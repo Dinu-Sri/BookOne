@@ -1,0 +1,28 @@
+# Debug and log files
+debug_log.txt
+error_log
+*.log
+
+# Config with sensitive data (keep config.sample.php in repo)
+config.php
+
+# Uploaded receipts (user data)
+receipts/*
+!receipts/.gitkeep
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.cache

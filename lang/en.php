@@ -1,0 +1,206 @@
+<?php
+/**
+ * Language Translations - English
+ */
+
+return [
+    // General
+    'app_name' => 'BookOne',
+    'login' => 'Login',
+    'department' => 'Department',
+    'switch_department' => 'Switch Department',
+    'no_department' => 'No Department',
+    'all_departments' => 'All Departments',
+    'financial_year' => 'Financial Year',
+    'financial_year_start' => 'Financial Year Start',
+    'fy_january' => 'January (Calendar Year)',
+    'fy_april' => 'April (IN, JP, UK)',
+    'fy_july' => 'July (AU, NZ)',
+    'fy_october' => 'October (US Federal)',
+    'logout' => 'Logout',
+    'save' => 'Save',
+    'cancel' => 'Cancel',
+    'delete' => 'Delete',
+    'edit' => 'Edit',
+    'add' => 'Add',
+    'search' => 'Search',
+    'filter' => 'Filter',
+    'clear' => 'Clear',
+    'loading' => 'Loading...',
+    'no_data' => 'No data',
+    'actions' => 'Actions',
+    'status' => 'Status',
+    'active' => 'Active',
+    'inactive' => 'Inactive',
+    'yes' => 'Yes',
+    'no' => 'No',
+    'all' => 'All',
+    'from' => 'From',
+    'to' => 'To',
+    'date' => 'Date',
+    'type' => 'Type',
+    'amount' => 'Amount',
+    'total' => 'Total',
+    'count' => 'Count',
+    'name' => 'Name',
+    'email' => 'Email',
+    'phone' => 'Phone',
+    'address' => 'Address',
+    'notes' => 'Notes',
+    'description' => 'Description',
+    
+    // Login
+    'username' => 'Username',
+    'password' => 'Password',
+    'login_error' => 'Invalid username or password',
+    'login_required' => 'Please enter username and password',
+    'login_invalid' => 'Invalid username or password',
+    'login_required_fields' => 'Please enter username and password',
+    
+    // Navigation
+    'nav_transactions' => 'Transactions',
+    'nav_reports' => 'Reports',
+    'nav_settings' => 'Settings',
+    'nav_help' => 'Help',
+    
+    // Transactions
+    'transactions' => 'Transactions',
+    'add_transaction' => 'Add Transaction',
+    'edit_transaction' => 'Edit Transaction',
+    'party' => 'Party',
+    'payment_method' => 'Payment Method',
+    'category' => 'Category',
+    'invoice_ref' => 'Invoice/Bill Ref',
+    'link_id' => 'Link to Transaction ID',
+    'department' => 'Department',
+    'receipt' => 'Receipt/Attachment',
+    'remove' => 'Remove',
+    'current_receipt' => 'Current Receipt',
+    
+    // Transaction Types
+    'type_sale' => 'Sale',
+    'type_purchase' => 'Purchase',
+    'type_expense' => 'Expense',
+    'type_receive' => 'Receive Payment',
+    'type_pay' => 'Make Payment',
+    'type_transfer' => 'Transfer',
+    'type_owner' => 'Owner Transaction',
+    
+    // Payment Methods
+    'method_cash' => 'Cash',
+    'method_bank' => 'Bank',
+    'method_card' => 'Card',
+    'method_online' => 'Online',
+    'method_credit' => 'Credit',
+    
+    // Status
+    'status_paid' => 'Paid',
+    'status_part' => 'Partial',
+    'status_unpaid' => 'Unpaid',
+    
+    // Totals
+    'income' => 'Income',
+    'expense' => 'Expense',
+    'net' => 'Net',
+    
+    // Reports
+    'reports' => 'Reports',
+    'summary' => 'Summary',
+    'sales' => 'Sales',
+    'purchases' => 'Purchases',
+    'expenses' => 'Expenses',
+    'balances' => 'Cash/Bank',
+    'receivables' => 'Receivables',
+    'payables' => 'Payables',
+    'generate_report' => 'Generate Report',
+    'export_csv' => 'Export CSV',
+    'total_sales' => 'Total Sales',
+    'total_purchases' => 'Total Purchases',
+    'total_expenses' => 'Total Expenses',
+    'net_income' => 'Net Income',
+    'cash_balance' => 'Cash Balance',
+    'bank_balance' => 'Bank Balance',
+    'outstanding' => 'Outstanding',
+    'received' => 'Received',
+    'paid' => 'Paid',
+    'parties' => 'Parties',
+    'invoices' => 'Invoices',
+    'bills' => 'Bills',
+    'unpaid_invoices' => 'Unpaid/Partial Invoices',
+    'unpaid_bills' => 'Unpaid/Partial Bills',
+    'recent_transactions' => 'Recent Cash/Bank Transactions',
+    'expenses_by_category' => 'Expenses by Category',
+    'cash_position' => 'Cash Position',
+    
+    // Settings
+    'settings' => 'Settings',
+    'profile' => 'Profile',
+    'your_profile' => 'Your Profile',
+    'display_name' => 'Display Name',
+    'update_profile' => 'Update Profile',
+    'change_password' => 'Change Password',
+    'current_password' => 'Current Password',
+    'new_password' => 'New Password',
+    'confirm_password' => 'Confirm New Password',
+    'password_changed' => 'Password changed successfully',
+    'password_mismatch' => 'New passwords do not match',
+    'password_wrong' => 'Current password is incorrect',
+    'password_min_length' => 'Password must be at least 8 characters',
+    
+    // Users
+    'users' => 'Users',
+    'add_user' => 'Add User',
+    'edit_user' => 'Edit User',
+    'role' => 'Role',
+    'role_admin' => 'Admin',
+    'role_manager' => 'Manager',
+    'role_user' => 'User',
+    
+    // Businesses
+    'businesses' => 'Businesses',
+    'add_business' => 'Add Business',
+    'edit_business' => 'Edit Business',
+    'business_name' => 'Business Name',
+    'tax_id' => 'Tax ID',
+    'currency' => 'Currency',
+    
+    // Departments
+    'departments' => 'Departments',
+    'add_department' => 'Add Department',
+    'edit_department' => 'Edit Department',
+    
+    // Categories
+    'categories' => 'Categories',
+    'add_category' => 'Add Category',
+    'edit_category' => 'Edit Category',
+    'category_type' => 'Type',
+    'type_income' => 'Income',
+    'type_expense_cat' => 'Expense',
+    'type_asset' => 'Asset',
+    'type_liability' => 'Liability',
+    
+    // Export
+    'export' => 'Export',
+    'export_data' => 'Export Data',
+    'data_type' => 'Data Type',
+    'transactions_all' => 'All Transactions',
+    'sales_only' => 'Sales Only',
+    'purchases_only' => 'Purchases Only',
+    'expenses_only' => 'Expenses Only',
+    
+    // System Settings
+    'system_settings' => 'System',
+    'language' => 'Language',
+    'select_language' => 'Select Language',
+    
+    // Messages
+    'confirm_delete' => 'Are you sure you want to delete this?',
+    'cannot_undo' => 'This action cannot be undone.',
+    'saved_success' => 'Saved successfully',
+    'deleted_success' => 'Deleted successfully',
+    'error_occurred' => 'An error occurred',
+    'required_field' => 'This field is required',
+    'invalid_token' => 'Invalid security token',
+    'access_denied' => 'Access denied',
+    'not_found' => 'Not found',
+];

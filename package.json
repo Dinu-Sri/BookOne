@@ -1,0 +1,23 @@
+{
+  "name": "bookone",
+  "version": "2.0.0",
+  "private": true,
+  "description": "BookOne v2 — Multi-tenant SaaS Accounting & ERP",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:e2e": "playwright test",
+    "db:migrate": "turbo db:migrate",
+    "db:seed": "turbo db:seed",
+    "db:studio": "turbo db:studio",
+    "clean": "turbo clean && rm -rf node_modules .turbo"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

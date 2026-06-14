@@ -1,0 +1,135 @@
+# BookOne v2 — Docker Compose (Production)
+# Deployed via Portainer stack on VPS
+# Domain: bookone.clossyan.com (Cloudflare Tunnel → Traefik)
+
+services:
+  traefik:
+    image: traefik:v3
+    container_name: bookone-traefik
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "letsencrypt_data:/letsencrypt"
+    networks:
+      - bookone_network
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    container_name: bookone-web
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_URL=${AUTH_URL}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - NEXT_PUBLIC_POSTHOG_KEY=${NEXT_PUBLIC_POSTHOG_KEY}
+      - CRON_SECRET=${CRON_SECRET}
+      - NODE_ENV=production
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bookone.rule=Host(\`bookone.clossyan.com\`)"
+      - "traefik.http.routers.bookone.entrypoints=web"
+      - "traefik.http.services.bookone.loadbalancer.server.port=3000"
+    networks:
+      - bookone_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: bookone-worker
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - NODE_ENV=production
+    networks:
+      - bookone_network
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bookone-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bookone_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: bookone-redis
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bookone_network
+
+  minio:
+    image: minio/minio:latest
+    container_name: bookone-minio
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    networks:
+      - bookone_network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: bookone-cloudflared
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - bookone_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  letsencrypt_data:
+
+networks:
+  bookone_network:
+    driver: bridge

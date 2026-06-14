@@ -1,0 +1,34 @@
+# BookOne v2 — Worker Dockerfile (BullMQ background jobs)
+FROM node:20-alpine AS base
+
+FROM base AS builder
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml turbo.json package.json ./
+COPY apps/workers/package.json apps/workers/
+COPY packages/db/package.json packages/db/
+COPY packages/accounting/package.json packages/accounting/
+
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+
+RUN pnpm build --filter=workers
+
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/workers/dist ./dist
+COPY --from=builder /app/apps/workers/package.json ./package.json
+
+USER nextjs
+
+CMD ["node", "dist/index.js"]

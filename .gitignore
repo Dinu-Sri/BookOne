@@ -1,28 +1,59 @@
-# Debug and log files
-debug_log.txt
-error_log
-*.log
+# BookOne v2
 
-# Config with sensitive data (keep config.sample.php in repo)
-config.php
+# Dependencies
+node_modules/
+.pnpm-store/
 
-# Uploaded receipts (user data)
-receipts/*
-!receipts/.gitkeep
+# Build outputs
+.next/
+dist/
+build/
+*.tsbuildinfo
 
-# IDE/Editor files
+# Environment
+.env
+.env.local
+.env.production
+.env.development.local
+.env.test.local
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Temporary files
-*.tmp
-*.bak
-*.cache
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Docker
+docker-compose.override.yml
+
+# Testing
+playwright-report/
+test-results/
+coverage/
+
+# Uploaded files (user data - do not commit)
+uploads/*
+!uploads/.gitkeep
+
+# Turbo
+.turbo/
+
+# TypeScript
+*.tsbuildinfo
+
+# Debug
+debug_log.txt
+
+# Old project (archived)
+old-project/

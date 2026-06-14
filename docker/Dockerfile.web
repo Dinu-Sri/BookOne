@@ -28,7 +28,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build Next.js using pnpm from deps stage
-RUN corepack enable && corepack prepare pnpm@9 --activate && pnpm --filter @bookone/web build
+RUN corepack enable && corepack prepare pnpm@9 --activate && cd apps/web && pnpm build
 
 FROM base AS runner
 WORKDIR /app

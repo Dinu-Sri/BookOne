@@ -1,12 +1,10 @@
 # BookOne v2 — Production Dockerfile (Next.js standalone)
 FROM node:20-alpine AS base
+RUN npm install -g pnpm@9
 
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
-
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@9 --activate
 
 # Copy workspace config and package.json files (needed for pnpm install)
 COPY pnpm-lock.yaml pnpm-workspace.yaml turbo.json package.json ./
@@ -28,7 +26,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build Next.js using pnpm from deps stage
-RUN cd apps/web && ../../node_modules/.bin/next build
+RUN pnpm --filter @bookone/web run build
 
 FROM base AS runner
 WORKDIR /app

@@ -43,7 +43,7 @@ services:
       - NODE_ENV=production
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.bookone.rule=Host(\`bookone.clossyan.com\`)"
+      - "traefik.http.routers.bookone.rule=Host(`bookone.clossyan.com`)"
       - "traefik.http.routers.bookone.entrypoints=web"
       - "traefik.http.services.bookone.loadbalancer.server.port=3000"
     networks:

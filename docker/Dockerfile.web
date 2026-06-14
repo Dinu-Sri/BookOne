@@ -19,7 +19,6 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/modules/package.json packages/modules/
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm install --frozen-lockfile --prod --filter=@bookone/web
 
 FROM base AS builder
 WORKDIR /app
@@ -29,7 +28,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build Next.js using pnpm from deps stage
-RUN corepack enable && corepack prepare pnpm@9 --activate && cd apps/web && pnpm build
+RUN corepack enable && corepack prepare pnpm@9 --activate && pnpm --filter @bookone/web build
 
 FROM base AS runner
 WORKDIR /app

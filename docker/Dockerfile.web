@@ -27,7 +27,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN pnpm exec turbo build --filter=@bookone/web
+# Build Next.js directly (skip turbo since sub-packages have no source)
+RUN cd apps/web && npx next build
 
 FROM base AS runner
 WORKDIR /app

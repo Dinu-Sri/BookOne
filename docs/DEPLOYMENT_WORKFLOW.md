@@ -19,32 +19,31 @@
 
 ---
 
-## Deployment Method: GitOps Webhook
+## Deployment Method: Portainer GitOps (Direct from GitHub Repo)
 
 ```
-Developer pushes to GitHub main
+Developer pushes to GitHub master branch
     ↓
-GitHub sends webhook to VPS
+GitHub sends webhook to Portainer (or Portainer polls on schedule)
     ↓
-Portainer redeploys stack (pulls latest, rebuilds if needed)
+Portainer pulls latest from GitHub, rebuilds Docker images, redeploys stack
     ↓
 Traefik detects new container, routes traffic
     ↓
-Cloudflare Tunnel → Traefik → Next.js container
+Cloudflare Tunnel → Traefik → Next.js container → bookone.clossyan.com
 ```
+
+**Key:** You do NOT need a container registry (Docker Hub, GHCR). Portainer builds images directly from the `Dockerfile` in the repo. The `docker-compose.prod.yml` uses `build:` directives, not pre-built images.
 
 ### Portainer Stack Configuration
 
-Stack is defined in `docker/docker-compose.prod.yml` and managed as a **Portainer Stack** pointed at the GitHub repo.
+1. Stack type: **Repository**
+2. Repository URL: `https://github.com/Dinu-Sri/BookOne.git`
+3. Reference: `refs/heads/master`
+4. Compose path: `docker/docker-compose.prod.yml`
+5. Environment variables: Set in Portainer stack UI (see `docs/PORTAINER_SETUP.md`)
 
-### Alternative: Manual Pull (if webhook fails)
-
-```bash
-ssh user@vps
-cd /opt/bookone
-git pull origin main
-docker compose -f docker/docker-compose.prod.yml up -d --build
-```
+See **[PORTAINER_SETUP.md](./PORTAINER_SETUP.md)** for the complete step-by-step guide with all 20+ environment variables.
 
 ---
 
@@ -78,7 +77,7 @@ pnpm test:e2e
 # 1. Commit and push
 git add -A
 git commit -m "type: description"
-git push origin main
+git push origin master
 
 # 2. Trigger Portainer redeploy (auto via webhook, or manual)
 #    - Go to Portainer → Stacks → bookone → Redeploy

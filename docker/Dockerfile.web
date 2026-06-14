@@ -11,6 +11,7 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 # Copy workspace config
 COPY pnpm-lock.yaml pnpm-workspace.yaml turbo.json package.json ./
 COPY apps/web/package.json apps/web/
+COPY apps/workers/package.json apps/workers/
 COPY packages/db/package.json packages/db/
 COPY packages/accounting/package.json packages/accounting/
 COPY packages/auth/package.json packages/auth/
@@ -24,10 +25,10 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 # Build
-RUN pnpm build --filter=web
+RUN pnpm build --filter=@bookone/web
 
 # Prune dev dependencies
-RUN pnpm --filter=web --prod deploy /app/prod
+RUN pnpm --filter=@bookone/web --prod deploy /app/prod
 
 FROM base AS runner
 WORKDIR /app

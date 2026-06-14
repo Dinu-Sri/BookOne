@@ -26,7 +26,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build Next.js using pnpm from deps stage
-RUN pnpm --filter @bookone/web run build
+RUN pnpm --dir apps/web build
 
 FROM base AS runner
 WORKDIR /app

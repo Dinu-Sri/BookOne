@@ -1,0 +1,21 @@
+# Dependencies and build outputs
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+
+# VCS and editor
+.git
+.gitignore
+.vscode
+
+# Local env and logs
+.env
+.env.*
+*.log
+
+# Large/legacy folders not needed for web image build
+old-project
+uploads

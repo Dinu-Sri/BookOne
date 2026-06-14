@@ -1,14 +1,14 @@
 # BookOne v2 — Production Dockerfile (Next.js standalone)
 FROM node:20-alpine AS base
 
-FROM base AS builder
-RUN apk add --no-cache libc6-compat python3 make g++
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
-# Copy workspace config
+# Copy workspace config and package.json files (needed for pnpm install)
 COPY pnpm-lock.yaml pnpm-workspace.yaml turbo.json package.json ./
 COPY apps/web/package.json apps/web/
 COPY apps/workers/package.json apps/workers/
@@ -18,17 +18,16 @@ COPY packages/auth/package.json packages/auth/
 COPY packages/ui/package.json packages/ui/
 COPY packages/modules/package.json packages/modules/
 
-# Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy source
+FROM base AS builder
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build
-RUN pnpm build --filter=@bookone/web
-
-# Prune dev dependencies
-RUN pnpm --filter=@bookone/web --prod deploy /app/prod
+RUN pnpm exec turbo build --filter=@bookone/web
 
 FROM base AS runner
 WORKDIR /app
@@ -39,18 +38,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/prod/node_modules ./node_modules
-COPY --from=builder /app/prod/package.json ./package.json
-
-# Copy standalone output
+COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
 
 USER nextjs
 
 EXPOSE 3000
-
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 

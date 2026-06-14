@@ -13,11 +13,18 @@
     "db:migrate": "turbo db:migrate",
     "db:seed": "turbo db:seed",
     "db:studio": "turbo db:studio",
-    "clean": "turbo clean && rm -rf node_modules .turbo"
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.0",
+    "typescript": "^5.5.0"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@9.0.0"
+  "packageManager": "pnpm@9.0.0",
+  "dependencies": {
+    "turbo": "^2.9.18"
+  }
 }

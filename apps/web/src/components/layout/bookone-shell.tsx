@@ -12,7 +12,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ReceiptText,
-  Search,
   Settings,
   ShieldCheck,
 } from 'lucide-react';
@@ -63,9 +62,9 @@ export function BookOneShell({ children, active = 'Simple Entry' }: { children: 
 
         <div className="sidebar-section sidebar-card">
           <Card padded>
-            <Badge tone="success">Engine ready</Badge>
+            <Badge tone="success">Ready</Badge>
             <p className="card-subtitle" style={{ marginTop: 10 }}>
-              Simple entries will map to transactions, settlements, balanced journals, and audit records.
+              Record daily business activity without accounting complexity.
             </p>
           </Card>
         </div>
@@ -77,10 +76,6 @@ export function BookOneShell({ children, active = 'Simple Entry' }: { children: 
             <SelectLike>
               <span className="cluster"><Building2 size={16} /> Clossyan Holdings</span>
             </SelectLike>
-            <div className="search-field">
-              <Search size={16} />
-              <input className="input" placeholder="Search parties, receipts, invoices" />
-            </div>
           </div>
           <div className="topbar-actions">
             <SelectLike>

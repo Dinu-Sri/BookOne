@@ -106,6 +106,32 @@ For every change pushed to `main`:
 
 ---
 
+## Portainer Troubleshooting Memory (Verified)
+
+Use these checks before changing architecture or rewriting Docker from scratch.
+
+1. **Compose path must be production file**
+- If stack only shows `postgres`, `redis`, `minio`, Portainer is using `docker/docker-compose.yml` (dev file).
+- For production stack, compose path must be `docker/docker-compose.prod.yml`.
+
+2. **Web service runtime arg pitfall**
+- `pnpm --dir apps/web start -- -H 0.0.0.0 -p 3000` can fail with: `Invalid project directory ... /app/apps/web/-H`.
+- Use: `pnpm --dir apps/web exec next start -H 0.0.0.0 -p 3000`.
+
+3. **Docker build context must be clean**
+- Keep `.dockerignore` present to exclude `node_modules`, `.next`, `.turbo`, local env/log files, and large local folders.
+- Missing `.dockerignore` can cause unstable or non-reproducible builds.
+
+4. **Use deterministic install/build flow first**
+- Prefer full repo copy + `pnpm install --frozen-lockfile` + `pnpm --dir apps/web build`.
+- Avoid complex partial-copy workspace install patterns until baseline deployment is stable.
+
+5. **Branch consistency for GitOps**
+- This repo currently deploys from `master` in Portainer.
+- If docs mention `main`, treat that as outdated unless explicitly migrated.
+
+---
+
 ## Key Files to Update When Things Change
 
 | Change | Update These Files |

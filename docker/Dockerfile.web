@@ -31,4 +31,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["pnpm", "--dir", "apps/web", "start", "--", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["pnpm", "--dir", "apps/web", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]

@@ -1,14 +1,13 @@
-import Image from 'next/image';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 export function LogoMark({ compact = false }: { compact?: boolean }) {
   if (compact) {
-    return <Image className="brand-mark" src="/favicon.webp" alt="BookOne" width={34} height={34} priority />;
+    return <img className="brand-mark" src="/favicon.webp" alt="BookOne" width={34} height={34} />;
   }
 
-  return <Image className="brand-logo" src="/logo.webp" alt="BookOne" width={284} height={73} priority />;
+  return <img className="brand-logo" src="/logo.webp" alt="BookOne" width={284} height={73} />;
 }
 
 export function BrandLockup({ compact = false }: { compact?: boolean }) {

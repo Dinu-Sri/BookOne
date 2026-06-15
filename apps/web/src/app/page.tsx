@@ -2,245 +2,257 @@ import {
   ArrowDownLeft,
   ArrowRightLeft,
   ArrowUpRight,
-  Bell,
-  BookOpenCheck,
-  Building2,
   CalendarDays,
+  Camera,
   CheckCircle2,
   ChevronRight,
-  ClipboardList,
   FileText,
-  Gauge,
   Landmark,
-  LayoutDashboard,
-  LineChart,
-  Plus,
+  Link2,
   ReceiptText,
-  Search,
-  Settings,
   ShieldCheck,
   Sparkles,
-  WalletCards,
+  Upload,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Badge, BrandLockup, Button, Card, CardBody, CardHeader, MetricCard, PageHeading, Progress, SelectLike } from '@/components/ui/bookone-ui';
-import { alerts, balances, entryTypes, journalPreview, metrics, transactions } from '@/lib/demo-data';
+import { BookOneShell } from '@/components/layout/bookone-shell';
+import { Badge, Button, Card, CardBody, CardHeader, PageHeading, Progress, SelectLike } from '@/components/ui/bookone-ui';
+import { balances, journalPreview, transactions } from '@/lib/demo-data';
 
-const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, active: true },
-  { label: 'Simple Entry', icon: ReceiptText },
-  { label: 'Transactions', icon: ClipboardList },
-  { label: 'Journal', icon: BookOpenCheck },
-  { label: 'Reports', icon: LineChart },
-  { label: 'Accounts', icon: Landmark },
-  { label: 'Reconciliation', icon: ShieldCheck },
-  { label: 'Settings', icon: Settings },
+const entryModes = [
+  { title: 'Money In', description: 'Customer payment, new sale, owner contribution', icon: ArrowDownLeft },
+  { title: 'Money Out', description: 'Expense, supplier payment, owner drawing', icon: ArrowUpRight, active: true },
+  { title: 'Move Money', description: 'Transfer between cash, bank, card, wallet', icon: ArrowRightLeft },
+  { title: 'Invoice/Bill', description: 'Record now and settle payment later', icon: FileText },
 ];
 
-function Sidebar() {
+const suggestions = ['Marketing', 'Paid from bank', 'Immediate settlement', 'Attach receipt'];
+
+function EntryModeStep() {
   return (
-    <aside className="sidebar">
-      <BrandLockup />
-      <div className="sidebar-section">
-        <p className="sidebar-label">Accounting workspace</p>
-        <nav className="nav-list" aria-label="Main navigation">
-          {navItems.map((item) => (
-            <a className={`nav-item ${item.active ? 'active' : ''}`} href="#" key={item.label}>
-              <item.icon size={17} />
-              <span>{item.label}</span>
-            </a>
+    <Card className="flow-step">
+      <div className="flow-number">1</div>
+      <div className="flow-content">
+        <div className="flow-title-row">
+          <div>
+            <h2>What happened?</h2>
+            <p>Choose the business event. BookOne will translate it into accounting terms.</p>
+          </div>
+          <Badge tone="info"><Sparkles size={13} /> Assisted</Badge>
+        </div>
+        <div className="mode-grid">
+          {entryModes.map((mode) => (
+            <button className={`mode-card ${mode.active ? 'active' : ''}`} type="button" key={mode.title}>
+              <mode.icon size={18} />
+              <strong>{mode.title}</strong>
+              <span>{mode.description}</span>
+            </button>
           ))}
-        </nav>
+        </div>
       </div>
-      <div className="sidebar-section">
-        <Card padded>
-          <Badge tone="success">Engine ready</Badge>
-          <p className="card-subtitle" style={{ marginTop: 10 }}>
-            Recognition, settlement, journal balancing, and audit trail will be handled under the hood.
-          </p>
-        </Card>
+    </Card>
+  );
+}
+
+function DetailsStep() {
+  return (
+    <Card className="flow-step">
+      <div className="flow-number">2</div>
+      <div className="flow-content">
+        <div className="flow-title-row">
+          <div>
+            <h2>Enter the few details the business owner knows</h2>
+            <p>No transaction type, journal account, or settlement status is required from the user.</p>
+          </div>
+          <Badge tone="success">Draft saved</Badge>
+        </div>
+
+        <div className="quick-entry-grid">
+          <div className="field">
+            <label>Who was it with?</label>
+            <input className="input large" defaultValue="Meta Platforms" />
+          </div>
+          <div className="field">
+            <label>How much?</label>
+            <input className="input large" defaultValue="LKR 24,500.00" />
+          </div>
+          <div className="field wide">
+            <label>What was it for?</label>
+            <input className="input large" defaultValue="Facebook ads campaign for June promotions" />
+          </div>
+          <div className="field">
+            <label>Paid from</label>
+            <SelectLike><span className="cluster"><Landmark size={16} /> Commercial Bank</span></SelectLike>
+          </div>
+          <div className="field">
+            <label>Date</label>
+            <SelectLike><span className="cluster"><CalendarDays size={16} /> Today, 15 Jun 2026</span></SelectLike>
+          </div>
+          <div className="field wide">
+            <label>Receipt</label>
+            <div className="receipt-drop">
+              <div className="cluster">
+                <ReceiptText size={18} color="var(--brand)" />
+                <div>
+                  <strong>Drop a receipt or take a photo</strong>
+                  <span>OCR can fill party, amount, date, and category hints later.</span>
+                </div>
+              </div>
+              <div className="cluster">
+                <Button variant="secondary"><Camera size={16} /> Photo</Button>
+                <Button variant="secondary"><Upload size={16} /> Upload</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="suggestion-list">
+          {suggestions.map((suggestion) => <Badge tone="neutral" key={suggestion}>{suggestion}</Badge>)}
+        </div>
       </div>
+    </Card>
+  );
+}
+
+function ReviewStep() {
+  return (
+    <Card className="flow-step">
+      <div className="flow-number">3</div>
+      <div className="flow-content">
+        <div className="flow-title-row">
+          <div>
+            <h2>Review and record</h2>
+            <p>The operator confirms the business event; BookOne handles the professional posting.</p>
+          </div>
+          <Badge tone="success"><CheckCircle2 size={13} /> Ready</Badge>
+        </div>
+        <div className="action-bar">
+          <div>
+            <strong style={{ display: 'block', fontSize: 14 }}>Record Money Out as Marketing Expense</strong>
+            <span style={{ display: 'block', marginTop: 4, color: 'var(--ink-muted)', fontSize: 13 }}>
+              Creates transaction, journal entry, audit record, and settled payment link.
+            </span>
+          </div>
+          <Button variant="primary">Record entry <ChevronRight size={16} /></Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function EngineReviewRail() {
+  return (
+    <aside className="review-rail">
+      <Card>
+        <CardHeader title="Engine preview" subtitle="What BookOne will create from this simple entry." action={<Badge tone="success">92% confidence</Badge>} />
+        <CardBody>
+          <div className="review-summary">
+            <div className="review-row">
+              <div>
+                <span>Business event</span>
+                <strong>Money Out</strong>
+              </div>
+              <Badge tone="neutral">User input</Badge>
+            </div>
+            <div className="review-row">
+              <div>
+                <span>Accounting type</span>
+                <strong>Expense</strong>
+              </div>
+              <Badge tone="info">Inferred</Badge>
+            </div>
+            <div className="review-row">
+              <div>
+                <span>Category</span>
+                <strong>Marketing and advertising</strong>
+              </div>
+              <Badge tone="success">High confidence</Badge>
+            </div>
+            <div className="review-row">
+              <div>
+                <span>Settlement</span>
+                <strong>Paid immediately from Commercial Bank</strong>
+              </div>
+              <Badge tone="success">Settled</Badge>
+            </div>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <div className="cluster" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+              <span className="metric-label">Inference confidence</span>
+              <span className="metric-label">92%</span>
+            </div>
+            <Progress value={92} />
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Journal output" subtitle="Visible to accountants; generated automatically for the operator." action={<Badge tone="success">Balanced</Badge>} />
+        <CardBody>
+          <div className="journal-lines">
+            {journalPreview.map((line) => (
+              <div className="journal-line" key={line.account}>
+                <div>
+                  <strong>{line.account}</strong>
+                  <span>{line.side}</span>
+                </div>
+                <strong>{line.amount}</strong>
+              </div>
+            ))}
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Safety checks" subtitle="Rules that protect books before posting." action={<ShieldCheck size={18} color="var(--success)" />} />
+        <CardBody>
+          <div className="safety-list">
+            <div className="safety-item"><CheckCircle2 size={16} color="var(--success)" /> Debit and credit totals match.</div>
+            <div className="safety-item"><CheckCircle2 size={16} color="var(--success)" /> Open period is editable.</div>
+            <div className="safety-item"><CheckCircle2 size={16} color="var(--success)" /> Tenant context will scope all data.</div>
+            <div className="safety-item"><Link2 size={16} color="var(--brand)" /> Audit trail will store the original simple entry.</div>
+          </div>
+        </CardBody>
+      </Card>
     </aside>
   );
 }
 
-function Topbar() {
+function ContextPanels() {
   return (
-    <header className="topbar">
-      <div className="cluster">
-        <SelectLike>
-          <span className="cluster"><Building2 size={16} /> Clossyan Holdings</span>
-        </SelectLike>
-        <div className="search-field">
-          <Search size={16} />
-          <input className="input" placeholder="Search transactions, accounts, parties" />
-        </div>
-      </div>
-      <div className="topbar-actions">
-        <SelectLike>
-          <span className="cluster"><CalendarDays size={16} /> Jun 2026</span>
-        </SelectLike>
-        <Button variant="secondary" className="icon" aria-label="Notifications"><Bell size={16} /></Button>
-        <Button variant="primary"><Plus size={16} /> New Entry</Button>
-      </div>
-    </header>
-  );
-}
-
-function SimpleEntryPanel() {
-  return (
-    <Card>
-      <CardHeader
-        title="Simple entry"
-        subtitle="Capture what happened in business language. The engine maps it to accounting entries."
-        action={<Badge tone="info"><Sparkles size={13} /> Assisted</Badge>}
-      />
-      <CardBody>
-        <div className="entry-options">
-          {entryTypes.map((entry, index) => (
-            <button className={`entry-option ${index === 1 ? 'active' : ''}`} type="button" key={entry.title}>
-              {index === 0 ? <ArrowDownLeft size={18} /> : null}
-              {index === 1 ? <ArrowUpRight size={18} /> : null}
-              {index === 2 ? <ArrowRightLeft size={18} /> : null}
-              {index === 3 ? <FileText size={18} /> : null}
-              <strong>{entry.title}</strong>
-              <span>{entry.text}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="form-grid" style={{ marginTop: 16 }}>
-          <div className="field">
-            <label>Who</label>
-            <input className="input" defaultValue="Meta Platforms" />
-          </div>
-          <div className="field">
-            <label>How much</label>
-            <input className="input" defaultValue="LKR 24,500.00" />
-          </div>
-          <div className="field">
-            <label>What for</label>
-            <input className="input" defaultValue="Facebook ads campaign" />
-          </div>
-          <div className="field">
-            <label>Paid from</label>
-            <SelectLike>Commercial Bank</SelectLike>
-          </div>
-        </div>
-
-        <div className="cluster" style={{ justifyContent: 'space-between', marginTop: 16 }}>
-          <Badge tone="success"><CheckCircle2 size={13} /> Ready to post</Badge>
-          <Button variant="primary">Record money out <ChevronRight size={16} /></Button>
-        </div>
-      </CardBody>
-    </Card>
-  );
-}
-
-function InferencePanel() {
-  return (
-    <Card>
-      <CardHeader
-        title="Engine inference"
-        subtitle="Preview before posting. Users see confidence and plain language; accountants can inspect the journal."
-        action={<Badge tone="success">92% confidence</Badge>}
-      />
-      <CardBody>
-        <div className="journal-lines">
-          <div className="journal-line">
-            <div>
-              <strong>Mapped transaction</strong>
-              <span>Money Out → Expense</span>
-            </div>
-            <Badge tone="neutral">Expense</Badge>
-          </div>
-          <div className="journal-line">
-            <div>
-              <strong>Suggested category</strong>
-              <span>Marketing and advertising</span>
-            </div>
-            <Badge tone="info">Rule + AI</Badge>
-          </div>
-          <div className="journal-line">
-            <div>
-              <strong>Settlement behavior</strong>
-              <span>Immediate payment from bank account</span>
-            </div>
-            <Badge tone="success">Settled</Badge>
-          </div>
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <div className="cluster" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-            <span className="metric-label">Inference confidence</span>
-            <span className="metric-label">92%</span>
-          </div>
-          <Progress value={92} />
-        </div>
-      </CardBody>
-    </Card>
-  );
-}
-
-function JournalPreview() {
-  return (
-    <Card>
-      <CardHeader title="Journal preview" subtitle="Balanced double-entry output generated from the simple entry." action={<Badge tone="success">Balanced</Badge>} />
-      <CardBody>
-        <div className="journal-lines">
-          {journalPreview.map((line) => (
-            <div className="journal-line" key={line.account}>
-              <div>
-                <strong>{line.account}</strong>
-                <span>{line.side}</span>
-              </div>
-              <strong>{line.amount}</strong>
-            </div>
-          ))}
-        </div>
-      </CardBody>
-    </Card>
-  );
-}
-
-function RecentTransactions() {
-  return (
-    <Card>
-      <CardHeader title="Recent transactions" subtitle="Recognition, settlement, and journal status in one operational view." action={<Button variant="secondary">View all</Button>} />
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Party</th>
-              <th>Description</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((transaction) => (
-              <tr key={`${transaction.date}-${transaction.party}`}>
-                <td>{transaction.date}</td>
-                <td><strong>{transaction.party}</strong></td>
-                <td>{transaction.description}</td>
-                <td>{transaction.type}</td>
-                <td><Badge tone={transaction.status === 'Unpaid' || transaction.status === 'Partial' ? 'warning' : 'success'}>{transaction.status}</Badge></td>
-                <td className={transaction.amount.startsWith('+') ? 'amount-positive' : 'amount-negative'}>{transaction.amount}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-}
-
-function RightRail() {
-  return (
-    <div className="grid">
+    <div className="context-grid">
       <Card>
-        <CardHeader title="Cash and bank" subtitle="Operational balances available for posting and reconciliation." action={<WalletCards size={18} color="var(--brand)" />} />
+        <CardHeader title="Recent simple entries" subtitle="A queue designed for fast review, not accountant-first data entry." action={<Link className="button secondary" href="/design-system">Design system</Link>} />
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Party</th>
+                <th>Description</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.slice(0, 4).map((transaction) => (
+                <tr key={`${transaction.date}-${transaction.party}`}>
+                  <td>{transaction.date}</td>
+                  <td><strong>{transaction.party}</strong></td>
+                  <td>{transaction.description}</td>
+                  <td>{transaction.type}</td>
+                  <td><Badge tone={transaction.status === 'Unpaid' || transaction.status === 'Partial' ? 'warning' : 'success'}>{transaction.status}</Badge></td>
+                  <td className={transaction.amount.startsWith('+') ? 'amount-positive' : 'amount-negative'}>{transaction.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Cash context" subtitle="Balances the operator may need while choosing payment account." />
         <CardBody>
           <div className="balance-list">
             {balances.map((balance) => (
@@ -255,57 +267,32 @@ function RightRail() {
           </div>
         </CardBody>
       </Card>
-
-      <JournalPreview />
-
-      <Card>
-        <CardHeader title="Alerts and tasks" subtitle="Items that need operator or accountant attention." action={<Gauge size={18} color="var(--brand)" />} />
-        <CardBody>
-          <div className="alert-list">
-            {alerts.map((alert) => (
-              <div className="alert-row" key={alert.title}>
-                <div>
-                  <strong>{alert.title}</strong>
-                  <span>{alert.detail}</span>
-                </div>
-                <Badge tone={alert.tone}>{alert.tone}</Badge>
-              </div>
-            ))}
-          </div>
-        </CardBody>
-      </Card>
     </div>
   );
 }
 
 export default function Home() {
   return (
-    <div className="app-shell">
-      <Sidebar />
-      <main className="main">
-        <Topbar />
-        <div className="workspace">
-          <PageHeading
-            eyebrow="Accounting engine"
-            title="Simple entries, professional books"
-            lead="BookOne lets operators record business events in a few fields while the accounting engine infers categories, settlement behavior, and balanced journals behind the scenes."
-            actions={<Link className="button secondary" href="/design-system">Open design system</Link>}
-          />
+    <BookOneShell active="Simple Entry">
+      <div className="workspace">
+        <PageHeading
+          eyebrow="Simple entry"
+          title="Record what happened"
+          lead="The first screen is built for non-accountants: pick the business event, fill the few facts you know, then let BookOne infer the accounting treatment before posting."
+          actions={<Link className="button secondary" href="/design-system">Open design system</Link>}
+        />
 
-          <div className="grid metrics" style={{ marginBottom: 16 }}>
-            {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
+        <div className="simple-entry-layout">
+          <div className="entry-flow">
+            <EntryModeStep />
+            <DetailsStep />
+            <ReviewStep />
           </div>
-
-          <div className="grid board">
-            <div className="grid">
-              <SimpleEntryPanel />
-              <InferencePanel />
-              <RecentTransactions />
-            </div>
-            <RightRail />
-          </div>
+          <EngineReviewRail />
         </div>
-      </main>
-    </div>
+
+        <ContextPanels />
+      </div>
+    </BookOneShell>
   );
 }

@@ -10,14 +10,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "^15.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@bookone/db": "workspace:*",
     "@bookone/accounting": "workspace:*",
     "@bookone/auth": "workspace:*",
+    "@bookone/db": "workspace:*",
+    "@bookone/modules": "workspace:*",
     "@bookone/ui": "workspace:*",
-    "@bookone/modules": "workspace:*"
+    "lucide-react": "^0.400.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

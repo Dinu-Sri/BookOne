@@ -190,10 +190,12 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 
 ## Important Docs
 
+- `docs/PROJECT_STATUS.md` — **Master status, deployment errors, workflows, what's next** (read first)
 - `docs/ARCHITECTURE_PLAN.md` — Full technology stack, scaling strategy
 - `docs/ACCOUNTING_ENGINE_DESIGN.md` — Simple entry → professional accounting engine design
 - `docs/DEPLOYMENT_WORKFLOW.md` — Production deployment steps
 - `docs/PORTAINER_SETUP.md` — Complete Portainer stack setup with all env vars
+- `docs/CLOUDFLARE_R2_SETUP.md` — R2 bucket + API token creation
 - `docs/PRODUCTION_RULES.md` — Rules that must never be broken
 - `docs/KNOWN_ERRORS.md` — Common issues and fixes
 - `docs/TASK_LOG.md` — Track completed/in-progress tasks

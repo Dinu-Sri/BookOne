@@ -13,6 +13,7 @@
     "db:migrate": "turbo db:migrate",
     "db:seed": "turbo db:seed",
     "db:studio": "turbo db:studio",
+    "db:init": "npx tsx scripts/init-db.ts",
     "clean": "turbo clean"
   },
   "devDependencies": {

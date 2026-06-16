@@ -25,10 +25,14 @@ RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app ./
 
+# Copy and make entrypoint executable
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 USER nextjs
 
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["pnpm", "--dir", "apps/web", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
+ENTRYPOINT ["/entrypoint.sh"]

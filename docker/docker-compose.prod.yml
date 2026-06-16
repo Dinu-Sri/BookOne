@@ -50,7 +50,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone.rule=Host(`bookone.clossyan.com`)"
       - "traefik.http.routers.bookone.entrypoints=web"
-      - "traefik.http.services.bookone.loadbalancer.server.port=3000"
+      - "traefik.http.services.bookone.loadbalancer.server.port=3100"
     networks:
       - bookone_network
     depends_on:

@@ -40,7 +40,7 @@ export default function LoginPage() {
             Sign in to your accounting workspace.
           </p>
           <p style={{ color: 'var(--ink-soft)', fontSize: 10, fontFamily: 'monospace', marginBottom: 8 }}>
-            build: v6
+            build: v8
           </p>
 
           <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>

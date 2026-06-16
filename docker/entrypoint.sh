@@ -28,4 +28,4 @@ echo "[2/2] RLS + seed..."
 pnpm exec tsx scripts/init-db.ts 2>&1 | tail -5 || true
 
 echo "=== Starting BookOne ==="
-exec pnpm --dir apps/web exec next start -H 0.0.0.0 -p 3000
+exec pnpm --dir apps/web exec next start -H 0.0.0.0 -p 3100

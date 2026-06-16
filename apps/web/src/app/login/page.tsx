@@ -53,9 +53,9 @@ export default function LoginPage() {
         <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 24 }}>
             Sign in to your accounting workspace.
           </p>
-
-        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>
-          <div className="field">
+        <p style={{ color: 'var(--ink-soft)', fontSize: 10, marginBottom: 16, fontFamily: 'monospace' }}>
+          build: v3
+        </p>
             <label>Email</label>
             <input
               className="input large"

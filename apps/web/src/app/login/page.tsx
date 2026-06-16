@@ -16,14 +16,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-      });
-
+      const result = await signIn('credentials', { email, password, redirect: false });
       if (result?.error) {
         setError('Invalid email or password.');
       } else {
@@ -31,61 +25,41 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch {
-      setError('Something went wrong. Please try again.');
+      setError('Something went wrong.');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main style={{
-      minHeight: '100vh',
-      display: 'grid',
-      placeItems: 'center',
-      background: 'var(--bg)',
-    }}>
+    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
       <div style={{ width: 'min(400px, 90vw)' }}>
         <Card padded>
           <h1 style={{ fontSize: 24, fontWeight: 850, marginBottom: 8 }}>BookOne</h1>
-<p style={{ color: 'var(--ink-muted)', fontSize: 14, marginBottom: 6 }}>
-          dinu.sri.m@gmail.com
-        </p>
-        <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 24 }}>
+          <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 24 }}>
             Sign in to your accounting workspace.
           </p>
-        <p style={{ color: 'var(--ink-soft)', fontSize: 10, marginBottom: 16, fontFamily: 'monospace' }}>
-          build: v3
-        </p>
-            <label>Email</label>
-            <input
-              className="input large"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-          <div className="field">
-            <label>Password</label>
-            <input
-              className="input large"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
 
-          {error ? (
-            <p style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</p>
-          ) : null}
+          <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>
+            <div className="field">
+              <label>Email</label>
+              <input className="input large" type="email" value={email}
+                onChange={(e) => setEmail(e.target.value)} required autoFocus />
+            </div>
+            <div className="field">
+              <label>Password</label>
+              <input className="input large" type="password" value={password}
+                onChange={(e) => setPassword(e.target.value)} required />
+            </div>
 
-          <Button variant="primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
-            {loading ? 'Signing in\u2026' : 'Sign in'}
-          </Button>
-        </form>
-      </Card>
+            {error && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</p>}
+
+            <Button variant="primary" type="submit" disabled={loading}
+              style={{ width: '100%', justifyContent: 'center' }}>
+              {loading ? 'Signing in\u2026' : 'Sign in'}
+            </Button>
+          </form>
+        </Card>
       </div>
     </main>
   );

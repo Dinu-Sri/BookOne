@@ -12,7 +12,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 
 ARG BUILD_DATE=0
-RUN echo "Build: $BUILD_DATE"
+RUN echo "Build: $BUILD_DATE" && rm -rf apps/web/.next apps/web/.turbo
 
 # Build Next.js
 RUN pnpm --dir apps/web build

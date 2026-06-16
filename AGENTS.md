@@ -130,6 +130,22 @@ Use these checks before changing architecture or rewriting Docker from scratch.
 - This repo currently deploys from `master` in Portainer.
 - If docs mention `main`, treat that as outdated unless explicitly migrated.
 
+6. **Middleware MUST live in the app, not in a workspace package** *(2026-06-16)*
+- Symptom: login page shows "build v9" but DevTools shows every `/_next/static/chunks/*.js` returning **307 → /login**. Page renders as raw HTML, no CSS, JS fails with `Unexpected token '<'`.
+- Cause: when `apps/web/src/middleware.ts` re-exports `middleware` and `config` from `@bookone/auth`, Next.js 15's bundler can drop the `config.matcher` during cross-workspace re-export, causing middleware to fire on static assets.
+- Fix: keep middleware as a **local** file in `apps/web/src/middleware.ts`. Use a minimal cookie-presence check (no `auth()` call) to avoid pulling bcryptjs/drizzle into the Edge runtime bundle.
+- Matcher must explicitly exclude `api/auth` (not just `api`) so NextAuth's own routes aren't intercepted:
+  `'/((?!_next/static|_next/image|favicon.ico|favicon.webp|logo.webp|api/auth).*)'`
+
+7. **Do NOT add global `Cache-Control: no-cache` headers in next.config.js** *(2026-06-16)*
+- Symptom: HTML loads but JS chunks return 307/HTML with `Unexpected token '<'`.
+- Cause: Cloudflare's edge cache was serving stale HTML referencing deleted JS chunks, and our no-cache header was *also* applied (incorrectly) to `_next/static` in some browser paths, masking chunk URLs.
+- Fix: remove the custom `headers()` block. Next.js already sends `Cache-Control: public, max-age=31536000, immutable` for `/_next/static/*`. Use a build stamp in the HTML (e.g. `build: v10`) to force fresh fetches after redeploy.
+
+8. **Dockerfile `nextjs` user needs writable pnpm cache** *(2026-06-16)*
+- Symptom: `pnpm --filter @bookone/db db:migrate` fails with EACCES on first run.
+- Fix: in `docker/entrypoint.sh`, export `PNPM_HOME=/app/.pnpm-store` and `npm_config_cache=/app/.cache/npm`, and `mkdir -p` those dirs. In `Dockerfile.web` `chown` `/app/.cache /app/.next /app/.pnpm-store` to `nextjs:nodejs` before `USER nextjs`.
+
 ---
 
 ## Key Files to Update When Things Change

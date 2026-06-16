@@ -20,7 +20,10 @@ export function resolveAccount(ref: AccountRef): Account {
 
   const matches = DEFAULT_CHART_OF_ACCOUNTS.filter((a) => a.code.startsWith(ref.value));
   if (matches.length === 1) {
-    return matches[0];
+    const [first] = matches;
+    if (first) {
+      return first;
+    }
   }
   if (matches.length === 0) {
     throw new Error(`No account matches subType prefix: ${ref.value}`);

@@ -1,4 +1,4 @@
-import { ACCOUNTS_BY_CODE } from '../chart-of-accounts';
+import { requireAccount } from '../account-lookup';
 import type { InferredTransaction, JournalDraft, JournalLine } from '../inference/types';
 
 function assertBalanced(lines: JournalLine[]): void {
@@ -37,10 +37,10 @@ export function generateJournal(transaction: InferredTransaction): JournalDraft 
 
   if (accountingType === 'Sale') {
     lines.push({ account: paymentAccount, side: 'debit', amount: money(amount), memo: 'Cash/Bank received' });
-    lines.push({ account: ACCOUNTS_BY_CODE['4000'], side: 'credit', amount: money(amount), memo: 'Sales revenue' });
+    lines.push({ account: requireAccount('4000'), side: 'credit', amount: money(amount), memo: 'Sales revenue' });
   } else if (accountingType === 'SaleCredit') {
-    lines.push({ account: ACCOUNTS_BY_CODE['1300'], side: 'debit', amount: money(amount), memo: 'Customer invoice' });
-    lines.push({ account: ACCOUNTS_BY_CODE['4000'], side: 'credit', amount: money(amount), memo: 'Sales revenue' });
+    lines.push({ account: requireAccount('1300'), side: 'debit', amount: money(amount), memo: 'Customer invoice' });
+    lines.push({ account: requireAccount('4000'), side: 'credit', amount: money(amount), memo: 'Sales revenue' });
   } else if (accountingType === 'Expense') {
     if (!category) {
       throw new Error('Expense journal requires an inferred category.');
@@ -58,19 +58,19 @@ export function generateJournal(transaction: InferredTransaction): JournalDraft 
       throw new Error('Purchase journal requires an inferred category.');
     }
     lines.push({ account: category.account, side: 'debit', amount: money(amount), memo: category.categoryName });
-    lines.push({ account: ACCOUNTS_BY_CODE['2100'], side: 'credit', amount: money(amount), memo: 'Vendor bill' });
+    lines.push({ account: requireAccount('2100'), side: 'credit', amount: money(amount), memo: 'Vendor bill' });
   } else if (accountingType === 'Receive') {
     lines.push({ account: paymentAccount, side: 'debit', amount: money(amount), memo: 'Customer payment received' });
-    lines.push({ account: ACCOUNTS_BY_CODE['1300'], side: 'credit', amount: money(amount), memo: 'Receivable settled' });
+    lines.push({ account: requireAccount('1300'), side: 'credit', amount: money(amount), memo: 'Receivable settled' });
   } else if (accountingType === 'Pay') {
-    lines.push({ account: ACCOUNTS_BY_CODE['2100'], side: 'debit', amount: money(amount), memo: 'Payable settled' });
+    lines.push({ account: requireAccount('2100'), side: 'debit', amount: money(amount), memo: 'Payable settled' });
     lines.push({ account: paymentAccount, side: 'credit', amount: money(amount), memo: 'Payment' });
   } else if (accountingType === 'Owner') {
     if (transaction.direction === 'money_in') {
       lines.push({ account: paymentAccount, side: 'debit', amount: money(amount), memo: 'Owner contribution' });
-      lines.push({ account: ACCOUNTS_BY_CODE['3000'], side: 'credit', amount: money(amount), memo: 'Owner equity' });
+      lines.push({ account: requireAccount('3000'), side: 'credit', amount: money(amount), memo: 'Owner equity' });
     } else {
-      lines.push({ account: ACCOUNTS_BY_CODE['3100'], side: 'debit', amount: money(amount), memo: 'Owner drawing' });
+      lines.push({ account: requireAccount('3100'), side: 'debit', amount: money(amount), memo: 'Owner drawing' });
       lines.push({ account: paymentAccount, side: 'credit', amount: money(amount), memo: 'Cash/Bank' });
     }
   } else {

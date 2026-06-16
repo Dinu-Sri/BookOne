@@ -16,7 +16,7 @@ export function inferTransaction(entry: SimpleEntry): EngineResult {
   if (entry.direction === 'money_out') {
     category = inferCategory(entry.description, entry.party, 'money_out', entry.categoryOverride);
   } else if (entry.direction === 'invoice_bill' && entry.invoiceType === 'vendor_bill') {
-    category = inferCategory(entry.description, entry.party, 'money_out');
+    category = inferCategory(entry.description, entry.party, 'money_out', entry.categoryOverride);
   }
 
   const accountingType = mapToAccountingType(entry);

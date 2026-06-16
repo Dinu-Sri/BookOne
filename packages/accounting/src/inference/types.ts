@@ -32,6 +32,7 @@ export interface MoveMoneyExtras {
 export interface InvoiceBillExtras {
   invoiceType: InvoiceType;
   dueDate?: string;
+  categoryOverride?: string;
 }
 
 export interface BaseSimpleEntry {

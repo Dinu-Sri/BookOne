@@ -20,6 +20,7 @@ export const moneyInSchema = baseEntrySchema.extend({
   direction: z.literal('money_in'),
   moneyInType: z.enum(['customer_payment', 'new_sale', 'owner_contribution']),
   invoiceRef: z.string().max(100).optional(),
+  categoryOverride: z.string().max(20).optional(),
 });
 
 export const moneyOutSchema = baseEntrySchema.extend({
@@ -31,12 +32,14 @@ export const moveMoneySchema = baseEntrySchema.extend({
   direction: z.literal('move_money'),
   fromAccount: accountRefSchema,
   toAccount: accountRefSchema,
+  categoryOverride: z.string().max(20).optional(),
 });
 
 export const invoiceBillSchema = baseEntrySchema.extend({
   direction: z.literal('invoice_bill'),
   invoiceType: z.enum(['customer_invoice', 'vendor_bill']),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  categoryOverride: z.string().max(20).optional(),
 });
 
 export const entrySchema = z.discriminatedUnion('direction', [

@@ -6,6 +6,7 @@ RUN npm install -g pnpm@9
 FROM base AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG BUILD_DATE=0
 
 COPY . .
 

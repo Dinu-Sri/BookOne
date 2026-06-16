@@ -26,6 +26,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.web
+      args:
+        BUILD_DATE: "${BUILD_DATE:-0}"
     container_name: bookone-web
     environment:
       - DATABASE_URL=${DATABASE_URL}

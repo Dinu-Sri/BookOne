@@ -47,7 +47,10 @@ export default function LoginPage() {
       <div style={{ width: 'min(400px, 90vw)' }}>
         <Card padded>
           <h1 style={{ fontSize: 24, fontWeight: 850, marginBottom: 8 }}>BookOne</h1>
-          <p style={{ color: 'var(--ink-muted)', fontSize: 14, marginBottom: 24 }}>
+<p style={{ color: 'var(--ink-muted)', fontSize: 14, marginBottom: 6 }}>
+          dinu.sri.m@gmail.com
+        </p>
+        <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 24 }}>
             Sign in to your accounting workspace.
           </p>
 

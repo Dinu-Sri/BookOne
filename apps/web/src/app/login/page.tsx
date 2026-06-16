@@ -36,8 +36,11 @@ export default function LoginPage() {
       <div style={{ width: 'min(400px, 90vw)' }}>
         <Card padded>
           <h1 style={{ fontSize: 24, fontWeight: 850, marginBottom: 8 }}>BookOne</h1>
-          <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 24 }}>
+          <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 20 }}>
             Sign in to your accounting workspace.
+          </p>
+          <p style={{ color: 'var(--ink-soft)', fontSize: 10, fontFamily: 'monospace', marginBottom: 8 }}>
+            build: v4
           </p>
 
           <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>

@@ -1,3 +1,5 @@
+import 'server-only';
+
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
@@ -43,7 +45,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         const email = (credentials.email as string).toLowerCase().trim();
         const password = credentials.password as string;
 
-        const [user] = await db
+        const [user] = await db()
           .select()
           .from(users)
           .where(and(eq(users.email, email), isNull(users.voidedAt)))

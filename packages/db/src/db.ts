@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
@@ -25,19 +27,21 @@ function createDb() {
   return { client, db: drizzle(client, { schema }) };
 }
 
-let _db: ReturnType<typeof drizzle<typeof schema>>;
-let _client: ReturnType<typeof postgres>;
-
 function getDb() {
   if (!globalForDb.db || !globalForDb.client) {
     const { db, client } = createDb();
     globalForDb.db = db;
     globalForDb.client = client;
   }
-  _db = globalForDb.db;
-  _client = globalForDb.client;
-  return { db: _db, client: _client };
+  return { db: globalForDb.db, client: globalForDb.client };
 }
 
-export const { db, client } = getDb();
-export type DbClient = typeof db;
+export function db() {
+  return getDb().db;
+}
+
+export function pgClient() {
+  return getDb().client;
+}
+
+export type DbClient = ReturnType<typeof getDb>['db'];

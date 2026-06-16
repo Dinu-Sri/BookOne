@@ -12,8 +12,9 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "drizzle-orm": "^0.33.0",
     "drizzle-kit": "^0.24.0",
-    "postgres": "^3.4.0"
+    "drizzle-orm": "^0.33.0",
+    "postgres": "^3.4.0",
+    "server-only": "^0.0.1"
   }
 }

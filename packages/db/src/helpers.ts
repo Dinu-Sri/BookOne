@@ -1,11 +1,11 @@
-import { client } from './db';
+import { pgClient } from './db';
 
 export async function setTenantContext(tenantId: string): Promise<void> {
-  await client`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;
+  await pgClient()`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;
 }
 
 export async function clearTenantContext(): Promise<void> {
-  await client`SELECT set_config('app.current_tenant_id', '', true)`;
+  await pgClient()`SELECT set_config('app.current_tenant_id', '', true)`;
 }
 
 export async function withTenantContext<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {

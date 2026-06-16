@@ -24,7 +24,7 @@ export interface RecordEntryResult {
 }
 
 async function resolveAccountId(code: string): Promise<string> {
-  const [account] = await db
+  const [account] = await db()
     .select({ id: accounts.id })
     .from(accounts)
     .where(eq(accounts.code, code))
@@ -65,7 +65,7 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
 
     // Execute everything in one DB transaction
     const result = await withTenantContext(user.tenantId, async () => {
-      return db.transaction(async (tx) => {
+      return db().transaction(async (tx) => {
         const [insertedTransaction] = await tx
           .insert(transactions)
           .values({

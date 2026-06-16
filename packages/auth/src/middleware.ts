@@ -1,5 +1,4 @@
 import { auth } from './auth';
-import { withTenantContext } from '@bookone/db';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export const config = {
@@ -13,8 +12,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!session?.user && pathname !== '/login') {
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   if (session?.user && pathname === '/login') {
@@ -28,13 +26,4 @@ export async function middleware(request: NextRequest) {
   }
 
   return response;
-}
-
-export async function withAuth(request: NextRequest, handler: () => Promise<Response>): Promise<Response> {
-  const session = await auth();
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  return withTenantContext(session.user.tenantId, handler);
 }

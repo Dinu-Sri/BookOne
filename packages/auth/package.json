@@ -13,7 +13,8 @@
     "@bookone/db": "workspace:*",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.33.0",
-    "next-auth": "5.0.0-beta.25"
+    "next-auth": "5.0.0-beta.25",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.0",

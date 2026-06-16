@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn } from '@bookone/auth';
+import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button, Card } from '@/components/ui/bookone-ui';
 

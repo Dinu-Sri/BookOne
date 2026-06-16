@@ -19,19 +19,51 @@ import Link from 'next/link';
 import { type ReactNode, useState } from 'react';
 import { Badge, BrandLockup, Button, Card, SelectLike } from '@/components/ui/bookone-ui';
 
-const navItems = [
+export interface NavItem {
+  label: string;
+  icon: typeof Bell;
+  href: string;
+}
+
+const navItems: NavItem[] = [
   { label: 'Simple Entry', icon: ReceiptText, href: '/' },
-  { label: 'Dashboard', icon: LayoutDashboard, href: '#' },
-  { label: 'Transactions', icon: ClipboardList, href: '#' },
-  { label: 'Journal', icon: BookOpenCheck, href: '#' },
-  { label: 'Reports', icon: LineChart, href: '#' },
-  { label: 'Accounts', icon: Landmark, href: '#' },
-  { label: 'Reconciliation', icon: ShieldCheck, href: '#' },
-  { label: 'Settings', icon: Settings, href: '#' },
+  { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+  { label: 'Transactions', icon: ClipboardList, href: '/transactions' },
+  { label: 'Journal', icon: BookOpenCheck, href: '/journal' },
+  { label: 'Reports', icon: LineChart, href: '/reports' },
+  { label: 'Accounts', icon: Landmark, href: '/accounts' },
+  { label: 'Reconciliation', icon: ShieldCheck, href: '/reconciliation' },
+  { label: 'Settings', icon: Settings, href: '/settings' },
 ];
 
-export function BookOneShell({ children, active = 'Simple Entry' }: { children: ReactNode; active?: string }) {
+export interface TenantLite {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+}
+
+export interface PeriodLite {
+  current: string;       // YYYY-MM
+  available: string[];   // YYYY-MM[]
+}
+
+export function BookOneShell({
+  children,
+  active = 'Simple Entry',
+  tenant,
+  period,
+}: {
+  children: ReactNode;
+  active?: string;
+  tenant?: TenantLite;
+  period?: PeriodLite;
+}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const currentMonthLabel = period?.current
+    ? new Date(period.current + '-01').toLocaleString('en-US', { month: 'short', year: 'numeric' })
+    : new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
 
   return (
     <div className={`app-shell ${sidebarOpen ? '' : 'is-collapsed'}`}>
@@ -74,14 +106,18 @@ export function BookOneShell({ children, active = 'Simple Entry' }: { children: 
         <header className="topbar">
           <div className="cluster">
             <SelectLike>
-              <span className="cluster"><Building2 size={16} /> Clossyan Holdings</span>
+              <span className="cluster">
+                <Building2 size={16} /> {tenant?.name ?? 'Workspace'}
+              </span>
             </SelectLike>
           </div>
           <div className="topbar-actions">
             <SelectLike>
-              <span className="cluster"><CalendarDays size={16} /> Jun 2026</span>
+              <span className="cluster"><CalendarDays size={16} /> {currentMonthLabel}</span>
             </SelectLike>
-            <Button variant="secondary" className="icon" aria-label="Notifications"><Bell size={16} /></Button>
+            <Button variant="secondary" className="icon" aria-label="Notifications">
+              <Bell size={16} />
+            </Button>
           </div>
         </header>
         {children}

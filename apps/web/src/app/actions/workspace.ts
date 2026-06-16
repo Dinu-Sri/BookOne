@@ -1,0 +1,456 @@
+'use server';
+
+import {
+  db,
+  accounts,
+  journalEntries,
+  journalLines,
+  transactions,
+  withTenantContext,
+  eq,
+  and,
+  isNull,
+  desc,
+  asc,
+  gte,
+  lte,
+  sql,
+} from '@bookone/db';
+import { requireTenantContext } from '@bookone/auth';
+
+export interface TenantInfo {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+}
+
+export interface AccountBalance {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  normalSide: string;
+  balance: number; // positive for assets/expenses, negative for liabilities/equity/revenue
+}
+
+export interface DashboardMetric {
+  label: string;
+  value: string;
+  note: string;
+  tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+}
+
+export interface DashboardData {
+  tenant: TenantInfo;
+  user: { id: string; name: string; email: string };
+  metrics: DashboardMetric[];
+  recentTransactions: {
+    id: string;
+    date: string;
+    party: string;
+    description: string;
+    direction: string;
+    type: string;
+    amount: number;
+    currency: string;
+  }[];
+  lowConfidenceCount: number;
+  availablePeriods: string[]; // e.g. ["2026-06", "2026-05"]
+}
+
+/** Returns the current tenant + user info for the topbar. */
+export async function getTenantInfo(): Promise<TenantInfo> {
+  const user = await requireTenantContext();
+  const { tenants } = await import('@bookone/db');
+  const [t] = await db()
+    .select({ id: tenants.id, name: tenants.name, slug: tenants.slug, plan: tenants.plan })
+    .from(tenants)
+    .where(eq(tenants.id, user.tenantId))
+    .limit(1);
+  if (!t) throw new Error('Tenant not found.');
+  return t;
+}
+
+/**
+ * Computes the current account balances for the tenant by aggregating
+ * signed journal line amounts. Uses each account's normalSide to determine
+ * whether debits or credits increase the balance.
+ */
+async function computeAccountBalances(tenantId: string): Promise<AccountBalance[]> {
+  return withTenantContext(tenantId, async () => {
+    // Sum debits - credits per account, then adjust for normalSide.
+    const rows = await db()
+      .select({
+        id: accounts.id,
+        code: accounts.code,
+        name: accounts.name,
+        type: accounts.type,
+        normalSide: accounts.normalSide,
+        debitTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalLines.side} = 'debit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
+        creditTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalLines.side} = 'credit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
+      })
+      .from(accounts)
+      .leftJoin(journalLines, and(eq(journalLines.accountId, accounts.id), isNull(journalLines.voidedAt)))
+      .leftJoin(
+        journalEntries,
+        and(eq(journalEntries.id, journalLines.journalEntryId), isNull(journalEntries.voidedAt)),
+      )
+      .where(and(eq(accounts.tenantId, tenantId), isNull(accounts.voidedAt)))
+      .groupBy(accounts.id);
+
+    return rows.map((r) => {
+      const debit = parseFloat(r.debitTotal);
+      const credit = parseFloat(r.creditTotal);
+      // For debit-normal accounts: balance = debit - credit
+      // For credit-normal accounts: balance = credit - debit
+      const raw = r.normalSide === 'debit' ? debit - credit : credit - debit;
+      return {
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        type: r.type,
+        normalSide: r.normalSide,
+        balance: Number.isFinite(raw) ? raw : 0,
+      };
+    });
+  });
+}
+
+function formatLKR(value: number, compact = false): string {
+  const sign = value < 0 ? '-' : '';
+  const abs = Math.abs(value);
+  if (compact && abs >= 1_000_000) return `${sign}LKR ${(abs / 1_000_000).toFixed(2)}M`;
+  if (compact && abs >= 1_000) return `${sign}LKR ${(abs / 1_000).toFixed(1)}K`;
+  return `${sign}LKR ${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+export async function getDashboardData(): Promise<DashboardData> {
+  const user = await requireTenantContext();
+  const tenant = await getTenantInfo();
+
+  return withTenantContext(user.tenantId, async () => {
+    const balances = await computeAccountBalances(user.tenantId);
+
+    const find = (code: string) => balances.find((b) => b.code === code)?.balance ?? 0;
+
+    const cash = find('1000') + find('1100') + find('1200'); // Cash on Hand + Bank + Card Clearing
+    const receivable = find('1300');
+    const payable = find('2100');
+    const revenue = balances
+      .filter((b) => b.type === 'revenue')
+      .reduce((sum, b) => sum + b.balance, 0);
+    const expense = balances
+      .filter((b) => b.type === 'expense')
+      .reduce((sum, b) => sum + b.balance, 0);
+    const net = revenue - expense;
+
+    const metrics: DashboardMetric[] = [
+      {
+        label: 'Net position',
+        value: formatLKR(net, true),
+        note: net >= 0 ? 'Revenue exceeds expenses' : 'Expenses exceed revenue',
+        tone: net >= 0 ? 'success' : 'danger',
+      },
+      {
+        label: 'Cash available',
+        value: formatLKR(cash, true),
+        note: 'Cash on hand + bank + card',
+        tone: 'neutral',
+      },
+      {
+        label: 'Receivables',
+        value: formatLKR(receivable, true),
+        note: 'Open customer balances',
+        tone: receivable > 0 ? 'warning' : 'neutral',
+      },
+      {
+        label: 'Payables',
+        value: formatLKR(payable, true),
+        note: 'Supplier balances owed',
+        tone: payable > 0 ? 'info' : 'neutral',
+      },
+    ];
+
+    // Recent transactions (last 10)
+    const recent = await db()
+      .select({
+        id: transactions.id,
+        date: transactions.date,
+        party: transactions.party,
+        description: transactions.description,
+        direction: transactions.direction,
+        type: transactions.accountingType,
+        amount: transactions.amount,
+        currency: transactions.currency,
+      })
+      .from(transactions)
+      .where(and(eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)))
+      .orderBy(desc(transactions.createdAt))
+      .limit(10);
+
+    // Count low-confidence categories needing review
+    const [{ count: lowConfidenceCount }] = await db()
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.tenantId, user.tenantId),
+          isNull(transactions.voidedAt),
+          sql`${transactions.categoryConfidence} IS NOT NULL AND ${transactions.categoryConfidence}::numeric < 0.7`,
+        ),
+      );
+
+    // Available months from existing transactions
+    const monthRows = await db()
+      .select({ date: transactions.date })
+      .from(transactions)
+      .where(and(eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)));
+    const periodSet = new Set<string>();
+    for (const r of monthRows) {
+      if (r.date && /^\d{4}-\d{2}/.test(r.date)) {
+        periodSet.add(r.date.slice(0, 7));
+      }
+    }
+    const availablePeriods = Array.from(periodSet).sort().reverse();
+
+    return {
+      tenant,
+      user: { id: user.id, name: user.name ?? user.email, email: user.email },
+      metrics,
+      recentTransactions: recent.map((r) => ({
+        id: r.id,
+        date: r.date,
+        party: r.party,
+        description: r.description,
+        direction: r.direction,
+        type: r.type,
+        amount: parseFloat(r.amount),
+        currency: r.currency,
+      })),
+      lowConfidenceCount: Number(lowConfidenceCount) || 0,
+      availablePeriods,
+    };
+  });
+}
+
+export interface TransactionRow {
+  id: string;
+  date: string;
+  party: string;
+  description: string;
+  direction: string;
+  accountingType: string;
+  amount: number;
+  currency: string;
+  categoryName: string | null;
+  categoryConfidence: number | null;
+  categorySource: string | null;
+  receiptRef: string | null;
+  paymentAccountCode: string;
+  paymentAccountName: string;
+}
+
+export async function listTransactions(period?: string): Promise<TransactionRow[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const conditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
+    if (period && /^\d{4}-\d{2}$/.test(period)) {
+      conditions.push(gte(transactions.date, `${period}-01`));
+      conditions.push(lte(transactions.date, `${period}-31`));
+    }
+    const rows = await db()
+      .select({
+        id: transactions.id,
+        date: transactions.date,
+        party: transactions.party,
+        description: transactions.description,
+        direction: transactions.direction,
+        accountingType: transactions.accountingType,
+        amount: transactions.amount,
+        currency: transactions.currency,
+        categoryName: transactions.categoryName,
+        categoryConfidence: transactions.categoryConfidence,
+        categorySource: transactions.categorySource,
+        receiptRef: transactions.receiptRef,
+        paymentAccountCode: accounts.code,
+        paymentAccountName: accounts.name,
+      })
+      .from(transactions)
+      .leftJoin(accounts, eq(accounts.id, transactions.paymentAccountId))
+      .where(and(...conditions))
+      .orderBy(desc(transactions.date), desc(transactions.createdAt));
+    return rows.map((r) => ({
+      id: r.id,
+      date: r.date,
+      party: r.party,
+      description: r.description,
+      direction: r.direction,
+      accountingType: r.accountingType,
+      amount: parseFloat(r.amount),
+      currency: r.currency,
+      categoryName: r.categoryName,
+      categoryConfidence: r.categoryConfidence ? parseFloat(r.categoryConfidence) : null,
+      categorySource: r.categorySource,
+      receiptRef: r.receiptRef,
+      paymentAccountCode: r.paymentAccountCode ?? '',
+      paymentAccountName: r.paymentAccountName ?? '',
+    }));
+  });
+}
+
+export interface JournalEntryRow {
+  id: string;
+  transactionId: string;
+  memo: string;
+  entryDate: string;
+  date: string;
+  party: string;
+  description: string;
+  direction: string;
+  amount: number;
+  currency: string;
+  lines: {
+    id: string;
+    accountCode: string;
+    accountName: string;
+    side: 'debit' | 'credit';
+    amount: number;
+    memo: string | null;
+  }[];
+}
+
+export async function listJournalEntries(period?: string): Promise<JournalEntryRow[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const conditions = [eq(journalEntries.tenantId, user.tenantId), isNull(journalEntries.voidedAt)];
+    if (period && /^\d{4}-\d{2}$/.test(period)) {
+      conditions.push(gte(journalEntries.entryDate, `${period}-01`));
+      conditions.push(lte(journalEntries.entryDate, `${period}-31`));
+    }
+    const entries = await db()
+      .select({
+        id: journalEntries.id,
+        transactionId: journalEntries.transactionId,
+        memo: journalEntries.memo,
+        entryDate: journalEntries.entryDate,
+        txDate: transactions.date,
+        party: transactions.party,
+        description: transactions.description,
+        direction: transactions.direction,
+        amount: transactions.amount,
+        currency: transactions.currency,
+      })
+      .from(journalEntries)
+      .innerJoin(transactions, eq(transactions.id, journalEntries.transactionId))
+      .where(and(...conditions))
+      .orderBy(desc(journalEntries.entryDate), desc(journalEntries.createdAt));
+
+    // Fetch all lines for these entries in one go
+    const entryIds = entries.map((e) => e.id);
+    const lines =
+      entryIds.length === 0
+        ? []
+        : await db()
+            .select({
+              id: journalLines.id,
+              journalEntryId: journalLines.journalEntryId,
+              side: journalLines.side,
+              amount: journalLines.amount,
+              memo: journalLines.memo,
+              accountCode: accounts.code,
+              accountName: accounts.name,
+            })
+            .from(journalLines)
+            .leftJoin(accounts, eq(accounts.id, journalLines.accountId))
+            .where(
+              and(
+                eq(journalLines.tenantId, user.tenantId),
+                isNull(journalLines.voidedAt),
+                sql`${journalLines.journalEntryId} = ANY(${entryIds})`,
+              ),
+            )
+            .orderBy(asc(journalLines.createdAt));
+
+    const linesByEntry = new Map<string, JournalEntryRow['lines']>();
+    for (const ln of lines) {
+      if (!ln.journalEntryId) continue;
+      const arr = linesByEntry.get(ln.journalEntryId) ?? [];
+      arr.push({
+        id: ln.id,
+        accountCode: ln.accountCode ?? '',
+        accountName: ln.accountName ?? '',
+        side: ln.side as 'debit' | 'credit',
+        amount: parseFloat(ln.amount),
+        memo: ln.memo,
+      });
+      linesByEntry.set(ln.journalEntryId, arr);
+    }
+
+    return entries.map((e) => ({
+      id: e.id,
+      transactionId: e.transactionId,
+      memo: e.memo,
+      entryDate: e.entryDate,
+      date: e.txDate,
+      party: e.party,
+      description: e.description,
+      direction: e.direction,
+      amount: parseFloat(e.amount),
+      currency: e.currency,
+      lines: linesByEntry.get(e.id) ?? [],
+    }));
+  });
+}
+
+export interface ReportRow {
+  accountCode: string;
+  accountName: string;
+  type: string;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface ReportsData {
+  trialBalance: ReportRow[];
+  income: { revenue: ReportRow[]; expense: ReportRow[]; netIncome: number };
+  asOfPeriod: string;
+}
+
+export async function getReports(period?: string): Promise<ReportsData> {
+  const user = await requireTenantContext();
+  const balances = await computeAccountBalances(user.tenantId);
+  const trialBalance: ReportRow[] = balances.map((b) => ({
+    accountCode: b.code,
+    accountName: b.name,
+    type: b.type,
+    debit: b.normalSide === 'debit' ? Math.max(0, b.balance) : 0,
+    credit: b.normalSide === 'credit' ? Math.max(0, b.balance) : 0,
+    balance: b.balance,
+  }));
+
+  const revenue = trialBalance.filter((r) => r.type === 'revenue');
+  const expense = trialBalance.filter((r) => r.type === 'expense');
+  const netIncome = revenue.reduce((s, r) => s + r.balance, 0) - expense.reduce((s, r) => s + r.balance, 0);
+
+  return {
+    trialBalance,
+    income: { revenue, expense, netIncome },
+    asOfPeriod: period ?? 'all',
+  };
+}
+
+export interface AccountWithBalance {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  normalSide: string;
+  balance: number;
+}
+
+export async function listAccountsWithBalances(): Promise<AccountWithBalance[]> {
+  const user = await requireTenantContext();
+  return computeAccountBalances(user.tenantId);
+}

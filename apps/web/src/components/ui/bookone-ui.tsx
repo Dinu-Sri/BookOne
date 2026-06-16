@@ -27,8 +27,8 @@ export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: R
   return <span className={`badge ${tone}`}>{children}</span>;
 }
 
-export function Card({ children, padded = false, className = '' }: { children: ReactNode; padded?: boolean; className?: string }) {
-  return <section className={`card ${padded ? 'pad' : ''} ${className}`.trim()}>{children}</section>;
+export function Card({ children, padded = false, className = '', style }: { children: ReactNode; padded?: boolean; className?: string; style?: React.CSSProperties }) {
+  return <section className={`card ${padded ? 'pad' : ''} ${className}`.trim()} style={style}>{children}</section>;
 }
 
 export function CardHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {

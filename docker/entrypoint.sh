@@ -4,6 +4,14 @@ set -e
 echo "=== BookOne — Startup Init ==="
 cd /app
 
+# Make sure pnpm has a writable store + cache even when running as the
+# unprivileged `nextjs` user inside the container.
+export PNPM_HOME=/app/.pnpm-store
+export npm_config_cache=/app/.cache/npm
+export NEXT_TELEMETRY_DISABLED=1
+export NODE_ENV=production
+mkdir -p "$PNPM_HOME" "$npm_config_cache"
+
 echo "[1/2] Waiting for Postgres & running migrations..."
 for i in 1 2 3 4 5 6 7 8 9 10; do
   OUT=$(pnpm --filter @bookone/db db:migrate 2>&1) || true

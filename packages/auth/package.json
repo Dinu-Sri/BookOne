@@ -5,10 +5,18 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
     "lint": "echo ok"
   },
   "dependencies": {
     "@bookone/db": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "drizzle-orm": "^0.33.0",
     "next-auth": "5.0.0-beta.25"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.0",
+    "next": "^15.0.0"
   }
 }

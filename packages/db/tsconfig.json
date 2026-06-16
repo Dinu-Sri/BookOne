@@ -8,5 +8,5 @@
     "composite": false
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "migrations"]
+  "exclude": ["node_modules", "dist", "migrations", "src/seed.ts"]
 }

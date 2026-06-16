@@ -2,9 +2,7 @@ import { auth } from './auth';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export const config = {
-  matcher: [
-    '/((?!api/auth|_next/static|_next/image|favicon.webp|logo.webp|design-system).*)',
-  ],
+  matcher: ['/((?!_next|api|favicon|logo).*)'],
 };
 
 export async function middleware(request: NextRequest) {

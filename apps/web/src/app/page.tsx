@@ -20,7 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Button, Card } from '@/components/ui/bookone-ui';
+import { Badge, Button } from '@/components/ui/bookone-ui';
 import { recordEntry, type RecordEntryResult } from '@/app/actions/record-entry';
 import {
   getActiveAccounts,
@@ -42,7 +42,7 @@ const entryModes: { title: string; hint: string; icon: typeof ArrowDownLeft; dir
 const PARTY_LABELS: Record<Direction, string> = {
   money_in: 'From whom',
   money_out: 'Paid to',
-  move_money: 'Memo',
+  move_money: 'Reference',
   invoice_bill: 'Customer / Vendor',
 };
 
@@ -56,7 +56,6 @@ const ACCOUNT_LABEL: Record<Direction, string> = {
 const PAYMENT_METHODS = ['Cash', 'Bank', 'Card', 'Online', 'Credit'] as const;
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-// Account code → likely payment method mapping
 const PAYMENT_HINT: Record<string, PaymentMethod> = {
   '1000': 'Cash',
   '1100': 'Bank',
@@ -95,15 +94,16 @@ export default function Home() {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<RecordEntryResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const partyInputRef = useRef<HTMLInputElement>(null);
 
   const partyLabel = PARTY_LABELS[direction];
   const accountLabel = ACCOUNT_LABEL[direction];
+  const activeModeIndex = entryModes.findIndex((mode) => mode.direction === direction);
   const actionLabel =
     direction === 'money_in' ? 'Record Money In' :
     direction === 'move_money' ? 'Record Transfer' :
     direction === 'invoice_bill' ? 'Create Document' : 'Record Money Out';
 
-  // Load accounts on mount
   useEffect(() => {
     let cancelled = false;
     setAccountsLoading(true);
@@ -136,13 +136,11 @@ export default function Home() {
     [accountList],
   );
 
-  // Auto-pick payment method when the account changes
   useEffect(() => {
     const hint = PAYMENT_HINT[paymentAccountCode];
     if (hint) setPaymentMethod(hint);
   }, [paymentAccountCode]);
 
-  // Live category preview (debounced)
   useEffect(() => {
     if (description.trim().length < 2) {
       setCategoryPreview(null);
@@ -164,7 +162,11 @@ export default function Home() {
     return () => clearTimeout(handle);
   }, [description, party, direction, categoryOverride]);
 
-  function clearForm() {
+  function focusPartyField() {
+    window.requestAnimationFrame(() => partyInputRef.current?.focus());
+  }
+
+  function clearForm({ keepResult = false }: { keepResult?: boolean } = {}) {
     setParty('');
     setAmountStr('');
     setDescription('');
@@ -173,7 +175,27 @@ export default function Home() {
     setShowCategoryPicker(false);
     setReceipt(null);
     setUploadError(null);
+    if (!keepResult) setResult(null);
+    focusPartyField();
+  }
+
+  function selectDirection(nextDirection: Direction, options: { focusParty?: boolean } = {}) {
+    setDirection(nextDirection);
     setResult(null);
+    setShowCategoryPicker(false);
+    if (options.focusParty) focusPartyField();
+  }
+
+  function handleModeKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const nextIndex =
+      event.key === 'Home' ? 0 :
+      event.key === 'End' ? entryModes.length - 1 :
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? (index + 1) % entryModes.length
+        : (index - 1 + entryModes.length) % entryModes.length;
+    selectDirection(entryModes[nextIndex].direction);
   }
 
   async function handleFileUpload(file: File) {
@@ -263,7 +285,7 @@ export default function Home() {
       recordEntry(input).then((res) => {
         setResult(res);
         if (res.success) {
-          clearForm();
+          clearForm({ keepResult: true });
         }
       });
     });
@@ -271,259 +293,288 @@ export default function Home() {
 
   const showCategorySection = direction === 'money_out' || direction === 'invoice_bill';
   const showFromAccount = direction === 'move_money';
+  const selectedMode = entryModes[activeModeIndex] ?? entryModes[1];
+  const SelectedIcon = selectedMode.icon;
 
   return (
     <BookOneShell active="Simple Entry">
       <div className="entry-screen">
-        <Card className="entry-card">
-          <form onSubmit={handleSubmit}>
-            <div className="entry-card-header">
-              <div>
-                <p className="eyebrow">Simple entry</p>
-                <h1>Record what happened</h1>
-              </div>
-              <Badge tone={result?.success ? 'success' : result?.error ? 'danger' : 'success'}>
-                {result?.success ? <CheckCircle2 size={13} /> : result?.error ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
-                {result?.success ? 'Recorded' : result?.error ? 'Error' : 'Ready'}
-              </Badge>
+        <form className="entry-card entry-console" onSubmit={handleSubmit}>
+          <div className="entry-card-header">
+            <div>
+              <p className="eyebrow">Simple entry</p>
+              <h1>Record what happened</h1>
             </div>
+            <Badge tone={result?.success ? 'success' : result?.error ? 'danger' : 'success'}>
+              {result?.success ? <CheckCircle2 size={13} /> : result?.error ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
+              {result?.success ? 'Recorded' : result?.error ? 'Error' : 'Ready'}
+            </Badge>
+          </div>
 
-            <div className="entry-section">
-              <label className="entry-label">What happened?</label>
-              <div className="entry-mode-row">
-                {entryModes.map((mode) => (
-                  <button
-                    className={`entry-mode ${mode.direction === direction ? 'active' : ''}`}
-                    type="button"
-                    key={mode.direction}
-                    onClick={() => {
-                      setDirection(mode.direction);
-                      setResult(null);
-                    }}
-                  >
-                    <mode.icon size={18} />
-                    <strong>{mode.title}</strong>
-                    <span>{mode.hint}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="entry-mode-strip" role="tablist" aria-label="Transaction type">
+            {entryModes.map((mode, index) => (
+              <button
+                className={`entry-mode ${mode.direction === direction ? 'active' : ''}`}
+                type="button"
+                role="tab"
+                aria-selected={mode.direction === direction}
+                tabIndex={mode.direction === direction ? 0 : -1}
+                key={mode.direction}
+                onClick={() => selectDirection(mode.direction, { focusParty: true })}
+                onKeyDown={(event) => handleModeKeyDown(event, index)}
+              >
+                <mode.icon size={17} />
+                <span>
+                  <strong>{mode.title}</strong>
+                  <small>{mode.hint}</small>
+                </span>
+              </button>
+            ))}
+          </div>
 
-            <div className="entry-form">
-              <div className="field">
-                <label>{partyLabel}</label>
-                <input
-                  className="input large"
-                  value={party}
-                  onChange={(e) => setParty(e.target.value)}
-                  placeholder={
-                    direction === 'money_out' ? 'Supplier name' :
-                    direction === 'money_in' ? 'Customer or source' :
-                    direction === 'move_money' ? 'Reference / memo' :
-                    'Customer or vendor name'
-                  }
-                  required
-                />
+          <div className="entry-workspace">
+            <section className="entry-main-lane" aria-labelledby="entry-event-title">
+              <div className="entry-lane-heading">
+                <span className="entry-step">1</span>
+                <div>
+                  <p className="eyebrow">Business event</p>
+                  <h2 id="entry-event-title"><SelectedIcon size={18} /> {selectedMode.title}</h2>
+                </div>
               </div>
-              <div className="field">
-                <label>Amount</label>
-                <input
-                  className="input large"
-                  value={amountStr}
-                  onChange={(e) => setAmountStr(e.target.value)}
-                  placeholder="1,500.00"
-                  inputMode="decimal"
-                  required
-                />
-              </div>
-              <div className="field field-full">
-                <label>What was it for?</label>
-                <input
-                  className="input large"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. Office supplies, rent, Facebook ads"
-                  required
-                />
-              </div>
-              {showFromAccount ? (
+
+              <div className="entry-form">
                 <div className="field">
-                  <label>From account</label>
+                  <label>{partyLabel}</label>
+                  <input
+                    ref={partyInputRef}
+                    className="input large"
+                    value={party}
+                    onChange={(e) => setParty(e.target.value)}
+                    placeholder={
+                      direction === 'money_out' ? 'Supplier name' :
+                      direction === 'money_in' ? 'Customer or source' :
+                      direction === 'move_money' ? 'Reference / memo' :
+                      'Customer or vendor name'
+                    }
+                    autoFocus
+                    required
+                  />
+                </div>
+                <div className="field amount-field">
+                  <label>Amount</label>
+                  <input
+                    className="input large"
+                    value={amountStr}
+                    onChange={(e) => setAmountStr(e.target.value)}
+                    placeholder="1,500.00"
+                    inputMode="decimal"
+                    required
+                  />
+                </div>
+                <div className="field field-full">
+                  <label>What was it for?</label>
+                  <input
+                    className="input large"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="e.g. Office supplies, rent, Facebook ads"
+                    required
+                  />
+                </div>
+              </div>
+
+              {showCategorySection ? (
+                <div className="entry-suggestion">
+                  <div>
+                    <span>
+                      {categoryPreview
+                        ? categoryPreview.source === 'override'
+                          ? 'Overridden category'
+                          : 'Inferred category'
+                        : 'Category'}
+                    </span>
+                    <strong>
+                      {categoryPreview
+                        ? `${categoryPreview.accountName} (${Math.round(categoryPreview.confidence * 100)}%)`
+                        : 'Type a description to see the inferred category...'}
+                    </strong>
+                  </div>
+                  {categoryPreview ? (
+                    <ProgressInline value={Math.round(categoryPreview.confidence * 100)} />
+                  ) : null}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => setShowCategoryPicker((v) => !v)}
+                  >
+                    {showCategoryPicker ? 'Hide override' : 'Override'}
+                  </button>
+                </div>
+              ) : null}
+
+              {showCategorySection && showCategoryPicker ? (
+                <div className="category-picker">
+                  <span className="entry-label">Pick the right account</span>
+                  <div className="suggestion-list">
+                    <button
+                      type="button"
+                      className={`chip ${!categoryOverride ? 'active' : ''}`}
+                      onClick={() => setCategoryOverride('')}
+                    >
+                      <Sparkles size={12} /> Auto
+                    </button>
+                    {(direction === 'money_out'
+                      ? expenseAccounts
+                      : expenseAccounts.concat(revenueAccounts)
+                    ).map((acc) => (
+                      <button
+                        type="button"
+                        key={acc.id}
+                        className={`chip ${categoryOverride === acc.code ? 'active' : ''}`}
+                        onClick={() => setCategoryOverride(acc.code)}
+                      >
+                        {acc.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {result?.error ? (
+                <p className="entry-result error">{result.error}</p>
+              ) : null}
+
+              {result?.success ? (
+                <p className="entry-result success">
+                  Entry recorded. Journal #{result.journalId?.slice(0, 8)} created.
+                </p>
+              ) : null}
+            </section>
+
+            <aside className="entry-side-rail" aria-label="Payment details">
+              <div className="entry-side-header">
+                <span className="entry-step">2</span>
+                <div>
+                  <p className="eyebrow">Payment details</p>
+                  <strong>{date === todayString() ? 'Today' : date}</strong>
+                </div>
+              </div>
+
+              <div className="side-field-stack">
+                {showFromAccount ? (
+                  <div className="field">
+                    <label>From account</label>
+                    <AccountSelect
+                      value={fromAccountCode}
+                      onChange={setFromAccountCode}
+                      accounts={liquidAccounts}
+                      disabled={accountsLoading}
+                    />
+                  </div>
+                ) : null}
+                <div className="field">
+                  <label>{accountLabel}</label>
                   <AccountSelect
-                    value={fromAccountCode}
-                    onChange={setFromAccountCode}
+                    value={paymentAccountCode}
+                    onChange={setPaymentAccountCode}
                     accounts={liquidAccounts}
                     disabled={accountsLoading}
                   />
                 </div>
-              ) : null}
-              <div className="field">
-                <label>{accountLabel}</label>
-                <AccountSelect
-                  value={paymentAccountCode}
-                  onChange={setPaymentAccountCode}
-                  accounts={liquidAccounts}
-                  disabled={accountsLoading}
-                />
-              </div>
-              <div className="field">
-                <label>Payment method</label>
-                <select
-                  className="input"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>Date</label>
-                <div className="date-field">
-                  <CalendarDays size={16} />
-                  <input
+                <div className="field">
+                  <label>Payment method</label>
+                  <select
                     className="input"
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    max={todayString()}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {showCategorySection ? (
-              <div className="entry-suggestion">
-                <div>
-                  <span>
-                    {categoryPreview
-                      ? categoryPreview.source === 'override'
-                        ? 'Overridden category'
-                        : 'Inferred category'
-                      : 'Category'}
-                  </span>
-                  <strong>
-                    {categoryPreview
-                      ? `${categoryPreview.accountName} (${Math.round(categoryPreview.confidence * 100)}%)`
-                      : 'Type a description to see the inferred category…'}
-                  </strong>
-                </div>
-                {categoryPreview ? (
-                  <ProgressInline value={Math.round(categoryPreview.confidence * 100)} />
-                ) : null}
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => setShowCategoryPicker((v) => !v)}
-                >
-                  {showCategoryPicker ? 'Hide override' : 'Override'}
-                </button>
-              </div>
-            ) : null}
-
-            {showCategorySection && showCategoryPicker ? (
-              <div className="category-picker">
-                <span className="entry-label">Pick the right account</span>
-                <div className="suggestion-list">
-                  <button
-                    type="button"
-                    className={`chip ${!categoryOverride ? 'active' : ''}`}
-                    onClick={() => setCategoryOverride('')}
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                   >
-                    <Sparkles size={12} /> Auto
-                  </button>
-                  {(direction === 'money_out'
-                    ? expenseAccounts
-                    : expenseAccounts.concat(revenueAccounts)
-                  ).map((acc) => (
-                    <button
-                      type="button"
-                      key={acc.id}
-                      className={`chip ${categoryOverride === acc.code ? 'active' : ''}`}
-                      onClick={() => setCategoryOverride(acc.code)}
-                    >
-                      {acc.name}
-                    </button>
-                  ))}
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
-              </div>
-            ) : null}
-
-            <div className="entry-receipt">
-              {receipt ? (
-                <>
-                  <div className="cluster">
-                    <Paperclip size={18} color="var(--brand)" />
-                    <div>
-                      <strong>{receipt.name}</strong>
-                      <span>{(receipt.size / 1024).toFixed(0)} KB · stored privately in R2</span>
-                    </div>
-                  </div>
-                  <Button variant="secondary" type="button" onClick={removeReceipt} aria-label="Remove receipt">
-                    <X size={16} /> Remove
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="cluster">
-                    <ReceiptText size={18} color="var(--brand)" />
-                    <div>
-                      <strong>Receipt</strong>
-                      <span>Optional. JPEG, PNG, WebP, HEIC, or PDF up to 10 MB.</span>
-                    </div>
-                  </div>
-                  <div className="cluster">
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                    >
-                      {uploading ? <Loader2 size={16} /> : <Camera size={16} />} Photo
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                    >
-                      {uploading ? <Loader2 size={16} /> : <Upload size={16} />} Upload
-                    </Button>
+                <div className="field">
+                  <label>Date</label>
+                  <div className="date-field">
+                    <CalendarDays size={16} />
                     <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
-                      hidden
-                      onChange={onFileSelected}
+                      className="input"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      max={todayString()}
                     />
                   </div>
-                </>
-              )}
-            </div>
-            {uploadError ? (
-              <p style={{ marginTop: 10, color: 'var(--danger)', fontSize: 13 }}>{uploadError}</p>
-            ) : null}
+                </div>
+              </div>
 
-            {result?.error ? (
-              <p style={{ marginTop: 14, color: 'var(--danger)', fontSize: 13 }}>{result.error}</p>
-            ) : null}
+              <div className="entry-receipt compact">
+                {receipt ? (
+                  <>
+                    <div className="cluster">
+                      <Paperclip size={18} color="var(--brand)" />
+                      <div>
+                        <strong>{receipt.name}</strong>
+                        <span>{(receipt.size / 1024).toFixed(0)} KB stored privately</span>
+                      </div>
+                    </div>
+                    <Button variant="secondary" type="button" onClick={removeReceipt} aria-label="Remove receipt">
+                      <X size={16} /> Remove
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="cluster">
+                      <ReceiptText size={18} color="var(--brand)" />
+                      <div>
+                        <strong>Receipt</strong>
+                        <span>Optional image or PDF up to 10 MB.</span>
+                      </div>
+                    </div>
+                    <div className="cluster receipt-actions">
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                      >
+                        {uploading ? <Loader2 size={16} /> : <Camera size={16} />} Photo
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                      >
+                        {uploading ? <Loader2 size={16} /> : <Upload size={16} />} Upload
+                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+                        hidden
+                        onChange={onFileSelected}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+              {uploadError ? (
+                <p className="entry-result error">{uploadError}</p>
+              ) : null}
 
-            {result?.success ? (
-              <p style={{ marginTop: 14, color: 'var(--success)', fontSize: 13 }}>
-                Entry recorded. Journal #{result.journalId?.slice(0, 8)} created.
-              </p>
-            ) : null}
-
-            <div className="entry-footer">
-              <span>BookOne automatically creates the journal and audit record.</span>
-              <Button variant="primary" type="submit" disabled={isPending || accountsLoading}>
-                {isPending ? <Loader2 size={16} /> : null}
-                {isPending ? 'Recording…' : actionLabel}
-              </Button>
-            </div>
-          </form>
-        </Card>
+              <div className="entry-submit-bar">
+                <Button variant="primary" type="submit" disabled={isPending || accountsLoading}>
+                  {isPending ? <Loader2 size={16} /> : null}
+                  {isPending ? 'Recording...' : actionLabel}
+                </Button>
+                <button type="button" className="link-button" onClick={() => clearForm()}>
+                  Clear
+                </button>
+              </div>
+            </aside>
+          </div>
+        </form>
       </div>
     </BookOneShell>
   );
@@ -544,7 +595,7 @@ function AccountSelect({
     return (
       <div className="select-like" aria-busy>
         <span className="cluster" style={{ color: 'var(--ink-soft)' }}>
-          <Landmark size={16} /> Loading accounts…
+          <Landmark size={16} /> Loading accounts...
         </span>
         <ChevronDown size={14} />
       </div>
@@ -562,7 +613,7 @@ function AccountSelect({
       ) : null}
       {accounts.map((a) => (
         <option key={a.id} value={a.code}>
-          {a.code} — {a.name}
+          {a.code} - {a.name}
         </option>
       ))}
     </select>

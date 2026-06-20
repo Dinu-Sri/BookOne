@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation';
 import { getDashboardData, getTenantInfo, listTransactions } from '@/app/actions/workspace';
+import { getReconciliationForPeriod } from '@/app/actions/reconciliation';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { BankReconciliationWizard } from '@/components/reconciliation/bank-reconciliation-wizard';
+import { PeriodCloseControls } from '@/components/reconciliation/period-close-controls';
 import { Badge, Card, PageHeading } from '@/components/ui/bookone-ui';
 import { CircleAlert, ShieldCheck } from 'lucide-react';
 
@@ -12,17 +14,20 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   let tenant;
   let data;
   let transactions;
+  let reconciliation;
   try {
-    [tenant, data, transactions] = await Promise.all([
-      getTenantInfo(),
-      getDashboardData(params?.period),
-      listTransactions(params?.period),
-    ]);
+    [tenant, data, transactions] = await Promise.all([getTenantInfo(), getDashboardData(params?.period), listTransactions(params?.period)]);
   } catch (err) {
     redirect('/login');
   }
 
   const period = { selected: data.selectedPeriod, available: data.availablePeriods };
+  const reconciliationPeriod = period.selected ?? new Date().toISOString().slice(0, 7);
+  try {
+    reconciliation = await getReconciliationForPeriod(reconciliationPeriod);
+  } catch (err) {
+    redirect('/login');
+  }
   const periodLabel = period.selected
     ? new Date(`${period.selected}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })
     : 'All time';
@@ -73,7 +78,16 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
             </div>
           </Card>
 
-          <BankReconciliationWizard transactions={transactions} />
+          <BankReconciliationWizard
+            period={reconciliationPeriod}
+            transactions={transactions}
+            initialImport={reconciliation.importSummary}
+          />
+          <PeriodCloseControls
+            period={reconciliationPeriod}
+            lock={reconciliation.lock}
+            importSummary={reconciliation.importSummary}
+          />
         </div>
       </div>
     </BookOneShell>

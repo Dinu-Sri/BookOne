@@ -98,6 +98,16 @@ The product positioning and design philosophy is documented in `docs/ACCOUNTING_
 
 Each phase corresponds to a commit on `master`. Replay them in order if you ever need to rebuild from scratch.
 
+### Current checkpoint - 2026-06-20
+
+- Period filtering is wired through Dashboard, Transactions, Journal, Reports, and Reconciliation from the header period picker.
+- Bank reconciliation now persists CSV imports, statement lines, automatic matches, and manual Reconciled/Unmatched decisions.
+- Period close is implemented through `period_locks`; locked months block new direct entries for that month.
+- Reversing entries are available from Transactions and post an opposite journal in the current open period.
+- Transaction review now supports search, party, account, low confidence, missing receipt, and unreconciled filters.
+- Receipt viewing uses private R2 presigned download URLs from the Transactions page.
+- Production smoke testing is documented in `docs/PRODUCTION_SMOKE_TEST.md`.
+
 | # | Phase | Status | Commit | Notes |
 |---|-------|--------|--------|-------|
 | 0 | Legacy audit & architecture docs | ✅ | (pre-monorepo) | README, ACCOUNTING_LOGIC, CHANGELOG |
@@ -219,6 +229,9 @@ BookOne v2
 | `journal_lines` | Debit/credit lines | `id`, `journal_entry_id`, `account_id`, `side`, `amount` |
 | `settlement_allocations` | (Future) Invoice ↔ payment matching | `id`, `invoice_id`, `payment_id`, `amount` |
 | `audit_log` | Every mutation | `id`, `user_id`, `action`, `table_name`, `record_id`, `new_values` |
+| `bank_statement_imports` | Uploaded bank statement batches | `id`, `tenant_id`, `period`, `file_name`, `status`, `row_count` |
+| `bank_statement_lines` | Statement rows and match decisions | `id`, `import_id`, `matched_transaction_id`, `transaction_date`, `amount`, `status` |
+| `period_locks` | Closed accounting periods | `id`, `tenant_id`, `period`, `status`, `locked_at` |
 
 **RLS policy:** `USING (tenant_id = current_setting('app.current_tenant_id')::uuid)`. Set at the start of every request via `withTenantContext()` (server) or middleware (Edge).
 

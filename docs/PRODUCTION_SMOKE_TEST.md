@@ -28,14 +28,23 @@ Run this after every Portainer redeploy on `https://bookone.clossyan.com`.
 - Open Reports and confirm the Profit & Loss reflects the entry.
 - Open Accounts and confirm the relevant cash/expense balances changed.
 
-## 5. Bank Reconciliation Preview
+## 5. Bank Reconciliation
 
 - Open Reconciliation.
 - Upload a small CSV with `date`, `description`, and `amount` columns.
 - Confirm matched rows show as Matched.
 - Mark at least one row Reconciled and one row Unmatched.
+- Refresh the page and confirm the uploaded statement and statuses are still visible.
+- If no lines remain in Review, click Lock period and confirm the period status changes to Locked.
 
-## 6. Production Health
+## 6. Transaction Review
+
+- Open Transactions for the same period.
+- Use the search, party, account, low confidence, missing receipt, and unreconciled filters.
+- If a receipt exists, click View and confirm a private presigned URL opens the file.
+- For a locked-period mistake, click Reverse and confirm a reversal entry appears in Journal.
+
+## 7. Production Health
 
 - Confirm no page redirects unexpectedly to Simple Entry except direct `/login` access while already signed in.
 - In Portainer, inspect `bookone-web` logs for startup, migration, RLS, seed, and runtime errors.

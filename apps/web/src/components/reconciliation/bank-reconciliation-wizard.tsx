@@ -1,8 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { CheckCircle2, CircleAlert, FileSpreadsheet, Upload } from 'lucide-react';
+import { useMemo, useState, useTransition } from 'react';
+import { CheckCircle2, CircleAlert, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import type { TransactionRow } from '@/app/actions/workspace';
+import {
+  createBankStatementImport,
+  updateBankStatementLineStatus,
+  type ReconciliationImportSummary,
+} from '@/app/actions/reconciliation';
 import { Badge, Button, Card } from '@/components/ui/bookone-ui';
 
 interface BankRow {
@@ -12,6 +17,7 @@ interface BankRow {
   amount: number;
   matchedTransactionId: string | null;
   status: 'matched' | 'reconciled' | 'unmatched' | 'review';
+  persisted: boolean;
 }
 
 function splitCsvLine(line: string): string[] {
@@ -105,6 +111,7 @@ function parseBankCsv(text: string, transactions: TransactionRow[]): BankRow[] {
       amount,
       matchedTransactionId: match?.id ?? null,
       status: match ? 'matched' : 'review',
+      persisted: false,
     };
   });
 }
@@ -114,10 +121,29 @@ function formatLKR(value: number) {
   return `${sign}LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-export function BankReconciliationWizard({ transactions }: { transactions: TransactionRow[] }) {
-  const [rows, setRows] = useState<BankRow[]>([]);
-  const [fileName, setFileName] = useState<string | null>(null);
+export function BankReconciliationWizard({
+  period,
+  transactions,
+  initialImport,
+}: {
+  period: string;
+  transactions: TransactionRow[];
+  initialImport: ReconciliationImportSummary | null;
+}) {
+  const [rows, setRows] = useState<BankRow[]>(
+    initialImport?.lines.map((line) => ({
+      id: line.id,
+      date: line.date,
+      description: line.description,
+      amount: line.amount,
+      matchedTransactionId: line.matchedTransactionId,
+      status: line.status as BankRow['status'],
+      persisted: true,
+    })) ?? [],
+  );
+  const [fileName, setFileName] = useState<string | null>(initialImport?.fileName ?? null);
   const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const reconciledCount = useMemo(
     () => rows.filter((row) => row.status === 'matched' || row.status === 'reconciled').length,
@@ -126,7 +152,23 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
   const unmatchedCount = rows.filter((row) => row.status === 'unmatched' || row.status === 'review').length;
 
   function updateStatus(id: string, status: BankRow['status']) {
-    setRows((current) => current.map((row) => (row.id === id ? { ...row, status } : row)));
+    const row = rows.find((item) => item.id === id);
+    if (!row) return;
+    setRows((current) => current.map((item) => (item.id === id ? { ...item, status } : item)));
+    if (row.persisted) {
+      startTransition(() => {
+        updateBankStatementLineStatus({
+          lineId: id,
+          status,
+          matchedTransactionId: status === 'unmatched' || status === 'review' ? null : row.matchedTransactionId,
+        }).then((result) => {
+          if (!result.ok) {
+            setError(result.error ?? 'Could not save status.');
+            setRows((current) => current.map((item) => (item.id === id ? row : item)));
+          }
+        });
+      });
+    }
   }
 
   async function handleFile(file: File) {
@@ -141,6 +183,25 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
         return;
       }
       setRows(parsed);
+      startTransition(() => {
+        createBankStatementImport({
+          period,
+          fileName: file.name,
+          rows: parsed.map((row) => ({
+            date: row.date,
+            description: row.description,
+            amount: row.amount,
+            matchedTransactionId: row.matchedTransactionId,
+            status: row.status,
+          })),
+        }).then((result) => {
+          if (!result.ok) {
+            setError(result.error ?? 'Could not save this bank statement.');
+            return;
+          }
+          window.location.reload();
+        });
+      });
     } catch {
       setRows([]);
       setError('Could not read this CSV file.');
@@ -156,6 +217,7 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
           <p className="card-subtitle">Upload a bank CSV to preview automatic matches for this period.</p>
         </div>
         <Badge tone={rows.length === 0 ? 'info' : unmatchedCount === 0 ? 'success' : 'warning'}>
+          {isPending ? <Loader2 size={12} /> : null}
           {rows.length === 0 ? 'Ready' : `${reconciledCount}/${rows.length} reconciled`}
         </Badge>
       </div>
@@ -164,15 +226,16 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
           <FileSpreadsheet size={20} color="var(--brand)" />
           <span>
             <strong>{fileName ?? 'Choose bank CSV'}</strong>
-            <small>Date + amount columns are enough for a first pass.</small>
+            <small>{rows.length > 0 ? 'Saved for this period.' : 'Date + amount columns are enough for a first pass.'}</small>
           </span>
           <Button variant="secondary">
-            <Upload size={15} /> Upload
+            {isPending ? <Loader2 size={15} /> : <Upload size={15} />} Upload
           </Button>
           <input
             type="file"
             accept=".csv,text/csv"
             hidden
+            disabled={isPending}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) void handleFile(file);

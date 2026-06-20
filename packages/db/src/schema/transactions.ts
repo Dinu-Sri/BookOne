@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, numeric, text } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, numeric, text, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { users } from './users';
 import { accounts } from './accounts';
@@ -16,6 +16,8 @@ export const transactions = pgTable('transactions', {
   paymentMethod: varchar('payment_method', { length: 20 }).notNull(),
   paymentAccountId: uuid('payment_account_id').notNull().references(() => accounts.id),
   transferSourceAccountId: uuid('transfer_source_account_id').references(() => accounts.id),
+  reversesTransactionId: uuid('reverses_transaction_id').references((): AnyPgColumn => transactions.id),
+  reversedByTransactionId: uuid('reversed_by_transaction_id').references((): AnyPgColumn => transactions.id),
   date: varchar('date', { length: 10 }).notNull(),
   receiptRef: varchar('receipt_ref', { length: 500 }),
   categoryCode: varchar('category_code', { length: 20 }),

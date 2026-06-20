@@ -749,6 +749,20 @@ img {
   padding-left: 38px;
 }
 
+.filter-bar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(140px, 0.7fr) minmax(130px, 0.62fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -896,6 +910,10 @@ img {
   min-width: 720px;
 }
 
+.table.review-table {
+  min-width: 1120px;
+}
+
 .table th,
 .table td {
   padding: 12px 14px;
@@ -914,6 +932,31 @@ img {
 
 .table td {
   color: var(--ink);
+}
+
+.status-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: 190px;
+}
+
+.receipt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-strong);
+  font-weight: 850;
+}
+
+.receipt-link.muted {
+  color: var(--ink-muted);
+}
+
+.table-icon-action {
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 
 .amount-positive {
@@ -1539,6 +1582,10 @@ img {
 
   .search-field {
     width: 100%;
+  }
+
+  .filter-bar {
+    grid-template-columns: 1fr;
   }
 
   .workspace {

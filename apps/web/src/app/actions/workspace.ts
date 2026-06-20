@@ -6,6 +6,8 @@ import {
   journalEntries,
   journalLines,
   transactions,
+  bankStatementLines,
+  periodLocks,
   withTenantContext,
   eq,
   and,
@@ -353,11 +355,49 @@ export interface TransactionRow {
   receiptRef: string | null;
   paymentAccountCode: string;
   paymentAccountName: string;
+  reconciliationStatus: string | null;
+  reconciliationLineId: string | null;
+  isPeriodLocked: boolean;
+  reversedByTransactionId: string | null;
+  reversesTransactionId: string | null;
 }
 
-export async function listTransactions(period?: string): Promise<TransactionRow[]> {
+export interface TransactionFilters {
+  period?: string;
+  q?: string;
+  confidence?: 'low' | 'all';
+  receipt?: 'missing' | 'attached' | 'all';
+  reconciliation?: 'reconciled' | 'unreconciled' | 'all';
+  account?: string;
+  party?: string;
+}
+
+function filtersFromInput(input?: string | TransactionFilters): TransactionFilters {
+  return typeof input === 'string' ? { period: input } : input ?? {};
+}
+
+export async function isPeriodLocked(tenantId: string, period: string): Promise<boolean> {
+  return withTenantContext(tenantId, async () => {
+    const [lock] = await db()
+      .select({ id: periodLocks.id })
+      .from(periodLocks)
+      .where(
+        and(
+          eq(periodLocks.tenantId, tenantId),
+          eq(periodLocks.period, period),
+          eq(periodLocks.status, 'locked'),
+          isNull(periodLocks.voidedAt),
+        ),
+      )
+      .limit(1);
+    return Boolean(lock);
+  });
+}
+
+export async function listTransactions(input?: string | TransactionFilters): Promise<TransactionRow[]> {
   const user = await requireTenantContext();
-  const selectedPeriod = selectedPeriodFromInput(period);
+  const filters = filtersFromInput(input);
+  const selectedPeriod = selectedPeriodFromInput(filters.period);
   return withTenantContext(user.tenantId, async () => {
     const conditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
     if (selectedPeriod) {
@@ -380,12 +420,53 @@ export async function listTransactions(period?: string): Promise<TransactionRow[
         receiptRef: transactions.receiptRef,
         paymentAccountCode: accounts.code,
         paymentAccountName: accounts.name,
+        reversedByTransactionId: transactions.reversedByTransactionId,
+        reversesTransactionId: transactions.reversesTransactionId,
       })
       .from(transactions)
       .leftJoin(accounts, eq(accounts.id, transactions.paymentAccountId))
       .where(and(...conditions))
       .orderBy(desc(transactions.date), desc(transactions.createdAt));
-    return rows.map((r) => ({
+    const transactionIds = rows.map((r) => r.id);
+    const reconciliationRows =
+      transactionIds.length === 0
+        ? []
+        : await db()
+            .select({
+              id: bankStatementLines.id,
+              matchedTransactionId: bankStatementLines.matchedTransactionId,
+              status: bankStatementLines.status,
+            })
+            .from(bankStatementLines)
+            .where(
+              and(
+                eq(bankStatementLines.tenantId, user.tenantId),
+                isNull(bankStatementLines.voidedAt),
+                inArray(bankStatementLines.matchedTransactionId, transactionIds),
+              ),
+            );
+    const reconciliationByTx = new Map<string, { id: string; status: string }>();
+    for (const row of reconciliationRows) {
+      if (row.matchedTransactionId) {
+        reconciliationByTx.set(row.matchedTransactionId, { id: row.id, status: row.status });
+      }
+    }
+
+    const lockRows = await db()
+      .select({ period: periodLocks.period })
+      .from(periodLocks)
+      .where(
+        and(
+          eq(periodLocks.tenantId, user.tenantId),
+          eq(periodLocks.status, 'locked'),
+          isNull(periodLocks.voidedAt),
+        ),
+      );
+    const lockedPeriods = new Set(lockRows.map((row) => row.period));
+
+    const mapped = rows.map((r) => {
+      const reconciliation = reconciliationByTx.get(r.id);
+      return {
       id: r.id,
       date: r.date,
       party: r.party,
@@ -400,7 +481,26 @@ export async function listTransactions(period?: string): Promise<TransactionRow[
       receiptRef: r.receiptRef,
       paymentAccountCode: r.paymentAccountCode ?? '',
       paymentAccountName: r.paymentAccountName ?? '',
-    }));
+      reconciliationStatus: reconciliation?.status ?? null,
+      reconciliationLineId: reconciliation?.id ?? null,
+      isPeriodLocked: lockedPeriods.has(r.date.slice(0, 7)),
+      reversedByTransactionId: r.reversedByTransactionId,
+      reversesTransactionId: r.reversesTransactionId,
+      };
+    });
+
+    return mapped.filter((tx) => {
+      const q = filters.q?.trim().toLowerCase();
+      if (q && !`${tx.party} ${tx.description} ${tx.categoryName ?? ''}`.toLowerCase().includes(q)) return false;
+      if (filters.party?.trim() && !tx.party.toLowerCase().includes(filters.party.trim().toLowerCase())) return false;
+      if (filters.account?.trim() && tx.paymentAccountCode !== filters.account.trim()) return false;
+      if (filters.confidence === 'low' && (tx.categoryConfidence == null || tx.categoryConfidence >= 0.7)) return false;
+      if (filters.receipt === 'missing' && tx.receiptRef) return false;
+      if (filters.receipt === 'attached' && !tx.receiptRef) return false;
+      if (filters.reconciliation === 'reconciled' && !tx.reconciliationStatus) return false;
+      if (filters.reconciliation === 'unreconciled' && tx.reconciliationStatus) return false;
+      return true;
+    });
   });
 }
 

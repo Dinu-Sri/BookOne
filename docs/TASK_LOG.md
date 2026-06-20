@@ -99,6 +99,23 @@
 
 ---
 
+## 2026-06-20 - Reconciliation Persistence & Period Close
+
+### Completed
+- Added tenant-scoped bank statement import, bank statement line, and period lock tables with RLS policies.
+- Persisted CSV reconciliation imports and manual Reconciled / Unmatched decisions.
+- Added period close controls on Reconciliation and blocked direct Simple Entry posting into locked months.
+- Added reversing entries from Transactions; reversals post the opposite journal into the current open period and audit the action.
+- Added transaction review filters for search, party, account, low confidence, missing receipts, and unreconciled items.
+- Added receipt viewer links using private R2 presigned URLs.
+- Updated the production smoke test checklist for reconciliation, period close, reversal, filters, and receipts.
+
+### Next Steps
+- [ ] Run live Portainer smoke test after GitHub Actions completes and the stack redeploys.
+- [ ] Decide the next ERP module foundation: inventory, tax, POS, or HR.
+
+---
+
 ## Template for New Entries
 
 ```

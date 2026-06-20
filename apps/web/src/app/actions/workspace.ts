@@ -621,6 +621,21 @@ export interface ReportRow {
 export interface ReportsData {
   trialBalance: ReportRow[];
   income: { revenue: ReportRow[]; expense: ReportRow[]; netIncome: number };
+  balanceSheet: {
+    assets: ReportRow[];
+    liabilities: ReportRow[];
+    equity: ReportRow[];
+    totalAssets: number;
+    totalLiabilities: number;
+    totalEquity: number;
+  };
+  cashFlow: {
+    moneyIn: number;
+    moneyOut: number;
+    netCashFlow: number;
+    transactionCount: number;
+  };
+  generalLedger: JournalEntryRow[];
   asOfPeriod: string;
 }
 
@@ -639,11 +654,47 @@ export async function getReports(period?: string): Promise<ReportsData> {
 
   const revenue = trialBalance.filter((r) => r.type === 'revenue');
   const expense = trialBalance.filter((r) => r.type === 'expense');
+  const assets = trialBalance.filter((r) => r.type === 'asset');
+  const liabilities = trialBalance.filter((r) => r.type === 'liability');
+  const equity = trialBalance.filter((r) => r.type === 'equity');
   const netIncome = revenue.reduce((s, r) => s + r.balance, 0) - expense.reduce((s, r) => s + r.balance, 0);
+
+  const transactionConditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
+  if (selectedPeriod) {
+    transactionConditions.push(gte(transactions.date, `${selectedPeriod}-01`));
+    transactionConditions.push(lte(transactions.date, `${selectedPeriod}-31`));
+  }
+  const periodTransactions = await withTenantContext(user.tenantId, async () => {
+    return db()
+      .select({ direction: transactions.direction, amount: transactions.amount })
+      .from(transactions)
+      .where(and(...transactionConditions));
+  });
+  const moneyIn = periodTransactions
+    .filter((tx) => tx.direction === 'money_in')
+    .reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const moneyOut = periodTransactions
+    .filter((tx) => tx.direction === 'money_out')
+    .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
   return {
     trialBalance,
     income: { revenue, expense, netIncome },
+    balanceSheet: {
+      assets,
+      liabilities,
+      equity,
+      totalAssets: assets.reduce((sum, row) => sum + row.balance, 0),
+      totalLiabilities: liabilities.reduce((sum, row) => sum + row.balance, 0),
+      totalEquity: equity.reduce((sum, row) => sum + row.balance, 0),
+    },
+    cashFlow: {
+      moneyIn,
+      moneyOut,
+      netCashFlow: moneyIn - moneyOut,
+      transactionCount: periodTransactions.length,
+    },
+    generalLedger: await listJournalEntries(period),
     asOfPeriod: selectedPeriod ?? 'all',
   };
 }

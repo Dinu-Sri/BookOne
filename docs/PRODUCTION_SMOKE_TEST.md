@@ -25,10 +25,19 @@ Run this after every Portainer redeploy on `https://bookone.clossyan.com`.
 ## 4. Accounting Cross-Check
 
 - Open Journal and confirm the new entry has balanced debit and credit totals.
-- Open Reports and confirm the Profit & Loss reflects the entry.
+- Open Reports and confirm Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance render.
 - Open Accounts and confirm the relevant cash/expense balances changed.
 
-## 5. Bank Reconciliation
+## 5. Parties, Invoices, Bills, and Allocation
+
+- Open Parties and create one customer or vendor.
+- Open Invoices/Bills and create one small customer invoice.
+- Confirm it appears as Open with a balance due.
+- Allocate a partial or full payment against the invoice.
+- Open Journal and confirm the invoice journal and payment journal are both balanced.
+- Open Reports and confirm receivables/cash/revenue changed.
+
+## 6. Bank Reconciliation
 
 - Open Reconciliation.
 - Upload a small CSV with `date`, `description`, and `amount` columns.
@@ -37,14 +46,14 @@ Run this after every Portainer redeploy on `https://bookone.clossyan.com`.
 - Refresh the page and confirm the uploaded statement and statuses are still visible.
 - If no lines remain in Review, click Lock period and confirm the period status changes to Locked.
 
-## 6. Transaction Review
+## 7. Transaction Review
 
 - Open Transactions for the same period.
 - Use the search, party, account, low confidence, missing receipt, and unreconciled filters.
 - If a receipt exists, click View and confirm a private presigned URL opens the file.
 - For a locked-period mistake, click Reverse and confirm a reversal entry appears in Journal.
 
-## 7. Production Health
+## 8. Production Health
 
 - Confirm no page redirects unexpectedly to Simple Entry except direct `/login` access while already signed in.
 - In Portainer, inspect `bookone-web` logs for startup, migration, RLS, seed, and runtime errors.

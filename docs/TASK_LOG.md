@@ -116,6 +116,24 @@
 
 ---
 
+## 2026-06-20 - AR/AP Documents & Reports v1
+
+### Completed
+- Added tenant-scoped `business_documents` and `business_document_lines` tables with RLS policies.
+- Added reusable customer/vendor party actions and a Parties screen.
+- Added Invoices/Bills screen for creating customer invoices and vendor bills.
+- Document creation now posts journals to AR/AP plus revenue/expense accounts.
+- Added payment allocation against open documents using `settlement_allocations`.
+- Added Reports v1 views: Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance.
+- Added Accounting sidebar links for Parties and Invoices/Bills.
+
+### Next Steps
+- [ ] Add line-item editing and multiple lines per invoice/bill.
+- [ ] Add document detail pages, print/PDF, and email/share workflow.
+- [ ] Add AR/AP aging reports after payment allocation is validated in production.
+
+---
+
 ## Template for New Entries
 
 ```

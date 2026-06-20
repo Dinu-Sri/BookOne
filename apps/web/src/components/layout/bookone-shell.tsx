@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   ClipboardList,
+  FileText,
   Landmark,
   LayoutDashboard,
   LineChart,
@@ -47,6 +48,8 @@ const navSuites: NavSuite[] = [
     items: [
       { label: 'Simple Entry', icon: ReceiptText, href: '/' },
       { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+      { label: 'Parties', icon: Users, href: '/parties' },
+      { label: 'Invoices/Bills', icon: FileText, href: '/documents' },
       { label: 'Transactions', icon: ClipboardList, href: '/transactions' },
       { label: 'Journal', icon: BookOpenCheck, href: '/journal' },
       { label: 'Reports', icon: LineChart, href: '/reports' },

@@ -107,6 +107,9 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 - Transaction review now supports search, party, account, low confidence, missing receipt, and unreconciled filters.
 - Receipt viewing uses private R2 presigned download URLs from the Transactions page.
 - Production smoke testing is documented in `docs/PRODUCTION_SMOKE_TEST.md`.
+- Customer/vendor parties are reusable records instead of only free-text names.
+- Invoices and bills are real AR/AP documents with journal posting and payment allocation.
+- Reports v1 now exposes Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance.
 
 | # | Phase | Status | Commit | Notes |
 |---|-------|--------|--------|-------|
@@ -232,6 +235,8 @@ BookOne v2
 | `bank_statement_imports` | Uploaded bank statement batches | `id`, `tenant_id`, `period`, `file_name`, `status`, `row_count` |
 | `bank_statement_lines` | Statement rows and match decisions | `id`, `import_id`, `matched_transaction_id`, `transaction_date`, `amount`, `status` |
 | `period_locks` | Closed accounting periods | `id`, `tenant_id`, `period`, `status`, `locked_at` |
+| `business_documents` | Customer invoices and vendor bills | `id`, `party_id`, `transaction_id`, `document_type`, `status`, `total`, `balance_due` |
+| `business_document_lines` | Invoice/bill line detail | `id`, `document_id`, `account_id`, `description`, `quantity`, `unit_price`, `line_total` |
 
 **RLS policy:** `USING (tenant_id = current_setting('app.current_tenant_id')::uuid)`. Set at the start of every request via `withTenantContext()` (server) or middleware (Edge).
 

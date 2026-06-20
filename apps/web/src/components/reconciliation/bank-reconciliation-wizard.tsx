@@ -11,6 +11,7 @@ interface BankRow {
   description: string;
   amount: number;
   matchedTransactionId: string | null;
+  status: 'matched' | 'reconciled' | 'unmatched' | 'review';
 }
 
 function splitCsvLine(line: string): string[] {
@@ -103,6 +104,7 @@ function parseBankCsv(text: string, transactions: TransactionRow[]): BankRow[] {
       description,
       amount,
       matchedTransactionId: match?.id ?? null,
+      status: match ? 'matched' : 'review',
     };
   });
 }
@@ -117,8 +119,15 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const matchedCount = useMemo(() => rows.filter((row) => row.matchedTransactionId).length, [rows]);
-  const unmatchedCount = rows.length - matchedCount;
+  const reconciledCount = useMemo(
+    () => rows.filter((row) => row.status === 'matched' || row.status === 'reconciled').length,
+    [rows],
+  );
+  const unmatchedCount = rows.filter((row) => row.status === 'unmatched' || row.status === 'review').length;
+
+  function updateStatus(id: string, status: BankRow['status']) {
+    setRows((current) => current.map((row) => (row.id === id ? { ...row, status } : row)));
+  }
 
   async function handleFile(file: File) {
     setError(null);
@@ -147,7 +156,7 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
           <p className="card-subtitle">Upload a bank CSV to preview automatic matches for this period.</p>
         </div>
         <Badge tone={rows.length === 0 ? 'info' : unmatchedCount === 0 ? 'success' : 'warning'}>
-          {rows.length === 0 ? 'Ready' : `${matchedCount}/${rows.length} matched`}
+          {rows.length === 0 ? 'Ready' : `${reconciledCount}/${rows.length} reconciled`}
         </Badge>
       </div>
       <div className="card-body">
@@ -180,9 +189,9 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
               <div className="balance-row">
                 <div>
                   <strong>Matched</strong>
-                  <span>Exact date and amount matches.</span>
+                  <span>Exact matches plus manual reconciliations.</span>
                 </div>
-                <Badge tone="success"><CheckCircle2 size={12} /> {matchedCount}</Badge>
+                <Badge tone="success"><CheckCircle2 size={12} /> {reconciledCount}</Badge>
               </div>
               <div className="balance-row">
                 <div>
@@ -202,6 +211,7 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
                     <th>Date</th>
                     <th>Description</th>
                     <th>Status</th>
+                    <th>Action</th>
                     <th style={{ textAlign: 'right' }}>Amount</th>
                   </tr>
                 </thead>
@@ -211,9 +221,21 @@ export function BankReconciliationWizard({ transactions }: { transactions: Trans
                       <td>{row.date}</td>
                       <td style={{ color: 'var(--ink-muted)' }}>{row.description}</td>
                       <td>
-                        <Badge tone={row.matchedTransactionId ? 'success' : 'warning'}>
-                          {row.matchedTransactionId ? 'Matched' : 'Review'}
+                        <Badge tone={row.status === 'matched' || row.status === 'reconciled' ? 'success' : row.status === 'unmatched' ? 'danger' : 'warning'}>
+                          {row.status === 'matched'
+                            ? 'Matched'
+                            : row.status === 'reconciled'
+                              ? 'Reconciled'
+                              : row.status === 'unmatched'
+                                ? 'Unmatched'
+                                : 'Review'}
                         </Badge>
+                      </td>
+                      <td>
+                        <div className="mini-actions">
+                          <button type="button" onClick={() => updateStatus(row.id, 'reconciled')}>Reconcile</button>
+                          <button type="button" onClick={() => updateStatus(row.id, 'unmatched')}>Unmatched</button>
+                        </div>
                       </td>
                       <td style={{ textAlign: 'right' }} className={row.amount < 0 ? 'amount-negative' : 'amount-positive'}>
                         {formatLKR(row.amount)}

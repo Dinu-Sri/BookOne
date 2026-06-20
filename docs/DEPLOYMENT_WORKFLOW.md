@@ -86,6 +86,9 @@ git push origin master
 curl -I https://bookone.clossyan.com
 # Should return HTTP 200
 
+# 3b. Run the app smoke test
+# See docs/PRODUCTION_SMOKE_TEST.md
+
 # 4. Check logs
 ssh user@vps
 docker compose -f /opt/bookone/docker/docker-compose.prod.yml logs -f --tail=50

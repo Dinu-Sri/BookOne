@@ -6,6 +6,7 @@ import {
   Building2,
   CalendarDays,
   Calculator,
+  Check,
   ChevronDown,
   ClipboardList,
   Landmark,
@@ -21,8 +22,8 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useState } from 'react';
-import { Badge, BrandLockup, Button, Card, SelectLike } from '@/components/ui/bookone-ui';
+import { type ReactNode, useMemo, useState } from 'react';
+import { BrandLockup, Button, SelectLike } from '@/components/ui/bookone-ui';
 import { PeriodSelector } from '@/components/layout/period-selector';
 
 export interface NavItem {
@@ -100,6 +101,61 @@ const navSuites: NavSuite[] = [
   },
 ];
 
+function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function DateQuickAccess() {
+  const [open, setOpen] = useState(false);
+  const today = useMemo(() => new Date(), []);
+  const days = useMemo(() => {
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const startOffset = first.getDay();
+    const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    return Array.from({ length: startOffset + totalDays }, (_, index) => {
+      if (index < startOffset) return null;
+      return new Date(today.getFullYear(), today.getMonth(), index - startOffset + 1);
+    });
+  }, [today]);
+  const label = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const monthLabel = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="date-quick">
+      <button className="date-trigger" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <CalendarDays size={16} />
+        <span>{label}</span>
+        <ChevronDown className="select-chevron" size={15} aria-hidden />
+      </button>
+      {open ? (
+        <div className="date-menu">
+          <div className="date-menu-head">
+            <strong>{monthLabel}</strong>
+            <span>Today</span>
+          </div>
+          <div className="date-grid date-weekdays">
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
+          <div className="date-grid">
+            {days.map((day, index) =>
+              day ? (
+                <button className={sameDay(day, today) ? 'today' : ''} type="button" key={day.toISOString()} onClick={() => setOpen(false)}>
+                  {day.getDate()}
+                  {sameDay(day, today) ? <Check size={11} /> : null}
+                </button>
+              ) : (
+                <span key={`blank-${index}`} />
+              ),
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export interface TenantLite {
   id: string;
   name: string;
@@ -126,15 +182,6 @@ export function BookOneShell({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const activeSuite = navSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
-
-  const currentDateLabel = new Date().toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  const currentMonthLabel = period?.selected
-    ? new Date(period.selected + '-01').toLocaleString('en-US', { month: 'short', year: 'numeric' })
-    : currentDateLabel;
 
   return (
     <div className={`app-shell ${sidebarOpen ? '' : 'is-collapsed'}`}>
@@ -205,14 +252,6 @@ export function BookOneShell({
           </nav>
         </div>
 
-        <div className="sidebar-section sidebar-card">
-          <Card padded>
-            <Badge tone="success">Ready</Badge>
-            <p className="card-subtitle" style={{ marginTop: 10 }}>
-              Record daily business activity without accounting complexity.
-            </p>
-          </Card>
-        </div>
       </aside>
 
       <main className="main">
@@ -228,9 +267,7 @@ export function BookOneShell({
             {period ? (
               <PeriodSelector selected={period.selected} available={period.available} compact />
             ) : (
-              <SelectLike>
-                <span className="cluster"><CalendarDays size={16} /> {currentMonthLabel}</span>
-              </SelectLike>
+              <DateQuickAccess />
             )}
             <Button variant="secondary" className="icon" aria-label="Notifications">
               <Bell size={16} />

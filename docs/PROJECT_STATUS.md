@@ -114,7 +114,7 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 | 11 | **Phase B + C** — Dashboard, Transactions, Journal, Reports, Accounts, Reconciliation, Settings | ✅ | `a4d8224` | 7 read pages with real DB data |
 | 12 | Period filter actually scopes data | ✅ | (local) | Dashboard / Transactions / Journal / Reports / Reconciliation use `?period=YYYY-MM` or `?period=all` |
 | 13 | Multi-tenant switcher | ⏳ | — | User belongs to 1 tenant for now |
-| 14 | Bank reconciliation wizard (CSV upload) | in progress | (local) | CSV upload preview + exact date/amount matching added; persistence still next |
+| 14 | Bank reconciliation wizard (CSV upload) | in progress | (local) | CSV upload preview, exact date/amount matching, and manual Reconciled/Unmatched statuses added; persistence still next |
 | 15 | Onboarding wizard (Onborda) | ⏳ | — | First-run tour |
 | 16 | Sentry + PostHog | ⏳ | — | Env keys not configured yet |
 | 17 | Worker service (apps/workers) | ⏳ | — | Disabled in compose, no source yet |

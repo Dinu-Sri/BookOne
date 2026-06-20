@@ -83,6 +83,22 @@
 
 ---
 
+## 2026-06-20 - Dashboard & Picker Cleanup
+
+### Completed
+- Replaced the native accounting period select with a custom popover picker.
+- Removed the Ready card from the left sidebar.
+- Added a clickable mini calendar for the Simple Entry header date.
+- Simplified Dashboard to working business metrics only: net position, net cash flow, cash available, money in/out, receivables/payables, and posting health.
+- Added manual Reconcile / Unmatched actions in the CSV reconciliation preview.
+- Added `docs/PRODUCTION_SMOKE_TEST.md` and linked it from the deployment workflow.
+
+### Next Steps
+- [ ] Replace remaining Simple Entry native form selects with custom app-styled pickers.
+- [ ] Persist reconciliation imports, manual statuses, and period close locks.
+
+---
+
 ## Template for New Entries
 
 ```

@@ -157,8 +157,7 @@ img {
 .is-collapsed .nav-item em,
 .is-collapsed .suite-trigger span,
 .is-collapsed .suite-chevron,
-.is-collapsed .suite-panel,
-.is-collapsed .sidebar-card {
+.is-collapsed .suite-panel {
   display: none;
 }
 
@@ -445,6 +444,49 @@ img {
   line-height: 1.4;
 }
 
+.cashflow-bars {
+  display: grid;
+  gap: 16px;
+}
+
+.cashflow-bars span {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.cashflow-bars strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.cashflow-track {
+  overflow: hidden;
+  height: 10px;
+  margin-top: 9px;
+  border-radius: 999px;
+  background: var(--success-soft);
+}
+
+.cashflow-track i {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: var(--success);
+}
+
+.cashflow-track.out {
+  background: var(--danger-soft);
+}
+
+.cashflow-track.out i {
+  background: var(--danger);
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -530,45 +572,164 @@ img {
   color: var(--ink-soft);
 }
 
-.period-select {
+.period-picker,
+.date-quick {
   position: relative;
+}
+
+.period-trigger,
+.date-trigger {
   display: inline-flex;
   align-items: center;
   gap: 9px;
   min-width: 172px;
   min-height: 40px;
-  padding: 0 36px 0 11px;
+  padding: 0 11px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
-.period-select.compact {
+.period-picker.compact .period-trigger {
   min-width: 152px;
 }
 
-.period-select svg {
+.period-trigger > span,
+.date-trigger > span {
+  flex: 1;
+  text-align: left;
+}
+
+.period-trigger:hover,
+.date-trigger:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+}
+
+.period-trigger svg,
+.date-trigger svg {
   flex: 0 0 auto;
   color: var(--ink-soft);
 }
 
-.period-select select {
-  width: 100%;
-  min-width: 0;
-  border: 0;
+.period-trigger:focus-visible,
+.date-trigger:focus-visible {
   outline: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 750;
-  appearance: none;
-}
-
-.period-select:focus-within {
   border-color: rgba(22, 119, 201, 0.5);
   box-shadow: var(--focus);
+}
+
+.period-menu,
+.date-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  min-width: 232px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.period-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.period-option:hover,
+.period-option.active {
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+}
+
+.period-option strong,
+.period-option small {
+  display: block;
+}
+
+.period-option strong {
+  font-size: 13px;
+}
+
+.period-option small {
+  margin-top: 2px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.date-menu {
+  width: 268px;
+}
+
+.date-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 12px;
+}
+
+.date-menu-head strong {
+  font-size: 13px;
+}
+
+.date-menu-head span {
+  color: var(--brand-strong);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.date-grid span,
+.date-grid button {
+  display: grid;
+  place-items: center;
+  min-height: 30px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.date-weekdays {
+  margin-bottom: 4px;
+}
+
+.date-grid button {
+  color: var(--ink);
+}
+
+.date-grid button.today {
+  background: var(--brand);
+  color: white;
+}
+
+.date-grid button.today svg {
+  margin-left: 2px;
 }
 
 .search-field {
@@ -1033,6 +1194,28 @@ img {
   margin-top: 10px;
   color: var(--danger);
   font-size: 13px;
+}
+
+.mini-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mini-actions button {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.mini-actions button:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
 .entry-footer {

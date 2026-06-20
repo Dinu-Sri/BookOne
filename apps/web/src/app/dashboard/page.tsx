@@ -1,21 +1,8 @@
-import { ArrowDownLeft, ArrowUpRight, BookOpenCheck, CircleAlert, ClipboardList, Landmark, LayoutDashboard, LineChart, ReceiptText, ShieldCheck, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { getDashboardData } from '@/app/actions/workspace';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Button, Card, MetricCard, PageHeading, Progress } from '@/components/ui/bookone-ui';
-
-function formatLKR(value: number) {
-  return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
-
-function directionTone(direction: string): 'success' | 'danger' | 'info' {
-  if (direction === 'money_in') return 'success';
-  if (direction === 'money_out') return 'danger';
-  if (direction === 'move_money') return 'info';
-  return 'info';
-}
+import { Badge, Card, MetricCard, PageHeading } from '@/components/ui/bookone-ui';
 
 interface SearchParams { period?: string }
 
@@ -37,7 +24,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <PageHeading
           eyebrow="Workspace"
           title="Dashboard"
-          lead="A real-time picture of your business. All numbers are derived from your posted journal entries."
+          lead="The current business position for the selected period, calculated from posted journals."
         />
 
         <div className="grid metrics">
@@ -46,113 +33,64 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           ))}
         </div>
 
-        <div className="grid board" style={{ marginTop: 18 }}>
+        <div className="grid two" style={{ marginTop: 18 }}>
           <Card>
-            <div style={{ padding: '18px 18px 0' }}>
-              <p className="eyebrow">Recent activity</p>
-              <h2 className="card-title" style={{ marginTop: 4 }}>Last 10 transactions</h2>
+            <div className="card-header">
+              <div>
+                <p className="eyebrow">Cash flow</p>
+                <h2 className="card-title" style={{ marginTop: 4 }}>Money movement</h2>
+              </div>
+              <Badge tone={data.cashFlow.net >= 0 ? 'success' : 'danger'}>
+                {data.cashFlow.net >= 0 ? 'Positive' : 'Negative'}
+              </Badge>
             </div>
             <div className="card-body">
-              {data.recentTransactions.length === 0 ? (
-                <div className="empty-state">
-                  <ReceiptText size={28} color="var(--ink-soft)" />
-                  <h3>No transactions yet</h3>
-                  <p>Use Simple Entry to record your first transaction.</p>
-                  <Link href="/">
-                    <Button variant="primary" style={{ marginTop: 14 }}>
-                      Record your first entry
-                    </Button>
-                  </Link>
+              <div className="cashflow-bars">
+                <div>
+                  <span>Money in</span>
+                  <strong>LKR {data.cashFlow.moneyIn.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
+                  <div className="cashflow-track"><i style={{ width: data.cashFlow.moneyIn > 0 ? '100%' : '0%' }} /></div>
                 </div>
-              ) : (
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Party</th>
-                        <th>Description</th>
-                        <th>Type</th>
-                        <th style={{ textAlign: 'right' }}>Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.recentTransactions.map((tx) => (
-                        <tr key={tx.id}>
-                          <td>{tx.date}</td>
-                          <td>{tx.party}</td>
-                          <td style={{ color: 'var(--ink-muted)' }}>{tx.description}</td>
-                          <td>
-                            <Badge tone={directionTone(tx.direction)}>{tx.type}</Badge>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <span className={tx.direction === 'money_in' ? 'amount-positive' : 'amount-negative'}>
-                              {tx.direction === 'money_in' ? '+' : tx.direction === 'money_out' ? '-' : ''}
-                              {formatLKR(tx.amount)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div>
+                  <span>Money out</span>
+                  <strong>LKR {data.cashFlow.moneyOut.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
+                  <div className="cashflow-track out"><i style={{ width: data.cashFlow.moneyOut > 0 ? '100%' : '0%' }} /></div>
                 </div>
-              )}
+              </div>
             </div>
           </Card>
 
-          <div className="review-rail">
-            <Card>
-              <div className="card-body">
-                <p className="eyebrow">Alerts</p>
-                {data.lowConfidenceCount > 0 ? (
-                  <div className="alert-list" style={{ marginTop: 12 }}>
-                    <div className="alert-row">
-                      <div>
-                        <strong>
-                          <CircleAlert size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                          {data.lowConfidenceCount} low-confidence categor{data.lowConfidenceCount === 1 ? 'y' : 'ies'}
-                        </strong>
-                        <span>Engine is not sure. Review on the Journal page.</span>
-                      </div>
-                      <Link href="/journal"><Button variant="secondary">Review</Button></Link>
-                    </div>
+          <Card>
+            <div className="card-header">
+              <div>
+                <p className="eyebrow">Period activity</p>
+                <h2 className="card-title" style={{ marginTop: 4 }}>Posting health</h2>
+              </div>
+              <Badge tone={data.lowConfidenceCount > 0 ? 'warning' : 'success'}>
+                {data.lowConfidenceCount > 0 ? 'Review' : 'Clean'}
+              </Badge>
+            </div>
+            <div className="card-body">
+              <div className="balance-list">
+                <div className="balance-row">
+                  <div>
+                    <strong>{data.cashFlow.transactionCount} posted entries</strong>
+                    <span>Included in the selected period.</span>
                   </div>
-                ) : (
-                  <div className="alert-list" style={{ marginTop: 12 }}>
-                    <div className="alert-row">
-                      <div>
-                        <strong>All categories look confident</strong>
-                        <span>Engine matched every entry above 70%.</span>
-                      </div>
-                      <Badge tone="success">Good</Badge>
-                    </div>
+                  <Badge tone="info">Live</Badge>
+                </div>
+                <div className="balance-row">
+                  <div>
+                    <strong>{data.lowConfidenceCount} category reviews</strong>
+                    <span>Entries below 70% confidence.</span>
                   </div>
-                )}
-                <div className="alert-list" style={{ marginTop: 12 }}>
-                  <div className="alert-row">
-                    <div>
-                      <strong>Tenant</strong>
-                      <span>{tenant.name} ({tenant.plan})</span>
-                    </div>
-                    <Badge tone="info">{tenant.slug}</Badge>
-                  </div>
+                  <Badge tone={data.lowConfidenceCount > 0 ? 'warning' : 'success'}>
+                    {data.lowConfidenceCount > 0 ? 'Pending' : 'OK'}
+                  </Badge>
                 </div>
               </div>
-            </Card>
-
-            <Card>
-              <div className="card-body">
-                <p className="eyebrow">Quick links</p>
-                <div className="nav-list" style={{ marginTop: 12 }}>
-                  <Link className="nav-item" href="/transactions"><ClipboardList size={16} /> Transactions</Link>
-                  <Link className="nav-item" href="/journal"><BookOpenCheck size={16} /> Journal</Link>
-                  <Link className="nav-item" href="/reports"><LineChart size={16} /> Reports</Link>
-                  <Link className="nav-item" href="/accounts"><Landmark size={16} /> Accounts</Link>
-                  <Link className="nav-item" href="/reconciliation"><ShieldCheck size={16} /> Reconciliation</Link>
-                </div>
-              </div>
-            </Card>
-          </div>
+            </div>
+          </Card>
         </div>
       </div>
     </BookOneShell>

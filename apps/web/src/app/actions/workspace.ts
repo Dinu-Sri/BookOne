@@ -59,6 +59,12 @@ export interface DashboardData {
   lowConfidenceCount: number;
   availablePeriods: string[]; // e.g. ["2026-06", "2026-05"]
   selectedPeriod: string | null;
+  cashFlow: {
+    moneyIn: number;
+    moneyOut: number;
+    net: number;
+    transactionCount: number;
+  };
 }
 
 export interface PeriodOptions {
@@ -234,6 +240,22 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
       transactionConditions.push(lte(transactions.date, `${selectedPeriod}-31`));
     }
 
+    const periodTransactions = await db()
+      .select({
+        direction: transactions.direction,
+        amount: transactions.amount,
+      })
+      .from(transactions)
+      .where(and(...transactionConditions));
+
+    const moneyIn = periodTransactions
+      .filter((tx) => tx.direction === 'money_in')
+      .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+    const moneyOut = periodTransactions
+      .filter((tx) => tx.direction === 'money_out')
+      .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+    const netCashFlow = moneyIn - moneyOut;
+
     const recent = await db()
       .select({
         id: transactions.id,
@@ -268,6 +290,27 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
 
     const availablePeriods = await collectAvailablePeriods(user.tenantId, selectedPeriod);
 
+    metrics.splice(1, 0, {
+      label: 'Net cash flow',
+      value: formatLKR(netCashFlow, true),
+      note: `${periodTransactions.length} posted entries in view`,
+      tone: netCashFlow >= 0 ? 'success' : 'danger',
+    });
+    metrics.push(
+      {
+        label: 'Money in',
+        value: formatLKR(moneyIn, true),
+        note: 'Cash received in this view',
+        tone: 'success',
+      },
+      {
+        label: 'Money out',
+        value: formatLKR(moneyOut, true),
+        note: 'Cash paid out in this view',
+        tone: moneyOut > 0 ? 'warning' : 'neutral',
+      },
+    );
+
     return {
       tenant,
       user: { id: user.id, name: user.name ?? user.email, email: user.email },
@@ -285,6 +328,12 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
       lowConfidenceCount: Number(lowConfidenceCount) || 0,
       availablePeriods,
       selectedPeriod,
+      cashFlow: {
+        moneyIn,
+        moneyOut,
+        net: netCashFlow,
+        transactionCount: periodTransactions.length,
+      },
     };
   });
 }

@@ -1,33 +1,44 @@
 import { redirect } from 'next/navigation';
-import { getReports, getTenantInfo } from '@/app/actions/workspace';
+import { getPeriodOptions, getReports, getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
+import { PeriodSelector } from '@/components/layout/period-selector';
 import { Badge, Card, PageHeading, SelectLike } from '@/components/ui/bookone-ui';
-import { CalendarDays, LineChart } from 'lucide-react';
+import { LineChart } from 'lucide-react';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-export default async function ReportsPage() {
+interface SearchParams { period?: string }
+
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
   let tenant;
   let data;
+  let periodOptions;
   try {
-    [tenant, data] = await Promise.all([getTenantInfo(), getReports()]);
+    [tenant, data, periodOptions] = await Promise.all([
+      getTenantInfo(),
+      getReports(params?.period),
+      getPeriodOptions(params?.period),
+    ]);
   } catch (err) {
     redirect('/login');
   }
 
+  const periodLabel = periodOptions.selected
+    ? new Date(`${periodOptions.selected}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })
+    : 'All time';
+
   return (
-    <BookOneShell active="Reports" tenant={tenant}>
+    <BookOneShell active="Reports" tenant={tenant} period={periodOptions}>
       <div className="workspace">
         <PageHeading
           eyebrow="Insights"
           title="Reports"
           lead="Real-time financial statements computed from your posted journals. As you record more entries, these update automatically."
           actions={
-            <SelectLike>
-              <span className="cluster"><CalendarDays size={16} /> All time</span>
-            </SelectLike>
+            <PeriodSelector selected={periodOptions.selected} available={periodOptions.available} />
           }
         />
 
@@ -37,6 +48,7 @@ export default async function ReportsPage() {
               <div>
                 <p className="eyebrow">Profit & Loss</p>
                 <h2 className="card-title" style={{ marginTop: 4 }}>Income statement</h2>
+                <p className="card-subtitle">{periodLabel}</p>
               </div>
               <Badge tone={data.income.netIncome >= 0 ? 'success' : 'danger'}>
                 {data.income.netIncome >= 0 ? 'Profit' : 'Loss'} · {formatLKR(data.income.netIncome)}
@@ -89,7 +101,7 @@ export default async function ReportsPage() {
                 <h2 className="card-title" style={{ marginTop: 4 }}>Trial balance</h2>
               </div>
               <SelectLike>
-                <span className="cluster"><LineChart size={16} /> All time</span>
+                <span className="cluster"><LineChart size={16} /> {periodLabel}</span>
               </SelectLike>
             </div>
             <div className="card-body">

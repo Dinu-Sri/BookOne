@@ -112,7 +112,7 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 | 9 | Production deploy issues — middleware, cache, pnpm | ✅ | `3e331ea` `ad5fbdb` | Login worked |
 | 10 | **Phase A** — Real account selector, date picker, R2 receipts, category override | ✅ | `233b1e2` | apps/web/src/app/actions/* |
 | 11 | **Phase B + C** — Dashboard, Transactions, Journal, Reports, Accounts, Reconciliation, Settings | ✅ | `a4d8224` | 7 read pages with real DB data |
-| 12 | Period filter actually scopes data | ⏳ | — | Period selector is currently display-only |
+| 12 | Period filter actually scopes data | ✅ | (local) | Dashboard / Transactions / Journal / Reports / Reconciliation use `?period=YYYY-MM` or `?period=all` |
 | 13 | Multi-tenant switcher | ⏳ | — | User belongs to 1 tenant for now |
 | 14 | Bank reconciliation wizard (CSV upload) | ⏳ | — | Reconciliation page is a placeholder |
 | 15 | Onboarding wizard (Onborda) | ⏳ | — | First-run tour |
@@ -123,7 +123,7 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 | 20 | Multi-user invitations | ⏳ | — | Settings page shows 1 user only |
 | 21 | Stripe + PayHere billing | ⏳ | — | Env vars reserved in .env.example |
 
-**Recommended next step:** Phase 12 (wire the period selector to actually filter data — small, high impact, ~1 hour of work).
+**Recommended next step:** Phase 14 (bank reconciliation CSV upload and matching wizard).
 
 ---
 
@@ -492,7 +492,6 @@ In rough priority order, picking up from where we are today:
 
 | Priority | Item | Effort | Impact |
 |----------|------|--------|--------|
-| 🔴 High | Wire the period selector to actually filter Dashboard / Transactions / Journal / Reports | 1 hour | Lets you review a month at a time |
 | 🔴 High | Bank reconciliation CSV upload | 1 day | Closes the period-close loop |
 | 🟡 Med | Onboarding tour (Onborda) | 1 day | First-time UX |
 | 🟡 Med | Sentry + PostHog wiring | 0.5 day | Observability |

@@ -57,6 +57,12 @@ export interface DashboardData {
   }[];
   lowConfidenceCount: number;
   availablePeriods: string[]; // e.g. ["2026-06", "2026-05"]
+  selectedPeriod: string | null;
+}
+
+export interface PeriodOptions {
+  selected: string | null;
+  available: string[];
 }
 
 /** Returns the current tenant + user info for the topbar. */
@@ -77,8 +83,18 @@ export async function getTenantInfo(): Promise<TenantInfo> {
  * signed journal line amounts. Uses each account's normalSide to determine
  * whether debits or credits increase the balance.
  */
-async function computeAccountBalances(tenantId: string): Promise<AccountBalance[]> {
+async function computeAccountBalances(tenantId: string, period?: string | null): Promise<AccountBalance[]> {
+  const selectedPeriod = normalizePeriod(period ?? undefined);
   return withTenantContext(tenantId, async () => {
+    const journalJoinConditions = [
+      eq(journalEntries.id, journalLines.journalEntryId),
+      isNull(journalEntries.voidedAt),
+    ];
+    if (selectedPeriod) {
+      journalJoinConditions.push(gte(journalEntries.entryDate, `${selectedPeriod}-01`));
+      journalJoinConditions.push(lte(journalEntries.entryDate, `${selectedPeriod}-31`));
+    }
+
     // Sum debits - credits per account, then adjust for normalSide.
     const rows = await db()
       .select({
@@ -87,15 +103,12 @@ async function computeAccountBalances(tenantId: string): Promise<AccountBalance[
         name: accounts.name,
         type: accounts.type,
         normalSide: accounts.normalSide,
-        debitTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalLines.side} = 'debit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
-        creditTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalLines.side} = 'credit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
+        debitTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntries.id} IS NOT NULL AND ${journalLines.side} = 'debit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
+        creditTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntries.id} IS NOT NULL AND ${journalLines.side} = 'credit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
       })
       .from(accounts)
       .leftJoin(journalLines, and(eq(journalLines.accountId, accounts.id), isNull(journalLines.voidedAt)))
-      .leftJoin(
-        journalEntries,
-        and(eq(journalEntries.id, journalLines.journalEntryId), isNull(journalEntries.voidedAt)),
-      )
+      .leftJoin(journalEntries, and(...journalJoinConditions))
       .where(and(eq(accounts.tenantId, tenantId), isNull(accounts.voidedAt)))
       .groupBy(accounts.id);
 
@@ -125,12 +138,53 @@ function formatLKR(value: number, compact = false): string {
   return `${sign}LKR ${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
+function currentPeriod(): string {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function normalizePeriod(period?: string): string | null {
+  if (!period || period === 'all') return null;
+  return /^\d{4}-\d{2}$/.test(period) ? period : null;
+}
+
+function selectedPeriodFromInput(period?: string): string | null {
+  if (period === 'all') return null;
+  return normalizePeriod(period) ?? currentPeriod();
+}
+
+async function collectAvailablePeriods(tenantId: string, selectedPeriod: string | null): Promise<string[]> {
+  const monthRows = await db()
+    .select({ date: transactions.date })
+    .from(transactions)
+    .where(and(eq(transactions.tenantId, tenantId), isNull(transactions.voidedAt)));
+
+  const periodSet = new Set<string>([currentPeriod()]);
+  if (selectedPeriod) periodSet.add(selectedPeriod);
+  for (const r of monthRows) {
+    if (r.date && /^\d{4}-\d{2}/.test(r.date)) {
+      periodSet.add(r.date.slice(0, 7));
+    }
+  }
+
+  return Array.from(periodSet).sort().reverse();
+}
+
+export async function getPeriodOptions(period?: string): Promise<PeriodOptions> {
+  const user = await requireTenantContext();
+  const selected = selectedPeriodFromInput(period);
+  return withTenantContext(user.tenantId, async () => ({
+    selected,
+    available: await collectAvailablePeriods(user.tenantId, selected),
+  }));
+}
+
+export async function getDashboardData(period?: string): Promise<DashboardData> {
   const user = await requireTenantContext();
   const tenant = await getTenantInfo();
+  const selectedPeriod = selectedPeriodFromInput(period);
 
   return withTenantContext(user.tenantId, async () => {
-    const balances = await computeAccountBalances(user.tenantId);
+    const balances = await computeAccountBalances(user.tenantId, selectedPeriod);
 
     const find = (code: string) => balances.find((b) => b.code === code)?.balance ?? 0;
 
@@ -173,6 +227,12 @@ export async function getDashboardData(): Promise<DashboardData> {
     ];
 
     // Recent transactions (last 10)
+    const transactionConditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
+    if (selectedPeriod) {
+      transactionConditions.push(gte(transactions.date, `${selectedPeriod}-01`));
+      transactionConditions.push(lte(transactions.date, `${selectedPeriod}-31`));
+    }
+
     const recent = await db()
       .select({
         id: transactions.id,
@@ -185,34 +245,27 @@ export async function getDashboardData(): Promise<DashboardData> {
         currency: transactions.currency,
       })
       .from(transactions)
-      .where(and(eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)))
+      .where(and(...transactionConditions))
       .orderBy(desc(transactions.createdAt))
       .limit(10);
 
     // Count low-confidence categories needing review
+    const lowConfidenceConditions = [
+      eq(transactions.tenantId, user.tenantId),
+      isNull(transactions.voidedAt),
+      sql`${transactions.categoryConfidence} IS NOT NULL AND ${transactions.categoryConfidence}::numeric < 0.7`,
+    ];
+    if (selectedPeriod) {
+      lowConfidenceConditions.push(gte(transactions.date, `${selectedPeriod}-01`));
+      lowConfidenceConditions.push(lte(transactions.date, `${selectedPeriod}-31`));
+    }
+
     const [{ count: lowConfidenceCount }] = await db()
       .select({ count: sql<number>`COUNT(*)` })
       .from(transactions)
-      .where(
-        and(
-          eq(transactions.tenantId, user.tenantId),
-          isNull(transactions.voidedAt),
-          sql`${transactions.categoryConfidence} IS NOT NULL AND ${transactions.categoryConfidence}::numeric < 0.7`,
-        ),
-      );
+      .where(and(...lowConfidenceConditions));
 
-    // Available months from existing transactions
-    const monthRows = await db()
-      .select({ date: transactions.date })
-      .from(transactions)
-      .where(and(eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)));
-    const periodSet = new Set<string>();
-    for (const r of monthRows) {
-      if (r.date && /^\d{4}-\d{2}/.test(r.date)) {
-        periodSet.add(r.date.slice(0, 7));
-      }
-    }
-    const availablePeriods = Array.from(periodSet).sort().reverse();
+    const availablePeriods = await collectAvailablePeriods(user.tenantId, selectedPeriod);
 
     return {
       tenant,
@@ -230,6 +283,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       })),
       lowConfidenceCount: Number(lowConfidenceCount) || 0,
       availablePeriods,
+      selectedPeriod,
     };
   });
 }
@@ -253,11 +307,12 @@ export interface TransactionRow {
 
 export async function listTransactions(period?: string): Promise<TransactionRow[]> {
   const user = await requireTenantContext();
+  const selectedPeriod = selectedPeriodFromInput(period);
   return withTenantContext(user.tenantId, async () => {
     const conditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
-    if (period && /^\d{4}-\d{2}$/.test(period)) {
-      conditions.push(gte(transactions.date, `${period}-01`));
-      conditions.push(lte(transactions.date, `${period}-31`));
+    if (selectedPeriod) {
+      conditions.push(gte(transactions.date, `${selectedPeriod}-01`));
+      conditions.push(lte(transactions.date, `${selectedPeriod}-31`));
     }
     const rows = await db()
       .select({
@@ -322,11 +377,12 @@ export interface JournalEntryRow {
 
 export async function listJournalEntries(period?: string): Promise<JournalEntryRow[]> {
   const user = await requireTenantContext();
+  const selectedPeriod = selectedPeriodFromInput(period);
   return withTenantContext(user.tenantId, async () => {
     const conditions = [eq(journalEntries.tenantId, user.tenantId), isNull(journalEntries.voidedAt)];
-    if (period && /^\d{4}-\d{2}$/.test(period)) {
-      conditions.push(gte(journalEntries.entryDate, `${period}-01`));
-      conditions.push(lte(journalEntries.entryDate, `${period}-31`));
+    if (selectedPeriod) {
+      conditions.push(gte(journalEntries.entryDate, `${selectedPeriod}-01`));
+      conditions.push(lte(journalEntries.entryDate, `${selectedPeriod}-31`));
     }
     const entries = await db()
       .select({
@@ -420,7 +476,8 @@ export interface ReportsData {
 
 export async function getReports(period?: string): Promise<ReportsData> {
   const user = await requireTenantContext();
-  const balances = await computeAccountBalances(user.tenantId);
+  const selectedPeriod = selectedPeriodFromInput(period);
+  const balances = await computeAccountBalances(user.tenantId, selectedPeriod);
   const trialBalance: ReportRow[] = balances.map((b) => ({
     accountCode: b.code,
     accountName: b.name,
@@ -437,7 +494,7 @@ export async function getReports(period?: string): Promise<ReportsData> {
   return {
     trialBalance,
     income: { revenue, expense, netIncome },
-    asOfPeriod: period ?? 'all',
+    asOfPeriod: selectedPeriod ?? 'all',
   };
 }
 

@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getTenantInfo, listTransactions } from '@/app/actions/workspace';
+import { getPeriodOptions, getTenantInfo, listTransactions } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Button, Card, PageHeading, SelectLike } from '@/components/ui/bookone-ui';
-import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, Paperclip } from 'lucide-react';
+import { PeriodSelector } from '@/components/layout/period-selector';
+import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
+import { Paperclip } from 'lucide-react';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -18,41 +19,34 @@ function directionTone(direction: string): 'success' | 'danger' | 'info' {
 
 interface SearchParams { period?: string }
 
-export default async function TransactionsPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function TransactionsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
   let tenant;
   let txs;
+  let periodOptions;
   try {
-    [tenant, txs] = await Promise.all([
+    [tenant, txs, periodOptions] = await Promise.all([
       getTenantInfo(),
-      listTransactions(searchParams?.period),
+      listTransactions(params?.period),
+      getPeriodOptions(params?.period),
     ]);
   } catch (err) {
     redirect('/login');
   }
 
-  const period = searchParams?.period;
-  const monthLabel = period
-    ? new Date(period + '-01').toLocaleString('en-US', { month: 'long', year: 'numeric' })
+  const monthLabel = periodOptions.selected
+    ? new Date(periodOptions.selected + '-01').toLocaleString('en-US', { month: 'long', year: 'numeric' })
     : 'All time';
 
   return (
-    <BookOneShell active="Transactions" tenant={tenant}>
+    <BookOneShell active="Transactions" tenant={tenant} period={periodOptions}>
       <div className="workspace">
         <PageHeading
           eyebrow="Records"
           title="Transactions"
           lead="Every entry you have posted, sorted newest first. Click a row to see the journal."
           actions={
-            <div className="cluster">
-              {period ? (
-                <Link href="/transactions">
-                  <Button variant="secondary"><ChevronLeft size={14} /> All time</Button>
-                </Link>
-              ) : null}
-              <SelectLike>
-                <span className="cluster"><CalendarDays size={16} /> {monthLabel}</span>
-              </SelectLike>
-            </div>
+            <PeriodSelector selected={periodOptions.selected} available={periodOptions.available} />
           }
         />
 
@@ -60,7 +54,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
           <div className="card-body">
             {txs.length === 0 ? (
               <div className="empty-state">
-                <h3>No transactions {period ? 'in this period' : 'yet'}</h3>
+                <h3>No transactions {periodOptions.selected ? `in ${monthLabel}` : 'yet'}</h3>
                 <p>Record your first entry from the Simple Entry page.</p>
                 <Link href="/"><Button variant="primary" style={{ marginTop: 14 }}>Go to Simple Entry</Button></Link>
               </div>

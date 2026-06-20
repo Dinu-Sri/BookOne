@@ -53,6 +53,21 @@
 
 ---
 
+## 2026-06-20 - Period Filtering & Suite Sidebar
+
+### Completed
+- Wired the accounting period selector into Dashboard, Transactions, Journal, Reports, and Reconciliation using `?period=YYYY-MM` plus `?period=all`.
+- Added a reusable `PeriodSelector` client component and shared server-side period option resolver.
+- Updated account balance aggregation so period reports only count journal lines whose parent journal entry is in scope.
+- Reworked the left sidebar into one-open-at-a-time suite groups for Accounting, Tax, Inventory, POS, and HR. Future suite items are visible but marked as coming soon.
+- Verified `tsc --noEmit -p apps/web/tsconfig.json`, `git diff --check`, and `next build`.
+
+### Next Steps
+- [ ] Build the bank reconciliation CSV upload and matching wizard.
+- [ ] Add live production smoke-test notes after deployment to `bookone.clossyan.com`.
+
+---
+
 ## Template for New Entries
 
 ```

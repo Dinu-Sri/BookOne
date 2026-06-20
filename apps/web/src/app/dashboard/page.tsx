@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { getDashboardData } from '@/app/actions/workspace';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Button, Card, MetricCard, PageHeading, Progress, SelectLike } from '@/components/ui/bookone-ui';
+import { PeriodSelector } from '@/components/layout/period-selector';
+import { Badge, Button, Card, MetricCard, PageHeading, Progress } from '@/components/ui/bookone-ui';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -17,28 +18,29 @@ function directionTone(direction: string): 'success' | 'danger' | 'info' {
   return 'info';
 }
 
-export default async function DashboardPage() {
+interface SearchParams { period?: string }
+
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
   let data;
   let tenant;
   try {
-    [data, tenant] = await Promise.all([getDashboardData(), getTenantInfo()]);
+    [data, tenant] = await Promise.all([getDashboardData(params?.period), getTenantInfo()]);
   } catch (err) {
     redirect('/login');
   }
 
-  const monthLabel = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  const period = { selected: data.selectedPeriod, available: data.availablePeriods };
 
   return (
-    <BookOneShell active="Dashboard" tenant={tenant}>
+    <BookOneShell active="Dashboard" tenant={tenant} period={period}>
       <div className="workspace">
         <PageHeading
           eyebrow="Workspace"
           title="Dashboard"
           lead="A real-time picture of your business. All numbers are derived from your posted journal entries."
           actions={
-            <SelectLike>
-              <span className="cluster"><LayoutDashboard size={16} /> {monthLabel}</span>
-            </SelectLike>
+            <PeriodSelector selected={period.selected} available={period.available} />
           }
         />
 

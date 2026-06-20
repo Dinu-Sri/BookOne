@@ -1,25 +1,35 @@
 import { redirect } from 'next/navigation';
 import { getDashboardData, getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
+import { PeriodSelector } from '@/components/layout/period-selector';
 import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
 import { CircleAlert, ShieldCheck, Wallet } from 'lucide-react';
 
-export default async function ReconciliationPage() {
+interface SearchParams { period?: string }
+
+export default async function ReconciliationPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
   let tenant;
   let data;
   try {
-    [tenant, data] = await Promise.all([getTenantInfo(), getDashboardData()]);
+    [tenant, data] = await Promise.all([getTenantInfo(), getDashboardData(params?.period)]);
   } catch (err) {
     redirect('/login');
   }
 
+  const period = { selected: data.selectedPeriod, available: data.availablePeriods };
+  const periodLabel = period.selected
+    ? new Date(`${period.selected}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })
+    : 'All time';
+
   return (
-    <BookOneShell active="Reconciliation" tenant={tenant}>
+    <BookOneShell active="Reconciliation" tenant={tenant} period={period}>
       <div className="workspace">
         <PageHeading
           eyebrow="Period close"
           title="Reconciliation"
           lead="Quick checks before you close a period. Locked periods are read-only — to change them, create a reversing entry."
+          actions={<PeriodSelector selected={period.selected} available={period.available} />}
         />
 
         <div className="grid two">
@@ -27,7 +37,7 @@ export default async function ReconciliationPage() {
             <div className="card-header">
               <div>
                 <p className="eyebrow">Period close checklist</p>
-                <h2 className="card-title" style={{ marginTop: 4 }}>Before you close {new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}</h2>
+                <h2 className="card-title" style={{ marginTop: 4 }}>Before you close {periodLabel}</h2>
               </div>
               <Badge tone={data.lowConfidenceCount > 0 ? 'warning' : 'success'}>
                 {data.lowConfidenceCount > 0 ? `${data.lowConfidenceCount} pending` : 'All clear'}

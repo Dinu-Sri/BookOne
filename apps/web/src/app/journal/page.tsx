@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getTenantInfo, listJournalEntries } from '@/app/actions/workspace';
+import { getPeriodOptions, getTenantInfo, listJournalEntries } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Button, Card, PageHeading, SelectLike } from '@/components/ui/bookone-ui';
-import { CalendarDays, CheckCircle2, ChevronLeft } from 'lucide-react';
+import { PeriodSelector } from '@/components/layout/period-selector';
+import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
+import { CheckCircle2 } from 'lucide-react';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -11,48 +12,41 @@ function formatLKR(value: number) {
 
 interface SearchParams { period?: string }
 
-export default async function JournalPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function JournalPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
   let tenant;
   let entries;
+  let periodOptions;
   try {
-    [tenant, entries] = await Promise.all([
+    [tenant, entries, periodOptions] = await Promise.all([
       getTenantInfo(),
-      listJournalEntries(searchParams?.period),
+      listJournalEntries(params?.period),
+      getPeriodOptions(params?.period),
     ]);
   } catch (err) {
     redirect('/login');
   }
 
-  const period = searchParams?.period;
-  const monthLabel = period
-    ? new Date(period + '-01').toLocaleString('en-US', { month: 'long', year: 'numeric' })
+  const monthLabel = periodOptions.selected
+    ? new Date(periodOptions.selected + '-01').toLocaleString('en-US', { month: 'long', year: 'numeric' })
     : 'All time';
 
   return (
-    <BookOneShell active="Journal" tenant={tenant}>
+    <BookOneShell active="Journal" tenant={tenant} period={periodOptions}>
       <div className="workspace">
         <PageHeading
           eyebrow="Audit"
           title="Journal"
           lead="Every posted journal entry, with both sides of the double-entry lines. All amounts are guaranteed to balance."
           actions={
-            <div className="cluster">
-              {period ? (
-                <Link href="/journal">
-                  <Button variant="secondary"><ChevronLeft size={14} /> All time</Button>
-                </Link>
-              ) : null}
-              <SelectLike>
-                <span className="cluster"><CalendarDays size={16} /> {monthLabel}</span>
-              </SelectLike>
-            </div>
+            <PeriodSelector selected={periodOptions.selected} available={periodOptions.available} />
           }
         />
 
         {entries.length === 0 ? (
           <Card>
             <div className="empty-state">
-              <h3>No journal entries {period ? 'in this period' : 'yet'}</h3>
+              <h3>No journal entries {periodOptions.selected ? `in ${monthLabel}` : 'yet'}</h3>
               <p>Record your first entry to see a balanced journal here.</p>
               <Link href="/"><Button variant="primary" style={{ marginTop: 14 }}>Go to Simple Entry</Button></Link>
             </div>

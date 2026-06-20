@@ -525,6 +525,11 @@ img {
   padding: 0 11px;
 }
 
+.select-chevron {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+}
+
 .period-select {
   position: relative;
   display: inline-flex;
@@ -537,6 +542,7 @@ img {
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--ink);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
 .period-select.compact {
@@ -560,15 +566,9 @@ img {
   appearance: none;
 }
 
-.period-select::after {
-  content: "v";
-  position: absolute;
-  right: 11px;
-  top: 50%;
-  transform: translateY(-54%);
-  color: var(--ink-soft);
-  font-size: 14px;
-  pointer-events: none;
+.period-select:focus-within {
+  border-color: rgba(22, 119, 201, 0.5);
+  box-shadow: var(--focus);
 }
 
 .search-field {
@@ -989,6 +989,52 @@ img {
   font-size: 12px;
 }
 
+.statement-drop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  cursor: pointer;
+}
+
+.statement-drop span {
+  flex: 1;
+  min-width: 0;
+}
+
+.statement-drop strong,
+.statement-drop small {
+  display: block;
+}
+
+.statement-drop strong {
+  font-size: 13px;
+}
+
+.statement-drop small {
+  margin-top: 3px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.recon-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.form-error {
+  margin-top: 10px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
 .entry-footer {
   display: flex;
   align-items: center;
@@ -1338,11 +1384,16 @@ img {
   }
 
   .receipt-drop,
+  .statement-drop,
   .entry-receipt,
   .entry-footer,
   .action-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .recon-summary {
+    grid-template-columns: 1fr;
   }
 
   .entry-screen {

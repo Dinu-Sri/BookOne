@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getPeriodOptions, getTenantInfo, listJournalEntries } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { PeriodSelector } from '@/components/layout/period-selector';
 import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
 import { CheckCircle2 } from 'lucide-react';
 
@@ -38,9 +37,6 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
           eyebrow="Audit"
           title="Journal"
           lead="Every posted journal entry, with both sides of the double-entry lines. All amounts are guaranteed to balance."
-          actions={
-            <PeriodSelector selected={periodOptions.selected} available={periodOptions.available} />
-          }
         />
 
         {entries.length === 0 ? (

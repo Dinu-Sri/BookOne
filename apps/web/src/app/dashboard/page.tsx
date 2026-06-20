@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { getDashboardData } from '@/app/actions/workspace';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { PeriodSelector } from '@/components/layout/period-selector';
 import { Badge, Button, Card, MetricCard, PageHeading, Progress } from '@/components/ui/bookone-ui';
 
 function formatLKR(value: number) {
@@ -39,9 +38,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           eyebrow="Workspace"
           title="Dashboard"
           lead="A real-time picture of your business. All numbers are derived from your posted journal entries."
-          actions={
-            <PeriodSelector selected={period.selected} available={period.available} />
-          }
         />
 
         <div className="grid metrics">

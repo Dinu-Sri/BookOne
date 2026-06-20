@@ -41,7 +41,7 @@ interface NavSuite {
 const navSuites: NavSuite[] = [
   {
     id: 'accounting',
-    label: 'Accounting Workspace',
+    label: 'Accounting',
     icon: Landmark,
     items: [
       { label: 'Simple Entry', icon: ReceiptText, href: '/' },
@@ -56,7 +56,7 @@ const navSuites: NavSuite[] = [
   },
   {
     id: 'tax',
-    label: 'Tax Suite',
+    label: 'Tax',
     icon: Calculator,
     items: [
       { label: 'Tax Dashboard', icon: LayoutDashboard },
@@ -67,7 +67,7 @@ const navSuites: NavSuite[] = [
   },
   {
     id: 'inventory',
-    label: 'Inventory Suite',
+    label: 'Inventory',
     icon: Package,
     items: [
       { label: 'Items', icon: Package },
@@ -78,7 +78,7 @@ const navSuites: NavSuite[] = [
   },
   {
     id: 'pos',
-    label: 'POS Suite',
+    label: 'POS',
     icon: ShoppingCart,
     items: [
       { label: 'Register', icon: ShoppingCart },
@@ -89,7 +89,7 @@ const navSuites: NavSuite[] = [
   },
   {
     id: 'hr',
-    label: 'HR Suite',
+    label: 'HR',
     icon: Users,
     items: [
       { label: 'Employees', icon: Users },
@@ -127,9 +127,14 @@ export function BookOneShell({
   const activeSuite = navSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
 
+  const currentDateLabel = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
   const currentMonthLabel = period?.selected
     ? new Date(period.selected + '-01').toLocaleString('en-US', { month: 'short', year: 'numeric' })
-    : new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    : currentDateLabel;
 
   return (
     <div className={`app-shell ${sidebarOpen ? '' : 'is-collapsed'}`}>

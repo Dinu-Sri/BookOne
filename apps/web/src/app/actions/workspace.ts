@@ -14,6 +14,7 @@ import {
   asc,
   gte,
   lte,
+  inArray,
   sql,
 } from '@bookone/db';
 import { requireTenantContext } from '@bookone/auth';
@@ -423,7 +424,7 @@ export async function listJournalEntries(period?: string): Promise<JournalEntryR
               and(
                 eq(journalLines.tenantId, user.tenantId),
                 isNull(journalLines.voidedAt),
-                sql`${journalLines.journalEntryId} = ANY(${entryIds})`,
+                inArray(journalLines.journalEntryId, entryIds),
               ),
             )
             .orderBy(asc(journalLines.createdAt));

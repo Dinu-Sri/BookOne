@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -61,7 +62,12 @@ export function MetricCard({ label, value, note, tone = 'neutral' }: { label: st
 }
 
 export function SelectLike({ children }: { children: ReactNode }) {
-  return <div className="select-like" role="button" tabIndex={0}>{children}<span aria-hidden>⌄</span></div>;
+  return (
+    <div className="select-like" role="button" tabIndex={0}>
+      {children}
+      <ChevronDown className="select-chevron" size={15} aria-hidden />
+    </div>
+  );
 }
 
 export function PageHeading({ eyebrow, title, lead, actions }: { eyebrow: string; title: string; lead: string; actions?: ReactNode }) {

@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
-import { getDashboardData, getTenantInfo } from '@/app/actions/workspace';
+import { getDashboardData, getTenantInfo, listTransactions } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { PeriodSelector } from '@/components/layout/period-selector';
-import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
-import { CircleAlert, ShieldCheck, Wallet } from 'lucide-react';
+import { BankReconciliationWizard } from '@/components/reconciliation/bank-reconciliation-wizard';
+import { Badge, Card, PageHeading } from '@/components/ui/bookone-ui';
+import { CircleAlert, ShieldCheck } from 'lucide-react';
 
 interface SearchParams { period?: string }
 
@@ -11,8 +11,13 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   const params = await searchParams;
   let tenant;
   let data;
+  let transactions;
   try {
-    [tenant, data] = await Promise.all([getTenantInfo(), getDashboardData(params?.period)]);
+    [tenant, data, transactions] = await Promise.all([
+      getTenantInfo(),
+      getDashboardData(params?.period),
+      listTransactions(params?.period),
+    ]);
   } catch (err) {
     redirect('/login');
   }
@@ -29,7 +34,6 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
           eyebrow="Period close"
           title="Reconciliation"
           lead="Quick checks before you close a period. Locked periods are read-only — to change them, create a reversing entry."
-          actions={<PeriodSelector selected={period.selected} available={period.available} />}
         />
 
         <div className="grid two">
@@ -69,25 +73,7 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
             </div>
           </Card>
 
-          <Card>
-            <div className="card-header">
-              <div>
-                <p className="eyebrow">Bank reconciliation</p>
-                <h2 className="card-title" style={{ marginTop: 4 }}>Match to statement</h2>
-              </div>
-              <Wallet size={18} color="var(--brand)" />
-            </div>
-            <div className="card-body">
-              <p style={{ color: 'var(--ink-muted)', fontSize: 13, lineHeight: 1.5 }}>
-                The bank reconciliation wizard will be enabled in the next release. It will let you
-                upload a CSV from your bank and automatically match each line to your posted journal
-                entries.
-              </p>
-              <Button variant="secondary" disabled style={{ marginTop: 14 }}>
-                Coming soon
-              </Button>
-            </div>
-          </Card>
+          <BankReconciliationWizard transactions={transactions} />
         </div>
       </div>
     </BookOneShell>

@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 function formatPeriod(period: string): string {
@@ -46,6 +46,7 @@ export function PeriodSelector({
           </option>
         ))}
       </select>
+      <ChevronDown className="select-chevron" size={15} aria-hidden />
     </label>
   );
 }

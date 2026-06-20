@@ -68,6 +68,21 @@
 
 ---
 
+## 2026-06-20 - Reconciliation Preview & UI Polish
+
+### Completed
+- Removed "Suite" and "Workspace" wording from the expandable sidebar group labels.
+- Kept the accounting period selector only in the sticky header; Simple Entry now shows today's date instead.
+- Replaced text-based dropdown chevrons with lucide chevron icons for a cleaner modern style.
+- Replaced the Journal raw `ANY(...)` lookup with Drizzle `inArray()` to avoid UUID-array runtime errors.
+- Added the first bank reconciliation CSV preview: upload a CSV, parse date/description/amount columns, and preview matched versus review-needed statement rows.
+
+### Next Steps
+- [ ] Persist reconciliation imports and match decisions in the database.
+- [ ] Add manual match/ignore controls for unmatched statement lines.
+
+---
+
 ## Template for New Entries
 
 ```

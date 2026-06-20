@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getPeriodOptions, getTenantInfo, listTransactions } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { PeriodSelector } from '@/components/layout/period-selector';
 import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
 import { Paperclip } from 'lucide-react';
 
@@ -45,9 +44,6 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
           eyebrow="Records"
           title="Transactions"
           lead="Every entry you have posted, sorted newest first. Click a row to see the journal."
-          actions={
-            <PeriodSelector selected={periodOptions.selected} available={periodOptions.available} />
-          }
         />
 
         <Card>

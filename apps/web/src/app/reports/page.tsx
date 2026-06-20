@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getPeriodOptions, getReports, getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { PeriodSelector } from '@/components/layout/period-selector';
 import { Badge, Card, PageHeading, SelectLike } from '@/components/ui/bookone-ui';
 import { LineChart } from 'lucide-react';
 
@@ -37,9 +36,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           eyebrow="Insights"
           title="Reports"
           lead="Real-time financial statements computed from your posted journals. As you record more entries, these update automatically."
-          actions={
-            <PeriodSelector selected={periodOptions.selected} available={periodOptions.available} />
-          }
         />
 
         <div className="grid board">

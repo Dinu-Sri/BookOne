@@ -26,6 +26,7 @@ import Link from 'next/link';
 import { type ReactNode, useMemo, useState } from 'react';
 import { BrandLockup, Button, SelectLike } from '@/components/ui/bookone-ui';
 import { PeriodSelector } from '@/components/layout/period-selector';
+import { CompanyResetButton } from '@/components/layout/company-reset-button';
 
 export interface NavItem {
   label: string;
@@ -267,6 +268,7 @@ export function BookOneShell({
             </SelectLike>
           </div>
           <div className="topbar-actions">
+            <CompanyResetButton />
             {period ? (
               <PeriodSelector selected={period.selected} available={period.available} compact />
             ) : (

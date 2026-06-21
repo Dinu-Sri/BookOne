@@ -134,6 +134,20 @@
 
 ---
 
+## 2026-06-21 - Journal Audit & Test Reset
+
+### Completed
+- Redesigned Journal into an audit console with integrity metrics, ledger balance checks, and expandable journal rows.
+- Added a formal Reports tab structure so Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance are reviewed one at a time.
+- Fixed the bank reconciliation CSV upload button by replacing the nested label/button behavior with an explicit file input trigger.
+- Added a temporary header Reset data control for admin test cycles. It clears current-tenant operational data and tenant receipt files while preserving tenant, users, and chart of accounts.
+
+### Next Steps
+- [ ] Validate reset and journal audit on live Portainer deploy before using it with real data.
+- [ ] Add immediate locked-period warning on date selection in Simple Entry and document/payment forms.
+
+---
+
 ## Template for New Entries
 
 ```

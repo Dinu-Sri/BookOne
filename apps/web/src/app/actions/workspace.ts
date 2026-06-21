@@ -513,6 +513,7 @@ export interface JournalEntryRow {
   party: string;
   description: string;
   direction: string;
+  accountingType: string;
   amount: number;
   currency: string;
   lines: {
@@ -544,6 +545,7 @@ export async function listJournalEntries(period?: string): Promise<JournalEntryR
         party: transactions.party,
         description: transactions.description,
         direction: transactions.direction,
+        accountingType: transactions.accountingType,
         amount: transactions.amount,
         currency: transactions.currency,
       })
@@ -602,6 +604,7 @@ export async function listJournalEntries(period?: string): Promise<JournalEntryR
       party: e.party,
       description: e.description,
       direction: e.direction,
+      accountingType: e.accountingType,
       amount: parseFloat(e.amount),
       currency: e.currency,
       lines: linesByEntry.get(e.id) ?? [],

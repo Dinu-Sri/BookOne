@@ -324,6 +324,30 @@ img {
   min-width: 0;
 }
 
+.reset-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reset-control > span {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink-muted);
+  box-shadow: var(--shadow-sm);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .workspace {
   padding: 24px 28px 38px;
 }
@@ -1313,6 +1337,180 @@ img {
   color: var(--danger);
 }
 
+.audit-check-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.audit-check {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.audit-check strong,
+.audit-check span {
+  display: block;
+}
+
+.audit-check strong {
+  font-size: 13px;
+}
+
+.audit-check span {
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.journal-audit-list {
+  display: grid;
+  gap: 8px;
+}
+
+.journal-audit-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.journal-audit-row.problem {
+  border-color: rgba(205, 72, 72, 0.45);
+}
+
+.journal-audit-row summary {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 130px 130px 110px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.journal-audit-row summary::-webkit-details-marker {
+  display: none;
+}
+
+.audit-row-main {
+  min-width: 0;
+}
+
+.audit-row-main strong,
+.audit-row-main small {
+  display: block;
+}
+
+.audit-row-main strong {
+  font-size: 13px;
+}
+
+.audit-row-main small {
+  margin-top: 3px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-row-detail {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.audit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.audit-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.report-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.report-tab:hover,
+.report-tab.active {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--brand-ink);
+}
+
+.statement-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.statement-section {
+  display: grid;
+  gap: 7px;
+}
+
+.statement-section h3 {
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.statement-section p {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.statement-line,
+.statement-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.statement-total {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+  font-weight: 900;
+}
+
 .statement-drop {
   display: flex;
   align-items: center;
@@ -1651,7 +1849,8 @@ img {
 
   .grid.metrics,
   .token-grid,
-  .state-demo {
+  .state-demo,
+  .audit-check-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1737,8 +1936,14 @@ img {
   .mode-grid,
   .form-grid,
   .token-grid,
-  .state-demo {
+  .state-demo,
+  .audit-check-grid {
     grid-template-columns: 1fr;
+  }
+
+  .journal-audit-row summary {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .flow-step {

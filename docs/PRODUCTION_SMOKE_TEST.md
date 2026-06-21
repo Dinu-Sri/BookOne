@@ -14,6 +14,7 @@ Run this after every Portainer redeploy on `https://bookone.clossyan.com`.
 - Click the date control and confirm the mini calendar opens.
 - Record one small Money Out entry for the current date.
 - Confirm the success message shows a journal id.
+- For test resets only, click Reset data in the header, type `RESET`, and confirm Simple Entry, Journal, Reports, Reconciliation, Parties, and Invoices/Bills return to empty working states.
 
 ## 3. Period Filtering
 
@@ -24,8 +25,9 @@ Run this after every Portainer redeploy on `https://bookone.clossyan.com`.
 
 ## 4. Accounting Cross-Check
 
-- Open Journal and confirm the new entry has balanced debit and credit totals.
-- Open Reports and confirm Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance render.
+- Open Journal and confirm the audit cards show a balanced ledger.
+- Expand several journal rows and confirm every row has equal debit and credit totals.
+- Open Reports and confirm Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance render as separate report tabs.
 - Open Accounts and confirm the relevant cash/expense balances changed.
 
 ## 5. Parties, Invoices, Bills, and Allocation

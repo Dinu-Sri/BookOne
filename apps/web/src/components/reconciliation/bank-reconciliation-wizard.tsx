@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { CheckCircle2, CircleAlert, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import type { TransactionRow } from '@/app/actions/workspace';
 import {
@@ -144,6 +144,7 @@ export function BankReconciliationWizard({
   const [fileName, setFileName] = useState<string | null>(initialImport?.fileName ?? null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reconciledCount = useMemo(
     () => rows.filter((row) => row.status === 'matched' || row.status === 'reconciled').length,
@@ -222,16 +223,17 @@ export function BankReconciliationWizard({
         </Badge>
       </div>
       <div className="card-body">
-        <label className="statement-drop">
+        <div className="statement-drop">
           <FileSpreadsheet size={20} color="var(--brand)" />
           <span>
             <strong>{fileName ?? 'Choose bank CSV'}</strong>
             <small>{rows.length > 0 ? 'Saved for this period.' : 'Date + amount columns are enough for a first pass.'}</small>
           </span>
-          <Button variant="secondary">
+          <Button variant="secondary" type="button" onClick={() => fileInputRef.current?.click()} disabled={isPending}>
             {isPending ? <Loader2 size={15} /> : <Upload size={15} />} Upload
           </Button>
           <input
+            ref={fileInputRef}
             type="file"
             accept=".csv,text/csv"
             hidden
@@ -242,7 +244,7 @@ export function BankReconciliationWizard({
               event.target.value = '';
             }}
           />
-        </label>
+        </div>
 
         {error ? <p className="form-error">{error}</p> : null}
 

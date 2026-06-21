@@ -110,6 +110,8 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 - Customer/vendor parties are reusable records instead of only free-text names.
 - Invoices and bills are real AR/AP documents with journal posting and payment allocation.
 - Reports v1 now exposes Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance.
+- Journal is now the first accounting-engine audit surface: check every posted entry, balance status, debit/credit totals, and ledger integrity before trusting reports or reconciliation.
+- Temporary admin reset is available from the header for live test cycles. It preserves tenant/users/accounts and clears operational data plus tenant receipt files.
 
 | # | Phase | Status | Commit | Notes |
 |---|-------|--------|--------|-------|

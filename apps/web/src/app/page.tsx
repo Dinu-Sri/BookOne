@@ -27,6 +27,7 @@ import {
   type AccountOption,
 } from '@/app/actions/accounts';
 import { getCompanySettingsData } from '@/app/actions/company-settings';
+import { getTenantInfo, type TenantInfo } from '@/app/actions/workspace';
 import { previewCategory, type CategoryPreview } from '@/app/actions/preview-category';
 import { uploadReceipt } from '@/app/actions/upload-receipt';
 import type { EntryInput } from '@/lib/entry-schema';
@@ -96,6 +97,7 @@ export default function Home() {
   const [accountList, setAccountList] = useState<AccountOption[]>([]);
   const [brandList, setBrandList] = useState<DimensionOption[]>([]);
   const [locationList, setLocationList] = useState<DimensionOption[]>([]);
+  const [tenant, setTenant] = useState<TenantInfo | undefined>();
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [categoryPreview, setCategoryPreview] = useState<CategoryPreview | null>(null);
   const [receipt, setReceipt] = useState<UploadedReceipt | null>(null);
@@ -129,6 +131,18 @@ export default function Home() {
         console.error('Failed to load accounts:', err);
         setAccountsLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getTenantInfo()
+      .then((data) => {
+        if (!cancelled) setTenant(data);
+      })
+      .catch((err) => console.error('Failed to load tenant info:', err));
     return () => {
       cancelled = true;
     };
@@ -332,7 +346,7 @@ export default function Home() {
   const SelectedIcon = selectedMode.icon;
 
   return (
-    <BookOneShell active="Simple Entry">
+    <BookOneShell active="Simple Entry" tenant={tenant}>
       <div className="entry-screen">
         <form className="entry-card entry-console" onSubmit={handleSubmit}>
           <div className="entry-card-header">
@@ -475,6 +489,37 @@ export default function Home() {
                 </div>
               ) : null}
 
+              {brandList.length > 0 || locationList.length > 0 ? (
+                <div className="entry-dimensions">
+                  {brandList.length > 0 ? (
+                    <div className="field">
+                      <label>Brand</label>
+                      <select className="input" value={brandId} onChange={(e) => setBrandId(e.target.value)} required>
+                        <option value="">Select brand</option>
+                        {brandList.map((brand) => (
+                          <option key={brand.id} value={brand.id}>
+                            {brand.code ? `${brand.code} - ${brand.name}` : brand.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                  {locationList.length > 0 ? (
+                    <div className="field">
+                      <label>Location</label>
+                      <select className="input" value={locationId} onChange={(e) => setLocationId(e.target.value)} required>
+                        <option value="">Select location</option>
+                        {locationList.map((location) => (
+                          <option key={location.id} value={location.id}>
+                            {location.code ? `${location.code} - ${location.name}` : location.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               {result?.error ? (
                 <p className="entry-result error">{result.error}</p>
               ) : null}
@@ -528,32 +573,6 @@ export default function Home() {
                     ))}
                   </select>
                 </div>
-                {brandList.length > 0 ? (
-                  <div className="field">
-                    <label>Brand</label>
-                    <select className="input" value={brandId} onChange={(e) => setBrandId(e.target.value)} required>
-                      <option value="">Select brand</option>
-                      {brandList.map((brand) => (
-                        <option key={brand.id} value={brand.id}>
-                          {brand.code ? `${brand.code} - ${brand.name}` : brand.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-                {locationList.length > 0 ? (
-                  <div className="field">
-                    <label>Location</label>
-                    <select className="input" value={locationId} onChange={(e) => setLocationId(e.target.value)} required>
-                      <option value="">Select location</option>
-                      {locationList.map((location) => (
-                        <option key={location.id} value={location.id}>
-                          {location.code ? `${location.code} - ${location.name}` : location.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
                 <div className="field">
                   <label>Date</label>
                   <div className="date-field">

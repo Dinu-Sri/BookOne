@@ -1453,6 +1453,13 @@ textarea.input {
   background: var(--surface-muted);
 }
 
+.entry-dimensions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .entry-suggestion span {
   display: block;
   color: var(--ink-muted);
@@ -1759,6 +1766,45 @@ textarea.input {
   margin-top: 10px;
   color: var(--danger);
   font-size: 13px;
+}
+
+.form-error.inline,
+.entry-result.inline {
+  margin-top: 0;
+  font-size: 13px;
+}
+
+.muted-line {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.inline-edit-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.company-inline-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.company-inline-form.is-edit {
+  background: var(--surface);
+}
+
+.company-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
 }
 
 .mini-actions {
@@ -2136,6 +2182,7 @@ textarea.input {
   .grid.three,
   .grid.two,
   .auth-grid.two,
+  .company-inline-form,
   .entry-options,
   .entry-mode-strip,
   .mode-grid,
@@ -2194,6 +2241,7 @@ textarea.input {
   }
 
   .entry-form,
+  .entry-dimensions,
   .side-field-stack,
   .entry-submit-bar {
     grid-template-columns: 1fr;

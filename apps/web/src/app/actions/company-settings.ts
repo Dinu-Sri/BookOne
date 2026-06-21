@@ -80,6 +80,14 @@ const createCompanySchema = z.object({
   baseCurrency: z.string().min(3).max(5).default('LKR'),
 });
 
+export interface CompanyActionState {
+  ok: boolean;
+  message?: string;
+  error?: string;
+}
+
+const emptyActionState: CompanyActionState = { ok: false };
+
 export interface CompanySettingsData {
   profile: {
     legalName: string;
@@ -139,6 +147,14 @@ export interface CompanySettingsData {
 function nullable(value?: string | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function formString(formData: FormData, key: string): string {
+  return String(formData.get(key) ?? '');
+}
+
+function duplicateText(label: string): CompanyActionState {
+  return { ok: false, error: `${label} already exists for this company.` };
 }
 
 function slugify(value: string): string {
@@ -391,6 +407,60 @@ export async function createBrand(formData: FormData): Promise<void> {
   revalidatePath('/settings');
 }
 
+export async function saveBrandForm(_state: CompanyActionState = emptyActionState, formData: FormData): Promise<CompanyActionState> {
+  const user = await requireTenantContext();
+  const id = formString(formData, 'id').trim();
+  const parsed = brandSchema.safeParse({
+    name: formString(formData, 'name'),
+    code: formString(formData, 'code'),
+    notes: formString(formData, 'notes'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Check the brand details.' };
+  }
+
+  const name = parsed.data.name.trim();
+  const code = nullable(parsed.data.code)?.toUpperCase() ?? null;
+  const notes = nullable(parsed.data.notes);
+
+  try {
+    await withTenantContext(user.tenantId, async () => {
+      const existingRows = await db()
+        .select({ id: brands.id, name: brands.name, code: brands.code })
+        .from(brands)
+        .where(and(eq(brands.tenantId, user.tenantId), isNull(brands.voidedAt)));
+
+      const editing = Boolean(id);
+      if (editing && !existingRows.some((brand) => brand.id === id)) {
+        throw new Error('Brand was not found.');
+      }
+
+      const sameName = existingRows.some((brand) => brand.id !== id && brand.name.trim().toLowerCase() === name.toLowerCase());
+      if (sameName) throw new Error('DUPLICATE_NAME');
+
+      const sameCode = code
+        ? existingRows.some((brand) => brand.id !== id && brand.code?.trim().toLowerCase() === code.toLowerCase())
+        : false;
+      if (sameCode) throw new Error('DUPLICATE_CODE');
+
+      if (editing) {
+        await db().update(brands).set({ name, code, notes, updatedAt: new Date() }).where(eq(brands.id, id));
+      } else {
+        await db().insert(brands).values({ tenantId: user.tenantId, name, code, notes });
+      }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'DUPLICATE_NAME') return duplicateText('Brand name');
+    if (error instanceof Error && error.message === 'DUPLICATE_CODE') return duplicateText('Brand code');
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not save brand.' };
+  }
+
+  revalidatePath('/company/brands');
+  revalidatePath('/');
+  return { ok: true, message: id ? 'Brand updated.' : 'Brand added.' };
+}
+
 export async function createLocation(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
   const parsed = locationSchema.parse({
@@ -412,6 +482,74 @@ export async function createLocation(formData: FormData): Promise<void> {
     });
   });
   revalidatePath('/settings');
+}
+
+export async function saveLocationForm(_state: CompanyActionState = emptyActionState, formData: FormData): Promise<CompanyActionState> {
+  const user = await requireTenantContext();
+  const id = formString(formData, 'id').trim();
+  const parsed = locationSchema.safeParse({
+    name: formString(formData, 'name'),
+    code: formString(formData, 'code'),
+    brandId: formString(formData, 'brandId'),
+    locationType: formString(formData, 'locationType') || 'branch',
+    address: formString(formData, 'address'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Check the location details.' };
+  }
+
+  const name = parsed.data.name.trim();
+  const code = nullable(parsed.data.code)?.toUpperCase() ?? null;
+  const brandId = parsed.data.brandId || null;
+  const locationType = parsed.data.locationType.trim() || 'branch';
+  const address = nullable(parsed.data.address);
+
+  try {
+    await withTenantContext(user.tenantId, async () => {
+      const [brand] = brandId
+        ? await db()
+            .select({ id: brands.id })
+            .from(brands)
+            .where(and(eq(brands.tenantId, user.tenantId), eq(brands.id, brandId), isNull(brands.voidedAt)))
+            .limit(1)
+        : [];
+      if (brandId && !brand) throw new Error('Selected brand was not found.');
+
+      const existingRows = await db()
+        .select({ id: locations.id, name: locations.name, code: locations.code })
+        .from(locations)
+        .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)));
+
+      const editing = Boolean(id);
+      if (editing && !existingRows.some((location) => location.id === id)) {
+        throw new Error('Location was not found.');
+      }
+
+      const sameName = existingRows.some((location) => location.id !== id && location.name.trim().toLowerCase() === name.toLowerCase());
+      if (sameName) throw new Error('DUPLICATE_NAME');
+
+      const sameCode = code
+        ? existingRows.some((location) => location.id !== id && location.code?.trim().toLowerCase() === code.toLowerCase())
+        : false;
+      if (sameCode) throw new Error('DUPLICATE_CODE');
+
+      const values = { brandId, name, code, locationType, address, updatedAt: new Date() };
+      if (editing) {
+        await db().update(locations).set(values).where(eq(locations.id, id));
+      } else {
+        await db().insert(locations).values({ tenantId: user.tenantId, ...values });
+      }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'DUPLICATE_NAME') return duplicateText('Location name');
+    if (error instanceof Error && error.message === 'DUPLICATE_CODE') return duplicateText('Location code');
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not save location.' };
+  }
+
+  revalidatePath('/company/locations');
+  revalidatePath('/');
+  return { ok: true, message: id ? 'Location updated.' : 'Location added.' };
 }
 
 export async function createCompany(formData: FormData): Promise<void> {

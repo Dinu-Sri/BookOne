@@ -14,6 +14,7 @@ import {
   Landmark,
   LayoutDashboard,
   LineChart,
+  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   Package,
@@ -28,6 +29,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { BrandLockup, Button, SelectLike } from '@/components/ui/bookone-ui';
 import { PeriodSelector } from '@/components/layout/period-selector';
 import { CompanyResetButton } from '@/components/layout/company-reset-button';
+import { signOutCurrentUser } from '@/app/actions/auth-session';
 
 export interface NavItem {
   label: string;
@@ -305,6 +307,11 @@ export function BookOneShell({
             <Button variant="secondary" className="icon" aria-label="Notifications">
               <Bell size={16} />
             </Button>
+            <form action={signOutCurrentUser}>
+              <Button variant="secondary" className="icon" type="submit" aria-label="Logout" title="Logout">
+                <LogOut size={16} />
+              </Button>
+            </form>
           </div>
         </header>
         {children}

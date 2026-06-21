@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getPeriodOptions, getTenantInfo, listJournalEntries } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
-import { CheckCircle2, ClipboardCheck, CircleAlert, ListChecks } from 'lucide-react';
+import { ClipboardCheck, ListChecks } from 'lucide-react';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -74,39 +74,6 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
             <p className="metric-note">Unique ledger accounts</p>
           </Card>
         </div>
-
-        <Card style={{ marginTop: 16 }}>
-          <div className="card-header">
-            <div>
-              <p className="eyebrow">Accounting engine check</p>
-              <h2 className="card-title" style={{ marginTop: 4 }}>Posting integrity</h2>
-              <p className="card-subtitle">Use this first, then compare Reports and Bank Reconciliation.</p>
-            </div>
-            <Badge tone={unbalancedCount === 0 && Math.abs(totalDebit - totalCredit) < 0.005 ? 'success' : 'danger'}>
-              {unbalancedCount === 0 ? <CheckCircle2 size={12} /> : <CircleAlert size={12} />}
-              {unbalancedCount === 0 ? 'Balanced ledger' : 'Needs audit'}
-            </Badge>
-          </div>
-          <div className="card-body">
-            <div className="audit-check-grid">
-              <AuditCheck
-                ok={entries.length > 0}
-                title="Every business event creates a journal"
-                detail={entries.length > 0 ? `${entries.length} journal entries found.` : 'Record test entries from Simple Entry first.'}
-              />
-              <AuditCheck
-                ok={unbalancedCount === 0}
-                title="Each journal balances"
-                detail={unbalancedCount === 0 ? 'Every entry has equal debit and credit totals.' : `${unbalancedCount} entries have a difference or missing lines.`}
-              />
-              <AuditCheck
-                ok={Math.abs(totalDebit - totalCredit) < 0.005}
-                title="Ledger totals balance"
-                detail={`${formatLKR(totalDebit)} debit vs ${formatLKR(totalCredit)} credit.`}
-              />
-            </div>
-          </div>
-        </Card>
 
         {entries.length === 0 ? (
           <Card style={{ marginTop: 16 }}>
@@ -179,17 +146,5 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
         )}
       </div>
     </BookOneShell>
-  );
-}
-
-function AuditCheck({ ok, title, detail }: { ok: boolean; title: string; detail: string }) {
-  return (
-    <div className="audit-check">
-      <Badge tone={ok ? 'success' : 'warning'}>{ok ? <CheckCircle2 size={12} /> : <CircleAlert size={12} />} {ok ? 'OK' : 'Check'}</Badge>
-      <div>
-        <strong>{title}</strong>
-        <span>{detail}</span>
-      </div>
-    </div>
   );
 }

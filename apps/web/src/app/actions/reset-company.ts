@@ -41,6 +41,14 @@ function makeClient(): S3Client | null {
   });
 }
 
+function storageWarning(prefix: string, error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Storage cleanup failed.';
+  if (message.toLowerCase().includes('specified key does not exist')) {
+    return `${prefix}: some stored receipt files were already missing.`;
+  }
+  return `${prefix}: ${message}`;
+}
+
 async function deleteTenantReceiptFiles(tenantId: string): Promise<{ deleted: number; warning?: string }> {
   const bucket = process.env.S3_BUCKET;
   const client = makeClient();
@@ -53,26 +61,36 @@ async function deleteTenantReceiptFiles(tenantId: string): Promise<{ deleted: nu
   let deleted = 0;
 
   do {
-    const listed = await client.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: prefix,
-        ContinuationToken: continuationToken,
-      }),
-    );
+    let listed;
+    try {
+      listed = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+    } catch (error) {
+      return { deleted, warning: storageWarning('Storage cleanup skipped', error) };
+    }
+
     const objects = (listed.Contents ?? [])
       .map((item) => item.Key)
       .filter((key): key is string => Boolean(key))
       .map((Key) => ({ Key }));
 
     if (objects.length > 0) {
-      await client.send(
-        new DeleteObjectsCommand({
-          Bucket: bucket,
-          Delete: { Objects: objects, Quiet: true },
-        }),
-      );
-      deleted += objects.length;
+      try {
+        await client.send(
+          new DeleteObjectsCommand({
+            Bucket: bucket,
+            Delete: { Objects: objects, Quiet: true },
+          }),
+        );
+        deleted += objects.length;
+      } catch (error) {
+        return { deleted, warning: storageWarning('Storage cleanup partially skipped', error) };
+      }
     }
 
     continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;

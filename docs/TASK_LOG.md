@@ -164,6 +164,24 @@
 
 ---
 
+## 2026-06-21 - Better Auth, Company Module, and Dimensions
+
+### Completed
+- Replaced the NextAuth route/config with Better Auth tables, API route, email/password login, Google login wiring, email verification, and password reset email support through Resend.
+- Added a single-page Sign In / Sign Up screen using BookOne styling and the requested tabbed layout.
+- Added a reset-password landing page for emailed password reset links.
+- Added Company sidebar module with separate Company Details, Tax Info, Brands, Locations, and Domain Verification screens.
+- Added DNS TXT based company domain verification instructions and persistence.
+- Added brand/location dimensions to transactions, journal entries, and journal lines.
+- Made Simple Entry require brand/location when the company has configured them, with auto-selection when only one exists.
+
+### Next Steps
+- [ ] Add brand/location filters to Dashboard, Transactions, Journal, Reports, and Reconciliation.
+- [ ] Add domain-verified organization joining rules after live DNS verification is tested.
+- [ ] Add team invitations and role management on top of Better Auth organizations.
+
+---
+
 ## Template for New Entries
 
 ```

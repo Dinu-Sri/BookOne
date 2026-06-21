@@ -76,8 +76,10 @@ Below each variable, I explain what it is and how to get/generate it.
 
 | Variable | Value | How to Get |
 |----------|-------|------------|
-| `AUTH_SECRET` | `output-of-openssl` | Generate: `openssl rand -base64 32` |
-| `AUTH_URL` | `https://bookone.clossyan.com` | Your domain |
+| `BETTER_AUTH_SECRET` | `output-of-openssl` | Generate: `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | `https://bookone.clossyan.com` | Your domain |
+| `GOOGLE_CLIENT_ID` | `...apps.googleusercontent.com` | Google Cloud OAuth client |
+| `GOOGLE_CLIENT_SECRET` | `...` | Google Cloud OAuth client secret |
 
 ### Redis
 

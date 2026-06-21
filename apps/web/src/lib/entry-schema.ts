@@ -12,6 +12,8 @@ export const baseEntrySchema = z.object({
   currency: z.string().max(5).default('LKR'),
   paymentMethod: z.enum(['Cash', 'Bank', 'Card', 'Online', 'Credit']),
   paymentAccount: accountRefSchema,
+  brandId: z.string().uuid().optional(),
+  locationId: z.string().uuid().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format'),
   receiptRef: z.string().max(500).optional(),
 });

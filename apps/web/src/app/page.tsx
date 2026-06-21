@@ -26,6 +26,7 @@ import {
   getActiveAccounts,
   type AccountOption,
 } from '@/app/actions/accounts';
+import { getCompanySettingsData } from '@/app/actions/company-settings';
 import { previewCategory, type CategoryPreview } from '@/app/actions/preview-category';
 import { uploadReceipt } from '@/app/actions/upload-receipt';
 import type { EntryInput } from '@/lib/entry-schema';
@@ -72,6 +73,12 @@ interface UploadedReceipt {
   size: number;
 }
 
+interface DimensionOption {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
 export default function Home() {
   const [direction, setDirection] = useState<Direction>('money_out');
   const [party, setParty] = useState('');
@@ -83,8 +90,12 @@ export default function Home() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Bank');
   const [categoryOverride, setCategoryOverride] = useState<string>('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [brandId, setBrandId] = useState('');
+  const [locationId, setLocationId] = useState('');
 
   const [accountList, setAccountList] = useState<AccountOption[]>([]);
+  const [brandList, setBrandList] = useState<DimensionOption[]>([]);
+  const [locationList, setLocationList] = useState<DimensionOption[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [categoryPreview, setCategoryPreview] = useState<CategoryPreview | null>(null);
   const [receipt, setReceipt] = useState<UploadedReceipt | null>(null);
@@ -122,6 +133,28 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCompanySettingsData()
+      .then((data) => {
+        if (cancelled) return;
+        setBrandList(data.brands.map((brand) => ({ id: brand.id, name: brand.name, code: brand.code })));
+        setLocationList(data.locations.map((location) => ({ id: location.id, name: location.name, code: location.code })));
+      })
+      .catch((err) => console.error('Failed to load company dimensions:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (brandList.length === 1 && !brandId) setBrandId(brandList[0].id);
+  }, [brandList, brandId]);
+
+  useEffect(() => {
+    if (locationList.length === 1 && !locationId) setLocationId(locationList[0].id);
+  }, [locationList, locationId]);
 
   const liquidAccounts = useMemo(
     () => accountList.filter((a) => a.type === 'asset' && ['1000', '1100', '1200', '1300'].includes(a.code)),
@@ -247,6 +280,8 @@ export default function Home() {
       currency: 'LKR' as const,
       paymentMethod,
       paymentAccount: { kind: 'code' as const, value: paymentAccountCode },
+      ...(brandId ? { brandId } : {}),
+      ...(locationId ? { locationId } : {}),
       date,
       receiptRef: receipt?.key,
     };
@@ -493,6 +528,32 @@ export default function Home() {
                     ))}
                   </select>
                 </div>
+                {brandList.length > 0 ? (
+                  <div className="field">
+                    <label>Brand</label>
+                    <select className="input" value={brandId} onChange={(e) => setBrandId(e.target.value)} required>
+                      <option value="">Select brand</option>
+                      {brandList.map((brand) => (
+                        <option key={brand.id} value={brand.id}>
+                          {brand.code ? `${brand.code} - ${brand.name}` : brand.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                {locationList.length > 0 ? (
+                  <div className="field">
+                    <label>Location</label>
+                    <select className="input" value={locationId} onChange={(e) => setLocationId(e.target.value)} required>
+                      <option value="">Select location</option>
+                      {locationList.map((location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.code ? `${location.code} - ${location.name}` : location.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 <div className="field">
                   <label>Date</label>
                   <div className="date-field">

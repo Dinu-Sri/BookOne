@@ -16,4 +16,5 @@ export {
   financialYears,
   brands,
   locations,
+  companyDomains,
 } from './company-settings';

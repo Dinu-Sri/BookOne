@@ -1,96 +1,83 @@
 import 'server-only';
 
-import NextAuth from 'next-auth';
-import Credentials from 'next-auth/providers/credentials';
-import { compare } from 'bcryptjs';
-import { db, users } from '@bookone/db';
-import { eq, and, isNull } from 'drizzle-orm';
+import { randomBytes } from 'node:crypto';
+import { betterAuth } from 'better-auth';
+import { organization } from 'better-auth/plugins';
+import { Pool } from 'pg';
+import { sendAuthEmail } from './email';
 
-declare module 'next-auth' {
-  interface User {
-    tenantId?: string;
-    role?: string;
-  }
-  interface Session {
-    user: {
-      id: string;
-      email: string;
-      name: string;
-      tenantId: string;
-      role: string;
-    };
-  }
-}
+const databaseUrl = process.env.DATABASE_URL;
 
-interface AppToken {
-  sub?: string;
-  tenantId?: string;
-  role?: string;
-  [key: string]: unknown;
-}
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const authSecret = process.env.BETTER_AUTH_SECRET ?? process.env.AUTH_SECRET ?? randomBytes(32).toString('base64');
 
-export const { auth, handlers, signIn, signOut } = NextAuth({
-  providers: [
-    Credentials({
-      name: 'credentials',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
+export const auth = betterAuth({
+  database: new Pool(databaseUrl ? { connectionString: databaseUrl } : undefined),
+  secret: authSecret,
+  baseURL: process.env.BETTER_AUTH_URL ?? process.env.AUTH_URL ?? process.env.APP_URL,
+  user: {
+    modelName: 'auth_users',
+  },
+  session: {
+    modelName: 'auth_sessions',
+  },
+  account: {
+    modelName: 'auth_accounts',
+  },
+  verification: {
+    modelName: 'auth_verifications',
+  },
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url }) => {
+      void sendAuthEmail({
+        to: user.email,
+        subject: 'Reset your BookOne password',
+        text: `Reset your BookOne password: ${url}`,
+        html: `<p>Reset your BookOne password:</p><p><a href="${url}">Reset password</a></p>`,
+      });
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    sendOnSignIn: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      void sendAuthEmail({
+        to: user.email,
+        subject: 'Verify your BookOne email',
+        text: `Verify your BookOne email address: ${url}`,
+        html: `<p>Verify your BookOne email address:</p><p><a href="${url}">Verify email</a></p>`,
+      });
+    },
+  },
+  socialProviders: {
+    ...(googleClientId && googleClientSecret
+      ? {
+          google: {
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
+            prompt: 'select_account',
+          },
         }
-
-        const email = (credentials.email as string).toLowerCase().trim();
-        const password = credentials.password as string;
-
-        const [user] = await db()
-          .select()
-          .from(users)
-          .where(and(eq(users.email, email), isNull(users.voidedAt)))
-          .limit(1);
-
-        if (!user) {
-          return null;
-        }
-
-        const isValid = await compare(password, user.passwordHash);
-        if (!isValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          tenantId: user.tenantId,
-          role: user.role,
-        };
+      : {}),
+  },
+  plugins: [
+    organization({
+      schema: {
+        organization: {
+          modelName: 'auth_organizations',
+        },
+        member: {
+          modelName: 'auth_members',
+        },
+        invitation: {
+          modelName: 'auth_invitations',
+        },
       },
     }),
   ],
-  session: { strategy: 'jwt' },
-  pages: {
-    signIn: '/login',
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      const t = token as AppToken;
-      if (user) {
-        t.tenantId = user.tenantId;
-        t.role = user.role;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      const t = token as AppToken;
-      if (session.user) {
-        session.user.id = t.sub ?? '';
-        session.user.tenantId = (t.tenantId as string) ?? '';
-        session.user.role = (t.role as string) ?? 'member';
-      }
-      return session;
-    },
-  },
 });

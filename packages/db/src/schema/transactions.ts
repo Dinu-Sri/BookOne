@@ -2,6 +2,7 @@ import { pgTable, uuid, varchar, timestamp, numeric, text, type AnyPgColumn } fr
 import { tenants } from './tenants';
 import { users } from './users';
 import { accounts } from './accounts';
+import { brands, locations } from './company-settings';
 
 export const transactions = pgTable('transactions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -15,6 +16,8 @@ export const transactions = pgTable('transactions', {
   currency: varchar('currency', { length: 5 }).notNull().default('LKR'),
   paymentMethod: varchar('payment_method', { length: 20 }).notNull(),
   paymentAccountId: uuid('payment_account_id').notNull().references(() => accounts.id),
+  brandId: uuid('brand_id').references(() => brands.id),
+  locationId: uuid('location_id').references(() => locations.id),
   transferSourceAccountId: uuid('transfer_source_account_id').references(() => accounts.id),
   reversesTransactionId: uuid('reverses_transaction_id').references((): AnyPgColumn => transactions.id),
   reversedByTransactionId: uuid('reversed_by_transaction_id').references((): AnyPgColumn => transactions.id),

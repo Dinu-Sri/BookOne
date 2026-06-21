@@ -10,14 +10,16 @@
     "lint": "echo ok"
   },
   "dependencies": {
+    "@bookone/accounting": "workspace:*",
     "@bookone/db": "workspace:*",
-    "bcryptjs": "^2.4.3",
+    "better-auth": "^1.6.20",
     "drizzle-orm": "^0.33.0",
-    "next-auth": "5.0.0-beta.25",
+    "pg": "^8.22.0",
+    "resend": "^6.14.0",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.0",
+    "@types/pg": "^8.20.0",
     "next": "^15.0.0"
   }
 }

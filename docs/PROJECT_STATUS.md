@@ -84,7 +84,7 @@ The product positioning and design philosophy is documented in `docs/ACCOUNTING_
 | Monorepo | pnpm workspaces + Turborepo | Fast, isolated, native TypeScript |
 | DB | PostgreSQL 16 | RLS, JSON, mature |
 | ORM | Drizzle ORM | Type-safe SQL builder, no runtime overhead |
-| Auth | Auth.js v5 (credentials) | JWT, sessions, password hashing via bcryptjs |
+| Auth | Better Auth | Email/password, Google login, verification/reset emails, organization foundation |
 | Storage | Cloudflare R2 (S3-compatible) | 10 GB free, no egress fees |
 | File upload | AWS SDK v3 (S3 client) | Works with both MinIO and R2 |
 | Reverse proxy | Traefik v3 | Auto-TLS, Docker provider |
@@ -122,7 +122,7 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 | 3 | Auto-init entrypoint (migrations + RLS + seed on deploy) | ✅ | `2ded922` | No manual `pnpm db:migrate` needed |
 | 4 | Phase 1 — Pure accounting engine + 12 tests | ✅ | `dabfec6` | packages/accounting |
 | 5 | Phase 2 — Drizzle schema (9 tables + RLS) | ✅ | `79c517a` | packages/db |
-| 6 | Phase 3 — Auth.js v5 with credentials + tenant middleware | ✅ | `39bb0a8` | packages/auth |
+| 6 | Phase 3 — Better Auth login + tenant bridge | ✅ | (current) | Email/password, Google login, verification/reset emails, and BookOne tenant mapping |
 | 7 | Phase 4 — `recordEntry` server action | ✅ | `71be731` | Engine + DB transaction + audit |
 | 8 | Phase 5 — Login page + entry form wiring | ✅ | `70b136c` | /login + form to recordEntry |
 | 9 | Production deploy issues — middleware, cache, pnpm | ✅ | `3e331ea` `ad5fbdb` | Login worked |
@@ -179,7 +179,7 @@ BookOne v2
 │   │   │   ├── engine/                         # Balanced journal generator
 │   │   │   └── index.ts
 │   │   └── test/engine.test.ts     # 12 vitest cases, all passing
-│   ├── auth/                       # Auth.js v5 + tenant middleware
+│   ├── auth/                       # Better Auth + tenant session bridge
 │   ├── db/                         # Drizzle ORM, migrations, RLS
 │   │   ├── src/schema/             # 9 tables
 │   │   ├── src/seed.ts             # Admin user + 20 accounts
@@ -280,8 +280,9 @@ Receipts are stored in **Cloudflare R2** under the `bookone-receipts` bucket.
 |----------|----------|-----------|
 | `DATABASE_URL` | Postgres connection | Portainer stack env |
 | `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Compose healthcheck + Postgres image | Portainer stack env |
-| `AUTH_SECRET` | NextAuth JWT signing | Portainer stack env (32+ bytes, base64) |
-| `AUTH_URL` | NextAuth callback URL | `https://bookone.clossyan.com` |
+| `BETTER_AUTH_SECRET` | Better Auth session signing | Portainer stack env (32+ bytes, base64) |
+| `BETTER_AUTH_URL` | Better Auth callback URL | `https://bookone.clossyan.com` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google login | Google Cloud OAuth client |
 | `REDIS_URL` | Cache / future BullMQ | `redis://redis:6379` |
 | `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_REGION`, `S3_FORCE_PATH_STYLE` | R2 / MinIO | Portainer stack env |
 | `OPENAI_API_KEY` | AI assistant (Phase 19) | not yet set |
@@ -295,7 +296,7 @@ Receipts are stored in **Cloudflare R2** under the `bookone-receipts` bucket.
 
 ```bash
 cp .env.example .env
-# fill in AUTH_SECRET: openssl rand -base64 32
+# fill in BETTER_AUTH_SECRET: openssl rand -base64 32
 # fill in DB_*
 docker compose -f docker/docker-compose.yml up -d postgres redis
 pnpm install
@@ -318,7 +319,7 @@ pnpm install
 
 # 2. Set up env
 cp .env.example .env
-# Edit .env: set AUTH_SECRET, leave DB_ defaults
+# Edit .env: set BETTER_AUTH_SECRET, leave DB_ defaults
 
 # 3. Start backing services
 docker compose -f docker/docker-compose.yml up -d

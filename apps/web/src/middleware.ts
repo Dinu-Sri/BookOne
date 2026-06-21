@@ -7,13 +7,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 // dropped during bundling, which causes the middleware to fire on
 // `/_next/static/*` and redirect every JS chunk to /login.
 
-// We intentionally use a minimal cookie check inline (no NextAuth `auth()`
-// call) so bcryptjs / drizzle do not leak into the Edge runtime bundle.
+// We intentionally use a minimal cookie check inline (no auth server call)
+// so database/auth dependencies do not leak into the Edge runtime bundle.
 const SESSION_COOKIE_NAMES = [
-  'authjs.session-token',
-  '__Secure-authjs.session-token',
-  'next-auth.session-token',
-  '__Secure-next-auth.session-token',
+  'better-auth.session_token',
+  '__Secure-better-auth.session_token',
 ];
 
 function hasSessionCookie(req: NextRequest): boolean {

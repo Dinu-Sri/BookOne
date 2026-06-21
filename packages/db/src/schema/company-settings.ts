@@ -86,3 +86,15 @@ export const locations = pgTable('locations', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),
 });
+
+export const companyDomains = pgTable('company_domains', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  domain: varchar('domain', { length: 255 }).notNull(),
+  verificationToken: varchar('verification_token', { length: 120 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('pending'),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});

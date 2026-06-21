@@ -11,6 +11,8 @@ import {
   journalLines,
   auditLog,
   accounts,
+  brands,
+  locations,
   periodLocks,
   withTenantContext,
   eq,
@@ -48,11 +50,35 @@ async function resolveAccountId(code: string): Promise<string> {
   return account.id;
 }
 
+async function resolveDimensions(tenantId: string, brandId?: string, locationId?: string) {
+  return withTenantContext(tenantId, async () => {
+    const brandRows = await db()
+      .select({ id: brands.id })
+      .from(brands)
+      .where(and(eq(brands.tenantId, tenantId), isNull(brands.voidedAt)));
+    const locationRows = await db()
+      .select({ id: locations.id })
+      .from(locations)
+      .where(and(eq(locations.tenantId, tenantId), isNull(locations.voidedAt)));
+
+    if (brandRows.length > 0 && !brandId) throw new Error('Select a brand for this transaction.');
+    if (locationRows.length > 0 && !locationId) throw new Error('Select a location for this transaction.');
+    if (brandId && !brandRows.some((brand) => brand.id === brandId)) throw new Error('Selected brand does not belong to this company.');
+    if (locationId && !locationRows.some((location) => location.id === locationId)) throw new Error('Selected location does not belong to this company.');
+
+    return {
+      brandId: brandId ?? null,
+      locationId: locationId ?? null,
+    };
+  });
+}
+
 export async function recordEntry(input: EntryInput): Promise<RecordEntryResult> {
   try {
     const parsed = entrySchema.parse(input);
     const user = await requireTenantContext();
     const entryPeriod = parsed.date.slice(0, 7);
+    const dimensions = await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId);
 
     const [lock] = await withTenantContext(user.tenantId, async () => {
       return db()
@@ -112,6 +138,8 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
             currency: transaction.currency,
             paymentMethod: transaction.paymentMethod,
             paymentAccountId,
+            brandId: dimensions.brandId,
+            locationId: dimensions.locationId,
             transferSourceAccountId,
             date: transaction.date,
             receiptRef: transaction.receiptRef ?? null,
@@ -131,6 +159,8 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
             tenantId: transaction.tenantId,
             userId: transaction.userId,
             transactionId: insertedTransaction.id,
+            brandId: dimensions.brandId,
+            locationId: dimensions.locationId,
             memo: journal.memo,
             entryDate: transaction.date,
             isBalanced: '1',
@@ -146,6 +176,8 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
             tenantId: transaction.tenantId,
             journalEntryId: insertedJournal.id,
             accountId,
+            brandId: dimensions.brandId,
+            locationId: dimensions.locationId,
             side: line.side,
             amount: line.amount.toString(),
             memo: line.memo ?? null,
@@ -233,6 +265,8 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
           currency: transactions.currency,
           paymentMethod: transactions.paymentMethod,
           paymentAccountId: transactions.paymentAccountId,
+          brandId: transactions.brandId,
+          locationId: transactions.locationId,
           transferSourceAccountId: transactions.transferSourceAccountId,
           receiptRef: transactions.receiptRef,
           categoryCode: transactions.categoryCode,
@@ -303,6 +337,8 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
             currency: original.currency,
             paymentMethod: original.paymentMethod,
             paymentAccountId: original.paymentAccountId,
+            brandId: original.brandId,
+            locationId: original.locationId,
             transferSourceAccountId: original.transferSourceAccountId,
             reversesTransactionId: original.id,
             receiptRef: original.receiptRef,
@@ -323,6 +359,8 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
             tenantId: user.tenantId,
             userId: user.id,
             transactionId: reversalTx.id,
+            brandId: original.brandId,
+            locationId: original.locationId,
             memo: `Reversal of ${originalJournal.memo}`,
             entryDate: reversalDate,
             isBalanced: '1',
@@ -334,6 +372,8 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
             tenantId: user.tenantId,
             journalEntryId: reversalJournal.id,
             accountId: line.accountId,
+            brandId: original.brandId,
+            locationId: original.locationId,
             side: line.side === 'debit' ? 'credit' : 'debit',
             amount: line.amount,
             memo: line.memo ? `Reverse: ${line.memo}`.slice(0, 500) : 'Reversal line',

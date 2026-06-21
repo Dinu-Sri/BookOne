@@ -26,6 +26,8 @@ export interface TenantInfo {
   name: string;
   slug: string;
   plan: string;
+  userEmail?: string;
+  userRole?: string;
 }
 
 export interface AccountBalance {
@@ -84,7 +86,7 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     .where(eq(tenants.id, user.tenantId))
     .limit(1);
   if (!t) throw new Error('Tenant not found.');
-  return t;
+  return { ...t, userEmail: user.email, userRole: user.role };
 }
 
 /**

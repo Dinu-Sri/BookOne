@@ -18,6 +18,7 @@ import {
   PanelLeftOpen,
   Package,
   ReceiptText,
+  SlidersHorizontal,
   ShieldCheck,
   ShoppingCart,
   Users,
@@ -39,6 +40,7 @@ interface NavSuite {
   label: string;
   icon: typeof Bell;
   items: NavItem[];
+  superAdminOnly?: boolean;
 }
 
 const navSuites: NavSuite[] = [
@@ -114,6 +116,17 @@ const navSuites: NavSuite[] = [
       { label: 'Leave', icon: CalendarDays },
     ],
   },
+  {
+    id: 'control-room',
+    label: 'Control Room',
+    icon: SlidersHorizontal,
+    superAdminOnly: true,
+    items: [
+      { label: 'Modules', icon: SlidersHorizontal, href: '/control-room/modules' },
+      { label: 'Access Rules', icon: ShieldCheck },
+      { label: 'Audit Controls', icon: ClipboardList },
+    ],
+  },
 ];
 
 function sameDay(a: Date, b: Date): boolean {
@@ -176,6 +189,8 @@ export interface TenantLite {
   name: string;
   slug: string;
   plan: string;
+  userEmail?: string;
+  userRole?: string;
 }
 
 export interface PeriodLite {
@@ -195,7 +210,9 @@ export function BookOneShell({
   period?: PeriodLite;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const activeSuite = navSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
+  const isSuperAdmin = tenant?.userRole === 'super_admin' || tenant?.userEmail === 'dinu.sri.m@gmail.com';
+  const visibleSuites = useMemo(() => navSuites.filter((suite) => !suite.superAdminOnly || isSuperAdmin), [isSuperAdmin]);
+  const activeSuite = visibleSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
 
   return (
@@ -215,7 +232,7 @@ export function BookOneShell({
 
         <div className="sidebar-section suite-nav">
           <nav aria-label="Suite navigation">
-            {navSuites.map((suite) => {
+            {visibleSuites.map((suite) => {
               const isOpen = openSuite === suite.id;
               const hasActiveItem = suite.items.some((item) => item.label === active);
               return (

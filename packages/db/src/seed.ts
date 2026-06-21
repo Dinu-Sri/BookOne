@@ -54,11 +54,15 @@ async function seed() {
       email: 'dinu.sri.m@gmail.com',
       name: 'Dinu Sri',
       passwordHash,
-      role: 'admin',
+      role: 'super_admin',
     });
-    console.log('Admin user created.');
+    console.log('Super admin user created.');
   } else {
-    console.log('Admin user already exists.');
+    await db
+      .update(schema.users)
+      .set({ role: 'super_admin', updatedAt: sql`NOW()` })
+      .where(eq(schema.users.email, 'dinu.sri.m@gmail.com'));
+    console.log('Super admin user already exists; role refreshed.');
   }
 
   // 3. Seed chart of accounts (skip if already seeded)

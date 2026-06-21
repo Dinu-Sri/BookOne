@@ -93,8 +93,10 @@ img {
   display: grid;
   place-items: center;
   padding: 32px 18px;
-  background: #11141b;
-  color: #f8fafc;
+  background:
+    linear-gradient(180deg, rgba(232, 244, 255, 0.78), rgba(246, 248, 251, 0) 420px),
+    var(--bg);
+  color: var(--ink);
 }
 
 .auth-panel {
@@ -117,9 +119,9 @@ img {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
   padding: 5px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: #1b202b;
+  background: var(--surface-muted);
 }
 
 .auth-tabs button {
@@ -127,13 +129,13 @@ img {
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #cbd5e1;
+  color: var(--ink-muted);
   font-weight: 750;
 }
 
 .auth-tabs button.active {
-  background: var(--success);
-  color: #06120d;
+  background: var(--brand);
+  color: #ffffff;
 }
 
 .auth-card {
@@ -141,10 +143,10 @@ img {
   gap: 18px;
   margin-top: 16px;
   padding: 28px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: #1a1f29;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
 }
 
 .auth-card h1 {
@@ -154,7 +156,7 @@ img {
 
 .auth-card > p {
   margin-top: -8px;
-  color: #cbd5e1;
+  color: var(--ink-muted);
   font-size: 14px;
 }
 
@@ -174,7 +176,7 @@ img {
 .auth-row label,
 .auth-row button,
 .auth-check {
-  color: #f8fafc;
+  color: var(--ink);
   font-size: 14px;
   font-weight: 800;
 }
@@ -197,10 +199,16 @@ img {
   gap: 10px;
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  border-radius: 999px;
-  background: #11141b;
-  color: #cbd5e1;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink-muted);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.auth-input:focus-within {
+  border-color: rgba(22, 119, 201, 0.5);
+  box-shadow: var(--focus);
 }
 
 .auth-input input {
@@ -208,11 +216,11 @@ img {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #e5edf7;
+  color: var(--ink);
 }
 
 .auth-input input::placeholder {
-  color: #94a3b8;
+  color: var(--ink-soft);
 }
 
 .auth-input button {
@@ -220,7 +228,7 @@ img {
   place-items: center;
   border: 0;
   background: transparent;
-  color: #94a3b8;
+  color: var(--ink-soft);
 }
 
 .auth-check {
@@ -243,19 +251,19 @@ img {
 }
 
 .auth-error {
-  background: rgba(220, 38, 38, 0.14);
-  color: #fecaca;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .auth-message {
-  background: rgba(16, 185, 129, 0.14);
-  color: #bbf7d0;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .auth-terms {
   padding-top: 16px;
-  border-top: 1px solid rgba(148, 163, 184, 0.26);
-  color: #cbd5e1;
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.45;
   text-align: center;
@@ -2127,6 +2135,7 @@ textarea.input {
   .grid.metrics,
   .grid.three,
   .grid.two,
+  .auth-grid.two,
   .entry-options,
   .entry-mode-strip,
   .mode-grid,

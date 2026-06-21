@@ -55,7 +55,16 @@ Run this after every Portainer redeploy on `https://bookone.clossyan.com`.
 - If a receipt exists, click View and confirm a private presigned URL opens the file.
 - For a locked-period mistake, click Reverse and confirm a reversal entry appears in Journal.
 
-## 8. Production Health
+## 8. Company Settings
+
+- Open Settings.
+- Save the company legal profile and confirm the sidebar/topbar company name updates after refresh.
+- Save tax settings with a TIN/VAT value and document prefixes.
+- Add one financial year, one brand, and one location.
+- Create a second test company and confirm it appears in the company list.
+- Click Switch on the second company, sign in again if prompted, and confirm the topbar now shows the switched company.
+
+## 9. Production Health
 
 - Confirm no page redirects unexpectedly to Simple Entry except direct `/login` access while already signed in.
 - In Portainer, inspect `bookone-web` logs for startup, migration, RLS, seed, and runtime errors.

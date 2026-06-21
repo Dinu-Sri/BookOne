@@ -9,3 +9,11 @@ export { settlementAllocations } from './settlement-allocations';
 export { auditLog } from './audit-log';
 export { bankStatementImports, bankStatementLines, periodLocks } from './reconciliation';
 export { businessDocuments, businessDocumentLines } from './business-documents';
+export {
+  tenantMemberships,
+  companyProfiles,
+  taxProfiles,
+  financialYears,
+  brands,
+  locations,
+} from './company-settings';

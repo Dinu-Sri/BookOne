@@ -148,6 +148,22 @@
 
 ---
 
+## 2026-06-21 - Company Settings Foundation
+
+### Completed
+- Added tenant-scoped company profile, tax profile, financial year, brand, location, and tenant membership tables.
+- Added RLS policy migration for the new company setup tables.
+- Rebuilt Settings into a business setup console for legal profile, tax IDs, document prefixes, financial years, brands, locations, and accessible companies.
+- Added additional-company creation with owner membership, tax defaults, seeded chart of accounts, and audit logging.
+- Added company switching foundation by updating the user's active tenant and redirecting back through login so the tenant session refreshes.
+
+### Next Steps
+- [ ] Add onboarding flow that guides first-time users through company profile, tax profile, financial year, and first location.
+- [ ] Add role-managed team invitations on top of tenant memberships.
+- [ ] Add edit/archive controls for financial years, brands, and locations after the create/list flow is validated in production.
+
+---
+
 ## Template for New Entries
 
 ```

@@ -98,7 +98,7 @@ The product positioning and design philosophy is documented in `docs/ACCOUNTING_
 
 Each phase corresponds to a commit on `master`. Replay them in order if you ever need to rebuild from scratch.
 
-### Current checkpoint - 2026-06-20
+### Current checkpoint - 2026-06-21
 
 - Period filtering is wired through Dashboard, Transactions, Journal, Reports, and Reconciliation from the header period picker.
 - Bank reconciliation now persists CSV imports, statement lines, automatic matches, and manual Reconciled/Unmatched decisions.
@@ -112,6 +112,7 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 - Reports v1 now exposes Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance.
 - Journal is now the first accounting-engine audit surface: check every posted entry, balance status, debit/credit totals, and ledger integrity before trusting reports or reconciliation.
 - Temporary admin reset is available from the header for live test cycles. It preserves tenant/users/accounts and clears operational data plus tenant receipt files.
+- Settings now includes the company setup foundation: legal company profile, tax identifiers, financial years, brands, locations, tenant memberships, additional company creation, and company switching through tenant-session refresh.
 
 | # | Phase | Status | Commit | Notes |
 |---|-------|--------|--------|-------|
@@ -128,7 +129,7 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 | 10 | **Phase A** — Real account selector, date picker, R2 receipts, category override | ✅ | `233b1e2` | apps/web/src/app/actions/* |
 | 11 | **Phase B + C** — Dashboard, Transactions, Journal, Reports, Accounts, Reconciliation, Settings | ✅ | `a4d8224` | 7 read pages with real DB data |
 | 12 | Period filter actually scopes data | ✅ | (local) | Dashboard / Transactions / Journal / Reports / Reconciliation use `?period=YYYY-MM` or `?period=all` |
-| 13 | Multi-tenant switcher | ⏳ | — | User belongs to 1 tenant for now |
+| 13 | Multi-company foundation | in progress | (local) | Tenant memberships, additional company creation, and active-company switching are available in Settings |
 | 14 | Bank reconciliation wizard (CSV upload) | in progress | (local) | CSV upload preview, exact date/amount matching, and manual Reconciled/Unmatched statuses added; persistence still next |
 | 15 | Onboarding wizard (Onborda) | ⏳ | — | First-run tour |
 | 16 | Sentry + PostHog | ⏳ | — | Env keys not configured yet |
@@ -239,6 +240,12 @@ BookOne v2
 | `period_locks` | Closed accounting periods | `id`, `tenant_id`, `period`, `status`, `locked_at` |
 | `business_documents` | Customer invoices and vendor bills | `id`, `party_id`, `transaction_id`, `document_type`, `status`, `total`, `balance_due` |
 | `business_document_lines` | Invoice/bill line detail | `id`, `document_id`, `account_id`, `description`, `quantity`, `unit_price`, `line_total` |
+| `tenant_memberships` | User access to companies | `id`, `tenant_id`, `user_id`, `role`, `status` |
+| `company_profiles` | Legal company identity | `id`, `tenant_id`, `legal_name`, `registration_number`, `country`, `base_currency` |
+| `tax_profiles` | Tax IDs and document defaults | `id`, `tenant_id`, `tin`, `vat_number`, `invoice_prefix`, `bill_prefix` |
+| `financial_years` | Company fiscal years | `id`, `tenant_id`, `label`, `start_date`, `end_date`, `status` |
+| `brands` | Trading brands under a company | `id`, `tenant_id`, `name`, `code`, `status` |
+| `locations` | Branches, warehouses, counters, offices | `id`, `tenant_id`, `brand_id`, `name`, `location_type`, `status` |
 
 **RLS policy:** `USING (tenant_id = current_setting('app.current_tenant_id')::uuid)`. Set at the start of every request via `withTenantContext()` (server) or middleware (Edge).
 

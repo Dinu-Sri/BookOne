@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Eye } from 'lucide-react';
 import { useMemo, useState, useTransition, useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -14,6 +15,7 @@ import {
 import { DateRangePicker } from '@/components/layout/date-range-picker';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
+import { PartySnapshotDialog } from '@/components/parties/party-snapshot';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
@@ -66,6 +68,7 @@ export function PartyListScreen({
     | { type: 'archive' | 'restore' | 'delete'; party: PartyRow }
   >(null);
   const [block, setBlock] = useState<null | { party: PartyRow; reasons: string[] }>(null);
+  const [preview, setPreview] = useState<PartyRow | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -281,6 +284,16 @@ export function PartyListScreen({
                         </td>
                         <td>
                           <div className="party-row-actions">
+                            <Button
+                              variant="ghost"
+                              className="icon"
+                              type="button"
+                              aria-label={`View ${p.displayName || p.name}`}
+                              title="Quick view"
+                              onClick={() => setPreview(p)}
+                            >
+                              <Eye size={16} />
+                            </Button>
                             <Link href={editHref}>
                               <Button variant="secondary" type="button">
                                 Edit
@@ -392,6 +405,15 @@ export function PartyListScreen({
           Archive the party instead if you want to hide it from pickers.
         </p>
       </ConfirmDialog>
+
+      {preview ? (
+        <PartySnapshotDialog
+          party={preview}
+          role={role}
+          editHref={`${basePath}/${preview.id}/edit`}
+          onClose={() => setPreview(null)}
+        />
+      ) : null}
     </div>
   );
 }

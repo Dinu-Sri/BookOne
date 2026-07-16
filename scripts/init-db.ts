@@ -47,6 +47,19 @@ async function init() {
     console.log('(seed may already exist)');
   }
 
+  // Demo catalogue (10 products + photos) — idempotent upsert by SKU
+  console.log('Seeding demo products...');
+  try {
+    execSync('pnpm exec tsx scripts/seed-demo-products.ts', {
+      cwd: '/app',
+      stdio: 'inherit',
+      env: { ...process.env, DATABASE_URL: DATABASE_URL! },
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.log('(demo products seed note)', msg);
+  }
+
   console.log('Init complete.');
   process.exit(0);
 }

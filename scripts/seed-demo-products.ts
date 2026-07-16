@@ -4,6 +4,7 @@
  *   pnpm exec tsx scripts/seed-demo-products.ts
  */
 import 'dotenv/config';
+import { existsSync } from 'fs';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import postgres from 'postgres';
@@ -59,15 +60,28 @@ async function main() {
     process.exit(1);
   }
 
-  const publicDir = path.join(process.cwd(), 'apps', 'web', 'public', 'products', 'demo');
+  // Prefer committed demo images path under apps/web/public (Docker: /app/...)
+  const candidates = [
+    path.join(process.cwd(), 'apps', 'web', 'public', 'products', 'demo'),
+    path.join(process.cwd(), 'public', 'products', 'demo'),
+    path.join('/app', 'apps', 'web', 'public', 'products', 'demo'),
+  ];
+  let publicDir = candidates.find((p) => existsSync(p)) ?? candidates[0];
   await mkdir(publicDir, { recursive: true });
 
   console.log(`Seeding demo products for tenant ${tenant.name} (${tenant.id})…`);
+  console.log(`Image dir: ${publicDir}`);
 
   for (const item of DEMO) {
-    const webp = await makeWebp(item.label, item.bg, item.accent);
     const filename = `${item.sku.toLowerCase()}.webp`;
-    await writeFile(path.join(publicDir, filename), webp);
+    const abs = path.join(publicDir, filename);
+    try {
+      // Always refresh demo art so deploy images are consistent 400x400 webp
+      const webp = await makeWebp(item.label, item.bg, item.accent);
+      await writeFile(abs, webp);
+    } catch (e) {
+      console.warn(`  image write failed for ${filename}:`, e);
+    }
     const imageKey = `/products/demo/${filename}`;
 
     const [existing] = await db

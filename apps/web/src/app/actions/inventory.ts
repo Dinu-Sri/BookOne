@@ -276,6 +276,8 @@ export async function listProducts(filter?: {
 }): Promise<ProductRow[]> {
   const user = await requireTenantContext();
   const q = filter?.q?.trim() ?? '';
+  // Default 'all' so newly seeded demos and archived items remain discoverable via search
+  // when explicitly filtered; product list page passes status as needed.
   const status = filter?.status ?? 'active';
   const sort = filter?.sort ?? 'name';
   const dir = filter?.dir ?? 'asc';

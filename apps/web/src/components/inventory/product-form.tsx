@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { ImagePlus, Trash2 } from 'lucide-react';
+import { useRef, useState, type DragEvent } from 'react';
 import { createProductFromForm, updateProductFromForm, type ProductRow } from '@/app/actions/inventory';
 import { Button } from '@/components/ui/bookone-ui';
 
@@ -26,8 +27,39 @@ export function ProductForm({
   const [tab, setTab] = useState<TabId>('identity');
   const [productType, setProductType] = useState(product?.productType ?? 'physical');
   const [preview, setPreview] = useState<string | null>(product?.imageUrl ?? null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const isPhysical = productType === 'physical' || productType === 'stocked';
   const typeLocked = Boolean(product?.typeLocked);
+
+  function applyFile(file: File | null | undefined) {
+    if (!file) {
+      setPreview(product?.imageUrl ?? null);
+      setFileName(null);
+      return;
+    }
+    if (!file.type.startsWith('image/')) return;
+    setFileName(file.name);
+    setPreview(URL.createObjectURL(file));
+  }
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !fileRef.current) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileRef.current.files = dt.files;
+    applyFile(file);
+  }
+
+  function clearPhoto() {
+    if (fileRef.current) fileRef.current.value = '';
+    setPreview(product?.imageUrl ?? null);
+    setFileName(null);
+  }
 
   return (
     <div className="party-form-shell">
@@ -59,44 +91,67 @@ export function ProductForm({
         </div>
       </div>
 
-      <form action={action} className="party-form-body" encType="multipart/form-data">
+      <form action={action} className="party-form-body">
         {mode === 'edit' && product ? <input type="hidden" name="id" value={product.id} /> : null}
 
         <div className="party-tab-panel" hidden={tab !== 'identity'}>
           <div className="party-tab-grid">
             <div className="field field-full">
               <label>Product photo</label>
-              <div className="product-photo-row">
-                <div className="product-photo-preview">
+              <div
+                className={`product-dropzone ${dragging ? 'is-dragging' : ''} ${preview ? 'has-preview' : ''}`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                }}
+                onDrop={onDrop}
+              >
+                <div className="product-dropzone-preview">
                   {preview ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={preview} alt="Product preview" width={96} height={96} />
+                    <img src={preview} alt="Product preview" width={112} height={112} />
                   ) : (
-                    <span>400×400</span>
+                    <div className="product-dropzone-empty">
+                      <ImagePlus size={28} strokeWidth={1.75} />
+                    </div>
                   )}
                 </div>
-                <div className="product-photo-meta">
-                  <input
-                    className="input"
-                    type="file"
-                    name="photo"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) {
-                        setPreview(product?.imageUrl ?? null);
-                        return;
-                      }
-                      const url = URL.createObjectURL(file);
-                      setPreview(url);
-                    }}
-                  />
-                  <p className="product-photo-hint">
-                    Any photo is auto-converted to <strong>400×400 WebP</strong> and compressed. Original is not kept.
+                <div className="product-dropzone-body">
+                  <strong>{preview ? 'Photo ready' : 'Add a product photo'}</strong>
+                  <p>
+                    Drag & drop, or choose a file. Saved as <b>400×400 WebP</b> (compressed). Original is discarded.
                   </p>
+                  {fileName ? <span className="product-dropzone-file">{fileName}</span> : null}
+                  <div className="product-dropzone-actions">
+                    <button type="button" className="button secondary" onClick={() => fileRef.current?.click()}>
+                      {preview ? 'Change photo' : 'Choose photo'}
+                    </button>
+                    {preview ? (
+                      <button type="button" className="button ghost" onClick={clearPhoto}>
+                        <Trash2 size={15} /> Remove
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
+                <input
+                  ref={fileRef}
+                  className="product-dropzone-input"
+                  type="file"
+                  name="photo"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={(e) => applyFile(e.target.files?.[0])}
+                />
               </div>
             </div>
+
             <div className="field">
               <label>Product type *</label>
               <select

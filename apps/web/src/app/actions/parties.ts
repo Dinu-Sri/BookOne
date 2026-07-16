@@ -128,6 +128,8 @@ export interface PartyListFilter {
   hasBalance?: 'all' | 'yes' | 'no';
   sort?: 'name' | 'code' | 'balance' | 'created' | 'updated';
   dir?: 'asc' | 'desc';
+  /** Accounting period (YYYY-MM or all) — reserved for balance scoping */
+  period?: string;
 }
 
 function cleanNullable(value?: string | null): string | null {

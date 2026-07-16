@@ -1,17 +1,15 @@
 import { redirect } from 'next/navigation';
 import { listParties, type PartyListFilter } from '@/app/actions/parties';
-import { getTenantInfo } from '@/app/actions/workspace';
+import { getPeriodOptions, getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { PartyListScreen } from '@/components/parties/party-list';
 
 interface SearchParams {
   q?: string;
   status?: string;
-  dualOnly?: string;
-  taxStatus?: string;
-  hasBalance?: string;
   sort?: string;
   dir?: string;
+  period?: string;
 }
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -19,25 +17,33 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   const filter: PartyListFilter = {
     kind: 'customer',
     q: params.q,
-    status: (params.status as PartyListFilter['status']) || 'active',
-    dualOnly: (params.dualOnly as PartyListFilter['dualOnly']) || 'all',
-    taxStatus: (params.taxStatus as PartyListFilter['taxStatus']) || 'all',
-    hasBalance: (params.hasBalance as PartyListFilter['hasBalance']) || 'all',
+    status: 'active',
     sort: (params.sort as PartyListFilter['sort']) || 'name',
     dir: (params.dir as PartyListFilter['dir']) || 'asc',
+    period: params.period,
   };
 
   let tenant;
   let rows;
+  let periodOptions;
   try {
-    [tenant, rows] = await Promise.all([getTenantInfo(), listParties(filter)]);
+    [tenant, rows, periodOptions] = await Promise.all([
+      getTenantInfo(),
+      listParties(filter),
+      getPeriodOptions(params.period),
+    ]);
   } catch {
     redirect('/login');
   }
 
   return (
     <BookOneShell active="Customers" tenant={tenant}>
-      <PartyListScreen role="customer" rows={rows} filter={filter} />
+      <PartyListScreen
+        role="customer"
+        rows={rows}
+        filter={filter}
+        period={{ selected: periodOptions.selected, available: periodOptions.available }}
+      />
     </BookOneShell>
   );
 }

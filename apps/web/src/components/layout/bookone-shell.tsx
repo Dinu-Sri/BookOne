@@ -53,13 +53,54 @@ const navSuites: NavSuite[] = [
     items: [
       { label: 'Simple Entry', icon: ReceiptText, href: '/' },
       { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-      { label: 'Parties', icon: Users, href: '/parties' },
-      { label: 'Invoices/Bills', icon: FileText, href: '/documents' },
       { label: 'Transactions', icon: ClipboardList, href: '/transactions' },
       { label: 'Journal', icon: BookOpenCheck, href: '/journal' },
       { label: 'Reports', icon: LineChart, href: '/reports' },
       { label: 'Accounts', icon: Landmark, href: '/accounts' },
       { label: 'Reconciliation', icon: ShieldCheck, href: '/reconciliation' },
+    ],
+  },
+  {
+    id: 'parties',
+    label: 'Parties',
+    icon: Users,
+    items: [
+      { label: 'Customers', icon: Users, href: '/parties/customers' },
+      { label: 'Vendors', icon: Building2, href: '/parties/vendors' },
+    ],
+  },
+  {
+    id: 'sales',
+    label: 'Sales',
+    icon: ShoppingCart,
+    items: [
+      { label: 'Quotations', icon: FileText, href: '/sales/quotations' },
+      { label: 'Sales Orders', icon: ClipboardList, href: '/sales/orders' },
+      { label: 'Sales Invoices', icon: ReceiptText, href: '/sales/invoices' },
+      { label: 'Sales Returns', icon: BookOpenCheck, href: '/sales/returns' },
+      { label: 'POS', icon: ShoppingCart, href: '/sales/pos' },
+      { label: 'Discounts', icon: Calculator, href: '/sales/discounts' },
+    ],
+  },
+  {
+    id: 'purchase',
+    label: 'Purchase',
+    icon: Package,
+    items: [
+      { label: 'Purchase Orders', icon: ClipboardList, href: '/purchase/orders' },
+      { label: 'Purchases', icon: ReceiptText, href: '/purchase/purchases' },
+      { label: 'Import Purchases', icon: Globe2, href: '/purchase/import' },
+      { label: 'Purchase Returns', icon: BookOpenCheck, href: '/purchase/returns' },
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    icon: Package,
+    items: [
+      { label: 'Products', icon: Package, href: '/inventory/products' },
+      { label: 'Stock Transfers', icon: ClipboardList, href: '/inventory/transfers' },
+      { label: 'Stock Adjustments', icon: SlidersHorizontal, href: '/inventory/adjustments' },
     ],
   },
   {
@@ -72,50 +113,6 @@ const navSuites: NavSuite[] = [
       { label: 'Brands', icon: Package, href: '/company/brands' },
       { label: 'Locations', icon: Landmark, href: '/company/locations' },
       { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },
-    ],
-  },
-  {
-    id: 'tax',
-    label: 'Tax',
-    icon: Calculator,
-    items: [
-      { label: 'Tax Dashboard', icon: LayoutDashboard },
-      { label: 'Returns', icon: ClipboardList },
-      { label: 'Tax Invoices', icon: ReceiptText },
-      { label: 'Compliance', icon: ShieldCheck },
-    ],
-  },
-  {
-    id: 'inventory',
-    label: 'Inventory',
-    icon: Package,
-    items: [
-      { label: 'Items', icon: Package },
-      { label: 'Stock Ledger', icon: ClipboardList },
-      { label: 'Purchases', icon: ReceiptText },
-      { label: 'Warehouses', icon: Landmark },
-    ],
-  },
-  {
-    id: 'pos',
-    label: 'POS',
-    icon: ShoppingCart,
-    items: [
-      { label: 'Register', icon: ShoppingCart },
-      { label: 'Sales', icon: ReceiptText },
-      { label: 'Shifts', icon: CalendarDays },
-      { label: 'Devices', icon: PanelLeftOpen },
-    ],
-  },
-  {
-    id: 'hr',
-    label: 'HR',
-    icon: Users,
-    items: [
-      { label: 'Employees', icon: Users },
-      { label: 'Payroll', icon: ReceiptText },
-      { label: 'Attendance', icon: CalendarDays },
-      { label: 'Leave', icon: CalendarDays },
     ],
   },
   {

@@ -1,0 +1,97 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildSalesInvoicePosting,
+  buildSalesReturnPosting,
+  buildStockAdjustmentPosting,
+  buildVendorBillPosting,
+  buildPurchaseReturnPosting,
+  sumSides,
+} from '../src/engine/document-posting';
+
+describe('sales invoice posting', () => {
+  it('posts AR + revenue for service lines', () => {
+    const result = buildSalesInvoicePosting({
+      lines: [{ description: 'Consulting', quantity: 2, unitPrice: 150, unitCost: 0, productType: 'service' }],
+    });
+    expect(result.netTotal).toBe(300);
+    expect(result.cogsTotal).toBe(0);
+    expect(sumSides(result.lines)).toEqual({ debit: 300, credit: 300 });
+    expect(result.lines.some((l) => l.accountCode === '1300' && l.side === 'debit')).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '4000' && l.side === 'credit')).toBe(true);
+  });
+
+  it('posts COGS and inventory for stocked lines', () => {
+    const result = buildSalesInvoicePosting({
+      lines: [{ description: 'Widget', quantity: 2, unitPrice: 150, unitCost: 100, productType: 'stocked' }],
+    });
+    expect(result.netTotal).toBe(300);
+    expect(result.cogsTotal).toBe(200);
+    expect(sumSides(result.lines)).toEqual({ debit: 500, credit: 500 });
+    expect(result.lines.some((l) => l.accountCode === '5000' && l.side === 'debit' && l.amount === 200)).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '5100' && l.side === 'credit' && l.amount === 200)).toBe(true);
+  });
+
+  it('POS cash sale debits cash not AR', () => {
+    const result = buildSalesInvoicePosting({
+      lines: [{ description: 'Widget', quantity: 1, unitPrice: 150, unitCost: 100, productType: 'stocked' }],
+      settledCashAccountCode: '1000',
+    });
+    expect(result.lines.some((l) => l.accountCode === '1000' && l.side === 'debit')).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '1300')).toBe(false);
+  });
+
+  it('applies header discount to net revenue', () => {
+    const result = buildSalesInvoicePosting({
+      lines: [{ description: 'A', quantity: 1, unitPrice: 100, unitCost: 0, productType: 'service' }],
+      headerDiscount: 10,
+    });
+    expect(result.netTotal).toBe(90);
+  });
+});
+
+describe('sales return posting', () => {
+  it('uses sales returns account and reverses COGS', () => {
+    const result = buildSalesReturnPosting({
+      lines: [{ description: 'Widget', quantity: 1, unitPrice: 150, unitCost: 100, productType: 'stocked' }],
+    });
+    expect(result.netTotal).toBe(150);
+    expect(result.lines.some((l) => l.accountCode === '4100' && l.side === 'debit')).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '1300' && l.side === 'credit')).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '5100' && l.side === 'debit' && l.amount === 100)).toBe(true);
+    expect(sumSides(result.lines)).toEqual({ debit: 250, credit: 250 });
+  });
+});
+
+describe('vendor bill + purchase return + stock adjustment', () => {
+  it('posts AP bill', () => {
+    const lines = buildVendorBillPosting({ total: 500, expenseAccountCode: '6800' });
+    expect(sumSides(lines)).toEqual({ debit: 500, credit: 500 });
+  });
+
+  it('posts inventory import purchase to 5100/2100', () => {
+    const lines = buildVendorBillPosting({
+      total: 1000,
+      expenseAccountCode: '6800',
+      isInventoryPurchase: true,
+      memo: 'Import',
+    });
+    expect(lines.some((l) => l.accountCode === '5100' && l.side === 'debit')).toBe(true);
+    expect(lines.some((l) => l.accountCode === '2100' && l.side === 'credit')).toBe(true);
+  });
+
+  it('posts purchase return reversing AP and inventory', () => {
+    const lines = buildPurchaseReturnPosting({
+      total: 200,
+      isInventoryPurchase: true,
+    });
+    expect(lines.some((l) => l.accountCode === '2100' && l.side === 'debit')).toBe(true);
+    expect(lines.some((l) => l.accountCode === '5100' && l.side === 'credit')).toBe(true);
+    expect(sumSides(lines)).toEqual({ debit: 200, credit: 200 });
+  });
+
+  it('posts inventory decrease adjustment', () => {
+    const lines = buildStockAdjustmentPosting({ quantityDelta: -2, unitCost: 50 });
+    expect(lines.find((l) => l.accountCode === '5100')?.side).toBe('credit');
+    expect(sumSides(lines)).toEqual({ debit: 100, credit: 100 });
+  });
+});

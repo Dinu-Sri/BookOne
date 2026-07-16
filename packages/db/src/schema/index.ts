@@ -18,3 +18,11 @@ export {
   locations,
   companyDomains,
 } from './company-settings';
+export {
+  inventoryProducts,
+  inventoryStockLevels,
+  inventoryStockDocs,
+  inventoryStockDocLines,
+  inventoryMovements,
+} from './inventory';
+export { salesDiscounts } from './sales-discounts';

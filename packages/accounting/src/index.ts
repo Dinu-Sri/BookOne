@@ -7,3 +7,12 @@ export { mapToAccountingType, isSettledOnPosting } from './inference/type-mapper
 export { generateJournal } from './engine/journal-generator';
 export { inferTransaction } from './engine/posting';
 export type { EngineResult } from './engine/posting';
+export {
+  buildSalesInvoicePosting,
+  buildSalesReturnPosting,
+  buildVendorBillPosting,
+  buildPurchaseReturnPosting,
+  buildStockAdjustmentPosting,
+  sumSides,
+} from './engine/document-posting';
+export type { PostingLine, SaleLineInput, BuiltSalePosting } from './engine/document-posting';

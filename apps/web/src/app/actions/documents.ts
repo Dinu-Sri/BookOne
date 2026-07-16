@@ -27,7 +27,7 @@ import {
 } from '@bookone/db';
 import { ensureParty } from '@/app/actions/parties';
 
-const documentTypeSchema = z.enum(['customer_invoice', 'vendor_bill']);
+const documentTypeSchema = z.enum(['customer_invoice', 'vendor_bill', 'sales_invoice']);
 
 const documentInputSchema = z.object({
   documentType: documentTypeSchema,
@@ -380,15 +380,14 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
         .limit(1);
 
       if (!document) throw new Error('Document not found.');
+      if (!document.transactionId) throw new Error('Document has no posted transaction to allocate against.');
       const balanceDue = Number(document.balanceDue);
       if (parsed.amount > balanceDue) throw new Error('Payment cannot exceed balance due.');
 
       const paymentAccount = await resolveAccount(user.tenantId, parsed.paymentAccountCode);
-      const controlAccount = await resolveAccount(
-        user.tenantId,
-        document.documentType === 'customer_invoice' ? '1300' : '2100',
-      );
-      const isInvoice = document.documentType === 'customer_invoice';
+      const isInvoice =
+        document.documentType === 'customer_invoice' || document.documentType === 'sales_invoice';
+      const controlAccount = await resolveAccount(user.tenantId, isInvoice ? '1300' : '2100');
 
       await db().transaction(async (tx) => {
         const [paymentTx] = await tx
@@ -448,7 +447,7 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
         await tx.insert(settlementAllocations).values({
           tenantId: user.tenantId,
           paymentTransactionId: paymentTx.id,
-          invoiceTransactionId: document.transactionId,
+          invoiceTransactionId: document.transactionId as string,
           allocatedAmount: parsed.amount.toFixed(2),
         });
 

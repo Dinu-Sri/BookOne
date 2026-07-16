@@ -182,6 +182,27 @@
 
 ---
 
+## 2026-07-16 — Four modules: Parties, Sales, Purchase, Inventory
+
+### ✅ Completed
+- Reorganized app into **4 operational modules**: Parties, Sales, Purchase, Inventory (plus Accounting + Company).
+- **Parties:** Customers and Vendors list+new screens (`/parties/customers`, `/parties/vendors`).
+- **Sales:** Quotations, Orders, Invoices, Returns, POS, Discounts — list table + New pattern.
+- **Purchase:** Purchase Orders, Purchases, Import Purchases, Purchase Returns — same design system.
+- **Inventory:** Products, Stock Transfers, Stock Adjustments.
+- Schema migration `008_sales_purchase_inventory_parties.sql` (nullable transaction_id, inventory tables, discounts, party fields).
+- Posting builders + unit tests for sales invoice/return, vendor/import purchase, purchase return, stock adjustment (COGS accuracy).
+- Legacy `/parties`, `/documents`, `/purchase/bills` redirect into new module routes.
+- Sidebar nav wired to live module hrefs.
+
+### 🔜 Next Steps
+- [ ] Run migration against local Docker Postgres when Docker Desktop is up.
+- [ ] End-to-end accounting accuracy walkthrough (product → purchase → sale → return → trial balance).
+- [ ] Payment allocation UI on sales invoice / purchase detail pages.
+- [ ] Multi-line form editor with add/remove rows (beyond fixed 3 lines).
+
+---
+
 ## Template for New Entries
 
 ```
@@ -201,4 +222,4 @@
 
 ---
 
-*Last updated: 2026-06-14*
+*Last updated: 2026-07-16*

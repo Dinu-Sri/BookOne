@@ -1,0 +1,32 @@
+import { redirect } from 'next/navigation';
+import { getTenantInfo } from '@/app/actions/workspace';
+import { BookOneShell } from '@/components/layout/bookone-shell';
+import { CommercialDocNewForm } from '@/components/module/commercial-doc-screens';
+import { loadSalesFormData } from '@/lib/module-page-helpers';
+
+export default async function NewPurchasePage() {
+  let tenant;
+  let form;
+  try {
+    [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData()]);
+  } catch {
+    redirect('/login');
+  }
+
+  return (
+    <BookOneShell active="Purchases" tenant={tenant}>
+      <CommercialDocNewForm
+        eyebrow="Purchase"
+        title="New purchase"
+        lead="Local purchase bill. Stocked products increase inventory (5100) and AP (2100)."
+        backHref="/purchase/purchases"
+        documentType="purchase"
+        partyLabel="Vendor"
+        partyPlaceholder="Vendor name"
+        products={form.products}
+        showExpenseAccount
+        expenseAccounts={form.expenseAccounts}
+      />
+    </BookOneShell>
+  );
+}

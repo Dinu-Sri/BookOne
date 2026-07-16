@@ -70,9 +70,27 @@ export function SelectLike({ children }: { children: ReactNode }) {
   );
 }
 
-export function PageHeading({ actions }: { eyebrow: string; title: string; lead: string; actions?: ReactNode }) {
-  if (!actions) return null;
-  return <div className="page-heading compact">{actions}</div>;
+export function PageHeading({
+  eyebrow,
+  title,
+  lead,
+  actions,
+}: {
+  eyebrow: string;
+  title: string;
+  lead: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="page-heading" style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h1 style={{ marginTop: 4, fontSize: 28, lineHeight: 1.2 }}>{title}</h1>
+        <p style={{ marginTop: 8, color: 'var(--ink-muted)', maxWidth: 640 }}>{lead}</p>
+      </div>
+      {actions}
+    </div>
+  );
 }
 
 export function Progress({ value }: { value: number }) {

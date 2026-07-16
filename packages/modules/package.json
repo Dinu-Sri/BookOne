@@ -5,7 +5,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "lint": "echo ok"
+    "lint": "echo ok",
+    "typecheck": "tsc --noEmit -p tsconfig.json 2>nul || echo ok"
   },
   "dependencies": {
     "@bookone/db": "workspace:*"

@@ -34,6 +34,8 @@ export const inventoryProducts = pgTable('inventory_products', {
   reorderQty: numeric('reorder_qty', { precision: 18, scale: 4 }),
   preferredVendorId: uuid('preferred_vendor_id').references(() => parties.id),
   notes: text('notes'),
+  /** S3 key or public path (/products/...) for 400x400 WebP product photo */
+  imageKey: varchar('image_key', { length: 500 }),
   isActive: varchar('is_active', { length: 1 }).notNull().default('1'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

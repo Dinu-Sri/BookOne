@@ -139,6 +139,7 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
               <table className="table">
                 <thead>
                   <tr>
+                    <th style={{ width: 56 }} />
                     <th>SKU</th>
                     <th>Name</th>
                     <th>Type</th>
@@ -152,6 +153,21 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                 <tbody>
                   {pageRows.map((p) => (
                     <tr key={p.id}>
+                      <td>
+                        <button
+                          type="button"
+                          className="product-thumb-btn"
+                          onClick={() => setPreview(p)}
+                          title="Quick view"
+                        >
+                          {p.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img className="product-thumb" src={p.imageUrl} alt="" width={40} height={40} />
+                          ) : (
+                            <span className="product-thumb product-thumb-empty">{(p.name || '?').slice(0, 1)}</span>
+                          )}
+                        </button>
+                      </td>
                       <td>
                         <strong>{p.sku}</strong>
                       </td>

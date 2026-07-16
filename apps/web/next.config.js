@@ -2,7 +2,7 @@
 const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
-  serverExternalPackages: ['bcryptjs', 'postgres'],
+  serverExternalPackages: ['bcryptjs', 'postgres', 'sharp'],
   // Intentionally NO global no-cache headers: Cloudflare's edge cache was
   // caching stale HTML that referenced deleted JS chunks, which caused the
   // "Unexpected token '<'" errors. We let Next.js send its own Cache-Control

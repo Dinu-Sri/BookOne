@@ -25,6 +25,7 @@ export function ProductForm({
   const action = mode === 'edit' ? updateProductFromForm : createProductFromForm;
   const [tab, setTab] = useState<TabId>('identity');
   const [productType, setProductType] = useState(product?.productType ?? 'physical');
+  const [preview, setPreview] = useState<string | null>(product?.imageUrl ?? null);
   const isPhysical = productType === 'physical' || productType === 'stocked';
   const typeLocked = Boolean(product?.typeLocked);
 
@@ -58,11 +59,44 @@ export function ProductForm({
         </div>
       </div>
 
-      <form action={action} className="party-form-body">
+      <form action={action} className="party-form-body" encType="multipart/form-data">
         {mode === 'edit' && product ? <input type="hidden" name="id" value={product.id} /> : null}
 
         <div className="party-tab-panel" hidden={tab !== 'identity'}>
           <div className="party-tab-grid">
+            <div className="field field-full">
+              <label>Product photo</label>
+              <div className="product-photo-row">
+                <div className="product-photo-preview">
+                  {preview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={preview} alt="Product preview" width={96} height={96} />
+                  ) : (
+                    <span>400×400</span>
+                  )}
+                </div>
+                <div className="product-photo-meta">
+                  <input
+                    className="input"
+                    type="file"
+                    name="photo"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) {
+                        setPreview(product?.imageUrl ?? null);
+                        return;
+                      }
+                      const url = URL.createObjectURL(file);
+                      setPreview(url);
+                    }}
+                  />
+                  <p className="product-photo-hint">
+                    Any photo is auto-converted to <strong>400×400 WebP</strong> and compressed. Original is not kept.
+                  </p>
+                </div>
+              </div>
+            </div>
             <div className="field">
               <label>Product type *</label>
               <select

@@ -14,9 +14,14 @@ export function ProductSnapshotDialog({ product, onClose }: { product: ProductRo
           <X size={16} />
         </button>
         <div className="party-snapshot-hero">
-          <div className="party-snapshot-avatar" aria-hidden>
-            <Package size={22} />
-          </div>
+          {product.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="product-snapshot-photo" src={product.imageUrl} alt="" width={72} height={72} />
+          ) : (
+            <div className="party-snapshot-avatar" aria-hidden>
+              <Package size={22} />
+            </div>
+          )}
           <div className="party-snapshot-hero-text">
             <p className="party-snapshot-kicker">{product.productType}</p>
             <h2>{product.name}</h2>

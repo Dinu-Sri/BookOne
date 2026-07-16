@@ -81,6 +81,9 @@ export interface ProductRow {
   inventoryAccountCode: string;
   expenseAccountCode: string;
   notes: string | null;
+  imageKey: string | null;
+  /** Browser-ready URL (public path or signed S3 URL) */
+  imageUrl: string | null;
   movementCount: number;
   documentLineCount: number;
   canDelete: boolean;
@@ -216,7 +219,18 @@ async function applyQtyDelta(
 
 function mapProduct(
   row: Record<string, unknown>,
-  extras: Partial<Pick<ProductRow, 'qtyOnHand' | 'movementCount' | 'documentLineCount' | 'canDelete' | 'deleteReasons' | 'typeLocked'>>,
+  extras: Partial<
+    Pick<
+      ProductRow,
+      | 'qtyOnHand'
+      | 'movementCount'
+      | 'documentLineCount'
+      | 'canDelete'
+      | 'deleteReasons'
+      | 'typeLocked'
+      | 'imageUrl'
+    >
+  >,
 ): ProductRow {
   const type = normalizeType(String(row.productType ?? 'physical'));
   return {
@@ -242,6 +256,8 @@ function mapProduct(
     inventoryAccountCode: String(row.inventoryAccountCode ?? '5100'),
     expenseAccountCode: String(row.expenseAccountCode ?? '6800'),
     notes: (row.notes as string | null) ?? null,
+    imageKey: (row.imageKey as string | null) ?? null,
+    imageUrl: extras.imageUrl ?? null,
     movementCount: extras.movementCount ?? 0,
     documentLineCount: extras.documentLineCount ?? 0,
     canDelete: extras.canDelete ?? false,
@@ -337,23 +353,29 @@ export async function listProducts(filter?: {
       lineRows.filter((r) => r.productId).map((r) => [r.productId as string, Number(r.total)]),
     );
 
-    let result = rows.map((row) => {
-      const mov = movMap.get(row.id) ?? 0;
-      const docs = lineMap.get(row.id) ?? 0;
-      const qty = qtyMap.get(row.id) ?? 0;
-      const reasons: string[] = [];
-      if (mov > 0) reasons.push(`Has ${mov} stock movement(s).`);
-      if (docs > 0) reasons.push(`Used on ${docs} document line(s).`);
-      if (Math.abs(qty) > 0.0001) reasons.push(`Qty on hand is ${qty} (adjust to zero first).`);
-      return mapProduct(row as unknown as Record<string, unknown>, {
-        qtyOnHand: qty,
-        movementCount: mov,
-        documentLineCount: docs,
-        canDelete: reasons.length === 0,
-        deleteReasons: reasons,
-        typeLocked: mov > 0 || docs > 0,
-      });
-    });
+    const { resolveProductImageUrl } = await import('@/lib/product-image');
+
+    let result = await Promise.all(
+      rows.map(async (row) => {
+        const mov = movMap.get(row.id) ?? 0;
+        const docs = lineMap.get(row.id) ?? 0;
+        const qty = qtyMap.get(row.id) ?? 0;
+        const reasons: string[] = [];
+        if (mov > 0) reasons.push(`Has ${mov} stock movement(s).`);
+        if (docs > 0) reasons.push(`Used on ${docs} document line(s).`);
+        if (Math.abs(qty) > 0.0001) reasons.push(`Qty on hand is ${qty} (adjust to zero first).`);
+        const imageUrl = await resolveProductImageUrl(row.imageKey);
+        return mapProduct(row as unknown as Record<string, unknown>, {
+          qtyOnHand: qty,
+          movementCount: mov,
+          documentLineCount: docs,
+          canDelete: reasons.length === 0,
+          deleteReasons: reasons,
+          typeLocked: mov > 0 || docs > 0,
+          imageUrl,
+        });
+      }),
+    );
 
     if (sort === 'qty') {
       result.sort((a, b) => (dir === 'desc' ? b.qtyOnHand - a.qtyOnHand : a.qtyOnHand - b.qtyOnHand));
@@ -467,6 +489,20 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
       .values(toProductValues(user.tenantId, { ...parsed, productType: type }))
       .returning({ id: inventoryProducts.id });
 
+    const photo = formData.get('photo');
+    if (photo instanceof File && photo.size > 0) {
+      const { saveProductPhoto } = await import('@/lib/product-image');
+      const { imageKey } = await saveProductPhoto({
+        tenantId: user.tenantId,
+        productId: product.id,
+        file: photo,
+      });
+      await db()
+        .update(inventoryProducts)
+        .set({ imageKey, updatedAt: new Date() })
+        .where(eq(inventoryProducts.id, product.id));
+    }
+
     if (type === 'physical') {
       await db().insert(inventoryStockLevels).values({
         tenantId: user.tenantId,
@@ -531,10 +567,19 @@ export async function updateProductFromForm(formData: FormData): Promise<void> {
       throw new Error('Cannot change product type after stock movements exist.');
     }
 
-    await db()
-      .update(inventoryProducts)
-      .set(toProductValues(user.tenantId, { ...parsed, productType: type }))
-      .where(eq(inventoryProducts.id, id));
+    const values = toProductValues(user.tenantId, { ...parsed, productType: type });
+    const photo = formData.get('photo');
+    if (photo instanceof File && photo.size > 0) {
+      const { saveProductPhoto } = await import('@/lib/product-image');
+      const { imageKey } = await saveProductPhoto({
+        tenantId: user.tenantId,
+        productId: id,
+        file: photo,
+      });
+      Object.assign(values, { imageKey });
+    }
+
+    await db().update(inventoryProducts).set(values).where(eq(inventoryProducts.id, id));
 
     await db().insert(auditLog).values({
       tenantId: user.tenantId,

@@ -51,8 +51,14 @@ export function PartyForm({
   return (
     <div className="party-form-shell">
       <div className="party-form-top">
-        <Link href={backHref} className="party-back">
-          ← Back
+        <Link href={backHref} className="party-back-btn">
+          <span className="party-back-arrow" aria-hidden>
+            ←
+          </span>
+          <span>
+            <strong>Back to list</strong>
+            <small>{roleContext === 'vendor' ? 'Vendors' : 'Customers'}</small>
+          </span>
         </Link>
         <div className="party-tabs" role="tablist">
           {TABS.map((t) => (

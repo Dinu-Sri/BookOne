@@ -579,16 +579,46 @@ export async function listParties(filter?: PartyListFilter): Promise<PartyRow[]>
       ]),
     );
 
+    // Preload sample document numbers for delete-blocker messages
+    const samples = await db()
+      .select({
+        partyId: businessDocuments.partyId,
+        documentNumber: businessDocuments.documentNumber,
+        documentType: businessDocuments.documentType,
+      })
+      .from(businessDocuments)
+      .where(and(eq(businessDocuments.tenantId, user.tenantId), isNull(businessDocuments.voidedAt)))
+      .orderBy(desc(businessDocuments.createdAt))
+      .limit(500);
+
+    const samplesByParty = new Map<string, string[]>();
+    for (const s of samples) {
+      const list = samplesByParty.get(s.partyId) ?? [];
+      if (list.length < 3) {
+        list.push(`${s.documentNumber} (${s.documentType})`);
+        samplesByParty.set(s.partyId, list);
+      }
+    }
+
     let result = rows.map((row) => {
       const bal = balMap.get(row.id) ?? { ar: 0, ap: 0, docs: 0 };
       const openBalance = kind === 'vendor' ? bal.ap : kind === 'customer' ? bal.ar : bal.ar + bal.ap;
+      const reasons: string[] = [];
+      if (bal.docs > 0) {
+        const sample = samplesByParty.get(row.id) ?? [];
+        reasons.push(
+          `Linked to ${bal.docs} commercial document(s)` +
+            (sample.length ? `: ${sample.join(', ')}` : '') +
+            '.',
+        );
+      }
       return mapPartyRow(row as unknown as Record<string, unknown>, {
         openBalance,
         openReceivable: bal.ar,
         openPayable: bal.ap,
         documentCount: bal.docs,
         canDelete: bal.docs === 0,
-        deleteReasons: bal.docs > 0 ? [`Linked to ${bal.docs} document(s).`] : [],
+        deleteReasons: reasons,
       });
     });
 
@@ -849,7 +879,8 @@ export async function createPartyFromForm(formData: FormData): Promise<void> {
 
   revalidateParties();
   const { redirect } = await import('next/navigation');
-  redirect(parsed.isVendor && !parsed.isCustomer ? '/parties/vendors' : '/parties/customers');
+  const dest = parsed.isVendor && !parsed.isCustomer ? '/parties/vendors' : '/parties/customers';
+  redirect(`${dest}?flash=created`);
 }
 
 export async function updatePartyFromForm(formData: FormData): Promise<void> {
@@ -923,7 +954,8 @@ export async function updatePartyFromForm(formData: FormData): Promise<void> {
 
   revalidateParties();
   const { redirect } = await import('next/navigation');
-  redirect(parsed.isVendor && !parsed.isCustomer ? '/parties/vendors' : '/parties/customers');
+  const dest = parsed.isVendor && !parsed.isCustomer ? '/parties/vendors' : '/parties/customers';
+  redirect(`${dest}?flash=updated`);
 }
 
 export async function archivePartyFromForm(formData: FormData): Promise<void> {
@@ -981,7 +1013,7 @@ export async function deletePartyFromForm(formData: FormData): Promise<void> {
 
     const check = await assertPartyDeletable(user.tenantId, id, existing.name);
     if (!check.ok) {
-      throw new Error(`Cannot delete: ${check.reasons.join(' ')} Archive instead.`);
+      throw new Error(`Cannot delete: ${check.reasons.join(' ')}`);
     }
 
     await db()
@@ -1000,4 +1032,18 @@ export async function deletePartyFromForm(formData: FormData): Promise<void> {
     });
   });
   revalidateParties();
+}
+
+/** Full delete blockers for UI popups */
+export async function getPartyDeleteBlockers(id: string): Promise<{ ok: boolean; reasons: string[] }> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const [existing] = await db()
+      .select({ id: parties.id, name: parties.name })
+      .from(parties)
+      .where(and(eq(parties.tenantId, user.tenantId), eq(parties.id, id), isNull(parties.voidedAt)))
+      .limit(1);
+    if (!existing) return { ok: false, reasons: ['Party not found.'] };
+    return assertPartyDeletable(user.tenantId, id, existing.name);
+  });
 }

@@ -25,10 +25,11 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useMemo, useState } from 'react';
+import { Suspense, type ReactNode, useMemo, useState } from 'react';
 import { BrandLockup, Button, SelectLike } from '@/components/ui/bookone-ui';
 import { PeriodSelector } from '@/components/layout/period-selector';
 import { CompanyResetButton } from '@/components/layout/company-reset-button';
+import { StatusToast } from '@/components/layout/status-toast';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
 
 export interface NavItem {
@@ -296,6 +297,9 @@ export function BookOneShell({
           </div>
           <div className="topbar-actions">
             <CompanyResetButton />
+            <Suspense fallback={null}>
+              <StatusToast />
+            </Suspense>
             {period ? (
               <PeriodSelector selected={period.selected} available={period.available} compact />
             ) : (

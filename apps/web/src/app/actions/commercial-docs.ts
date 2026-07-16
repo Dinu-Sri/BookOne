@@ -7,6 +7,7 @@ import {
   buildSalesReturnPosting,
   buildVendorBillPosting,
   buildPurchaseReturnPosting,
+  isPhysicalProduct,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -340,7 +341,7 @@ export async function createCommercialDocument(
       const enriched = [];
       for (const line of parsed.lines) {
         let unitCost = line.unitCost ?? 0;
-        let productType: 'stocked' | 'service' = 'service';
+        let productType = 'service';
         let description = line.description;
         if (line.productId) {
           const [product] = await db()
@@ -356,7 +357,7 @@ export async function createCommercialDocument(
             .limit(1);
           if (product) {
             unitCost = Number(product.unitCost);
-            productType = product.productType === 'stocked' ? 'stocked' : 'service';
+            productType = product.productType === 'stocked' ? 'physical' : product.productType;
             if (!description) description = product.name;
           }
         }
@@ -442,7 +443,7 @@ export async function createCommercialDocument(
         } else if (isPurchaseBillType(parsed.documentType)) {
           const expenseCode = enriched[0]?.accountCode || '6800';
           const forceInventory =
-            parsed.documentType === 'import_purchase' || enriched.some((l) => l.productType === 'stocked');
+            parsed.documentType === 'import_purchase' || enriched.some((l) => isPhysicalProduct(l.productType));
           postingLines = buildVendorBillPosting({
             total,
             expenseAccountCode: expenseCode,
@@ -457,7 +458,7 @@ export async function createCommercialDocument(
           postingLines = buildPurchaseReturnPosting({
             total,
             expenseAccountCode: expenseCode,
-            isInventoryPurchase: enriched.some((l) => l.productType === 'stocked'),
+            isInventoryPurchase: enriched.some((l) => isPhysicalProduct(l.productType)),
             memo: documentNumber,
           });
           accountingType = 'purchase_return';
@@ -592,8 +593,8 @@ export async function createCommercialDocument(
           lineTotal: line.lineTotal.toFixed(2),
         });
 
-        // Stock for stocked products on posted sales/purchases/returns
-        if (line.productId && line.productType === 'stocked' && postsToGl(parsed.documentType)) {
+        // Stock qty only for physical products on posted sales/purchases/returns
+        if (line.productId && isPhysicalProduct(line.productType) && postsToGl(parsed.documentType)) {
           const isSalesReturn = parsed.documentType === 'sales_return';
           const isSale = ['sales_invoice', 'pos_sale', 'customer_invoice'].includes(parsed.documentType);
           const isPurchase = isPurchaseBillType(parsed.documentType);

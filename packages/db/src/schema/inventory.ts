@@ -3,20 +3,37 @@ import { tenants } from './tenants';
 import { users } from './users';
 import { locations } from './company-settings';
 import { transactions } from './transactions';
+import { parties } from './parties';
 
+/**
+ * product_type:
+ * - physical (legacy: stocked) — qty tracked, COGS + inventory on sale
+ * - digital — non-stock sellable (licenses etc.), no inventory asset
+ * - service — labour/fees, no inventory asset
+ */
 export const inventoryProducts = pgTable('inventory_products', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
   sku: varchar('sku', { length: 80 }).notNull(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-  productType: varchar('product_type', { length: 20 }).notNull().default('stocked'),
+  productType: varchar('product_type', { length: 20 }).notNull().default('physical'),
   unit: varchar('unit', { length: 40 }).notNull().default('ea'),
   unitCost: numeric('unit_cost', { precision: 18, scale: 2 }).notNull().default('0'),
   sellPrice: numeric('sell_price', { precision: 18, scale: 2 }).notNull().default('0'),
   revenueAccountCode: varchar('revenue_account_code', { length: 20 }).notNull().default('4000'),
   cogsAccountCode: varchar('cogs_account_code', { length: 20 }).notNull().default('5000'),
   inventoryAccountCode: varchar('inventory_account_code', { length: 20 }).notNull().default('5100'),
+  expenseAccountCode: varchar('expense_account_code', { length: 20 }).notNull().default('6800'),
+  category: varchar('category', { length: 120 }),
+  barcode: varchar('barcode', { length: 80 }),
+  sellable: varchar('sellable', { length: 1 }).notNull().default('1'),
+  purchasable: varchar('purchasable', { length: 1 }).notNull().default('1'),
+  taxStatus: varchar('tax_status', { length: 20 }).notNull().default('unknown'),
+  reorderLevel: numeric('reorder_level', { precision: 18, scale: 4 }),
+  reorderQty: numeric('reorder_qty', { precision: 18, scale: 4 }),
+  preferredVendorId: uuid('preferred_vendor_id').references(() => parties.id),
+  notes: text('notes'),
   isActive: varchar('is_active', { length: 1 }).notNull().default('1'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -47,7 +64,7 @@ export const inventoryStockDocs = pgTable('inventory_stock_docs', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
   userId: uuid('user_id').notNull().references(() => users.id),
-  docType: varchar('doc_type', { length: 20 }).notNull(), // transfer | adjustment
+  docType: varchar('doc_type', { length: 20 }).notNull(),
   documentNumber: varchar('document_number', { length: 50 }).notNull(),
   docDate: varchar('doc_date', { length: 10 }).notNull(),
   status: varchar('status', { length: 20 }).notNull().default('posted'),

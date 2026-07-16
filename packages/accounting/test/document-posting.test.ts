@@ -20,20 +20,36 @@ describe('sales invoice posting', () => {
     expect(result.lines.some((l) => l.accountCode === '4000' && l.side === 'credit')).toBe(true);
   });
 
-  it('posts COGS and inventory for stocked lines', () => {
+  it('posts COGS and inventory for physical (and legacy stocked) lines', () => {
     const result = buildSalesInvoicePosting({
-      lines: [{ description: 'Widget', quantity: 2, unitPrice: 150, unitCost: 100, productType: 'stocked' }],
+      lines: [{ description: 'Widget', quantity: 2, unitPrice: 150, unitCost: 100, productType: 'physical' }],
     });
     expect(result.netTotal).toBe(300);
     expect(result.cogsTotal).toBe(200);
     expect(sumSides(result.lines)).toEqual({ debit: 500, credit: 500 });
     expect(result.lines.some((l) => l.accountCode === '5000' && l.side === 'debit' && l.amount === 200)).toBe(true);
     expect(result.lines.some((l) => l.accountCode === '5100' && l.side === 'credit' && l.amount === 200)).toBe(true);
+
+    const legacy = buildSalesInvoicePosting({
+      lines: [{ description: 'Legacy', quantity: 1, unitPrice: 10, unitCost: 4, productType: 'stocked' }],
+    });
+    expect(legacy.cogsTotal).toBe(4);
+  });
+
+  it('does not post COGS for digital or service lines', () => {
+    for (const productType of ['digital', 'service'] as const) {
+      const result = buildSalesInvoicePosting({
+        lines: [{ description: 'Item', quantity: 2, unitPrice: 150, unitCost: 100, productType }],
+      });
+      expect(result.cogsTotal).toBe(0);
+      expect(result.lines.some((l) => l.accountCode === '5100')).toBe(false);
+      expect(sumSides(result.lines)).toEqual({ debit: 300, credit: 300 });
+    }
   });
 
   it('POS cash sale debits cash not AR', () => {
     const result = buildSalesInvoicePosting({
-      lines: [{ description: 'Widget', quantity: 1, unitPrice: 150, unitCost: 100, productType: 'stocked' }],
+      lines: [{ description: 'Widget', quantity: 1, unitPrice: 150, unitCost: 100, productType: 'physical' }],
       settledCashAccountCode: '1000',
     });
     expect(result.lines.some((l) => l.accountCode === '1000' && l.side === 'debit')).toBe(true);
@@ -52,7 +68,7 @@ describe('sales invoice posting', () => {
 describe('sales return posting', () => {
   it('uses sales returns account and reverses COGS', () => {
     const result = buildSalesReturnPosting({
-      lines: [{ description: 'Widget', quantity: 1, unitPrice: 150, unitCost: 100, productType: 'stocked' }],
+      lines: [{ description: 'Widget', quantity: 1, unitPrice: 150, unitCost: 100, productType: 'physical' }],
     });
     expect(result.netTotal).toBe(150);
     expect(result.lines.some((l) => l.accountCode === '4100' && l.side === 'debit')).toBe(true);

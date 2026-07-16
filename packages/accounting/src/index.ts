@@ -8,6 +8,7 @@ export { generateJournal } from './engine/journal-generator';
 export { inferTransaction } from './engine/posting';
 export type { EngineResult } from './engine/posting';
 export {
+  isPhysicalProduct,
   buildSalesInvoicePosting,
   buildSalesReturnPosting,
   buildVendorBillPosting,

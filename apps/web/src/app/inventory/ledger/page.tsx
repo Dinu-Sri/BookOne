@@ -1,14 +1,14 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
-import { listProducts } from '@/app/actions/inventory';
+import { listStockMovements } from '@/app/actions/inventory';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { ProductListScreen } from '@/components/inventory/product-list';
+import { StockLedgerList } from '@/components/inventory/stock-ledger-list';
 
-export default async function ProductsPage({
+export default async function StockLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; q?: string }>;
 }) {
   const params = await searchParams;
   let tenant;
@@ -16,16 +16,16 @@ export default async function ProductsPage({
   try {
     [tenant, rows] = await Promise.all([
       getTenantInfo(),
-      listProducts({ q: params.q, status: 'active' }),
+      listStockMovements({ from: params.from, to: params.to, q: params.q }),
     ]);
   } catch {
     redirect('/login');
   }
 
   return (
-    <BookOneShell active="Products" tenant={tenant}>
+    <BookOneShell active="Stock Ledger" tenant={tenant}>
       <Suspense fallback={<div className="workspace">Loading…</div>}>
-        <ProductListScreen rows={rows} />
+        <StockLedgerList rows={rows} />
       </Suspense>
     </BookOneShell>
   );

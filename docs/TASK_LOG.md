@@ -182,6 +182,21 @@
 
 ---
 
+## 2026-07-16 — Inventory module upgrade (Sage-aligned)
+
+### ✅ Completed
+- Product types: **physical / digital / service** (migrate legacy `stocked` → physical).
+- Migration `010_inventory_products_v2.sql` + enriched product fields.
+- Posting: COGS/inventory only for physical; digital/service revenue-only.
+- Screens: Products (Parties-grade UX), **Stock Levels**, **Stock Ledger**, Transfers, Adjustments.
+- Physical-only transfers/adjustments; delete/archive guards; header toasts.
+
+### 🔜 Next Steps
+- [ ] Apply migration 010 on production after Portainer redeploy.
+- [ ] Smoke: physical sale COGS, digital sale no 5100, transfer TB unchanged.
+
+---
+
 ## 2026-07-16 — Parties module full upgrade (Phases 1–4)
 
 ### ✅ Completed

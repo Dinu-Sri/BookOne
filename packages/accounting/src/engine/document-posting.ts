@@ -12,13 +12,19 @@ export interface PostingLine {
   memo: string;
 }
 
+/** Physical goods track qty + COGS. Legacy 'stocked' is treated as physical. */
+export function isPhysicalProduct(type?: string | null): boolean {
+  return type === 'physical' || type === 'stocked';
+}
+
 export interface SaleLineInput {
   description: string;
   quantity: number;
   unitPrice: number;
   unitCost: number;
   discountAmount?: number;
-  productType?: 'stocked' | 'service';
+  /** physical | digital | service | stocked (legacy) */
+  productType?: string;
   revenueAccountCode?: string;
   cogsAccountCode?: string;
   inventoryAccountCode?: string;
@@ -63,7 +69,7 @@ export function buildSalesInvoicePosting(input: {
     gross = round2(gross + lineGross);
     lineDiscounts = round2(lineDiscounts + disc);
 
-    if (line.productType === 'stocked' && line.quantity > 0) {
+    if (isPhysicalProduct(line.productType) && line.quantity > 0) {
       const cogs = round2(line.quantity * line.unitCost);
       cogsTotal = round2(cogsTotal + cogs);
       if (cogs > 0) {
@@ -123,7 +129,7 @@ export function buildSalesReturnPosting(input: {
   for (const line of input.lines) {
     const lineNet = round2(line.quantity * line.unitPrice - (line.discountAmount ?? 0));
     netTotal = round2(netTotal + lineNet);
-    if (line.productType === 'stocked' && line.quantity > 0) {
+    if (isPhysicalProduct(line.productType) && line.quantity > 0) {
       const cogs = round2(line.quantity * line.unitCost);
       cogsTotal = round2(cogsTotal + cogs);
       if (cogs > 0) {

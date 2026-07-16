@@ -100,6 +100,8 @@ const navSuites: NavSuite[] = [
     icon: Package,
     items: [
       { label: 'Products', icon: Package, href: '/inventory/products' },
+      { label: 'Stock Levels', icon: Landmark, href: '/inventory/levels' },
+      { label: 'Stock Ledger', icon: BookOpenCheck, href: '/inventory/ledger' },
       { label: 'Stock Transfers', icon: ClipboardList, href: '/inventory/transfers' },
       { label: 'Stock Adjustments', icon: SlidersHorizontal, href: '/inventory/adjustments' },
     ],

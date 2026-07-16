@@ -1,23 +1,23 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
-import { listStockDocs } from '@/app/actions/inventory';
+import { listStockLevels } from '@/app/actions/inventory';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { StockDocsList } from '@/components/inventory/stock-docs-list';
+import { StockLevelsList } from '@/components/inventory/stock-levels-list';
 
-export default async function AdjustmentsPage() {
+export default async function StockLevelsPage() {
   let tenant;
   let rows;
   try {
-    [tenant, rows] = await Promise.all([getTenantInfo(), listStockDocs('adjustment')]);
+    [tenant, rows] = await Promise.all([getTenantInfo(), listStockLevels()]);
   } catch {
     redirect('/login');
   }
 
   return (
-    <BookOneShell active="Stock Adjustments" tenant={tenant}>
+    <BookOneShell active="Stock Levels" tenant={tenant}>
       <Suspense fallback={<div className="workspace">Loading…</div>}>
-        <StockDocsList docType="adjustment" rows={rows} />
+        <StockLevelsList rows={rows} />
       </Suspense>
     </BookOneShell>
   );

@@ -8,7 +8,7 @@ export default async function NewImportPurchasePage() {
   let tenant;
   let form;
   try {
-    [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData()]);
+    [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData('vendor')]);
   } catch {
     redirect('/login');
   }
@@ -24,6 +24,7 @@ export default async function NewImportPurchasePage() {
         partyLabel="Supplier / agent"
         partyPlaceholder="Overseas supplier"
         products={form.products}
+        partyOptions={form.partyOptions}
         showExpenseAccount
         expenseAccounts={form.expenseAccounts}
       />

@@ -3,6 +3,7 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { listProducts } from '@/app/actions/inventory';
 import { listActiveDiscounts } from '@/app/actions/commercial-docs';
 import { getDocumentFormOptions } from '@/app/actions/documents';
+import { listPartyOptions } from '@/app/actions/parties';
 
 export async function requireTenant() {
   try {
@@ -12,8 +13,8 @@ export async function requireTenant() {
   }
 }
 
-export async function loadSalesFormData() {
-  const [products, discounts, options] = await Promise.all([
+export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'customer') {
+  const [products, discounts, options, partyOptions] = await Promise.all([
     listProducts().catch(() => []),
     listActiveDiscounts().catch(() => []),
     getDocumentFormOptions().catch(() => ({
@@ -21,6 +22,7 @@ export async function loadSalesFormData() {
       expenseAccounts: [],
       paymentAccounts: [],
     })),
+    listPartyOptions(partyRole).catch(() => []),
   ]);
   return {
     products: products.map((p) => ({
@@ -32,5 +34,6 @@ export async function loadSalesFormData() {
     discounts,
     paymentAccounts: options.paymentAccounts,
     expenseAccounts: options.expenseAccounts,
+    partyOptions,
   };
 }

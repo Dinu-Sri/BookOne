@@ -8,7 +8,7 @@ export default async function NewSalesInvoicePage() {
   let tenant;
   let form;
   try {
-    [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData()]);
+    [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData('customer')]);
   } catch {
     redirect('/login');
   }
@@ -24,6 +24,8 @@ export default async function NewSalesInvoicePage() {
         partyLabel="Customer"
         partyPlaceholder="Customer name"
         products={form.products}
+        partyOptions={form.partyOptions}
+        creditWarning
         discounts={form.discounts}
       />
     </BookOneShell>

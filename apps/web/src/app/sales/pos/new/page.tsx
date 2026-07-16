@@ -8,7 +8,7 @@ export default async function NewPosSalePage() {
   let tenant;
   let form;
   try {
-    [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData()]);
+    [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData('customer')]);
   } catch {
     redirect('/login');
   }
@@ -24,6 +24,7 @@ export default async function NewPosSalePage() {
         partyLabel="Customer (optional name)"
         partyPlaceholder="Walk-in customer"
         products={form.products}
+        partyOptions={form.partyOptions}
         discounts={form.discounts}
         showPaymentAccount
         paymentAccounts={form.paymentAccounts}

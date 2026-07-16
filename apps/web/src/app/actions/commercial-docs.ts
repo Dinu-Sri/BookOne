@@ -321,7 +321,15 @@ export async function createCommercialDocument(
     const party = await ensureParty({
       name: parsed.partyName,
       kind: isSales ? 'customer' : 'vendor',
+      isCustomer: isSales,
+      isVendor: !isSales,
     });
+    if (party.status === 'blocked') {
+      return { ok: false, error: 'This party is blocked. Unblock them in Parties before posting.' };
+    }
+    if (party.status === 'inactive') {
+      return { ok: false, error: 'This party is inactive. Restore them in Parties before posting.' };
+    }
 
     const id = await withTenantContext(user.tenantId, async () => {
       if (postsToGl(parsed.documentType)) {
@@ -696,9 +704,16 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     });
   }
 
+  const selectedParty = String(formData.get('partyName') ?? '').trim();
+  const overrideParty = String(formData.get('partyNameOverride') ?? '').trim();
+  const partyName =
+    overrideParty ||
+    (selectedParty && selectedParty !== '__new__' ? selectedParty : '') ||
+    overrideParty;
+
   await createCommercialDocument({
     documentType,
-    partyName: String(formData.get('partyName') ?? ''),
+    partyName: partyName || 'Walk-in',
     issueDate: String(formData.get('issueDate') ?? new Date().toISOString().slice(0, 10)),
     dueDate: String(formData.get('dueDate') ?? ''),
     notes: String(formData.get('notes') ?? ''),

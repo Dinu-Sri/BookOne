@@ -182,6 +182,23 @@
 
 ---
 
+## 2026-07-16 — Parties module full upgrade (Phases 1–4)
+
+### ✅ Completed
+- Migration `009_parties_enrichment.sql`: SL tax/identity/address/bank fields, `is_customer`/`is_vendor`, status.
+- Dual-role master: one record on both Customer and Vendor lists; role demotion guarded by document usage.
+- List: search, status/role/tax/balance filters, multi-column sort (URL searchParams).
+- Create/edit forms with full SL field sections; edit routes under `/parties/{customers|vendors}/[id]/edit`.
+- Safe soft-delete only when no commercial docs and no simple-entry name matches; Archive/Restore always available.
+- `ensureParty` merges dual roles on name match; blocks inactive/blocked parties on document post.
+- Sales/Purchase forms: party master picker + walk-in override; invoice credit-limit advisory note.
+
+### 🔜 Next Steps
+- [ ] Apply migrations 008+009 on production after Portainer redeploy.
+- [ ] Optional: multi-address / multi-bank tables later.
+
+---
+
 ## 2026-07-16 — Four modules: Parties, Sales, Purchase, Inventory
 
 ### ✅ Completed

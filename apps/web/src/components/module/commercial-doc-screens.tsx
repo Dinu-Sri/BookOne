@@ -100,12 +100,14 @@ export function CommercialDocNewForm({
   partyLabel,
   partyPlaceholder,
   products,
+  partyOptions,
   discounts,
   showPaymentAccount,
   paymentAccounts,
   defaultPaymentCode,
   expenseAccounts,
   showExpenseAccount,
+  creditWarning,
 }: {
   eyebrow: string;
   title: string;
@@ -115,12 +117,14 @@ export function CommercialDocNewForm({
   partyLabel: string;
   partyPlaceholder: string;
   products: { id: string; name: string; sellPrice: number; unitCost: number }[];
+  partyOptions?: { id: string; name: string; code: string | null; creditLimit: number | null; openBalance: number; status: string }[];
   discounts?: { id: string; name: string; discountType: string; value: string | number }[];
   showPaymentAccount?: boolean;
   paymentAccounts?: { code: string; name: string }[];
   defaultPaymentCode?: string;
   expenseAccounts?: { code: string; name: string }[];
   showExpenseAccount?: boolean;
+  creditWarning?: boolean;
 }) {
   const defaultProduct = products[0];
   return (
@@ -131,8 +135,42 @@ export function CommercialDocNewForm({
 
         <div className="field">
           <label>{partyLabel}</label>
-          <input className="input" name="partyName" placeholder={partyPlaceholder} required />
+          {partyOptions && partyOptions.length > 0 ? (
+            <>
+              <select className="input" name="partyName" defaultValue="" required>
+                <option value="" disabled>
+                  Select {partyLabel.toLowerCase()}…
+                </option>
+                {partyOptions.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.code ? `${p.code} — ` : ''}
+                    {p.name}
+                    {p.creditLimit != null ? ` (limit ${formatLKR(p.creditLimit)}, open ${formatLKR(p.openBalance)})` : ''}
+                  </option>
+                ))}
+                <option value="__new__">+ Type new name below…</option>
+              </select>
+              <input
+                className="input"
+                name="partyNameOverride"
+                placeholder={partyPlaceholder}
+                style={{ marginTop: 8 }}
+              />
+              <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                Prefer selecting a master party. Use override only for walk-in / new names (auto-creates master).
+              </p>
+            </>
+          ) : (
+            <input className="input" name="partyName" placeholder={partyPlaceholder} required />
+          )}
         </div>
+        {creditWarning ? (
+          <div className="field field-full">
+            <p style={{ fontSize: 13, color: 'var(--warning)', background: 'var(--warning-soft)', padding: 10, borderRadius: 8 }}>
+              Credit limit is advisory for now. If open AR plus this invoice exceeds the customer limit, review before posting.
+            </p>
+          </div>
+        ) : null}
         <div className="field">
           <label>Date</label>
           <input className="input" name="issueDate" type="date" defaultValue={todayString()} required />

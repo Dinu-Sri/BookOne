@@ -825,5 +825,3 @@ export async function listActiveDiscounts() {
       );
   });
 }
-
-export { SALES_TYPES, PURCHASE_TYPES };

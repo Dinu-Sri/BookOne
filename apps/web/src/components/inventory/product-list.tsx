@@ -14,6 +14,7 @@ import {
 import { DateRangePicker } from '@/components/layout/date-range-picker';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
+import { ProductImageHover } from '@/components/inventory/product-image-hover';
 import { ProductSnapshotDialog } from '@/components/inventory/product-snapshot';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -154,19 +155,14 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                   {pageRows.map((p) => (
                     <tr key={p.id}>
                       <td>
-                        <button
-                          type="button"
-                          className="product-thumb-btn"
+                        <ProductImageHover
+                          src={p.imageUrl}
+                          alt={p.name}
+                          size={40}
+                          zoomSize={220}
+                          fallback={(p.name || '?').slice(0, 1).toUpperCase()}
                           onClick={() => setPreview(p)}
-                          title="Quick view"
-                        >
-                          {p.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img className="product-thumb" src={p.imageUrl} alt="" width={40} height={40} />
-                          ) : (
-                            <span className="product-thumb product-thumb-empty">{(p.name || '?').slice(0, 1)}</span>
-                          )}
-                        </button>
+                        />
                       </td>
                       <td>
                         <strong>{p.sku}</strong>

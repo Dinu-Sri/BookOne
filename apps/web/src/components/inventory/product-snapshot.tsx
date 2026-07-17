@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Package, X } from 'lucide-react';
 import type { ProductRow } from '@/app/actions/inventory';
+import { ProductImageHover } from '@/components/inventory/product-image-hover';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { Button } from '@/components/ui/bookone-ui';
 
@@ -15,8 +16,7 @@ export function ProductSnapshotDialog({ product, onClose }: { product: ProductRo
         </button>
         <div className="party-snapshot-hero">
           {product.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img className="product-snapshot-photo" src={product.imageUrl} alt="" width={72} height={72} />
+            <ProductImageHover src={product.imageUrl} alt={product.name} size={72} zoomSize={280} className="product-snapshot-hover" />
           ) : (
             <div className="party-snapshot-avatar" aria-hidden>
               <Package size={22} />

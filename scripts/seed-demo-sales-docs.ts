@@ -177,6 +177,38 @@ async function main() {
 
   console.log(`Seeding demo sales docs for ${tenant.name}…`);
 
+  // Demo discounts
+  const demoDiscounts = [
+    { name: 'Retail 5%', code: 'RET5', discountType: 'percent', value: '5.00' },
+    { name: 'Wholesale 10%', code: 'WH10', discountType: 'percent', value: '10.00' },
+    { name: 'Loyalty LKR 500', code: 'LOY500', discountType: 'fixed', value: '500.00' },
+    { name: 'Festival 15%', code: 'FEST15', discountType: 'percent', value: '15.00' },
+  ];
+  for (const d of demoDiscounts) {
+    const [exists] = await db
+      .select({ id: schema.salesDiscounts.id })
+      .from(schema.salesDiscounts)
+      .where(
+        and(
+          eq(schema.salesDiscounts.tenantId, tenant.id),
+          eq(schema.salesDiscounts.code, d.code),
+          isNull(schema.salesDiscounts.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (!exists) {
+      await db.insert(schema.salesDiscounts).values({
+        tenantId: tenant.id,
+        name: d.name,
+        code: d.code,
+        discountType: d.discountType,
+        value: d.value,
+        isActive: '1',
+        notes: 'Demo discount',
+      });
+    }
+  }
+
   // Ensure demo customers
   const partyIds: string[] = [];
   for (const c of CUSTOMERS) {

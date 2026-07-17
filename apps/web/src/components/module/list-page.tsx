@@ -35,7 +35,7 @@ export function StatusBadge({ status }: { status: string }) {
   const tone: Tone =
     status === 'paid' || status === 'posted' || status === 'accepted' || status === 'confirmed' || status === 'active'
       ? 'success'
-      : status === 'void' || status === 'cancelled'
+      : status === 'void' || status === 'cancelled' || status === 'inactive'
         ? 'danger'
         : status === 'draft' || status === 'open' || status === 'sent'
           ? 'info'

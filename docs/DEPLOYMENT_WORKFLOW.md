@@ -94,14 +94,16 @@ ssh user@vps
 docker compose -f /opt/bookone/docker/docker-compose.prod.yml logs -f --tail=50
 ```
 
-### Post-Deploy (if schema changes)
+### Post-Deploy (schema changes)
 
-```bash
-# Run migrations on VPS
-ssh user@vps
-cd /opt/bookone
-docker compose -f docker/docker-compose.prod.yml exec web pnpm db:migrate
-```
+**No manual migrate step.** On every `bookone-web` container start, `docker/entrypoint.sh` runs:
+
+1. `pnpm --filter @bookone/db db:migrate` (`drizzle-kit push`)
+2. `pnpm exec tsx scripts/init-db.ts` (all `packages/db/migrations/*.sql` + seed)
+
+After a Portainer GitOps pull/rebuild, check web logs for `Migrations ok` and `Init complete`.
+
+Only if logs show a DB error (wrong `DATABASE_URL`, etc.) fix env and redeploy the web service.
 
 ### Post-Deploy (if new env vars)
 

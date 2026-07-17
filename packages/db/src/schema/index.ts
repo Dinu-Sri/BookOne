@@ -27,3 +27,4 @@ export {
 } from './inventory';
 export { salesDiscounts } from './sales-discounts';
 export { salesSettings, taxInvoiceSequences, salesInvoiceSources } from './sales-settings';
+export { posRegisters, posShifts } from './pos';

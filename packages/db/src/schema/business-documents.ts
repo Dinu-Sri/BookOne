@@ -51,6 +51,11 @@ export const businessDocuments = pgTable('business_documents', {
   purchaserTin: varchar('purchaser_tin', { length: 50 }),
   purchaserPhone: varchar('purchaser_phone', { length: 40 }),
   purchaserAddress: varchar('purchaser_address', { length: 500 }),
+  registerId: uuid('register_id'),
+  shiftId: uuid('shift_id'),
+  /** sale | return when created from POS */
+  posMode: varchar('pos_mode', { length: 20 }),
+  sourcePosSaleId: uuid('source_pos_sale_id'),
   postedAt: timestamp('posted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

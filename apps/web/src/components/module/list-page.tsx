@@ -33,7 +33,12 @@ export function ModulePageHeader({
 
 export function StatusBadge({ status }: { status: string }) {
   const tone: Tone =
-    status === 'paid' || status === 'posted' || status === 'accepted' || status === 'confirmed' || status === 'active'
+    status === 'paid' ||
+    status === 'posted' ||
+    status === 'accepted' ||
+    status === 'confirmed' ||
+    status === 'active' ||
+    status === 'refunded'
       ? 'success'
       : status === 'void' || status === 'cancelled' || status === 'inactive'
         ? 'danger'

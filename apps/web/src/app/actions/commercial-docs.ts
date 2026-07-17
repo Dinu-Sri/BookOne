@@ -100,6 +100,7 @@ const createSchema = z.object({
   registerId: z.string().uuid().optional().nullable(),
   shiftId: z.string().uuid().optional().nullable(),
   posMode: z.enum(['sale', 'return']).optional().nullable(),
+  sourcePosSaleId: z.string().uuid().optional().nullable(),
   lines: z.array(lineSchema).min(1),
 });
 
@@ -206,6 +207,7 @@ function defaultStatus(type: string) {
   if (type === 'quotation') return 'draft';
   if (type === 'sales_order' || type === 'purchase_order') return 'confirmed';
   if (type === 'pos_sale') return 'paid';
+  if (type === 'sales_return') return 'open';
   return 'open';
 }
 
@@ -510,9 +512,12 @@ export async function createCommercialDocument(
         taxInvoiceNumber = await nextTaxInvoiceNumber(user.tenantId, parsed.issueDate, vatCfg.dept);
       }
 
-      const status = defaultStatus(parsed.documentType);
+      let status = defaultStatus(parsed.documentType);
       const settled =
         parsed.documentType === 'pos_sale' ||
+        (parsed.documentType === 'sales_return' &&
+          Boolean(parsed.paymentAccountCode) &&
+          parsed.posMode === 'return') ||
         Boolean(
           parsed.paymentAccountCode &&
             postsToGl(parsed.documentType) &&
@@ -520,6 +525,9 @@ export async function createCommercialDocument(
             parsed.documentType !== 'purchase_return' &&
             parsed.documentType !== 'sales_return',
         );
+      if (parsed.documentType === 'sales_return' && settled) {
+        status = 'refunded';
+      }
 
       let transactionId: string | null = null;
       let postedAt: Date | null = null;
@@ -694,13 +702,18 @@ export async function createCommercialDocument(
           vatRate: vatRate.toFixed(2),
           amountInWords:
             amountInWords ??
-            (appliesSalesVat || isPosSale ? amountInWordsLkr(total) : null),
+            (appliesSalesVat || isPosSale || (parsed.documentType === 'sales_return' && settled)
+              ? amountInWordsLkr(total)
+              : null),
           purchaserTin: parsed.purchaserTin || party.tin || null,
           purchaserPhone: parsed.purchaserPhone || party.phoneMobile || party.phone || null,
           purchaserAddress: parsed.purchaserAddress || party.addressLine1 || party.address || null,
           registerId: parsed.registerId ?? null,
           shiftId: parsed.shiftId ?? null,
-          posMode: parsed.posMode ?? (isPosSale ? 'sale' : null),
+          posMode:
+            parsed.posMode ??
+            (isPosSale ? 'sale' : parsed.documentType === 'sales_return' ? 'return' : null),
+          sourcePosSaleId: parsed.sourcePosSaleId ?? null,
           postedAt,
         })
         .returning({ id: businessDocuments.id });

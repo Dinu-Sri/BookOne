@@ -157,12 +157,13 @@ Print:
 - Post `pos_sale`, commercial default  
 - Browser receipt; thermal stub/queue  
 
-### Phase 2 — returns (v1, same release track as Phase 1 if capacity)
+### Phase 2 — returns ✅
 
-- Return mode on `/pos`  
-- Lookup ticket → reverse lines  
+- Return mode on `/pos` (Sale | Return toggle)  
+- Lookup ticket / recent sales → reverse lines with remaining qty  
 - Free return (no original) with reason  
-- Post return + restock + refund tender  
+- Post `sales_return` + restock + refund tender (cash/card/bank)  
+
 
 ### Phase 3 — shift close + Z
 

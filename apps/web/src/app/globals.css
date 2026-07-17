@@ -3844,3 +3844,151 @@ textarea.input {
   .pos-line-qty { grid-area: qty; }
   .pos-line-amt { grid-area: amt; text-align: right; }
 }
+
+/* POS Sale | Return toggle + return UI */
+.pos-mode-toggle {
+  display: inline-flex;
+  border-radius: 10px;
+  border: 1px solid #475569;
+  overflow: hidden;
+  background: #0f172a;
+}
+.pos-mode-toggle button {
+  min-height: 40px;
+  min-width: 88px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 14px;
+}
+.pos-mode-toggle button.active {
+  background: #0284c7;
+  color: #fff;
+}
+.pos-mode-toggle button.active.return {
+  background: #b45309;
+  color: #fff;
+}
+.pos-mode-return .pos-topbar {
+  border-bottom-color: #b45309;
+}
+.pos-search-return {
+  border-color: #f59e0b !important;
+}
+.pos-return-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.pos-chip.return-chip {
+  background: #b45309;
+  color: #ffedd5;
+}
+.pos-ticket-box {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #475569;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1e293b;
+}
+.pos-ticket-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #334155;
+  flex-wrap: wrap;
+}
+.pos-ticket-head strong { display: block; color: #f8fafc; font-size: 14px; }
+.pos-ticket-head span { display: block; color: #94a3b8; font-size: 12px; margin-top: 2px; }
+.pos-ticket-lines {
+  flex: 1;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  align-content: start;
+}
+.pos-ticket-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pos-ticket-line:disabled { opacity: 0.4; cursor: not-allowed; }
+.pos-ticket-line:not(:disabled):hover { border-color: #f59e0b; }
+.pos-ticket-line strong { display: block; font-size: 13px; }
+.pos-ticket-line em { display: block; font-style: normal; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.pos-ticket-line .add { font-size: 12px; font-weight: 800; color: #fbbf24; white-space: nowrap; }
+
+.pos-recent { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.pos-recent-list {
+  flex: 1;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.pos-recent-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pos-recent-row:hover { border-color: #f59e0b; }
+.pos-recent-row strong { font-size: 13px; color: #f8fafc; }
+.pos-recent-row span { grid-column: 1; font-size: 11px; color: #94a3b8; }
+.pos-recent-row em { grid-row: 1 / span 2; align-self: center; font-style: normal; font-weight: 800; color: #7dd3fc; }
+
+.pos-cart-banner {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #fde68a;
+  background: #422006;
+  border-bottom: 1px solid #78350f;
+}
+.pos-cart-banner.warn {
+  color: #fecaca;
+  background: #450a0a;
+  border-bottom-color: #7f1d1d;
+}
+.pos-cart-head input {
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #f1f5f9;
+  padding: 0 8px;
+  font: inherit;
+}
+.pos-btn.primary.pay.refund {
+  background: #c2410c;
+  border-color: #c2410c;
+}

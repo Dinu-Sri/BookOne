@@ -53,7 +53,11 @@ export default async function PosReceiptPage({
         <p className="center muted">
           {register ? `${register.code} · ${register.name}` : 'POS'}
           <br />
-          {doc.invoiceKind === 'tax_invoice' ? 'TAX INVOICE' : 'SALES RECEIPT'}
+          {doc.documentType === 'sales_return' || doc.posMode === 'return'
+            ? 'RETURN / REFUND'
+            : doc.invoiceKind === 'tax_invoice'
+              ? 'TAX INVOICE'
+              : 'SALES RECEIPT'}
         </p>
         <p>
           <strong>{doc.taxInvoiceNumber || doc.documentNumber}</strong>

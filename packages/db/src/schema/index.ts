@@ -26,3 +26,4 @@ export {
   inventoryMovements,
 } from './inventory';
 export { salesDiscounts } from './sales-discounts';
+export { salesSettings, taxInvoiceSequences, salesInvoiceSources } from './sales-settings';

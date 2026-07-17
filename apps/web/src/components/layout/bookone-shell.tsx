@@ -76,7 +76,7 @@ const navSuites: NavSuite[] = [
     icon: ShoppingCart,
     items: [
       { label: 'Quotations', icon: FileText, href: '/sales/quotations' },
-      { label: 'Sales Orders', icon: ClipboardList, href: '/sales/orders' },
+      { label: 'Sales Orders (Dispatch Note)', icon: ClipboardList, href: '/sales/orders' },
       { label: 'Sales Invoices', icon: ReceiptText, href: '/sales/invoices' },
       { label: 'Sales Returns', icon: BookOpenCheck, href: '/sales/returns' },
       { label: 'POS', icon: ShoppingCart, href: '/sales/pos' },
@@ -113,6 +113,7 @@ const navSuites: NavSuite[] = [
     items: [
       { label: 'Company Details', icon: Building2, href: '/company/details' },
       { label: 'Tax Info', icon: FileText, href: '/company/tax' },
+      { label: 'Sales Settings', icon: ReceiptText, href: '/company/sales' },
       { label: 'Brands', icon: Package, href: '/company/brands' },
       { label: 'Locations', icon: Landmark, href: '/company/locations' },
       { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },

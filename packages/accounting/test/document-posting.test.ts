@@ -14,10 +14,26 @@ describe('sales invoice posting', () => {
       lines: [{ description: 'Consulting', quantity: 2, unitPrice: 150, unitCost: 0, productType: 'service' }],
     });
     expect(result.netTotal).toBe(300);
+    expect(result.grandTotal).toBe(300);
+    expect(result.vatTotal).toBe(0);
     expect(result.cogsTotal).toBe(0);
     expect(sumSides(result.lines)).toEqual({ debit: 300, credit: 300 });
     expect(result.lines.some((l) => l.accountCode === '1300' && l.side === 'debit')).toBe(true);
     expect(result.lines.some((l) => l.accountCode === '4000' && l.side === 'credit')).toBe(true);
+  });
+
+  it('posts tax invoice with 18% output VAT', () => {
+    const result = buildSalesInvoicePosting({
+      lines: [{ description: 'Goods', quantity: 1, unitPrice: 1000, unitCost: 0, productType: 'service' }],
+      vatRatePercent: 18,
+    });
+    expect(result.netTotal).toBe(1000);
+    expect(result.vatTotal).toBe(180);
+    expect(result.grandTotal).toBe(1180);
+    expect(result.lines.some((l) => l.accountCode === '1300' && l.amount === 1180)).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '4000' && l.amount === 1000)).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '2200' && l.side === 'credit' && l.amount === 180)).toBe(true);
+    expect(sumSides(result.lines)).toEqual({ debit: 1180, credit: 1180 });
   });
 
   it('posts COGS and inventory for physical (and legacy stocked) lines', () => {
@@ -25,6 +41,7 @@ describe('sales invoice posting', () => {
       lines: [{ description: 'Widget', quantity: 2, unitPrice: 150, unitCost: 100, productType: 'physical' }],
     });
     expect(result.netTotal).toBe(300);
+    expect(result.grandTotal).toBe(300);
     expect(result.cogsTotal).toBe(200);
     expect(sumSides(result.lines)).toEqual({ debit: 500, credit: 500 });
     expect(result.lines.some((l) => l.accountCode === '5000' && l.side === 'debit' && l.amount === 200)).toBe(true);

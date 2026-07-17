@@ -31,7 +31,12 @@ export interface SaleLineInput {
 }
 
 export interface BuiltSalePosting {
+  /** Amount excluding VAT (revenue base) */
   netTotal: number;
+  /** VAT amount (0 if commercial / zero-rated) */
+  vatTotal: number;
+  /** Inclusive total charged to customer */
+  grandTotal: number;
   cogsTotal: number;
   lines: PostingLine[];
 }
@@ -48,15 +53,23 @@ function assertBalanced(lines: PostingLine[]) {
   }
 }
 
-/** Credit sale: Dr AR, Cr Revenue (net); optional COGS/Inventory per stocked line */
+/**
+ * Credit sale: Dr AR/Cash (incl. VAT), Cr Revenue (ex-VAT), optional Cr Output VAT 2200,
+ * optional COGS/Inventory for physical lines.
+ * unitPrice is treated as **excluding VAT**.
+ */
 export function buildSalesInvoicePosting(input: {
   lines: SaleLineInput[];
   headerDiscount?: number;
   settledCashAccountCode?: string | null; // if set, cash sale instead of AR
+  /** VAT % applied on supply (e.g. 18). 0 = commercial / zero-rated */
+  vatRatePercent?: number;
+  outputVatAccountCode?: string;
   memo?: string;
 }): BuiltSalePosting {
   const memo = input.memo ?? 'Sales invoice';
   const headerDiscount = round2(input.headerDiscount ?? 0);
+  const vatRate = Math.max(0, input.vatRatePercent ?? 0);
 
   let gross = 0;
   let lineDiscounts = 0;
@@ -92,14 +105,17 @@ export function buildSalesInvoicePosting(input: {
   }
 
   const netTotal = round2(Math.max(0, gross - lineDiscounts - headerDiscount));
+  const vatTotal = round2((netTotal * vatRate) / 100);
+  const grandTotal = round2(netTotal + vatTotal);
   const settleCode = input.settledCashAccountCode ?? null;
   const controlCode = settleCode ?? '1300';
+  const vatCode = input.outputVatAccountCode ?? '2200';
 
   const lines: PostingLine[] = [
     {
       accountCode: controlCode,
       side: 'debit',
-      amount: netTotal,
+      amount: grandTotal,
       memo,
     },
     {
@@ -108,11 +124,19 @@ export function buildSalesInvoicePosting(input: {
       amount: netTotal,
       memo,
     },
-    ...cogsLines,
   ];
+  if (vatTotal > 0) {
+    lines.push({
+      accountCode: vatCode,
+      side: 'credit',
+      amount: vatTotal,
+      memo: `Output VAT ${vatRate}%`,
+    });
+  }
+  lines.push(...cogsLines);
 
   assertBalanced(lines);
-  return { netTotal, cogsTotal, lines };
+  return { netTotal, vatTotal, grandTotal, cogsTotal, lines };
 }
 
 /** Sales return: Dr Sales Returns 4100, Cr AR/Cash; reverse COGS for stocked */
@@ -169,7 +193,7 @@ export function buildSalesReturnPosting(input: {
   ];
 
   assertBalanced(lines);
-  return { netTotal, cogsTotal, lines };
+  return { netTotal, vatTotal: 0, grandTotal: netTotal, cogsTotal, lines };
 }
 
 /** Vendor bill / local or import purchase: Dr Expense/Inventory, Cr AP */

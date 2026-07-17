@@ -1,4 +1,4 @@
-export * from './chart-of-accounts';
+﻿export * from './chart-of-accounts';
 export * from './account-lookup';
 export * from './inference/types';
 export { inferCategory, listKnownAccounts, CATEGORY_RULES } from './inference/category-inferrer';
@@ -17,3 +17,4 @@ export {
   sumSides,
 } from './engine/document-posting';
 export type { PostingLine, SaleLineInput, BuiltSalePosting } from './engine/document-posting';
+export { amountInWordsLkr, formatDateMmDdYyyy } from './amount-in-words';

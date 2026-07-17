@@ -8,6 +8,7 @@ import {
   buildVendorBillPosting,
   buildPurchaseReturnPosting,
   isPhysicalProduct,
+  amountInWordsLkr,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -31,6 +32,9 @@ import {
   inventoryStockLevels,
   inventoryMovements,
   salesDiscounts,
+  salesSettings,
+  taxInvoiceSequences,
+  salesInvoiceSources,
   sql,
   transactions,
   withTenantContext,
@@ -76,13 +80,84 @@ const createSchema = z.object({
   partyName: z.string().min(1).max(255),
   issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+  deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
   notes: z.string().max(1000).optional(),
+  additionalInfo: z.string().max(2000).optional(),
   discountId: z.string().uuid().optional().nullable(),
   headerDiscount: z.number().min(0).optional().default(0),
   sourceDocumentId: z.string().uuid().optional().nullable(),
+  sourceOrderIds: z.array(z.string().uuid()).optional(),
   paymentAccountCode: z.string().max(20).optional(), // POS / cash invoice
+  saleChannel: z.enum(['local', 'export']).optional().default('local'),
+  invoiceKind: z.enum(['commercial', 'tax_invoice']).optional().default('commercial'),
+  placeOfSupply: z.string().max(255).optional(),
+  paymentMode: z.string().max(40).optional(),
+  exportCountry: z.string().max(100).optional(),
+  exportRef: z.string().max(120).optional(),
+  purchaserTin: z.string().max(50).optional(),
+  purchaserPhone: z.string().max(40).optional(),
+  purchaserAddress: z.string().max(500).optional(),
   lines: z.array(lineSchema).min(1),
 });
+
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'] as const;
+
+/** Tax invoice no: YYMMM_DEPT/SERIAL e.g. 26JUL_01/1 */
+async function nextTaxInvoiceNumber(tenantId: string, issueDate: string, deptCode: string): Promise<string> {
+  const d = new Date(`${issueDate}T12:00:00`);
+  const yy = String(d.getFullYear()).slice(-2);
+  const mmm = MONTHS[d.getMonth()];
+  const dept = (deptCode || '01').trim().toUpperCase();
+
+  const [seq] = await db()
+    .select()
+    .from(taxInvoiceSequences)
+    .where(
+      and(
+        eq(taxInvoiceSequences.tenantId, tenantId),
+        eq(taxInvoiceSequences.yearYy, yy),
+        eq(taxInvoiceSequences.monthMmm, mmm),
+        eq(taxInvoiceSequences.deptCode, dept),
+      ),
+    )
+    .limit(1);
+
+  let serial = 1;
+  if (seq) {
+    serial = Number(seq.lastSerial) + 1;
+    await db()
+      .update(taxInvoiceSequences)
+      .set({ lastSerial: serial, updatedAt: new Date() })
+      .where(eq(taxInvoiceSequences.id, seq.id));
+  } else {
+    await db().insert(taxInvoiceSequences).values({
+      tenantId,
+      yearYy: yy,
+      monthMmm: mmm,
+      deptCode: dept,
+      lastSerial: serial,
+    });
+  }
+  return `${yy}${mmm}_${dept}/${serial}`;
+}
+
+async function loadSalesVatConfig(tenantId: string, saleChannel: string, invoiceKind: string) {
+  const [settings] = await db()
+    .select()
+    .from(salesSettings)
+    .where(eq(salesSettings.tenantId, tenantId))
+    .limit(1);
+  const vatRegistered = settings?.vatRegistered === '1';
+  const dept = settings?.taxInvoiceDeptCode ?? '01';
+  let vatRate = 0;
+  if (invoiceKind === 'tax_invoice' && vatRegistered) {
+    vatRate =
+      saleChannel === 'export'
+        ? Number(settings?.exportVatRatePercent ?? 0)
+        : Number(settings?.vatRatePercent ?? 18);
+  }
+  return { vatRate, dept, vatRegistered };
+}
 
 const PREFIX: Record<string, string> = {
   quotation: 'QT',
@@ -243,6 +318,9 @@ export interface CommercialDocRow {
   id: string;
   documentType: string;
   documentNumber: string;
+  taxInvoiceNumber: string | null;
+  invoiceKind: string;
+  saleChannel: string;
   partyName: string;
   issueDate: string;
   dueDate: string | null;
@@ -276,6 +354,9 @@ export async function listCommercialDocuments(types: string[], period?: string):
         id: businessDocuments.id,
         documentType: businessDocuments.documentType,
         documentNumber: businessDocuments.documentNumber,
+        taxInvoiceNumber: businessDocuments.taxInvoiceNumber,
+        invoiceKind: businessDocuments.invoiceKind,
+        saleChannel: businessDocuments.saleChannel,
         partyName: parties.name,
         issueDate: businessDocuments.issueDate,
         dueDate: businessDocuments.dueDate,
@@ -297,6 +378,9 @@ export async function listCommercialDocuments(types: string[], period?: string):
       id: row.id,
       documentType: row.documentType,
       documentNumber: row.documentNumber,
+      taxInvoiceNumber: row.taxInvoiceNumber,
+      invoiceKind: row.invoiceKind ?? 'commercial',
+      saleChannel: row.saleChannel ?? 'local',
       partyName: row.partyName ?? 'Unknown',
       issueDate: row.issueDate,
       dueDate: row.dueDate,
@@ -313,7 +397,7 @@ export async function listCommercialDocuments(types: string[], period?: string):
 }
 
 export async function createCommercialDocument(
-  input: z.infer<typeof createSchema>,
+  input: z.input<typeof createSchema>,
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
     const parsed = createSchema.parse(input);
@@ -399,8 +483,28 @@ export async function createCommercialDocument(
         }
       }
 
-      const total = Math.max(0, Math.round((subtotal - lineDiscountSum - headerDiscount) * 100) / 100);
+      const supplyExVat = Math.max(0, Math.round((subtotal - lineDiscountSum - headerDiscount) * 100) / 100);
+      const saleChannel = parsed.saleChannel ?? 'local';
+      const invoiceKind = parsed.invoiceKind ?? 'commercial';
+      const isSalesInvoiceType = parsed.documentType === 'sales_invoice';
+
+      const vatCfg = isSalesInvoiceType
+        ? await loadSalesVatConfig(user.tenantId, saleChannel, invoiceKind)
+        : { vatRate: 0, dept: '01', vatRegistered: false };
+
+      const vatRate = vatCfg.vatRate;
+      const vatTotal =
+        isSalesInvoiceType && invoiceKind === 'tax_invoice'
+          ? Math.round(((supplyExVat * vatRate) / 100) * 100) / 100
+          : 0;
+      const total = Math.round((supplyExVat + vatTotal) * 100) / 100;
+
       const documentNumber = await nextDocumentNumber(user.tenantId, parsed.documentType, parsed.issueDate);
+      let taxInvoiceNumber: string | null = null;
+      if (isSalesInvoiceType && invoiceKind === 'tax_invoice') {
+        taxInvoiceNumber = await nextTaxInvoiceNumber(user.tenantId, parsed.issueDate, vatCfg.dept);
+      }
+
       const status = defaultStatus(parsed.documentType);
       const settled =
         parsed.documentType === 'pos_sale' ||
@@ -414,6 +518,7 @@ export async function createCommercialDocument(
 
       let transactionId: string | null = null;
       let postedAt: Date | null = null;
+      let amountInWords: string | null = null;
 
       if (postsToGl(parsed.documentType)) {
         const saleLines = enriched.map((l) => ({
@@ -429,6 +534,7 @@ export async function createCommercialDocument(
         let accountingType = 'invoice_bill';
         let direction = 'money_in';
         let paymentAccountCode = '1300';
+        let postedTotal = total;
 
         if (parsed.documentType === 'sales_return') {
           const built = buildSalesReturnPosting({
@@ -440,12 +546,13 @@ export async function createCommercialDocument(
           accountingType = 'sales_return';
           direction = 'money_out';
           paymentAccountCode = parsed.paymentAccountCode ?? '1300';
+          postedTotal = built.netTotal;
         } else if (isPurchaseBillType(parsed.documentType)) {
           const expenseCode = enriched[0]?.accountCode || '6800';
           const forceInventory =
             parsed.documentType === 'import_purchase' || enriched.some((l) => isPhysicalProduct(l.productType));
           postingLines = buildVendorBillPosting({
-            total,
+            total: supplyExVat,
             expenseAccountCode: expenseCode,
             memo: documentNumber,
             isInventoryPurchase: forceInventory,
@@ -453,10 +560,11 @@ export async function createCommercialDocument(
           accountingType = parsed.documentType === 'import_purchase' ? 'import_purchase' : 'invoice_bill';
           direction = 'money_out';
           paymentAccountCode = '2100';
+          postedTotal = supplyExVat;
         } else if (parsed.documentType === 'purchase_return') {
           const expenseCode = enriched[0]?.accountCode || '6800';
           postingLines = buildPurchaseReturnPosting({
-            total,
+            total: supplyExVat,
             expenseAccountCode: expenseCode,
             isInventoryPurchase: enriched.some((l) => isPhysicalProduct(l.productType)),
             memo: documentNumber,
@@ -464,8 +572,9 @@ export async function createCommercialDocument(
           accountingType = 'purchase_return';
           direction = 'money_in';
           paymentAccountCode = '2100';
+          postedTotal = supplyExVat;
         } else {
-          // sales_invoice | pos_sale | customer_invoice
+          // sales_invoice | pos_sale
           const cashCode =
             parsed.documentType === 'pos_sale'
               ? parsed.paymentAccountCode || '1000'
@@ -474,12 +583,15 @@ export async function createCommercialDocument(
             lines: saleLines,
             headerDiscount,
             settledCashAccountCode: cashCode,
-            memo: documentNumber,
+            vatRatePercent: isSalesInvoiceType && invoiceKind === 'tax_invoice' ? vatRate : 0,
+            memo: taxInvoiceNumber ?? documentNumber,
           });
           postingLines = built.lines;
           paymentAccountCode = cashCode ?? '1300';
           direction = 'money_in';
           accountingType = cashCode ? 'sale' : 'invoice_bill';
+          postedTotal = built.grandTotal;
+          amountInWords = amountInWordsLkr(built.grandTotal);
         }
 
         // Resolve account ids and write journal
@@ -499,8 +611,8 @@ export async function createCommercialDocument(
             accountingType,
             direction,
             party: party.name,
-            description: `${documentNumber}: ${enriched[0]?.description ?? parsed.documentType}`.slice(0, 1000),
-            amount: total.toFixed(2),
+            description: `${taxInvoiceNumber ?? documentNumber}: ${enriched[0]?.description ?? parsed.documentType}`.slice(0, 1000),
+            amount: postedTotal.toFixed(2),
             currency: 'LKR',
             paymentMethod:
               paymentAccount.code === '1000' ? 'Cash' : paymentAccount.code === '1200' ? 'Card' : paymentAccount.code === '1100' ? 'Bank' : 'Credit',
@@ -558,16 +670,56 @@ export async function createCommercialDocument(
           sourceDocumentId: parsed.sourceDocumentId ?? null,
           discountId: parsed.discountId ?? null,
           discountTotal: headerDiscount.toFixed(2),
-          subtotal: subtotal.toFixed(2),
-          taxTotal: '0',
+          subtotal: supplyExVat.toFixed(2),
+          taxTotal: vatTotal.toFixed(2),
           total: total.toFixed(2),
           paidAmount: settled || parsed.documentType === 'pos_sale' ? total.toFixed(2) : '0',
           balanceDue: settled || parsed.documentType === 'pos_sale' ? '0' : total.toFixed(2),
           currency: 'LKR',
           notes: parsed.notes ?? null,
+          saleChannel,
+          invoiceKind: isSalesInvoiceType ? invoiceKind : 'commercial',
+          deliveryDate: parsed.deliveryDate || null,
+          placeOfSupply: parsed.placeOfSupply || null,
+          paymentMode: parsed.paymentMode || null,
+          taxInvoiceNumber,
+          exportCountry: saleChannel === 'export' ? parsed.exportCountry || null : null,
+          exportRef: saleChannel === 'export' ? parsed.exportRef || null : null,
+          additionalInfo: parsed.additionalInfo || null,
+          vatRate: vatRate.toFixed(2),
+          amountInWords: amountInWords ?? (isSalesInvoiceType ? amountInWordsLkr(total) : null),
+          purchaserTin: parsed.purchaserTin || party.tin || null,
+          purchaserPhone: parsed.purchaserPhone || party.phoneMobile || party.phone || null,
+          purchaserAddress: parsed.purchaserAddress || party.addressLine1 || party.address || null,
           postedAt,
         })
         .returning({ id: businessDocuments.id });
+
+      // Multi sales-order → invoice links
+      const orderIds = [
+        ...(parsed.sourceOrderIds ?? []),
+        ...(parsed.sourceDocumentId ? [parsed.sourceDocumentId] : []),
+      ].filter((v, i, a) => a.indexOf(v) === i);
+
+      if (isSalesInvoiceType && orderIds.length > 0) {
+        for (const orderId of orderIds) {
+          await db().insert(salesInvoiceSources).values({
+            tenantId: user.tenantId,
+            invoiceId: document.id,
+            salesOrderId: orderId,
+          });
+          await db()
+            .update(businessDocuments)
+            .set({ status: 'fully_invoiced', updatedAt: new Date() })
+            .where(
+              and(
+                eq(businessDocuments.tenantId, user.tenantId),
+                eq(businessDocuments.id, orderId),
+                eq(businessDocuments.documentType, 'sales_order'),
+              ),
+            );
+        }
+      }
 
       for (const line of enriched) {
         let accountId: string | null = null;
@@ -712,18 +864,39 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     (selectedParty && selectedParty !== '__new__' ? selectedParty : '') ||
     overrideParty;
 
-  await createCommercialDocument({
+  const sourceOrderIds = formData
+    .getAll('sourceOrderIds')
+    .map(String)
+    .filter((id) => id && id.length > 10);
+
+  const result = await createCommercialDocument({
     documentType,
     partyName: partyName || 'Walk-in',
     issueDate: String(formData.get('issueDate') ?? new Date().toISOString().slice(0, 10)),
     dueDate: String(formData.get('dueDate') ?? ''),
+    deliveryDate: String(formData.get('deliveryDate') ?? ''),
     notes: String(formData.get('notes') ?? ''),
+    additionalInfo: String(formData.get('additionalInfo') ?? ''),
     discountId: String(formData.get('discountId') ?? '') || null,
     headerDiscount: Number(String(formData.get('headerDiscount') ?? '0').replace(/[^0-9.-]/g, '')) || 0,
     sourceDocumentId: String(formData.get('sourceDocumentId') ?? '') || null,
+    sourceOrderIds,
     paymentAccountCode: String(formData.get('paymentAccountCode') ?? '') || undefined,
+    saleChannel: (String(formData.get('saleChannel') ?? 'local') as 'local' | 'export') || 'local',
+    invoiceKind: (String(formData.get('invoiceKind') ?? 'commercial') as 'commercial' | 'tax_invoice') || 'commercial',
+    placeOfSupply: String(formData.get('placeOfSupply') ?? ''),
+    paymentMode: String(formData.get('paymentMode') ?? ''),
+    exportCountry: String(formData.get('exportCountry') ?? ''),
+    exportRef: String(formData.get('exportRef') ?? ''),
+    purchaserTin: String(formData.get('purchaserTin') ?? ''),
+    purchaserPhone: String(formData.get('purchaserPhone') ?? ''),
+    purchaserAddress: String(formData.get('purchaserAddress') ?? ''),
     lines,
   });
+
+  if (!result.ok) {
+    throw new Error(result.error ?? 'Could not create document.');
+  }
 
   const { redirect } = await import('next/navigation');
   const listPath: Record<string, string> = {
@@ -818,6 +991,136 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
     vendor_bill: '/purchase/purchases',
   };
   redirect(listPath[targetType] ?? '/sales/orders');
+}
+
+/** Combine multiple sales orders into one sales invoice. */
+export async function convertMultipleOrdersToInvoice(formData: FormData): Promise<void> {
+  const orderIds = formData.getAll('orderIds').map(String).filter(Boolean);
+  if (orderIds.length === 0) throw new Error('Select at least one sales order.');
+
+  const user = await requireTenantContext();
+  await withTenantContext(user.tenantId, async () => {
+    const orders = await db()
+      .select()
+      .from(businessDocuments)
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          inArray(businessDocuments.id, orderIds),
+          eq(businessDocuments.documentType, 'sales_order'),
+          isNull(businessDocuments.voidedAt),
+        ),
+      );
+    if (orders.length === 0) throw new Error('No sales orders found.');
+    const partyId = orders[0].partyId;
+    if (orders.some((o) => o.partyId !== partyId)) {
+      throw new Error('All sales orders must belong to the same customer.');
+    }
+    if (orders.some((o) => o.status === 'fully_invoiced')) {
+      throw new Error('One or more selected orders are already fully invoiced.');
+    }
+
+    const [party] = await db()
+      .select({
+        name: parties.name,
+        tin: parties.tin,
+        phone: parties.phone,
+        phoneMobile: parties.phoneMobile,
+        address: parties.address,
+        addressLine1: parties.addressLine1,
+      })
+      .from(parties)
+      .where(eq(parties.id, partyId))
+      .limit(1);
+
+    const lines = [];
+    for (const order of orders) {
+      const orderLines = await db()
+        .select()
+        .from(businessDocumentLines)
+        .where(
+          and(eq(businessDocumentLines.documentId, order.id), isNull(businessDocumentLines.voidedAt)),
+        );
+      for (const l of orderLines) {
+        lines.push({
+          productId: l.productId,
+          description: l.description,
+          quantity: Number(l.quantity),
+          unitPrice: Number(l.unitPrice),
+          unitCost: Number(l.unitCost),
+          discountAmount: Number(l.discountAmount),
+        });
+      }
+    }
+    if (lines.length === 0) throw new Error('Selected orders have no lines.');
+
+    const result = await createCommercialDocument({
+      documentType: 'sales_invoice',
+      partyName: party?.name ?? 'Customer',
+      issueDate: new Date().toISOString().slice(0, 10),
+      sourceOrderIds: orders.map((o) => o.id),
+      sourceDocumentId: orders[0].id,
+      saleChannel: 'local',
+      invoiceKind: 'commercial',
+      purchaserTin: party?.tin ?? undefined,
+      purchaserPhone: party?.phoneMobile ?? party?.phone ?? undefined,
+      purchaserAddress: party?.addressLine1 ?? party?.address ?? undefined,
+      lines,
+    });
+    if (!result.ok) throw new Error(result.error ?? 'Invoice create failed.');
+  });
+
+  const { redirect } = await import('next/navigation');
+  redirect('/sales/invoices?flash=created');
+}
+
+export async function getInvoicePrintData(invoiceId: string) {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const [doc] = await db()
+      .select()
+      .from(businessDocuments)
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          eq(businessDocuments.id, invoiceId),
+          isNull(businessDocuments.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (!doc) return null;
+
+    const [party] = await db()
+      .select()
+      .from(parties)
+      .where(eq(parties.id, doc.partyId))
+      .limit(1);
+
+    const lines = await db()
+      .select()
+      .from(businessDocumentLines)
+      .where(and(eq(businessDocumentLines.documentId, doc.id), isNull(businessDocumentLines.voidedAt)));
+
+    const { companyProfiles, taxProfiles } = await import('@bookone/db');
+    const [company] = await db()
+      .select()
+      .from(companyProfiles)
+      .where(eq(companyProfiles.tenantId, user.tenantId))
+      .limit(1);
+    const [tax] = await db()
+      .select()
+      .from(taxProfiles)
+      .where(eq(taxProfiles.tenantId, user.tenantId))
+      .limit(1);
+
+    return {
+      doc,
+      party,
+      lines,
+      company,
+      tax,
+    };
+  });
 }
 
 export async function listActiveDiscounts() {

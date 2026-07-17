@@ -18,7 +18,7 @@ export default async function QuotationsPage() {
       <CommercialDocList
         eyebrow="Sales"
         title="Quotations"
-        lead="Price offers before commitment. No journal posts until converted to invoice."
+        lead="Price offers before commitment. Quote → Sales Order (Dispatch Note) → Invoice. No GL until invoice."
         newHref="/sales/quotations/new"
         newLabel="New quotation"
         rows={rows}

@@ -3,14 +3,17 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
+  closePosShift,
   completePosReturn,
   completePosSale,
   lookupPosSale,
   openPosShift,
+  previewShiftZReport,
   type PosBootstrap,
   type PosProductLite,
   type PosTicket,
   type PosTicketSummary,
+  type PosZReport,
 } from '@/app/actions/pos-session';
 
 type CartLine = {
@@ -77,6 +80,12 @@ export function PosTerminal({
   const [mixedCash, setMixedCash] = useState('');
   const [mixedCard, setMixedCard] = useState('');
   const [lastDocId, setLastDocId] = useState<string | null>(null);
+
+  // Shift close / Z
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [zPreview, setZPreview] = useState<PosZReport | null>(null);
+  const [closingCash, setClosingCash] = useState('');
+  const [closeNotes, setCloseNotes] = useState('');
 
   const register = activeRegisters.find((r) => r.id === registerId) ?? activeRegisters[0];
 
@@ -272,6 +281,50 @@ export function PosTerminal({
       }
       setShiftId(res.shiftId);
       setStatus('Shift opened');
+    });
+  }
+
+  function openCloseShift() {
+    if (!shiftId) return;
+    if (cart.length > 0) {
+      setError('Clear or complete the cart before closing the shift.');
+      return;
+    }
+    setError(null);
+    setCloseOpen(true);
+    setZPreview(null);
+    startTransition(async () => {
+      const res = await previewShiftZReport(shiftId);
+      if (!res.ok || !res.report) {
+        setError(res.error ?? 'Could not load Z-report');
+        setCloseOpen(false);
+        return;
+      }
+      setZPreview(res.report);
+      setClosingCash(String(res.report.expectedCash));
+    });
+  }
+
+  function doCloseShift() {
+    if (!shiftId) return;
+    const count = Number(String(closingCash).replace(/[^0-9.]/g, '')) || 0;
+    setError(null);
+    startTransition(async () => {
+      const res = await closePosShift({
+        shiftId,
+        closingCashCount: count,
+        notes: closeNotes || undefined,
+      });
+      if (!res.ok) {
+        setError(res.error ?? 'Close failed');
+        return;
+      }
+      const closedId = shiftId;
+      setCloseOpen(false);
+      setZPreview(null);
+      setShiftId(null);
+      setStatus('Shift closed');
+      window.open(`/pos/z-report/${closedId}?autoprint=1`, '_blank', 'noopener,width=480,height=800');
     });
   }
 
@@ -491,6 +544,11 @@ export function PosTerminal({
           <span className="pos-chip muted">{bootstrap.cashierName}</span>
         </div>
         <div className="pos-top-actions">
+          {shiftId ? (
+            <button type="button" className="pos-link-btn" onClick={openCloseShift} disabled={pending}>
+              Close shift
+            </button>
+          ) : null}
           {lastDocId ? (
             <Link className="pos-link-btn" href={`/pos/receipt/${lastDocId}`} target="_blank">
               Last receipt
@@ -498,6 +556,9 @@ export function PosTerminal({
           ) : null}
           <Link className="pos-link-btn" href="/sales/pos">
             History
+          </Link>
+          <Link className="pos-link-btn" href="/sales/pos/shifts">
+            Shifts
           </Link>
           <Link className="pos-link-btn" href="/">
             Exit
@@ -884,6 +945,112 @@ export function PosTerminal({
 
       {error ? <div className="pos-toast error">{error}</div> : null}
       {status ? <div className="pos-toast ok">{status}</div> : null}
+
+      {closeOpen ? (
+        <div className="pos-pay-backdrop" role="dialog" aria-modal="true">
+          <div className="pos-pay-sheet pos-z-sheet">
+            <header>
+              <h2>Close shift · Z-report</h2>
+              <button type="button" className="pos-btn" onClick={() => setCloseOpen(false)}>
+                Cancel
+              </button>
+            </header>
+            {!zPreview ? (
+              <p className="pos-muted">Loading totals…</p>
+            ) : (
+              <>
+                <p className="pos-muted">
+                  {zPreview.registerCode} — {zPreview.registerName}
+                  <br />
+                  Opened {new Date(zPreview.openedAt).toLocaleString()}
+                </p>
+                <div className="pos-z-grid">
+                  <div>
+                    <span>Sales ({zPreview.salesCount})</span>
+                    <strong>LKR {money(zPreview.salesTotal)}</strong>
+                  </div>
+                  <div>
+                    <span>Returns ({zPreview.returnsCount})</span>
+                    <strong>LKR {money(zPreview.returnsTotal)}</strong>
+                  </div>
+                  <div>
+                    <span>Net</span>
+                    <strong>LKR {money(zPreview.netSales)}</strong>
+                  </div>
+                  <div>
+                    <span>Cash in</span>
+                    <strong>LKR {money(zPreview.cashIn)}</strong>
+                  </div>
+                  <div>
+                    <span>Cash out (refunds)</span>
+                    <strong>LKR {money(zPreview.cashOut)}</strong>
+                  </div>
+                  <div>
+                    <span>Opening float</span>
+                    <strong>LKR {money(zPreview.openingFloat)}</strong>
+                  </div>
+                  <div className="grand">
+                    <span>Expected cash in drawer</span>
+                    <strong>LKR {money(zPreview.expectedCash)}</strong>
+                  </div>
+                </div>
+                <div className="pos-z-tenders">
+                  <p>
+                    Sales tender — Cash {money(zPreview.tenderSales.cash)} · Card{' '}
+                    {money(zPreview.tenderSales.card)} · Bank {money(zPreview.tenderSales.bank)} · Mixed{' '}
+                    {money(zPreview.tenderSales.mixed)}
+                  </p>
+                </div>
+                <div className="pos-cash-block">
+                  <label>
+                    Counted cash in drawer *
+                    <input
+                      value={closingCash}
+                      onChange={(e) => setClosingCash(e.target.value)}
+                      inputMode="decimal"
+                      autoFocus
+                    />
+                  </label>
+                  <p className="pos-change">
+                    Variance{' '}
+                    <strong
+                      className={
+                        (Number(closingCash) || 0) - zPreview.expectedCash === 0
+                          ? ''
+                          : (Number(closingCash) || 0) - zPreview.expectedCash > 0
+                            ? 'pos-var-over'
+                            : 'pos-var-short'
+                      }
+                    >
+                      LKR{' '}
+                      {money(
+                        Math.round(((Number(closingCash) || 0) - zPreview.expectedCash) * 100) / 100,
+                      )}
+                    </strong>
+                  </p>
+                  <label>
+                    Notes
+                    <input
+                      value={closeNotes}
+                      onChange={(e) => setCloseNotes(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </label>
+                </div>
+                {error ? <p className="pos-error">{error}</p> : null}
+                <button
+                  type="button"
+                  className="pos-btn primary pay wide"
+                  disabled={pending}
+                  onClick={doCloseShift}
+                >
+                  {pending ? 'Closing…' : 'Close shift & print Z'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {payOpen ? (
         <div className="pos-pay-backdrop" role="dialog" aria-modal="true">

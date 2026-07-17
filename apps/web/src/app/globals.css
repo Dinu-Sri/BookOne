@@ -3992,3 +3992,35 @@ textarea.input {
   background: #c2410c;
   border-color: #c2410c;
 }
+
+/* POS Z-report close sheet */
+.pos-z-sheet { max-height: min(94vh, 820px); }
+.pos-z-grid {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #0f172a;
+  border: 1px solid #334155;
+}
+.pos-z-grid > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.pos-z-grid strong { color: #e2e8f0; font-variant-numeric: tabular-nums; }
+.pos-z-grid .grand {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #334155;
+  color: #f8fafc;
+  font-size: 14px;
+}
+.pos-z-grid .grand strong { color: #7dd3fc; font-size: 16px; }
+.pos-z-tenders { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
+.pos-var-over { color: #4ade80 !important; }
+.pos-var-short { color: #fca5a5 !important; }

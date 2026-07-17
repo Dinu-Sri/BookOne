@@ -652,6 +652,309 @@ export async function completePosReturn(
   }
 }
 
+function round2(n: number) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function parseMixedCashFromNotes(notes: string | null | undefined): number {
+  if (!notes) return 0;
+  const m = notes.match(/cash\s*=\s*([0-9]+(?:\.[0-9]+)?)/i);
+  return m ? Number(m[1]) || 0 : 0;
+}
+
+export interface PosZReport {
+  shiftId: string;
+  registerId: string;
+  registerCode: string;
+  registerName: string;
+  status: string;
+  openedAt: string;
+  closedAt: string | null;
+  openedByName: string | null;
+  closedByName: string | null;
+  openingFloat: number;
+  closingCashCount: number | null;
+  expectedCash: number;
+  varianceCash: number | null;
+  notes: string | null;
+  salesCount: number;
+  salesTotal: number;
+  returnsCount: number;
+  returnsTotal: number;
+  netSales: number;
+  tenderSales: { cash: number; card: number; bank: number; mixed: number };
+  tenderRefunds: { cash: number; card: number; bank: number };
+  cashIn: number;
+  cashOut: number;
+  tickets: {
+    id: string;
+    documentNumber: string;
+    documentType: string;
+    paymentMode: string | null;
+    total: number;
+    issueDate: string;
+  }[];
+}
+
+/** Build Z-report figures for a shift (open or closed). */
+export async function getShiftZReport(shiftId: string): Promise<PosZReport | null> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const { businessDocuments, users } = await import('@bookone/db');
+
+    const [shift] = await db()
+      .select()
+      .from(posShifts)
+      .where(and(eq(posShifts.tenantId, user.tenantId), eq(posShifts.id, shiftId)))
+      .limit(1);
+    if (!shift) return null;
+
+    const [reg] = await db()
+      .select()
+      .from(posRegisters)
+      .where(eq(posRegisters.id, shift.registerId))
+      .limit(1);
+
+    const [opener] = await db()
+      .select({ name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.id, shift.openedBy))
+      .limit(1);
+    let closerName: string | null = null;
+    if (shift.closedBy) {
+      const [closer] = await db()
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, shift.closedBy))
+        .limit(1);
+      closerName = closer?.name || closer?.email || null;
+    }
+
+    const docs = await db()
+      .select({
+        id: businessDocuments.id,
+        documentNumber: businessDocuments.documentNumber,
+        documentType: businessDocuments.documentType,
+        paymentMode: businessDocuments.paymentMode,
+        total: businessDocuments.total,
+        issueDate: businessDocuments.issueDate,
+        notes: businessDocuments.notes,
+        posMode: businessDocuments.posMode,
+      })
+      .from(businessDocuments)
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          eq(businessDocuments.shiftId, shiftId),
+          isNull(businessDocuments.voidedAt),
+        ),
+      )
+      .orderBy(desc(businessDocuments.createdAt));
+
+    let salesCount = 0;
+    let salesTotal = 0;
+    let returnsCount = 0;
+    let returnsTotal = 0;
+    const tenderSales = { cash: 0, card: 0, bank: 0, mixed: 0 };
+    const tenderRefunds = { cash: 0, card: 0, bank: 0 };
+    let cashIn = 0;
+    let cashOut = 0;
+
+    for (const d of docs) {
+      const total = Number(d.total);
+      const mode = (d.paymentMode || '').toLowerCase();
+      if (d.documentType === 'pos_sale') {
+        salesCount += 1;
+        salesTotal = round2(salesTotal + total);
+        if (mode === 'cash') {
+          tenderSales.cash = round2(tenderSales.cash + total);
+          cashIn = round2(cashIn + total);
+        } else if (mode === 'card') {
+          tenderSales.card = round2(tenderSales.card + total);
+        } else if (mode === 'bank') {
+          tenderSales.bank = round2(tenderSales.bank + total);
+        } else if (mode === 'mixed') {
+          tenderSales.mixed = round2(tenderSales.mixed + total);
+          const cashPart = parseMixedCashFromNotes(d.notes);
+          cashIn = round2(cashIn + cashPart);
+        } else {
+          // default unknown → cash for float safety
+          tenderSales.cash = round2(tenderSales.cash + total);
+          cashIn = round2(cashIn + total);
+        }
+      } else if (d.documentType === 'sales_return' || d.posMode === 'return') {
+        returnsCount += 1;
+        returnsTotal = round2(returnsTotal + total);
+        if (mode === 'card') {
+          tenderRefunds.card = round2(tenderRefunds.card + total);
+        } else if (mode === 'bank') {
+          tenderRefunds.bank = round2(tenderRefunds.bank + total);
+        } else {
+          tenderRefunds.cash = round2(tenderRefunds.cash + total);
+          cashOut = round2(cashOut + total);
+        }
+      }
+    }
+
+    const openingFloat = Number(shift.openingFloat);
+    const expectedCash = round2(openingFloat + cashIn - cashOut);
+    const closingCashCount =
+      shift.closingCashCount != null ? Number(shift.closingCashCount) : null;
+    const varianceCash =
+      shift.varianceCash != null
+        ? Number(shift.varianceCash)
+        : closingCashCount != null
+          ? round2(closingCashCount - expectedCash)
+          : null;
+
+    return {
+      shiftId: shift.id,
+      registerId: shift.registerId,
+      registerCode: reg?.code ?? '—',
+      registerName: reg?.name ?? 'Register',
+      status: shift.status,
+      openedAt: shift.openedAt.toISOString(),
+      closedAt: shift.closedAt ? shift.closedAt.toISOString() : null,
+      openedByName: opener?.name || opener?.email || null,
+      closedByName: closerName,
+      openingFloat,
+      closingCashCount,
+      expectedCash,
+      varianceCash,
+      notes: shift.notes,
+      salesCount,
+      salesTotal,
+      returnsCount,
+      returnsTotal,
+      netSales: round2(salesTotal - returnsTotal),
+      tenderSales,
+      tenderRefunds,
+      cashIn,
+      cashOut,
+      tickets: docs.map((d) => ({
+        id: d.id,
+        documentNumber: d.documentNumber,
+        documentType: d.documentType,
+        paymentMode: d.paymentMode,
+        total: Number(d.total),
+        issueDate: d.issueDate,
+      })),
+    };
+  });
+}
+
+export async function previewShiftZReport(shiftId: string): Promise<{
+  ok: boolean;
+  error?: string;
+  report?: PosZReport;
+}> {
+  try {
+    const report = await getShiftZReport(shiftId);
+    if (!report) return { ok: false, error: 'Shift not found.' };
+    return { ok: true, report };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not load Z-report.' };
+  }
+}
+
+export async function closePosShift(input: {
+  shiftId: string;
+  closingCashCount: number;
+  notes?: string;
+}): Promise<{ ok: boolean; error?: string; report?: PosZReport }> {
+  try {
+    const user = await requireTenantContext();
+    const count = Math.max(0, Number(input.closingCashCount) || 0);
+
+    const preview = await getShiftZReport(input.shiftId);
+    if (!preview) return { ok: false, error: 'Shift not found.' };
+    if (preview.status !== 'open') return { ok: false, error: 'Shift is already closed.' };
+
+    const expected = preview.expectedCash;
+    const variance = round2(count - expected);
+
+    await withTenantContext(user.tenantId, async () => {
+      await db()
+        .update(posShifts)
+        .set({
+          status: 'closed',
+          closedBy: user.id,
+          closedAt: new Date(),
+          closingCashCount: count.toFixed(2),
+          expectedCash: expected.toFixed(2),
+          varianceCash: variance.toFixed(2),
+          notes: input.notes?.trim() || preview.notes,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(posShifts.tenantId, user.tenantId),
+            eq(posShifts.id, input.shiftId),
+            eq(posShifts.status, 'open'),
+          ),
+        );
+    });
+
+    const report = await getShiftZReport(input.shiftId);
+    revalidatePath('/pos');
+    revalidatePath('/sales/pos');
+    revalidatePath('/sales/pos/shifts');
+    return { ok: true, report: report ?? undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not close shift.' };
+  }
+}
+
+export async function listPosShifts(limit = 40): Promise<
+  {
+    id: string;
+    registerCode: string;
+    registerName: string;
+    status: string;
+    openedAt: string;
+    closedAt: string | null;
+    openingFloat: number;
+    closingCashCount: number | null;
+    expectedCash: number | null;
+    varianceCash: number | null;
+  }[]
+> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const rows = await db()
+      .select({
+        id: posShifts.id,
+        status: posShifts.status,
+        openedAt: posShifts.openedAt,
+        closedAt: posShifts.closedAt,
+        openingFloat: posShifts.openingFloat,
+        closingCashCount: posShifts.closingCashCount,
+        expectedCash: posShifts.expectedCash,
+        varianceCash: posShifts.varianceCash,
+        registerCode: posRegisters.code,
+        registerName: posRegisters.name,
+      })
+      .from(posShifts)
+      .leftJoin(posRegisters, eq(posRegisters.id, posShifts.registerId))
+      .where(eq(posShifts.tenantId, user.tenantId))
+      .orderBy(desc(posShifts.openedAt))
+      .limit(limit);
+
+    return rows.map((r) => ({
+      id: r.id,
+      registerCode: r.registerCode ?? '—',
+      registerName: r.registerName ?? 'Register',
+      status: r.status,
+      openedAt: r.openedAt.toISOString(),
+      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
+      openingFloat: Number(r.openingFloat),
+      closingCashCount: r.closingCashCount != null ? Number(r.closingCashCount) : null,
+      expectedCash: r.expectedCash != null ? Number(r.expectedCash) : null,
+      varianceCash: r.varianceCash != null ? Number(r.varianceCash) : null,
+    }));
+  });
+}
+
 export async function getPosReceiptData(saleId: string) {
   const user = await requireTenantContext();
   return withTenantContext(user.tenantId, async () => {

@@ -22,6 +22,11 @@ export default async function PosHistoryPage() {
           <div className="party-search-form">
             <input className="input party-search" placeholder="POS ticket history…" disabled />
           </div>
+          <Link href="/sales/pos/shifts">
+            <Button variant="secondary" type="button">
+              Shifts / Z
+            </Button>
+          </Link>
           <Link href="/pos">
             <Button variant="primary" type="button">
               Open POS terminal

@@ -44,7 +44,7 @@ export function StatusBadge({ status }: { status: string }) {
         ? 'danger'
         : status === 'draft' || status === 'open' || status === 'sent'
           ? 'info'
-          : status === 'converted' || status === 'partial'
+          : status === 'converted' || status === 'partial' || status === 'closed'
             ? 'warning'
             : 'neutral';
   return <Badge tone={tone}>{status}</Badge>;

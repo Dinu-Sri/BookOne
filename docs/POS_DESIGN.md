@@ -165,9 +165,13 @@ Print:
 - Post `sales_return` + restock + refund tender (cash/card/bank)  
 
 
-### Phase 3 — shift close + Z
+### Phase 3 — shift close + Z ✅
 
-- Cash count, variance, Z-report by register  
+- Close shift from POS top bar  
+- Expected cash = float + cash sales − cash refunds  
+- Counted cash + variance  
+- Printable Z-report `/pos/z-report/[shiftId]`  
+- Office list `/sales/pos/shifts`  
 
 ### Phase 4 — hardware polish
 

@@ -2895,24 +2895,21 @@ textarea.input {
   line-height: 1;
 }
 
-.product-img-zoom {
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 50;
-  width: 220px;
-  height: 220px;
+/* Fixed portal preview — never clipped by table/card overflow */
+.product-img-zoom-portal {
+  position: fixed;
+  z-index: 200;
   padding: 6px;
   border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--surface);
   box-shadow: var(--shadow-md);
   pointer-events: none;
+  box-sizing: border-box;
   animation: product-zoom-in 120ms ease;
 }
 
-.product-img-zoom img {
+.product-img-zoom-portal img {
   display: block;
   width: 100% !important;
   height: 100% !important;
@@ -2922,21 +2919,14 @@ textarea.input {
   border-radius: 10px;
 }
 
-.product-snapshot-hover .product-img-zoom {
-  left: auto;
-  right: calc(100% + 12px);
-  width: 280px;
-  height: 280px;
-}
-
 @keyframes product-zoom-in {
   from {
     opacity: 0;
-    transform: translateY(-50%) scale(0.96);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(-50%) scale(1);
+    transform: scale(1);
   }
 }
 

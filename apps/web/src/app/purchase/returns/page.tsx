@@ -19,13 +19,11 @@ export default async function PurchaseReturnsPage() {
   return (
     <BookOneShell active="Purchase Returns" tenant={tenant}>
       <CommercialDocList
-        eyebrow="Purchase"
-        title="Purchase returns"
-        lead="Return goods to vendor. Debits AP and reduces inventory/expense."
         newHref="/purchase/returns/new"
         newLabel="New purchase return"
         rows={rows}
         emptyTitle="No purchase returns yet"
+        searchPlaceholder="Search purchase returns…"
       />
     </BookOneShell>
   );

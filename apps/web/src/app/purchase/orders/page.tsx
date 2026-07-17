@@ -16,13 +16,11 @@ export default async function PurchaseOrdersPage() {
   return (
     <BookOneShell active="Purchase Orders" tenant={tenant}>
       <CommercialDocList
-        eyebrow="Purchase"
-        title="Purchase orders"
-        lead="Vendor orders before billing. No GL until converted to a vendor bill."
         newHref="/purchase/orders/new"
         newLabel="New purchase order"
         rows={rows}
         emptyTitle="No purchase orders yet"
+        searchPlaceholder="Search purchase orders…"
         convertTo="purchase"
         convertLabel="To purchase"
       />

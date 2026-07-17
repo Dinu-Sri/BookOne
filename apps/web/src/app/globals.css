@@ -339,6 +339,7 @@ img {
 
 .is-collapsed .sidebar-label,
 .is-collapsed .nav-item span,
+.is-collapsed .nav-item-text,
 .is-collapsed .nav-item em,
 .is-collapsed .suite-trigger span,
 .is-collapsed .suite-chevron,
@@ -455,6 +456,44 @@ img {
   min-height: 36px;
   padding: 8px 9px;
   font-size: 13px;
+}
+
+.nav-child-multi {
+  min-height: 46px;
+  align-items: flex-start;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.nav-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.nav-item-label {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-item-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-item.active .nav-item-sub,
+.nav-item:hover .nav-item-sub {
+  color: color-mix(in srgb, var(--brand-ink) 72%, var(--ink-soft));
 }
 
 .nav-item em {
@@ -2675,6 +2714,221 @@ textarea.input {
   font-size: 13px;
   color: var(--ink-muted);
   font-weight: 600;
+}
+
+/* ===== Commercial document form (quote / order / invoice) ===== */
+.doc-form-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 120px);
+  max-height: calc(100vh - 100px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.doc-form-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doc-form-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: end;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.doc-form-header .field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  margin-bottom: 3px;
+}
+
+.doc-form-header .field {
+  margin: 0;
+  min-width: 0;
+}
+
+.doc-form-header .field-span-2 {
+  grid-column: span 2;
+}
+
+.doc-lines-card {
+  flex: 1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.doc-lines-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.doc-lines-scroll {
+  flex: 1;
+  min-height: 120px;
+  max-height: none;
+  overflow: auto;
+}
+
+.doc-lines-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.doc-lines-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-muted);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.doc-lines-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.doc-lines-table .input {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.doc-lines-table .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding-right: 10px;
+  min-width: 88px;
+}
+
+.doc-lines-table .col-qty {
+  width: 72px;
+}
+
+.doc-lines-table .col-price {
+  width: 110px;
+}
+
+.doc-lines-table .col-amt {
+  width: 100px;
+}
+
+.doc-lines-table .col-item {
+  width: 160px;
+}
+
+.doc-form-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.7fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.doc-notes .input {
+  min-height: 72px;
+}
+
+.doc-totals {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--surface-muted);
+  display: grid;
+  gap: 6px;
+}
+
+.doc-totals-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+.doc-totals-row strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-totals-row.is-total {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.doc-totals-row.is-total strong {
+  font-size: 16px;
+  color: var(--brand-ink);
+}
+
+.doc-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-muted);
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .doc-form-header {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .doc-form-header .field-span-2 {
+    grid-column: 1 / -1;
+  }
+
+  .doc-form-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .doc-form-shell {
+    max-height: none;
+    min-height: auto;
+  }
+
+  .doc-lines-card {
+    min-height: 240px;
+  }
 }
 
 .party-pagination-actions {

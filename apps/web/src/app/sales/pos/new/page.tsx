@@ -16,12 +16,10 @@ export default async function NewPosSalePage() {
   return (
     <BookOneShell active="POS" tenant={tenant}>
       <CommercialDocNewForm
-        eyebrow="Sales"
-        title="New POS sale"
-        lead="Walk-up sale settled immediately to cash, bank, or card clearing."
         backHref="/sales/pos"
+        backLabel="POS"
         documentType="pos_sale"
-        partyLabel="Customer (optional name)"
+        partyLabel="Customer"
         partyPlaceholder="Walk-in customer"
         products={form.products}
         partyOptions={form.partyOptions}
@@ -29,6 +27,7 @@ export default async function NewPosSalePage() {
         showPaymentAccount
         paymentAccounts={form.paymentAccounts}
         defaultPaymentCode="1000"
+        submitLabel="Save POS sale"
       />
     </BookOneShell>
   );

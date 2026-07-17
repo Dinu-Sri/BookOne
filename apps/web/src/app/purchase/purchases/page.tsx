@@ -19,13 +19,11 @@ export default async function PurchasesPage() {
   return (
     <BookOneShell active="Purchases" tenant={tenant}>
       <CommercialDocList
-        eyebrow="Purchase"
-        title="Purchases"
-        lead="Local vendor purchases. Posts Accounts Payable and inventory/expense — same layout as Sales invoices."
         newHref="/purchase/purchases/new"
         newLabel="New purchase"
         rows={rows}
         emptyTitle="No purchases yet"
+        searchPlaceholder="Search purchases…"
       />
     </BookOneShell>
   );

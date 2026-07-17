@@ -16,16 +16,15 @@ export default async function NewSalesOrderPage() {
   return (
     <BookOneShell active="Sales Orders" tenant={tenant}>
       <CommercialDocNewForm
-        eyebrow="Sales"
-        title="New sales order"
-        lead="Confirm a customer order. Convert to invoice to post accounting."
         backHref="/sales/orders"
+        backLabel="Sales orders"
         documentType="sales_order"
         partyLabel="Customer"
         partyPlaceholder="Customer name"
         products={form.products}
         partyOptions={form.partyOptions}
         discounts={form.discounts}
+        submitLabel="Save sales order"
       />
     </BookOneShell>
   );

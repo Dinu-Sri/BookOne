@@ -16,10 +16,8 @@ export default async function NewPurchaseReturnPage() {
   return (
     <BookOneShell active="Purchase Returns" tenant={tenant}>
       <CommercialDocNewForm
-        eyebrow="Purchase"
-        title="New purchase return"
-        lead="Reverse a purchase: reduce AP and stock (or expense)."
         backHref="/purchase/returns"
+        backLabel="Purchase returns"
         documentType="purchase_return"
         partyLabel="Vendor"
         partyPlaceholder="Vendor name"
@@ -27,6 +25,7 @@ export default async function NewPurchaseReturnPage() {
         partyOptions={form.partyOptions}
         showExpenseAccount
         expenseAccounts={form.expenseAccounts}
+        submitLabel="Save purchase return"
       />
     </BookOneShell>
   );

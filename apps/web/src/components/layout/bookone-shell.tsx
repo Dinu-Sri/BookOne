@@ -34,6 +34,8 @@ import { signOutCurrentUser } from '@/app/actions/auth-session';
 
 export interface NavItem {
   label: string;
+  /** Optional second line (e.g. Dispatch Note) — nowrap, smaller */
+  subtitle?: string;
   icon: typeof Bell;
   href?: string;
 }
@@ -76,7 +78,7 @@ const navSuites: NavSuite[] = [
     icon: ShoppingCart,
     items: [
       { label: 'Quotations', icon: FileText, href: '/sales/quotations' },
-      { label: 'Sales Orders (Dispatch Note)', icon: ClipboardList, href: '/sales/orders' },
+      { label: 'Sales Orders', subtitle: 'Dispatch Note', icon: ClipboardList, href: '/sales/orders' },
       { label: 'Sales Invoices', icon: ReceiptText, href: '/sales/invoices' },
       { label: 'Sales Returns', icon: BookOpenCheck, href: '/sales/returns' },
       { label: 'POS', icon: ShoppingCart, href: '/sales/pos' },
@@ -253,28 +255,43 @@ export function BookOneShell({
                   </button>
                   <div
                     className="suite-panel"
-                    style={{ maxHeight: isOpen ? `${suite.items.length * 44 + 8}px` : '0px' }}
+                    style={{
+                      maxHeight: isOpen
+                        ? `${suite.items.reduce((h, it) => h + (it.subtitle ? 52 : 40), 12)}px`
+                        : '0px',
+                    }}
                   >
                     <div className="nav-list" aria-label={`${suite.label} navigation`}>
                       {suite.items.map((item) => {
+                        const isActive = item.label === active;
+                        const title = item.subtitle ? `${item.label} (${item.subtitle})` : item.label;
                         const content = (
                           <>
                             <item.icon size={16} />
-                            <span>{item.label}</span>
+                            <span className="nav-item-text">
+                              <span className="nav-item-label">{item.label}</span>
+                              {item.subtitle ? (
+                                <span className="nav-item-sub">{item.subtitle}</span>
+                              ) : null}
+                            </span>
                             {!item.href ? <em>Soon</em> : null}
                           </>
                         );
                         return item.href ? (
                           <Link
-                            className={`nav-item nav-child ${item.label === active ? 'active' : ''}`}
+                            className={`nav-item nav-child ${item.subtitle ? 'nav-child-multi' : ''} ${isActive ? 'active' : ''}`}
                             href={item.href}
                             key={item.label}
-                            title={item.label}
+                            title={title}
                           >
                             {content}
                           </Link>
                         ) : (
-                          <span className="nav-item nav-child disabled" key={item.label} title={`${item.label} coming soon`}>
+                          <span
+                            className={`nav-item nav-child ${item.subtitle ? 'nav-child-multi' : ''} disabled`}
+                            key={item.label}
+                            title={`${title} coming soon`}
+                          >
                             {content}
                           </span>
                         );

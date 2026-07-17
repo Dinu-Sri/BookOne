@@ -23,12 +23,12 @@ export default async function SalesInvoicesPage() {
       <div className="workspace party-workspace">
         <div className="party-toolbar">
           <div className="party-search-form">
-            <span
+            <input
               className="input party-search"
-              style={{ display: 'flex', alignItems: 'center', color: 'var(--ink-muted)' }}
-            >
-              Invoices post to the ledger · Tax invoices use IRD print layout
-            </span>
+              placeholder="Search invoices…"
+              aria-label="Search"
+              disabled
+            />
           </div>
           <Link href="/sales/invoices/new">
             <Button variant="primary" type="button">
@@ -41,7 +41,7 @@ export default async function SalesInvoicesPage() {
             {rows.length === 0 ? (
               <div className="empty-state" style={{ padding: 28 }}>
                 <h3>No sales invoices yet</h3>
-                <p>Create directly or convert from sales orders (dispatch notes).</p>
+                <p>Create directly or convert from sales orders.</p>
               </div>
             ) : (
               <div className="table-wrap">
@@ -64,11 +64,13 @@ export default async function SalesInvoicesPage() {
                         <td>
                           <strong>{row.taxInvoiceNumber || row.documentNumber}</strong>
                           {row.taxInvoiceNumber ? (
-                            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{row.documentNumber}</div>
+                            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                              {row.documentNumber}
+                            </div>
                           ) : null}
                         </td>
                         <td>
-                          {row.invoiceKind === 'tax_invoice' ? 'TAX INVOICE' : 'Commercial'}
+                          {row.invoiceKind === 'tax_invoice' ? 'TAX' : 'Commercial'}
                           <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
                             {row.saleChannel === 'export' ? 'Export' : 'Local'}
                           </div>

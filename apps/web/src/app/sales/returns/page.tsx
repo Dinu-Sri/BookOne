@@ -16,13 +16,11 @@ export default async function SalesReturnsPage() {
   return (
     <BookOneShell active="Sales Returns" tenant={tenant}>
       <CommercialDocList
-        eyebrow="Sales"
-        title="Sales returns"
-        lead="Posts to Sales Returns (4100), reduces AR, and restocks inventory."
         newHref="/sales/returns/new"
         newLabel="New return"
         rows={rows}
         emptyTitle="No sales returns yet"
+        searchPlaceholder="Search returns…"
       />
     </BookOneShell>
   );

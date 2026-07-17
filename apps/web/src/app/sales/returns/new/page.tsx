@@ -16,15 +16,14 @@ export default async function NewSalesReturnPage() {
   return (
     <BookOneShell active="Sales Returns" tenant={tenant}>
       <CommercialDocNewForm
-        eyebrow="Sales"
-        title="New sales return"
-        lead="Reverse revenue via account 4100 and restock stocked products."
         backHref="/sales/returns"
+        backLabel="Sales returns"
         documentType="sales_return"
         partyLabel="Customer"
         partyPlaceholder="Customer name"
         products={form.products}
         partyOptions={form.partyOptions}
+        submitLabel="Save return"
       />
     </BookOneShell>
   );

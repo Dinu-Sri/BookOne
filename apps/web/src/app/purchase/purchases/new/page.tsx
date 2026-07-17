@@ -16,10 +16,8 @@ export default async function NewPurchasePage() {
   return (
     <BookOneShell active="Purchases" tenant={tenant}>
       <CommercialDocNewForm
-        eyebrow="Purchase"
-        title="New purchase"
-        lead="Local purchase bill. Stocked products increase inventory (5100) and AP (2100)."
         backHref="/purchase/purchases"
+        backLabel="Purchases"
         documentType="purchase"
         partyLabel="Vendor"
         partyPlaceholder="Vendor name"
@@ -27,6 +25,7 @@ export default async function NewPurchasePage() {
         partyOptions={form.partyOptions}
         showExpenseAccount
         expenseAccounts={form.expenseAccounts}
+        submitLabel="Save purchase"
       />
     </BookOneShell>
   );

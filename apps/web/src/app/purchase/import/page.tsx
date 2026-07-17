@@ -19,13 +19,11 @@ export default async function ImportPurchasesPage() {
   return (
     <BookOneShell active="Import Purchases" tenant={tenant}>
       <CommercialDocList
-        eyebrow="Purchase"
-        title="Import purchases"
-        lead="Overseas/import stock receipts. Posts inventory asset and AP for accounting accuracy tests."
         newHref="/purchase/import/new"
         newLabel="New import purchase"
         rows={rows}
         emptyTitle="No import purchases yet"
+        searchPlaceholder="Search import purchases…"
       />
     </BookOneShell>
   );

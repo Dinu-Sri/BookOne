@@ -60,6 +60,19 @@ async function init() {
     console.log('(demo products seed note)', msg);
   }
 
+  // Demo sales docs (12 quotes, 12 orders, 12 invoices) — skip if already present
+  console.log('Seeding demo sales documents...');
+  try {
+    execSync('pnpm exec tsx scripts/seed-demo-sales-docs.ts', {
+      cwd: '/app',
+      stdio: 'inherit',
+      env: { ...process.env, DATABASE_URL: DATABASE_URL! },
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.log('(demo sales docs seed note)', msg);
+  }
+
   console.log('Init complete.');
   process.exit(0);
 }

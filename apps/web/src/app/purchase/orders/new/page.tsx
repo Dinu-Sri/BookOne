@@ -16,10 +16,8 @@ export default async function NewPurchaseOrderPage() {
   return (
     <BookOneShell active="Purchase Orders" tenant={tenant}>
       <CommercialDocNewForm
-        eyebrow="Purchase"
-        title="New purchase order"
-        lead="Order goods or services from a vendor."
         backHref="/purchase/orders"
+        backLabel="Purchase orders"
         documentType="purchase_order"
         partyLabel="Vendor"
         partyPlaceholder="Vendor name"
@@ -27,6 +25,7 @@ export default async function NewPurchaseOrderPage() {
         partyOptions={form.partyOptions}
         showExpenseAccount
         expenseAccounts={form.expenseAccounts}
+        submitLabel="Save purchase order"
       />
     </BookOneShell>
   );

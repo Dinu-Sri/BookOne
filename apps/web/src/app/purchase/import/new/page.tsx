@@ -16,10 +16,8 @@ export default async function NewImportPurchasePage() {
   return (
     <BookOneShell active="Import Purchases" tenant={tenant}>
       <CommercialDocNewForm
-        eyebrow="Purchase"
-        title="New import purchase"
-        lead="Import shipment. Always capitalizes to Inventory (5100) with AP (2100)."
         backHref="/purchase/import"
+        backLabel="Import purchases"
         documentType="import_purchase"
         partyLabel="Supplier / agent"
         partyPlaceholder="Overseas supplier"
@@ -27,6 +25,7 @@ export default async function NewImportPurchasePage() {
         partyOptions={form.partyOptions}
         showExpenseAccount
         expenseAccounts={form.expenseAccounts}
+        submitLabel="Save import purchase"
       />
     </BookOneShell>
   );

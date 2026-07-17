@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { listDiscounts } from '@/app/actions/discounts';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { formatLKR, ModulePageHeader, StatusBadge } from '@/components/module/list-page';
+import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { Button, Card } from '@/components/ui/bookone-ui';
 
 export default async function DiscountsPage() {
@@ -17,25 +17,23 @@ export default async function DiscountsPage() {
 
   return (
     <BookOneShell active="Discounts" tenant={tenant}>
-      <div className="workspace">
-        <ModulePageHeader
-          eyebrow="Sales"
-          title="Discounts"
-          lead="Reusable discount rules applied on quotations, orders, invoices, and POS."
-          newHref="/sales/discounts/new"
-          newLabel="New discount"
-        />
+      <div className="workspace party-workspace">
+        <div className="party-toolbar">
+          <div className="party-search-form">
+            <input className="input party-search" placeholder="Search discounts…" disabled />
+          </div>
+          <Link href="/sales/discounts/new">
+            <Button variant="primary" type="button">
+              New discount
+            </Button>
+          </Link>
+        </div>
         <Card>
           <div className="card-body" style={{ padding: 0 }}>
             {rows.length === 0 ? (
-              <div className="empty-state" style={{ padding: 32 }}>
+              <div className="empty-state" style={{ padding: 28 }}>
                 <h3>No discounts yet</h3>
                 <p>Define percent or fixed discounts for sales documents.</p>
-                <div style={{ marginTop: 12 }}>
-                  <Link href="/sales/discounts/new">
-                    <Button variant="primary" type="button">New discount</Button>
-                  </Link>
-                </div>
               </div>
             ) : (
               <div className="table-wrap">
@@ -53,11 +51,15 @@ export default async function DiscountsPage() {
                   <tbody>
                     {rows.map((r) => (
                       <tr key={r.id}>
-                        <td><strong>{r.name}</strong></td>
+                        <td>
+                          <strong>{r.name}</strong>
+                        </td>
                         <td>{r.code ?? '—'}</td>
                         <td>{r.discountType}</td>
                         <td>{r.discountType === 'percent' ? `${r.value}%` : formatLKR(r.value)}</td>
-                        <td><StatusBadge status={r.isActive === '1' ? 'active' : 'void'} /></td>
+                        <td>
+                          <StatusBadge status={r.isActive === '1' ? 'active' : 'void'} />
+                        </td>
                         <td>{[r.startsOn, r.endsOn].filter(Boolean).join(' → ') || '—'}</td>
                       </tr>
                     ))}

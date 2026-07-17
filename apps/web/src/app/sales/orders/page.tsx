@@ -22,16 +22,16 @@ export default async function SalesOrdersPage() {
   const openRows = rows.filter((r) => r.status !== 'fully_invoiced' && r.status !== 'converted');
 
   return (
-    <BookOneShell active="Sales Orders (Dispatch Note)" tenant={tenant}>
+    <BookOneShell active="Sales Orders" tenant={tenant}>
       <div className="workspace party-workspace">
         <div className="party-toolbar">
           <div className="party-search-form">
-            <span
+            <input
               className="input party-search"
-              style={{ display: 'flex', alignItems: 'center', color: 'var(--ink-muted)' }}
-            >
-              Sales Orders (Dispatch Note) — no GL until invoiced
-            </span>
+              placeholder="Search sales orders…"
+              aria-label="Search"
+              disabled
+            />
           </div>
           <Link href="/sales/orders/new">
             <Button variant="primary" type="button">
@@ -65,7 +65,8 @@ export default async function SalesOrdersPage() {
                       </thead>
                       <tbody>
                         {rows.map((row) => {
-                          const canInvoice = row.status !== 'fully_invoiced' && row.status !== 'converted';
+                          const canInvoice =
+                            row.status !== 'fully_invoiced' && row.status !== 'converted';
                           return (
                             <tr key={row.id}>
                               <td>
@@ -103,7 +104,7 @@ export default async function SalesOrdersPage() {
                   </div>
                   {openRows.length > 0 ? (
                     <div className="party-pagination">
-                      <span>Select orders for the same customer, then combine into one invoice.</span>
+                      <span>Select same-customer orders → one invoice</span>
                       <Button variant="primary" type="submit">
                         Create invoice from selected
                       </Button>
@@ -111,7 +112,6 @@ export default async function SalesOrdersPage() {
                   ) : null}
                 </form>
 
-                {/* Standalone convert forms (avoid nested forms) */}
                 {openRows.map((row) => (
                   <form
                     key={row.id}

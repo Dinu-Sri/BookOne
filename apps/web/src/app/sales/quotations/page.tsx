@@ -16,13 +16,11 @@ export default async function QuotationsPage() {
   return (
     <BookOneShell active="Quotations" tenant={tenant}>
       <CommercialDocList
-        eyebrow="Sales"
-        title="Quotations"
-        lead="Price offers before commitment. Quote → Sales Order (Dispatch Note) → Invoice. No GL until invoice."
         newHref="/sales/quotations/new"
         newLabel="New quotation"
         rows={rows}
         emptyTitle="No quotations yet"
+        searchPlaceholder="Search quotations…"
         convertTo="sales_order"
         convertLabel="To order"
       />

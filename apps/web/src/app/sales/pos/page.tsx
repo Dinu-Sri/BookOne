@@ -16,13 +16,11 @@ export default async function PosPage() {
   return (
     <BookOneShell active="POS" tenant={tenant}>
       <CommercialDocList
-        eyebrow="Sales"
-        title="POS sales"
-        lead="Immediate cash/card sales — settled on post with optional COGS."
         newHref="/sales/pos/new"
         newLabel="New POS sale"
         rows={rows}
         emptyTitle="No POS sales yet"
+        searchPlaceholder="Search POS…"
       />
     </BookOneShell>
   );

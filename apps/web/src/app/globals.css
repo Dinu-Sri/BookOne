@@ -4024,3 +4024,133 @@ textarea.input {
 .pos-z-tenders { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
 .pos-var-over { color: #4ade80 !important; }
 .pos-var-short { color: #fca5a5 !important; }
+
+/* Customer-facing display */
+.cfd-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0b1220;
+  color: #f8fafc;
+  font-family: var(--font-sans);
+}
+.cfd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #111827;
+  border-bottom: 1px solid #334155;
+}
+.cfd-head strong { display: block; font-size: 20px; }
+.cfd-head span { display: block; color: #94a3b8; font-size: 13px; margin-top: 2px; }
+.cfd-head em {
+  font-style: normal;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cfd-idle {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 24px;
+}
+.cfd-idle h1 { font-size: clamp(28px, 5vw, 42px); margin: 0; }
+.cfd-idle p { color: #94a3b8; font-size: 18px; margin: 0; }
+.cfd-idle.thankyou h1 { color: #4ade80; }
+.cfd-total {
+  font-size: clamp(32px, 6vw, 48px) !important;
+  font-weight: 800;
+  color: #7dd3fc !important;
+}
+.cfd-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.cfd-mode {
+  padding: 8px 16px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  background: #0284c7;
+  color: #fff;
+}
+.cfd-mode.return { background: #c2410c; }
+.cfd-lines {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.cfd-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #1e293b;
+  border: 1px solid #334155;
+}
+.cfd-line strong { display: block; font-size: 18px; }
+.cfd-line span { display: block; color: #94a3b8; margin-top: 4px; font-size: 14px; }
+.cfd-line em {
+  font-style: normal;
+  font-size: 20px;
+  font-weight: 800;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+.cfd-empty { color: #64748b; font-size: 16px; }
+.cfd-foot {
+  padding: 16px 20px 24px;
+  background: #0f172a;
+  border-top: 1px solid #334155;
+  display: grid;
+  gap: 8px;
+}
+.cfd-foot > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.cfd-foot strong { color: #f8fafc; }
+.cfd-foot .grand {
+  font-size: 22px;
+  color: #f8fafc;
+  padding-top: 10px;
+  border-top: 1px solid #334155;
+  margin-top: 4px;
+}
+.cfd-foot .grand strong {
+  font-size: clamp(24px, 4vw, 32px);
+  color: #7dd3fc;
+}
+
+/* POS hardware bar */
+.pos-hw-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 12px;
+  background: #0b1220;
+  border-bottom: 1px solid #1e293b;
+  font-size: 12px;
+}
+.pos-hw-bar .pos-hw-status {
+  color: #94a3b8;
+  font-weight: 650;
+  margin-right: 4px;
+}
+.pos-hw-bar .pos-hw-status.ok { color: #4ade80; }
+.pos-hw-bar .pos-hw-status.warn { color: #fbbf24; }
+.pos-link-btn.small {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}

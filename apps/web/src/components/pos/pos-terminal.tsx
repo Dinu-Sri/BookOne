@@ -6,6 +6,7 @@ import {
   closePosShift,
   completePosReturn,
   completePosSale,
+  getPosReceiptData,
   lookupPosSale,
   openPosShift,
   previewShiftZReport,
@@ -15,6 +16,19 @@ import {
   type PosTicketSummary,
   type PosZReport,
 } from '@/app/actions/pos-session';
+import {
+  connectThermalPrinter,
+  getThermalStatus,
+  isWebSerialSupported,
+  openCashDrawer,
+  printThermalReceipt,
+  printThermalZReport,
+  type ThermalStatus,
+} from '@/lib/pos/thermal-bridge';
+import {
+  openCustomerDisplayWindow,
+  publishPosDisplay,
+} from '@/lib/pos/customer-display-channel';
 
 type CartLine = {
   key: string;
@@ -87,7 +101,17 @@ export function PosTerminal({
   const [closingCash, setClosingCash] = useState('');
   const [closeNotes, setCloseNotes] = useState('');
 
+  // Hardware
+  const [thermal, setThermal] = useState<ThermalStatus>(() =>
+    typeof window === 'undefined'
+      ? { supported: false, connected: false, baudRate: 9600, label: '…' }
+      : getThermalStatus(),
+  );
+  const [hwBusy, setHwBusy] = useState(false);
+  const [openDrawerOnCash, setOpenDrawerOnCash] = useState(true);
+
   const register = activeRegisters.find((r) => r.id === registerId) ?? activeRegisters[0];
+  const registerLabel = register ? `${register.code} · ${register.name}` : 'POS';
 
   useEffect(() => {
     const open = bootstrap.openShifts.find((s) => s.registerId === registerId);
@@ -97,6 +121,58 @@ export function PosTerminal({
   useEffect(() => {
     if (!payOpen) searchRef.current?.focus();
   }, [payOpen, cart.length, mode]);
+
+  function refreshThermalStatus() {
+    setThermal(getThermalStatus());
+  }
+
+  async function handleConnectPrinter() {
+    setHwBusy(true);
+    setError(null);
+    const res = await connectThermalPrinter({ baudRate: 9600 });
+    refreshThermalStatus();
+    setHwBusy(false);
+    if (!res.ok) setError(res.error ?? 'Connect failed');
+    else setStatus('Thermal printer connected');
+  }
+
+  async function handleOpenDrawer() {
+    setHwBusy(true);
+    setError(null);
+    const res = await openCashDrawer();
+    refreshThermalStatus();
+    setHwBusy(false);
+    if (!res.ok) setError(res.error ?? 'Drawer failed');
+    else setStatus('Drawer opened');
+  }
+
+  function handleOpenCustomerDisplay() {
+    const w = openCustomerDisplayWindow();
+    if (!w) setError('Pop-up blocked — allow pop-ups for customer display');
+    else {
+      setStatus('Customer display opened — drag to second screen');
+      // re-publish current state shortly after open
+      window.setTimeout(() => {
+        publishPosDisplay({
+          type: 'cart',
+          storeName: bootstrap.tenantName,
+          registerLabel,
+          mode,
+          lines: cart.map((l) => ({
+            description: l.description,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            amount: lineTotal(l),
+          })),
+          subtotal,
+          discount: discountAmt,
+          tax: vat,
+          total,
+          updatedAt: Date.now(),
+        });
+      }, 400);
+    }
+  }
 
   const filteredProducts = useMemo(() => {
     let list = bootstrap.products;
@@ -142,6 +218,46 @@ export function PosTerminal({
 
   const cashNum = Number(String(cashTendered).replace(/[^0-9.]/g, '')) || 0;
   const change = tender === 'cash' ? Math.max(0, Math.round((cashNum - total) * 100) / 100) : 0;
+
+  // Push cart to customer display
+  useEffect(() => {
+    if (!shiftId) {
+      publishPosDisplay({
+        type: 'idle',
+        storeName: bootstrap.tenantName,
+        registerLabel,
+        updatedAt: Date.now(),
+      });
+      return;
+    }
+    publishPosDisplay({
+      type: 'cart',
+      storeName: bootstrap.tenantName,
+      registerLabel,
+      mode,
+      lines: cart.map((l) => ({
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        amount: lineTotal(l),
+      })),
+      subtotal,
+      discount: discountAmt,
+      tax: vat,
+      total,
+      updatedAt: Date.now(),
+    });
+  }, [
+    cart,
+    subtotal,
+    discountAmt,
+    vat,
+    total,
+    mode,
+    shiftId,
+    bootstrap.tenantName,
+    registerLabel,
+  ]);
 
   function switchMode(next: PosMode) {
     if (next === mode) return;
@@ -325,6 +441,25 @@ export function PosTerminal({
       setShiftId(null);
       setStatus('Shift closed');
       window.open(`/pos/z-report/${closedId}?autoprint=1`, '_blank', 'noopener,width=480,height=800');
+      // Thermal Z if register uses thermal
+      const printMode = register?.printMode ?? 'browser';
+      if ((printMode === 'thermal' || printMode === 'both') && res.report) {
+        const r = res.report;
+        const lines = [
+          `${r.registerCode} ${r.registerName}`,
+          `Status: ${r.status}`,
+          `Sales: ${r.salesCount} / ${r.salesTotal.toFixed(2)}`,
+          `Returns: ${r.returnsCount} / ${r.returnsTotal.toFixed(2)}`,
+          `Net: ${r.netSales.toFixed(2)}`,
+          `Float: ${r.openingFloat.toFixed(2)}`,
+          `Cash in: ${r.cashIn.toFixed(2)}`,
+          `Cash out: ${r.cashOut.toFixed(2)}`,
+          `Expected: ${r.expectedCash.toFixed(2)}`,
+          `Counted: ${r.closingCashCount?.toFixed(2) ?? '-'}`,
+          `Variance: ${r.varianceCash?.toFixed(2) ?? '-'}`,
+        ];
+        void printThermalZReport(lines).then(refreshThermalStatus);
+      }
     });
   }
 
@@ -371,13 +506,89 @@ export function PosTerminal({
     setPayOpen(true);
   }
 
-  function finishPrint(id: string) {
+  async function finishPrint(
+    id: string,
+    opts?: { kickDrawer?: boolean; mode?: 'sale' | 'return'; printedTotal?: number },
+  ) {
     const printMode = register?.printMode ?? 'browser';
+    const saleMode = opts?.mode ?? mode;
+    const displayTotal = opts?.printedTotal ?? total;
+
+    publishPosDisplay({
+      type: 'thankyou',
+      storeName: bootstrap.tenantName,
+      registerLabel,
+      total: displayTotal,
+      mode: saleMode,
+      updatedAt: Date.now(),
+    });
+    window.setTimeout(() => {
+      publishPosDisplay({
+        type: 'idle',
+        storeName: bootstrap.tenantName,
+        registerLabel,
+        updatedAt: Date.now(),
+      });
+    }, 6000);
+
     if (printMode === 'browser' || printMode === 'both') {
       window.open(`/pos/receipt/${id}?autoprint=1`, '_blank', 'noopener,width=420,height=720');
     }
+
     if (printMode === 'thermal' || printMode === 'both') {
-      console.info('[POS] Thermal print queued for', id, register?.thermalDeviceHint);
+      try {
+        const data = await getPosReceiptData(id);
+        if (data) {
+          const store =
+            data.company?.tradingName || data.company?.legalName || bootstrap.tenantName;
+          const res = await printThermalReceipt({
+            storeName: store,
+            registerLabel: data.register
+              ? `${data.register.code} · ${data.register.name}`
+              : registerLabel,
+            title:
+              data.doc.documentType === 'sales_return' || data.doc.posMode === 'return'
+                ? 'RETURN / REFUND'
+                : data.doc.invoiceKind === 'tax_invoice'
+                  ? 'TAX INVOICE'
+                  : 'SALES RECEIPT',
+            documentNumber: data.doc.taxInvoiceNumber || data.doc.documentNumber,
+            dateLabel: data.doc.issueDate,
+            customer: data.party?.displayName || data.party?.name || 'Walk-in',
+            paymentMode: data.doc.paymentMode ?? undefined,
+            lines: data.lines.map((l) => ({
+              description: l.description,
+              quantity: Number(l.quantity),
+              amount: Number(l.lineTotal),
+            })),
+            subtotal: Number(data.doc.subtotal),
+            tax: Number(data.doc.taxTotal),
+            total: Number(data.doc.total),
+            footer: data.register?.receiptFooter ?? register?.receiptFooter,
+            paperChars: 42,
+          });
+          refreshThermalStatus();
+          if (!res.ok) {
+            console.warn('[POS] Thermal print:', res.error);
+            if (printMode === 'thermal') {
+              window.open(
+                `/pos/receipt/${id}?autoprint=1`,
+                '_blank',
+                'noopener,width=420,height=720',
+              );
+              setError(res.error ?? 'Thermal failed — opened browser print');
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[POS] Thermal print error', e);
+      }
+    }
+
+    if (opts?.kickDrawer && openDrawerOnCash) {
+      const drawer = await openCashDrawer();
+      refreshThermalStatus();
+      if (!drawer.ok) console.warn('[POS] Drawer:', drawer.error);
     }
   }
 
@@ -430,7 +641,8 @@ export function PosTerminal({
       setHeaderDiscount(0);
       setInvoiceKind('commercial');
       setStatus(`Sale ${res.documentNumber} complete`);
-      finishPrint(res.id);
+      const kick = tender === 'cash' || tender === 'mixed';
+      await finishPrint(res.id, { kickDrawer: kick, mode: 'sale' });
       searchRef.current?.focus();
     });
   }
@@ -468,7 +680,8 @@ export function PosTerminal({
       setReturnReason('');
       setFreeReturn(false);
       setStatus(`Return ${res.documentNumber} complete`);
-      finishPrint(res.id);
+      const kick = refundTender === 'cash';
+      await finishPrint(res.id, { kickDrawer: kick, mode: 'return' });
       searchRef.current?.focus();
     });
   }
@@ -565,6 +778,55 @@ export function PosTerminal({
           </Link>
         </div>
       </header>
+
+      <div className="pos-hw-bar">
+        <span className={`pos-hw-status ${thermal.connected ? 'ok' : isWebSerialSupported() ? 'warn' : ''}`}>
+          Printer: {thermal.label}
+        </span>
+        <button
+          type="button"
+          className="pos-link-btn small"
+          disabled={hwBusy || !isWebSerialSupported()}
+          onClick={handleConnectPrinter}
+          title={
+            isWebSerialSupported()
+              ? 'Connect USB thermal printer (Web Serial)'
+              : 'Requires Chrome/Edge on HTTPS or localhost'
+          }
+        >
+          Connect printer
+        </button>
+        <button
+          type="button"
+          className="pos-link-btn small"
+          disabled={hwBusy}
+          onClick={handleOpenDrawer}
+          title="Open cash drawer via printer"
+        >
+          Open drawer
+        </button>
+        <button type="button" className="pos-link-btn small" onClick={handleOpenCustomerDisplay}>
+          Customer display
+        </button>
+        <label className="pos-hw-status" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="checkbox"
+            checked={openDrawerOnCash}
+            onChange={(e) => setOpenDrawerOnCash(e.target.checked)}
+          />
+          Auto drawer on cash
+        </label>
+        {register?.printMode ? (
+          <span className="pos-hw-status">
+            Mode:{' '}
+            {register.printMode === 'both'
+              ? 'Browser+Thermal'
+              : register.printMode === 'thermal'
+                ? 'Thermal'
+                : 'Browser'}
+          </span>
+        ) : null}
+      </div>
 
       {!shiftId ? (
         <div className="pos-shift-gate">

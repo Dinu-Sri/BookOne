@@ -104,7 +104,7 @@ export default async function CompanySalesSettingsPage() {
           <div className="party-form-top">
             <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--ink)' }}>POS registers (counters)</span>
             <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
-              Multi-counter · print mode per register · commercial default at POS
+              Multi-counter · print mode · thermal via Web Serial on POS · customer display
             </span>
           </div>
 

@@ -173,18 +173,30 @@ Print:
 - Printable Z-report `/pos/z-report/[shiftId]`  
 - Office list `/sales/pos/shifts`  
 
-### Phase 4 — hardware polish
+### Phase 4 — hardware polish ✅
 
-- ESC/POS bridge, drawer kick, customer display  
+- **Web Serial ESC/POS** thermal print (`Connect printer` on POS bar)  
+- **Cash drawer kick** via printer (manual + auto on cash sale/refund)  
+- **Customer display** window `/pos/customer-display` (BroadcastChannel + localStorage)  
+- Thermal receipt after sale/return; thermal Z lines on shift close  
+- Browser print still used for `browser` / `both` modes; thermal-only falls back to browser if serial fails  
+
+Hardware notes:
+
+- Chrome/Edge, HTTPS or localhost required for Web Serial  
+- Drawer must be wired to printer RJ11/RJ12  
+- Customer display: open second window and drag to pole/second monitor  
 
 ---
 
-## Non-goals for first ship
+## Non-goals (still later)
 
-- Offline-first multi-day queue (design-friendly later)  
+- Offline-first multi-day queue  
 - Full restaurant modifiers / tables  
 - Multi-currency at POS  
 - Self-checkout kiosk mode  
+- Native print agent outside the browser  
+
 
 ---
 

@@ -140,14 +140,14 @@ Print:
 
 ## Implementation phases
 
-### Phase 0 — foundations (schema + settings) ✅ next
+### Phase 0 — foundations (schema + settings) ✅
 
 - `pos_registers`, `pos_shifts`  
 - Document register/shift FKs  
 - Company → Sales Settings: manage registers + print mode  
 - Default register seeded  
 
-### Phase 1 — sell screen
+### Phase 1 — sell screen ✅
 
 - Full-screen `/pos`  
 - Register picker if multi active  

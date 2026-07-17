@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
-import { and, db, eq, isNull, posRegisters, withTenantContext } from '@bookone/db';
+import { and, asc, db, eq, isNull, posRegisters, withTenantContext } from '@bookone/db';
 
 export interface PosRegisterRow {
   id: string;
@@ -35,7 +35,7 @@ export async function listPosRegisters(): Promise<PosRegisterRow[]> {
       .select()
       .from(posRegisters)
       .where(and(eq(posRegisters.tenantId, user.tenantId), isNull(posRegisters.voidedAt)))
-      .orderBy(posRegisters.sortOrder, posRegisters.code);
+      .orderBy(asc(posRegisters.sortOrder), asc(posRegisters.code));
 
     // Ensure at least one default register (migration seeds; this is a safety net)
     if (rows.length === 0) {

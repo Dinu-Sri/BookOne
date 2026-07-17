@@ -97,6 +97,9 @@ const createSchema = z.object({
   purchaserTin: z.string().max(50).optional(),
   purchaserPhone: z.string().max(40).optional(),
   purchaserAddress: z.string().max(500).optional(),
+  registerId: z.string().uuid().optional().nullable(),
+  shiftId: z.string().uuid().optional().nullable(),
+  posMode: z.enum(['sale', 'return']).optional().nullable(),
   lines: z.array(lineSchema).min(1),
 });
 
@@ -487,21 +490,23 @@ export async function createCommercialDocument(
       const saleChannel = parsed.saleChannel ?? 'local';
       const invoiceKind = parsed.invoiceKind ?? 'commercial';
       const isSalesInvoiceType = parsed.documentType === 'sales_invoice';
+      const isPosSale = parsed.documentType === 'pos_sale';
+      const appliesSalesVat = isSalesInvoiceType || isPosSale;
 
-      const vatCfg = isSalesInvoiceType
+      const vatCfg = appliesSalesVat
         ? await loadSalesVatConfig(user.tenantId, saleChannel, invoiceKind)
         : { vatRate: 0, dept: '01', vatRegistered: false };
 
       const vatRate = vatCfg.vatRate;
       const vatTotal =
-        isSalesInvoiceType && invoiceKind === 'tax_invoice'
+        appliesSalesVat && invoiceKind === 'tax_invoice'
           ? Math.round(((supplyExVat * vatRate) / 100) * 100) / 100
           : 0;
       const total = Math.round((supplyExVat + vatTotal) * 100) / 100;
 
       const documentNumber = await nextDocumentNumber(user.tenantId, parsed.documentType, parsed.issueDate);
       let taxInvoiceNumber: string | null = null;
-      if (isSalesInvoiceType && invoiceKind === 'tax_invoice') {
+      if (appliesSalesVat && invoiceKind === 'tax_invoice') {
         taxInvoiceNumber = await nextTaxInvoiceNumber(user.tenantId, parsed.issueDate, vatCfg.dept);
       }
 
@@ -583,7 +588,7 @@ export async function createCommercialDocument(
             lines: saleLines,
             headerDiscount,
             settledCashAccountCode: cashCode,
-            vatRatePercent: isSalesInvoiceType && invoiceKind === 'tax_invoice' ? vatRate : 0,
+            vatRatePercent: appliesSalesVat && invoiceKind === 'tax_invoice' ? vatRate : 0,
             memo: taxInvoiceNumber ?? documentNumber,
           });
           postingLines = built.lines;
@@ -678,7 +683,7 @@ export async function createCommercialDocument(
           currency: 'LKR',
           notes: parsed.notes ?? null,
           saleChannel,
-          invoiceKind: isSalesInvoiceType ? invoiceKind : 'commercial',
+          invoiceKind: appliesSalesVat ? invoiceKind : 'commercial',
           deliveryDate: parsed.deliveryDate || null,
           placeOfSupply: parsed.placeOfSupply || null,
           paymentMode: parsed.paymentMode || null,
@@ -687,10 +692,15 @@ export async function createCommercialDocument(
           exportRef: saleChannel === 'export' ? parsed.exportRef || null : null,
           additionalInfo: parsed.additionalInfo || null,
           vatRate: vatRate.toFixed(2),
-          amountInWords: amountInWords ?? (isSalesInvoiceType ? amountInWordsLkr(total) : null),
+          amountInWords:
+            amountInWords ??
+            (appliesSalesVat || isPosSale ? amountInWordsLkr(total) : null),
           purchaserTin: parsed.purchaserTin || party.tin || null,
           purchaserPhone: parsed.purchaserPhone || party.phoneMobile || party.phone || null,
           purchaserAddress: parsed.purchaserAddress || party.addressLine1 || party.address || null,
+          registerId: parsed.registerId ?? null,
+          shiftId: parsed.shiftId ?? null,
+          posMode: parsed.posMode ?? (isPosSale ? 'sale' : null),
           postedAt,
         })
         .returning({ id: businessDocuments.id });

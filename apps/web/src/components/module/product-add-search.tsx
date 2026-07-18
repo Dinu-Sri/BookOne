@@ -3,10 +3,10 @@
 /**
  * Universal product add UX for commercial forms:
  * - Type SKU / name / barcode
- * - Suggestions while typing (portaled so not clipped by table/footer)
+ * - Suggestions while typing (portaled)
  * - Exactly one match → auto-add after debounce
- * - Multiple matches → pick from list (with 1:1 thumbnail)
- * - Enter selects highlighted suggestion
+ * - Multiple matches → pick from list (1:1 thumbnail)
+ * - No match + Enter / "Add as free text" → manual line (qty 1, blank price)
  * - onSearchActive: parent can collapse header for more space
  */
 
@@ -30,15 +30,17 @@ function money(n: number) {
 export function ProductAddSearch({
   products,
   onPick,
+  onPickManual,
   placeholder = 'Search SKU or product name…',
   autoFocus = false,
   onSearchActive,
 }: {
   products: ProductPick[];
   onPick: (product: ProductPick) => void;
+  /** Free-text line when no catalog match (description only; qty 1, price blank). */
+  onPickManual?: (description: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
-  /** true when query non-empty (parent may collapse form header) */
   onSearchActive?: (active: boolean) => void;
 }) {
   const listId = useId();
@@ -102,8 +104,7 @@ export function ProductAddSearch({
     });
   }
 
-  function commit(p: ProductPick) {
-    onPick(p);
+  function clearSearch() {
     setQ('');
     setOpen(false);
     setHi(0);
@@ -112,7 +113,18 @@ export function ProductAddSearch({
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  // Notify parent of search focus without thrashing when callback identity changes
+  function commit(p: ProductPick) {
+    onPick(p);
+    clearSearch();
+  }
+
+  function commitManual() {
+    const text = q.trim();
+    if (!text || !onPickManual) return;
+    onPickManual(text);
+    clearSearch();
+  }
+
   const onSearchActiveRef = useRef(onSearchActive);
   onSearchActiveRef.current = onSearchActive;
   const lastActiveRef = useRef(false);
@@ -123,7 +135,6 @@ export function ProductAddSearch({
     onSearchActiveRef.current?.(active);
   }, [q]);
 
-  // Auto-add: exact SKU/barcode immediately, or sole fuzzy match after debounce
   useEffect(() => {
     if (exactMatch) {
       if (lastAutoId.current === exactMatch.id) return;
@@ -151,14 +162,16 @@ export function ProductAddSearch({
 
   useEffect(() => {
     setHi(0);
-    const shouldOpen = q.trim().length > 0 && matches.length > 1;
+    // Show list for multi-match OR free-text option when no match
+    const shouldOpen =
+      q.trim().length > 0 && (matches.length > 1 || (matches.length === 0 && Boolean(onPickManual)));
     setOpen(shouldOpen);
     if (shouldOpen) {
       requestAnimationFrame(placeList);
     } else {
       setListPos(null);
     }
-  }, [q, matches.length]);
+  }, [q, matches.length, onPickManual]);
 
   useEffect(() => {
     if (!open) return;
@@ -186,7 +199,8 @@ export function ProductAddSearch({
       e.preventDefault();
       setOpen(true);
       placeList();
-      setHi((h) => Math.min(h + 1, Math.max(0, matches.length - 1)));
+      const max = matches.length > 0 ? matches.length - 1 : 0;
+      setHi((h) => Math.min(h + 1, max));
       return;
     }
     if (e.key === 'ArrowUp') {
@@ -206,6 +220,11 @@ export function ProductAddSearch({
       }
       if (matches.length > 1 && matches[hi]) {
         commit(matches[hi]);
+        return;
+      }
+      // No catalog match → free-text line
+      if (matches.length === 0 && q.trim() && onPickManual) {
+        commitManual();
       }
       return;
     }
@@ -216,8 +235,11 @@ export function ProductAddSearch({
     }
   }
 
+  const showFreeTextOption = Boolean(onPickManual) && q.trim().length > 0 && matches.length === 0;
+  const showMulti = matches.length > 1;
+
   const listPortal =
-    mounted && open && matches.length > 1 && listPos
+    mounted && open && listPos && (showMulti || showFreeTextOption)
       ? createPortal(
           <ul
             ref={listRef}
@@ -234,32 +256,48 @@ export function ProductAddSearch({
               zIndex: 220,
             }}
           >
-            {matches.map((p, i) => (
-              <li key={p.id} role="option" aria-selected={i === hi}>
-                <button
-                  type="button"
-                  className={`product-add-search-option ${i === hi ? 'active' : ''}`}
-                  onMouseEnter={() => setHi(i)}
-                  onClick={() => commit(p)}
-                >
-                  <span className="product-add-thumb" aria-hidden>
-                    {p.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.imageUrl} alt="" />
-                    ) : (
-                      <span className="product-add-thumb-fallback">
-                        {(p.name || '?').slice(0, 1).toUpperCase()}
+            {showMulti
+              ? matches.map((p, i) => (
+                  <li key={p.id} role="option" aria-selected={i === hi}>
+                    <button
+                      type="button"
+                      className={`product-add-search-option ${i === hi ? 'active' : ''}`}
+                      onMouseEnter={() => setHi(i)}
+                      onClick={() => commit(p)}
+                    >
+                      <span className="product-add-thumb" aria-hidden>
+                        {p.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.imageUrl} alt="" />
+                        ) : (
+                          <span className="product-add-thumb-fallback">
+                            {(p.name || '?').slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
                       </span>
-                    )}
+                      <span className="product-add-search-main">
+                        <strong>{p.sku}</strong>
+                        <span>{p.name}</span>
+                      </span>
+                      <em>LKR {money(p.sellPrice)}</em>
+                    </button>
+                  </li>
+                ))
+              : null}
+            {showFreeTextOption ? (
+              <li role="option" aria-selected>
+                <button type="button" className="product-add-search-option free-text active" onClick={commitManual}>
+                  <span className="product-add-thumb" aria-hidden>
+                    <span className="product-add-thumb-fallback">+</span>
                   </span>
                   <span className="product-add-search-main">
-                    <strong>{p.sku}</strong>
-                    <span>{p.name}</span>
+                    <strong>Add as free text</strong>
+                    <span>“{q.trim()}” · qty 1 · set price on line</span>
                   </span>
-                  <em>LKR {money(p.sellPrice)}</em>
+                  <em>Manual</em>
                 </button>
               </li>
-            ))}
+            ) : null}
           </ul>,
           document.body,
         )
@@ -276,7 +314,7 @@ export function ProductAddSearch({
           setQ(e.target.value);
         }}
         onFocus={() => {
-          if (matches.length > 1) {
+          if (matches.length > 1 || (matches.length === 0 && q.trim() && onPickManual)) {
             setOpen(true);
             placeList();
           }
@@ -291,8 +329,13 @@ export function ProductAddSearch({
         aria-expanded={open}
       />
       {listPortal}
-      {q.trim() && matches.length === 0 ? (
+      {q.trim() && matches.length === 0 && !onPickManual ? (
         <p className="product-add-search-empty">No products match “{q.trim()}”</p>
+      ) : null}
+      {q.trim() && matches.length === 0 && onPickManual ? (
+        <p className="product-add-search-empty">
+          No catalog match — press <kbd>Enter</kbd> to add as free text
+        </p>
       ) : null}
     </div>
   );

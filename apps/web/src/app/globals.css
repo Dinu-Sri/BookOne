@@ -4461,3 +4461,53 @@ textarea.input {
   background: transparent !important;
   color: var(--ink-soft) !important;
 }
+
+/* Qty stepper (- value +) on document lines */
+.qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+}
+.qty-stepper-btn {
+  width: 28px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.qty-stepper-btn:hover {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+}
+.qty-stepper-input {
+  width: 52px !important;
+  min-width: 0;
+  text-align: center;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+.doc-line-sku.is-manual {
+  color: var(--warning, #a76612);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.product-add-search-option.free-text {
+  border-top: 1px dashed var(--line);
+}
+.product-add-search-empty kbd {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+}

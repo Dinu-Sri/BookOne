@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { createCommercialDocumentFromForm } from '@/app/actions/commercial-docs';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import { ProductAddSearch, type ProductPick } from '@/components/module/product-add-search';
+import { QtyStepper } from '@/components/module/qty-stepper';
 import { Button } from '@/components/ui/bookone-ui';
 
 type ProductOpt = ProductPick;
@@ -25,6 +26,8 @@ type LineState = {
   quantity: string;
   unitPrice: string;
   sku?: string;
+  /** Catalog product vs free-text manual line */
+  isManual?: boolean;
 };
 
 function money(n: number) {
@@ -116,6 +119,23 @@ export function QuotationForm({
         quantity: '1',
         unitPrice: String(p.sellPrice),
         sku: p.sku,
+        isManual: false,
+      },
+    ]);
+  }
+
+  /** Uncatalogued item: qty 1, blank price — user sets price on the line */
+  function pickManual(description: string) {
+    setLines((prev) => [
+      ...prev,
+      {
+        key: newKey(),
+        productId: '',
+        description,
+        quantity: '1',
+        unitPrice: '',
+        sku: 'MANUAL',
+        isManual: true,
       },
     ]);
   }
@@ -262,7 +282,7 @@ export function QuotationForm({
           <div className="doc-lines-head">
             <span>Line items</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)' }}>
-              Search SKU / name · 1 match auto-adds
+              Search catalog · or Enter free text if no match
             </span>
           </div>
           <div className="doc-lines-scroll">
@@ -279,10 +299,12 @@ export function QuotationForm({
               </thead>
               <tbody>
                 {lines.map((line, i) => (
-                  <tr key={line.key}>
+                  <tr key={line.key} className={line.isManual ? 'doc-line-manual' : undefined}>
                     <td>
                       <input type="hidden" name={`line_${i}_productId`} value={line.productId} />
-                      <span className="doc-line-sku">{line.sku || '—'}</span>
+                      <span className={`doc-line-sku ${line.isManual ? 'is-manual' : ''}`}>
+                        {line.isManual ? 'Manual' : line.sku || '—'}
+                      </span>
                     </td>
                     <td>
                       <input
@@ -293,12 +315,11 @@ export function QuotationForm({
                       />
                     </td>
                     <td>
-                      <input
-                        className="input"
+                      <QtyStepper
                         name={`line_${i}_quantity`}
-                        inputMode="decimal"
                         value={line.quantity}
-                        onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
+                        onChange={(v) => updateLine(line.key, { quantity: v })}
+                        min={0}
                       />
                     </td>
                     <td>
@@ -308,6 +329,7 @@ export function QuotationForm({
                         inputMode="decimal"
                         value={line.unitPrice}
                         onChange={(e) => updateLine(line.key, { unitPrice: e.target.value })}
+                        placeholder={line.isManual ? 'Set price' : undefined}
                       />
                     </td>
                     <td className="num">{money(computed.lineAmounts[i] ?? 0)}</td>
@@ -326,20 +348,20 @@ export function QuotationForm({
                 {lines.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ color: 'var(--ink-soft)', fontSize: 13, padding: '10px 8px' }}>
-                      No lines yet — search below to add products.
+                      No lines yet — search a product or type a free-text description and press Enter.
                     </td>
                   </tr>
                 ) : null}
               </tbody>
             </table>
 
-            {/* Always-visible add field (new empty row for next item) */}
             <div className="product-add-row">
-              <label className="product-add-label">Add product</label>
+              <label className="product-add-label">Add product or free text</label>
               <ProductAddSearch
                 products={products}
                 onPick={pickProduct}
-                placeholder="Type SKU or product name…"
+                onPickManual={pickManual}
+                placeholder="Type SKU, name, or free-text description…"
                 autoFocus
                 onSearchActive={handleSearchActive}
               />

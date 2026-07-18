@@ -198,6 +198,22 @@ Classes: `doc-action-panel`, `doc-action-panel-fixed`, `doc-action-item`, `doc-a
 | Form data | `loadSalesFormData` supplies `id`, `sku`, `name`, `sellPrice`, `unitCost`, `barcode`, **`imageUrl`** |
 | Reference form | `quotation-form.tsx` |
 
+### Free-text / uncatalogued lines
+
+When the typed text has **no catalog match**:
+
+| Step | Behavior |
+|------|----------|
+| Enter or “Add as free text” | Add line: **description** = typed text, **qty = 1**, **unit price blank** |
+| SKU column | Show **Manual** (not a product id) |
+| Price | User sets on the line before save |
+| Qty | **− / value / +** stepper on every line (`QtyStepper`) |
+
+**Accounting policy (BookOne standard — see also below):**  
+On **quotations / sales orders**, free-text is document-only (no inventory, no GL).  
+When converted to **invoice / POS / posted sale**, free-text posts as **service-like revenue** to default sales account **4000** (no COGS / no stock movement) unless the user later links a catalog product.  
+Optional later: “Save as product” prompt with type physical/digital/service — **not required** on every free-text add.
+
 ### Reuse checklist (forms)
 
 - [ ] No product `<select>` for catalogues  
@@ -206,8 +222,62 @@ Classes: `doc-action-panel`, `doc-action-panel-fixed`, `doc-action-item`, `doc-a
 - [ ] Thumbnails 1:1 on suggestions  
 - [ ] Collapse details while searching; expand on bar click  
 - [ ] Auto-add single / exact match  
+- [ ] Free-text add when no match (qty 1, blank price)  
+- [ ] Qty steppers on lines  
 - [ ] Focus retained after add  
 - [ ] Hidden inputs / line indices still post correctly to server actions  
+
+---
+
+## H2. Accounting standard for manual (free-text) lines
+
+### What international practice does
+
+| Approach | Used by | Meaning |
+|----------|---------|---------|
+| **Non-inventory / service line** | Sage, QuickBooks, Xero | Description + amount only; revenue GL; **no stock** |
+| **One-time item** | Many mid-market ERPs | Same as service line; optional “save to item list later” |
+| **Force create item first** | Strict inventory shops | Blocks free text — slower for quotes |
+
+Best practice for SME + mixed goods/services: **allow free-text on quotes/orders**, post as **non-stock revenue** on invoice, optionally promote to product master later.
+
+### BookOne recommended model
+
+```
+Quote / SO line
+  productId = null
+  description = user text
+  qty, unitPrice
+  (no inventory type required yet)
+
+Invoice / POS / GL post
+  if productId set → use product type (physical/digital/service) + accounts
+  if productId null → treat as **service / non-stock**
+       Dr AR/Cash
+       Cr Sales Revenue 4000
+       no inventory 5100, no COGS 5000
+```
+
+### Do we ask product type on every manual line?
+
+| Option | Pros | Cons | Recommendation |
+|--------|------|------|----------------|
+| **A. No type on quote** (default service on post) | Fast quotes | Wrong if they meant stocked goods | **Default for quotes** |
+| **B. Optional type on line** (goods / service) | Better invoice accuracy | Extra click | Use when converting to invoice |
+| **C. Force “Save as product”** | Clean masters | Slows sales staff | Offer as **optional** action, not required |
+
+**Recommended BookOne flow:**
+
+1. **Quote/SO:** free-text = manual line, no type dialog.  
+2. **Invoice conversion / direct invoice:** if any free-text lines remain, optional banner: “Link to product or keep as non-stock service (4000).”  
+3. **Save as product (optional):** opens product form pre-filled name; user picks physical/digital/service; future lines use SKU.  
+4. **Never** auto-create catalog products from free-text without confirmation (avoids junk SKUs).
+
+### Inventory / VAT notes
+
+- Free-text physical goods still need a **product** for proper stock + COGS; free-text alone cannot track qty on hand correctly.  
+- VAT: tax status follows company settings / line tax flags; free-text uses default standard rate unless marked exempt.  
+- Sri Lanka tax invoice: description of goods/services on the line is valid even without an item code.
 
 ---
 

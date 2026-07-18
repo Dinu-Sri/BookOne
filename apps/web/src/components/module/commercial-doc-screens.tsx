@@ -1,13 +1,28 @@
+'use client';
+
+/**
+ * Legacy thin list shell kept for rare callers.
+ * Prefer CommercialDocumentList for full search/sort/actions UX.
+ * CommercialDocNewForm uses DocumentLinesEditor (product search + free-text + save-as).
+ */
+
 import Link from 'next/link';
+import { useCallback, useMemo, useState } from 'react';
 import {
   createCommercialDocumentFromForm,
   convertDocumentAction,
   type CommercialDocRow,
 } from '@/app/actions/commercial-docs';
+import {
+  DocumentLinesEditor,
+  computeLineAmounts,
+  type DocLineState,
+} from '@/components/module/document-lines-editor';
+import type { ProductPick } from '@/components/module/product-add-search';
 import { formatLKR, StatusBadge, todayString } from '@/components/module/list-page';
 import { Button, Card } from '@/components/ui/bookone-ui';
 
-/** Parties-style list: toolbar + table, no page headings */
+/** Parties-style list: toolbar + table (basic — prefer CommercialDocumentList) */
 export function CommercialDocList({
   newHref,
   newLabel,
@@ -36,7 +51,7 @@ export function CommercialDocList({
             placeholder={searchPlaceholder ?? 'Search…'}
             aria-label="Search"
             disabled
-            title="List filter coming soon — use browser find for now"
+            title="Use CommercialDocumentList for live search"
           />
         </div>
         <Link href={newHref}>
@@ -128,14 +143,18 @@ export function CommercialDocList({
   );
 }
 
-/** Shared compact form shell used by order / return / POS until dedicated UIs exist */
+function money(n: number) {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Shared create form — product search, free-text, save-as-product (purchase + sales). */
 export function CommercialDocNewForm({
   backHref,
   backLabel,
   documentType,
   partyLabel,
   partyPlaceholder,
-  products,
+  products: initialProducts,
   partyOptions,
   discounts,
   showPaymentAccount,
@@ -151,14 +170,14 @@ export function CommercialDocNewForm({
   documentType: string;
   partyLabel: string;
   partyPlaceholder: string;
-  products: { id: string; name: string; sellPrice: number; unitCost: number }[];
+  products: ProductPick[];
   partyOptions?: {
     id: string;
     name: string;
     code: string | null;
-    creditLimit: number | null;
-    openBalance: number;
-    status: string;
+    creditLimit?: number | null;
+    openBalance?: number;
+    status?: string;
   }[];
   discounts?: { id: string; name: string; discountType: string; value: string | number }[];
   showPaymentAccount?: boolean;
@@ -169,12 +188,51 @@ export function CommercialDocNewForm({
   creditWarning?: boolean;
   submitLabel?: string;
 }) {
-  const defaultProduct = products[0];
+  const [lines, setLines] = useState<DocLineState[]>([]);
+  const [catalog, setCatalog] = useState<ProductPick[]>(initialProducts);
+  const [detailsCollapsed, setDetailsCollapsed] = useState(false);
+  const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
+  const [expenseCode, setExpenseCode] = useState(
+    expenseAccounts?.find((a) => a.code === '6800')?.code ?? expenseAccounts?.[0]?.code ?? '6800',
+  );
+  const [headerDiscount, setHeaderDiscount] = useState('0');
+  const [discountId, setDiscountId] = useState('');
+
+  const handleSearchActive = useCallback(
+    (active: boolean) => {
+      if (active) {
+        if (!pinDetailsExpanded) setDetailsCollapsed(true);
+      } else {
+        setDetailsCollapsed(false);
+        setPinDetailsExpanded(false);
+      }
+    },
+    [pinDetailsExpanded],
+  );
+
+  const computed = useMemo(() => {
+    const lineAmounts = computeLineAmounts(lines);
+    const subtotal = Math.round(lineAmounts.reduce((s, a) => s + a, 0) * 100) / 100;
+    let discountAmt = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
+    if (discountId && discounts) {
+      const d = discounts.find((x) => x.id === discountId);
+      if (d) {
+        discountAmt =
+          d.discountType === 'percent'
+            ? Math.round(((subtotal * Number(d.value)) / 100) * 100) / 100
+            : Number(d.value);
+      }
+    }
+    discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
+    return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
+  }, [lines, headerDiscount, discountId, discounts]);
+
   return (
     <div className="workspace party-workspace">
       <form action={createCommercialDocumentFromForm} className="doc-form-shell">
         <input type="hidden" name="documentType" value={documentType} />
-        <input type="hidden" name="lineCount" value="5" />
+        <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
+        <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
 
         <div className="party-form-top">
           <Link href={backHref} className="party-back-btn">
@@ -189,11 +247,33 @@ export function CommercialDocNewForm({
         </div>
 
         <div className="doc-form-scroll">
-          <div className="doc-form-header">
+          {detailsCollapsed ? (
+            <button
+              type="button"
+              className="doc-details-collapsed-bar"
+              onClick={() => {
+                setDetailsCollapsed(false);
+                setPinDetailsExpanded(true);
+              }}
+            >
+              <span>
+                <strong>Document details</strong>
+                <small>Click to expand</small>
+              </span>
+              <span className="doc-details-collapsed-hint">Expand</span>
+            </button>
+          ) : null}
+
+          <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
             <div className="field field-span-2">
               <label>{partyLabel} *</label>
               {partyOptions && partyOptions.length > 0 ? (
-                <select className="input" name="partyName" defaultValue={partyOptions[0]?.name ?? ''} required>
+                <select
+                  className="input"
+                  name="partyName"
+                  defaultValue={partyOptions[0]?.name ?? ''}
+                  required
+                >
                   {partyOptions.map((p) => (
                     <option key={p.id} value={p.name}>
                       {p.code ? `${p.code} — ` : ''}
@@ -220,21 +300,58 @@ export function CommercialDocNewForm({
             {discounts && discounts.length > 0 ? (
               <div className="field">
                 <label>Discount</label>
-                <select className="input" name="discountId" defaultValue="">
+                <select
+                  className="input"
+                  name="discountId"
+                  value={discountId}
+                  onChange={(e) => setDiscountId(e.target.value)}
+                >
                   <option value="">None</option>
                   {discounts.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.name} ({d.discountType === 'percent' ? `${d.value}%` : formatLKR(Number(d.value))})
+                      {d.name} (
+                      {d.discountType === 'percent' ? `${d.value}%` : formatLKR(Number(d.value))})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="field">
+                <label>Header discount (LKR)</label>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={headerDiscount}
+                  onChange={(e) => setHeaderDiscount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            )}
+            {showPaymentAccount && paymentAccounts ? (
+              <div className="field">
+                <label>Payment account</label>
+                <select
+                  className="input"
+                  name="paymentAccountCode"
+                  defaultValue={defaultPaymentCode ?? '1000'}
+                >
+                  {paymentAccounts.map((a) => (
+                    <option key={a.code} value={a.code}>
+                      {a.code} — {a.name}
                     </option>
                   ))}
                 </select>
               </div>
             ) : null}
-            {showPaymentAccount && paymentAccounts ? (
+            {showExpenseAccount && expenseAccounts && expenseAccounts.length > 0 ? (
               <div className="field">
-                <label>Payment account</label>
-                <select className="input" name="paymentAccountCode" defaultValue={defaultPaymentCode ?? '1000'}>
-                  {paymentAccounts.map((a) => (
+                <label>Expense account</label>
+                <select
+                  className="input"
+                  value={expenseCode}
+                  onChange={(e) => setExpenseCode(e.target.value)}
+                >
+                  {expenseAccounts.map((a) => (
                     <option key={a.code} value={a.code}>
                       {a.code} — {a.name}
                     </option>
@@ -250,83 +367,48 @@ export function CommercialDocNewForm({
             </p>
           ) : null}
 
-          <div className="doc-lines-card">
-            <div className="doc-lines-head">
-              <span>Line items</span>
-            </div>
-            <div className="doc-lines-scroll">
-              <table className="doc-lines-table">
-                <thead>
-                  <tr>
-                    <th className="col-item">Product</th>
-                    <th>Description</th>
-                    <th className="col-qty">Qty</th>
-                    <th className="col-price">Unit price</th>
-                    {showExpenseAccount ? <th>Account</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <tr key={i}>
-                      <td>
-                        <select
-                          className="input"
-                          name={`line_${i}_productId`}
-                          defaultValue={i === 0 && defaultProduct ? defaultProduct.id : ''}
-                        >
-                          <option value="">Free text</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          className="input"
-                          name={`line_${i}_description`}
-                          placeholder={i === 0 ? 'Required if no product' : 'Optional'}
-                          defaultValue={i === 0 && defaultProduct ? defaultProduct.name : ''}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="input"
-                          name={`line_${i}_quantity`}
-                          defaultValue={i === 0 ? '1' : ''}
-                          inputMode="decimal"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="input"
-                          name={`line_${i}_unitPrice`}
-                          defaultValue={i === 0 && defaultProduct ? String(defaultProduct.sellPrice) : ''}
-                          inputMode="decimal"
-                        />
-                      </td>
-                      {showExpenseAccount && expenseAccounts ? (
-                        <td>
-                          <select className="input" name={`line_${i}_accountCode`} defaultValue="6800">
-                            {expenseAccounts.map((a) => (
-                              <option key={a.code} value={a.code}>
-                                {a.code}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DocumentLinesEditor
+            products={catalog}
+            lines={lines}
+            onChange={setLines}
+            onSearchActive={handleSearchActive}
+            onCatalogProduct={(p) =>
+              setCatalog((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))
+            }
+            hint="Search catalog · free text · Save as product (service default)"
+          />
 
-          <div className="field" style={{ margin: 0 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)' }}>Notes</label>
-            <input className="input" name="notes" placeholder="Optional notes" />
+          {/* Apply expense account to each line for purchase GL */}
+          {showExpenseAccount
+            ? lines.map((_, i) => (
+                <input
+                  key={`exp-${i}`}
+                  type="hidden"
+                  name={`line_${i}_accountCode`}
+                  value={expenseCode}
+                />
+              ))
+            : null}
+
+          <div className="doc-form-bottom">
+            <div className="field doc-notes" style={{ margin: 0 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)' }}>Notes</label>
+              <input className="input" name="notes" placeholder="Optional notes" />
+            </div>
+            <div className="doc-totals" aria-live="polite">
+              <div className="doc-totals-row">
+                <span>Subtotal</span>
+                <strong>LKR {money(computed.subtotal)}</strong>
+              </div>
+              <div className="doc-totals-row">
+                <span>Discount</span>
+                <strong>LKR {money(computed.discountAmt)}</strong>
+              </div>
+              <div className="doc-totals-row is-total">
+                <span>Total</span>
+                <strong>LKR {money(computed.total)}</strong>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -336,7 +418,7 @@ export function CommercialDocNewForm({
               Cancel
             </Button>
           </Link>
-          <Button variant="primary" type="submit">
+          <Button variant="primary" type="submit" disabled={lines.length === 0}>
             {submitLabel}
           </Button>
         </div>

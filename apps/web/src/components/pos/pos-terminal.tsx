@@ -29,6 +29,7 @@ import {
   openCustomerDisplayWindow,
   publishPosDisplay,
 } from '@/lib/pos/customer-display-channel';
+import { createQuickProduct } from '@/app/actions/inventory';
 
 type CartLine = {
   key: string;
@@ -38,6 +39,9 @@ type CartLine = {
   unitPrice: number;
   sku?: string;
   maxQty?: number;
+  /** Free-text line not yet linked to catalog */
+  isManual?: boolean;
+  saveAsType?: 'physical' | 'digital' | 'service';
 };
 
 type Tender = 'cash' | 'card' | 'bank' | 'mixed';
@@ -77,6 +81,8 @@ export function PosTerminal({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | 'all'>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [products, setProducts] = useState<PosProductLite[]>(() => bootstrap.products);
+  const [saveBusyKey, setSaveBusyKey] = useState<string | null>(null);
   const [partyName, setPartyName] = useState('Walk-in');
   const [headerDiscount, setHeaderDiscount] = useState(0);
   const [discountId, setDiscountId] = useState('');
@@ -175,7 +181,7 @@ export function PosTerminal({
   }
 
   const filteredProducts = useMemo(() => {
-    let list = bootstrap.products;
+    let list = products;
     if (category !== 'all') list = list.filter((p) => p.category === category);
     const q = query.trim().toLowerCase();
     if (!q) return list.slice(0, 48);
@@ -188,7 +194,7 @@ export function PosTerminal({
           (p.category && p.category.toLowerCase().includes(q)),
       )
       .slice(0, 48);
-  }, [bootstrap.products, category, query]);
+  }, [products, category, query]);
 
   const subtotal = useMemo(
     () => Math.round(cart.reduce((s, l) => s + lineTotal(l), 0) * 100) / 100,
@@ -292,6 +298,7 @@ export function PosTerminal({
           quantity: qty,
           unitPrice: p.sellPrice,
           sku: p.sku,
+          isManual: false,
         },
       ];
     });
@@ -299,6 +306,78 @@ export function PosTerminal({
     setStatus(null);
     setError(null);
   }, []);
+
+  function addManualLine(description: string) {
+    const text = description.trim();
+    if (!text) return;
+    setCart((prev) => [
+      ...prev,
+      {
+        key: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        productId: null,
+        description: text,
+        quantity: 1,
+        unitPrice: 0,
+        sku: 'MANUAL',
+        isManual: true,
+        saveAsType: 'service',
+      },
+    ]);
+    setQuery('');
+    setStatus('Manual line — set price (posts as service revenue unless saved as product)');
+    setError(null);
+  }
+
+  async function saveCartLineAsProduct(line: CartLine) {
+    if (!line.isManual || line.productId) return;
+    setSaveBusyKey(line.key);
+    try {
+      const res = await createQuickProduct({
+        name: line.description.trim() || 'Item',
+        productType: line.saveAsType ?? 'service',
+        sellPrice: line.unitPrice,
+        unitCost: 0,
+      });
+      if (!res.ok || !res.product) {
+        setError(res.error ?? 'Could not save product');
+        return;
+      }
+      const p = res.product;
+      const lite: PosProductLite = {
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        barcode: p.barcode,
+        category:
+          p.productType === 'service' ? 'Services' : p.productType === 'digital' ? 'Digital' : 'General',
+        sellPrice: p.sellPrice,
+        unitCost: p.unitCost,
+        productType: p.productType,
+        imageUrl: p.imageUrl,
+        qtyOnHand: 0,
+      };
+      setProducts((prev) => (prev.some((x) => x.id === lite.id) ? prev : [lite, ...prev]));
+      setCart((prev) =>
+        prev.map((l) =>
+          l.key === line.key
+            ? {
+                ...l,
+                productId: p.id,
+                sku: p.sku,
+                description: p.name,
+                unitPrice: l.unitPrice > 0 ? l.unitPrice : p.sellPrice,
+                isManual: false,
+                saveAsType: undefined,
+              }
+            : l,
+        ),
+      );
+      setStatus(`Saved as ${p.productType} product ${p.sku}`);
+      setError(null);
+    } finally {
+      setSaveBusyKey(null);
+    }
+  }
 
   function addReturnLine(line: {
     productId: string | null;
@@ -352,15 +431,30 @@ export function PosTerminal({
       return;
     }
     const exact =
-      bootstrap.products.find((p) => p.barcode && p.barcode === q) ||
-      bootstrap.products.find((p) => p.sku.toLowerCase() === q.toLowerCase());
+      products.find((p) => p.barcode && p.barcode === q) ||
+      products.find((p) => p.sku.toLowerCase() === q.toLowerCase());
     if (exact) {
       addProduct(exact);
       return;
     }
     const first = filteredProducts[0];
     if (first) addProduct(first);
-    else setError(`No product for “${q}”`);
+    else if (mode === 'sale' || freeReturn) {
+      // Free-text line — posts as non-stock service (4000) unless saved as product
+      addManualLine(q);
+    } else {
+      setError(`No product for “${q}”`);
+    }
+  }
+
+  function setLinePrice(key: string, unitPrice: number) {
+    setCart((prev) =>
+      prev.map((l) => (l.key === key ? { ...l, unitPrice: Math.max(0, unitPrice) } : l)),
+    );
+  }
+
+  function setLineSaveAsType(key: string, saveAsType: 'physical' | 'digital' | 'service') {
+    setCart((prev) => prev.map((l) => (l.key === key ? { ...l, saveAsType } : l)));
   }
 
   function setQty(key: string, quantity: number) {
@@ -982,7 +1076,7 @@ export function PosTerminal({
                     className="pos-search"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Scan barcode or search name / SKU…"
+                    placeholder="Scan barcode, search, or free-text line…"
                     autoComplete="off"
                     autoFocus
                   />
@@ -990,6 +1084,11 @@ export function PosTerminal({
                     Add
                   </button>
                 </form>
+                {query.trim() && filteredProducts.length === 0 ? (
+                  <p className="pos-muted" style={{ margin: '0 0 8px' }}>
+                    No catalog match — press Enter to add as free text (service revenue default).
+                  </p>
+                ) : null}
                 <div className="pos-cats">
                   <button
                     type="button"
@@ -1094,13 +1193,60 @@ export function PosTerminal({
                 </p>
               ) : (
                 cart.map((l) => (
-                  <div key={l.key} className="pos-line">
+                  <div key={l.key} className={`pos-line ${l.isManual ? 'pos-line-manual' : ''}`}>
                     <div className="pos-line-main">
-                      <strong>{l.description}</strong>
+                      <strong>
+                        {l.isManual ? <em className="pos-manual-tag">Manual · </em> : null}
+                        {l.description}
+                      </strong>
                       <span>
-                        LKR {money(l.unitPrice)}
+                        {l.isManual ? (
+                          <label className="pos-price-edit">
+                            LKR
+                            <input
+                              inputMode="decimal"
+                              value={l.unitPrice || ''}
+                              placeholder="Price"
+                              onChange={(e) =>
+                                setLinePrice(
+                                  l.key,
+                                  Number(String(e.target.value).replace(/[^0-9.]/g, '')) || 0,
+                                )
+                              }
+                            />
+                          </label>
+                        ) : (
+                          <>LKR {money(l.unitPrice)}</>
+                        )}
                         {l.maxQty != null ? ` · max ${l.maxQty}` : ''}
+                        {l.sku && !l.isManual ? ` · ${l.sku}` : ''}
                       </span>
+                      {l.isManual && !l.productId ? (
+                        <div className="pos-save-as">
+                          <select
+                            value={l.saveAsType ?? 'service'}
+                            onChange={(e) =>
+                              setLineSaveAsType(
+                                l.key,
+                                e.target.value as 'physical' | 'digital' | 'service',
+                              )
+                            }
+                            aria-label="Save as product type"
+                          >
+                            <option value="service">Service</option>
+                            <option value="physical">Physical</option>
+                            <option value="digital">Digital</option>
+                          </select>
+                          <button
+                            type="button"
+                            className="pos-btn pos-save-as-btn"
+                            disabled={saveBusyKey === l.key || !l.description.trim()}
+                            onClick={() => saveCartLineAsProduct(l)}
+                          >
+                            {saveBusyKey === l.key ? '…' : 'Save as product'}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="pos-line-qty">
                       <button type="button" onClick={() => setQty(l.key, l.quantity - 1)}>

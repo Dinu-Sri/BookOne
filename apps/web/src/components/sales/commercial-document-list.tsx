@@ -40,8 +40,10 @@ export type CommercialListConfig = {
   searchPlaceholder: string;
   newHref: string;
   newLabel: string;
+  /** Column header for party (default Customer) */
+  partyLabel?: string;
   editHref?: (id: string) => string | null;
-  convertTo?: 'sales_order' | 'sales_invoice' | 'purchase' | 'vendor_bill';
+  convertTo?: 'sales_order' | 'sales_invoice' | 'purchase_order' | 'purchase' | 'vendor_bill';
   convertLabel?: string;
   showTaxCols?: boolean;
   printHref?: (id: string) => string | null;
@@ -492,7 +494,7 @@ export function CommercialDocumentList({
                     {config.showTaxCols ? <th>Kind</th> : null}
                     <th>
                       <button type="button" className="th-sort-btn" onClick={() => toggleSort('partyName')}>
-                        Customer
+                        {config.partyLabel ?? 'Customer'}
                         <SortIcon active={sortKey === 'partyName'} dir={sortDir} />
                       </button>
                     </th>

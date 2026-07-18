@@ -3656,6 +3656,55 @@ textarea.input {
   font-weight: 700;
 }
 .pos-line-amt { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pos-line-manual {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(14, 116, 144, 0.12);
+}
+.pos-manual-tag {
+  font-style: normal;
+  color: #7dd3fc;
+  font-weight: 800;
+  font-size: 11px;
+}
+.pos-price-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.pos-price-edit input {
+  width: 72px;
+  min-height: 26px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pos-save-as {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  align-items: center;
+}
+.pos-save-as select {
+  min-height: 28px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+.pos-save-as-btn {
+  min-height: 28px !important;
+  padding: 0 8px !important;
+  font-size: 11px !important;
+}
 .pos-line-void {
   width: 36px;
   height: 36px;

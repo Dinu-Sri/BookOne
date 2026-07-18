@@ -212,7 +212,7 @@ When the typed text has **no catalog match**:
 **Accounting policy (BookOne standard — see also below):**  
 On **quotations / sales orders**, free-text is document-only (no inventory, no GL).  
 When converted to **invoice / POS / posted sale**, free-text posts as **service-like revenue** to default sales account **4000** (no COGS / no stock movement) unless the user later links a catalog product.  
-Optional later: “Save as product” prompt with type physical/digital/service — **not required** on every free-text add.
+Optional **Save as product** (type physical/digital/service, default service) — available on each Manual line; not required.
 
 ### Reuse checklist (forms)
 
@@ -310,13 +310,14 @@ Invoice / POS / GL post
 
 | Module | List UX | Form / lines UX |
 |--------|---------|-----------------|
-| **Quotations** | ✅ `QuotationList` → `CommercialDocumentList` | ✅ `QuotationForm` + `DocumentLinesEditor` |
-| **Sales Orders** | ✅ same list component | ✅ `SalesDocumentForm` |
+| **Quotations** | ✅ `CommercialDocumentList` | ✅ `QuotationForm` + `DocumentLinesEditor` |
+| **Sales Orders** | ✅ same list | ✅ `SalesDocumentForm` |
 | **Sales Invoices** | ✅ list + tax cols + print | ✅ `InvoiceDocumentForm` |
-| **Sales Returns** | list (basic) | ✅ `SalesDocumentForm` |
-| **POS** | history list | ✅ Full-screen `/pos` (not office form) |
-| **Inventory products** | ✅ search + period + pagination + inline actions | Product form (existing) |
-| Purchase orders/bills | Still older `CommercialDocList` shell | Can adopt `DocumentLinesEditor` next |
+| **Sales Returns** | ✅ same list | ✅ `SalesDocumentForm` |
+| **POS** | history list | ✅ Free-text cart + Save as product (service default) |
+| **Inventory products** | ✅ search, sort, period, pagination, portaled Actions | Product form (physical/digital/service) |
+| **Purchase orders** | ✅ `CommercialDocumentList` (Vendor) | ✅ `CommercialDocNewForm` + lines editor |
+| **Purchases / import / returns** | ✅ same list | ✅ same form + expense account |
 
 ### Shared building blocks
 
@@ -327,17 +328,26 @@ Invoice / POS / GL post
 | Product typeahead | `components/module/product-add-search.tsx` |
 | Qty steppers | `components/module/qty-stepper.tsx` |
 | Quick create product | `createQuickProduct` in `app/actions/inventory.ts` |
+| Purchase/shared form | `components/module/commercial-doc-screens.tsx` (`CommercialDocNewForm`) |
+| Inventory product list | `components/inventory/product-list.tsx` |
 
 ### Save as product (free-text → catalog)
 
-On each **Manual** line:
+On each **Manual** line (quotes, SO, invoices, purchase docs, POS):
 
 1. Type dropdown: **Service (default)** / Physical / Digital  
 2. **Save** → `createQuickProduct` → product master + link `productId` on the line  
 3. Physical gets stock level 0; invoice/POS later uses type for COGS/stock  
 4. SKU auto: `Q-{NAME}-{stamp}`  
+5. Unsaved free-text on post → **service / non-stock** revenue **4000** (no COGS, no stock)
 
-POS full-screen remains separate — see `docs/POS_DESIGN.md`.
+### Accounting match by product type
+
+| Type | Revenue | COGS / stock |
+|------|---------|--------------|
+| **service** (default free-text) | 4000 | No stock, no COGS |
+| **digital** | 4000 | No stock, no COGS |
+| **physical** | 4000 | COGS 5000 + inventory 5100 when qty/cost present |
 
 ---
 

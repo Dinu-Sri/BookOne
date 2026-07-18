@@ -1,8 +1,9 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { listCommercialDocuments } from '@/app/actions/commercial-docs';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { CommercialDocList } from '@/components/module/commercial-doc-screens';
+import { CommercialDocumentList } from '@/components/sales/commercial-document-list';
 
 export default async function PurchasesPage() {
   let tenant;
@@ -18,13 +19,18 @@ export default async function PurchasesPage() {
 
   return (
     <BookOneShell active="Purchases" tenant={tenant}>
-      <CommercialDocList
-        newHref="/purchase/purchases/new"
-        newLabel="New purchase"
-        rows={rows}
-        emptyTitle="No purchases yet"
-        searchPlaceholder="Search purchases…"
-      />
+      <Suspense fallback={<div className="workspace party-workspace">Loading…</div>}>
+        <CommercialDocumentList
+          rows={rows}
+          config={{
+            title: 'Purchase',
+            partyLabel: 'Vendor',
+            searchPlaceholder: 'Search by vendor name or number…',
+            newHref: '/purchase/purchases/new',
+            newLabel: 'New purchase',
+          }}
+        />
+      </Suspense>
     </BookOneShell>
   );
 }

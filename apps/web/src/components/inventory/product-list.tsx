@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Eye } from 'lucide-react';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Eye } from 'lucide-react';
 import {
   archiveProductFromForm,
   deleteProductFromForm,
@@ -21,19 +22,47 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const PAGE_SIZE = 10;
 
+type SortKey = 'sku' | 'name' | 'productType' | 'unitCost' | 'sellPrice' | 'qtyOnHand' | 'isActive';
+type SortDir = 'asc' | 'desc';
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <ArrowUpDown size={13} className="th-sort-icon" aria-hidden />;
+  return dir === 'asc' ? (
+    <ArrowUp size={13} className="th-sort-icon active" aria-hidden />
+  ) : (
+    <ArrowDown size={13} className="th-sort-icon active" aria-hidden />
+  );
+}
+
 export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page') ?? '1') || 1));
+  const [sortKey, setSortKey] = useState<SortKey>(
+    (searchParams.get('sort') as SortKey) || 'name',
+  );
+  const [sortDir, setSortDir] = useState<SortDir>(searchParams.get('dir') === 'desc' ? 'desc' : 'asc');
   const [rows, setRows] = useState(initialRows);
   const [pending, startTransition] = useTransition();
   const [preview, setPreview] = useState<ProductRow | null>(null);
-  const [confirm, setConfirm] = useState<null | { type: 'archive' | 'restore' | 'delete'; product: ProductRow }>(null);
+  const [confirm, setConfirm] = useState<null | {
+    type: 'archive' | 'restore' | 'delete';
+    product: ProductRow;
+  }>(null);
   const [block, setBlock] = useState<null | { product: ProductRow; reasons: string[] }>(null);
   const [busy, setBusy] = useState(false);
 
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; openUp: boolean } | null>(
+    null,
+  );
+  const [mounted, setMounted] = useState(false);
+  const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const menuPanelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => setMounted(true), []);
   useEffect(() => setRows(initialRows), [initialRows]);
 
   useEffect(() => {
@@ -51,17 +80,99 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
     return () => window.clearTimeout(handle);
   }, [query, pathname, router, searchParams]);
 
+  function placeMenu(btn: HTMLButtonElement) {
+    const rect = btn.getBoundingClientRect();
+    const menuH = 220;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < menuH && rect.top > menuH;
+    const left = Math.min(Math.max(8, rect.right - 220), window.innerWidth - 228);
+    setMenuPos({
+      top: openUp ? rect.top - 4 : rect.bottom + 4,
+      left,
+      openUp,
+    });
+  }
+
+  function toggleMenu(id: string) {
+    if (openMenuId === id) {
+      setOpenMenuId(null);
+      setMenuPos(null);
+      return;
+    }
+    const btn = triggerRefs.current.get(id);
+    if (btn) placeMenu(btn);
+    setOpenMenuId(id);
+  }
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    function close(e: Event) {
+      const t = e.target as Node;
+      if (menuPanelRef.current?.contains(t)) return;
+      const btn = triggerRefs.current.get(openMenuId!);
+      if (btn?.contains(t)) return;
+      setOpenMenuId(null);
+      setMenuPos(null);
+    }
+    function reposition() {
+      const btn = triggerRefs.current.get(openMenuId!);
+      if (!btn) return;
+      placeMenu(btn);
+    }
+    document.addEventListener('mousedown', close);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [openMenuId]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((p) =>
-      [p.sku, p.name, p.productType, p.category, p.barcode].filter(Boolean).join(' ').toLowerCase().includes(q),
-    );
-  }, [rows, query]);
+    let list = rows;
+    if (q) {
+      list = list.filter((p) =>
+        [p.sku, p.name, p.productType, p.category, p.barcode]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(q),
+      );
+    }
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av ?? '').localeCompare(String(bv ?? ''), undefined, { sensitivity: 'base' }) * dir;
+    });
+  }, [rows, query, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'unitCost' || key === 'sellPrice' || key === 'qtyOnHand' ? 'desc' : 'asc');
+    }
+  }
+
+  const openRow = openMenuId
+    ? pageRows.find((r) => r.id === openMenuId) ||
+      filtered.find((r) => r.id === openMenuId) ||
+      rows.find((r) => r.id === openMenuId) ||
+      null
+    : null;
 
   async function runAction() {
     if (!confirm) return;
@@ -94,6 +205,8 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
 
   async function onDelete(product: ProductRow) {
     setBusy(true);
+    setOpenMenuId(null);
+    setMenuPos(null);
     try {
       const blockers = await getProductDeleteBlockers(product.id);
       if (!blockers.ok) {
@@ -106,6 +219,93 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
     }
   }
 
+  function renderMenuItems(p: ProductRow) {
+    const items: ReactNode[] = [
+      <Link
+        key="edit"
+        href={`/inventory/products/${p.id}/edit`}
+        className="doc-action-item"
+        role="menuitem"
+        onClick={() => {
+          setOpenMenuId(null);
+          setMenuPos(null);
+        }}
+      >
+        Edit
+      </Link>,
+    ];
+    if (p.isActive === '1') {
+      items.push(
+        <button
+          key="archive"
+          type="button"
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+            setConfirm({ type: 'archive', product: p });
+          }}
+        >
+          Archive
+        </button>,
+      );
+    } else {
+      items.push(
+        <button
+          key="restore"
+          type="button"
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+            setConfirm({ type: 'restore', product: p });
+          }}
+        >
+          Restore
+        </button>,
+      );
+    }
+    items.push(
+      <button
+        key="delete"
+        type="button"
+        className="doc-action-item danger"
+        role="menuitem"
+        onClick={() => onDelete(p)}
+      >
+        Delete
+      </button>,
+    );
+    return items;
+  }
+
+  const menuPortal =
+    mounted && openMenuId && menuPos && openRow
+      ? createPortal(
+          <div
+            ref={menuPanelRef}
+            className={`doc-action-panel doc-action-panel-fixed ${menuPos.openUp ? 'open-up' : ''}`}
+            role="menu"
+            style={{
+              position: 'fixed',
+              top: menuPos.top,
+              left: menuPos.left,
+              transform: menuPos.openUp ? 'translateY(-100%)' : 'none',
+              zIndex: 300,
+              minWidth: 220,
+              visibility: 'visible',
+              opacity: 1,
+              pointerEvents: 'auto',
+            }}
+          >
+            {renderMenuItems(openRow)}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div className="workspace party-workspace">
       <div className="party-toolbar">
@@ -114,8 +314,8 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
             className="input party-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by SKU or product name…"
-            aria-label="Search products by SKU or name"
+            placeholder="Search by SKU, name, type, barcode…"
+            aria-label="Search products"
           />
         </div>
         <div className="party-toolbar-period">
@@ -141,14 +341,69 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                 <thead>
                   <tr>
                     <th style={{ width: 56 }} />
-                    <th>SKU</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Cost</th>
-                    <th>Price</th>
-                    <th>Qty</th>
-                    <th>Status</th>
-                    <th className="th-actions" />
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('sku')}>
+                        SKU
+                        <SortIcon active={sortKey === 'sku'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('name')}>
+                        Name
+                        <SortIcon active={sortKey === 'name'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => toggleSort('productType')}
+                      >
+                        Type
+                        <SortIcon active={sortKey === 'productType'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => toggleSort('unitCost')}
+                      >
+                        Cost
+                        <SortIcon active={sortKey === 'unitCost'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => toggleSort('sellPrice')}
+                      >
+                        Price
+                        <SortIcon active={sortKey === 'sellPrice'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => toggleSort('qtyOnHand')}
+                      >
+                        Qty
+                        <SortIcon active={sortKey === 'qtyOnHand'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => toggleSort('isActive')}
+                      >
+                        Status
+                        <SortIcon active={sortKey === 'isActive'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th className="th-actions" style={{ width: 132 }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -173,32 +428,39 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                       </td>
                       <td>{formatLKR(p.unitCost)}</td>
                       <td>{formatLKR(p.sellPrice)}</td>
-                      <td>{p.productType === 'physical' ? p.qtyOnHand : '—'}</td>
+                      <td>{p.productType === 'physical' || p.productType === 'stocked' ? p.qtyOnHand : '—'}</td>
                       <td>
                         <StatusBadge status={p.isActive === '1' ? 'active' : 'inactive'} />
                       </td>
                       <td className="td-actions">
                         <div className="party-row-actions party-row-actions-inline">
-                          <Button variant="ghost" className="icon" type="button" title="Quick view" onClick={() => setPreview(p)}>
+                          <Button
+                            variant="ghost"
+                            className="icon"
+                            type="button"
+                            title="Quick view"
+                            onClick={() => setPreview(p)}
+                          >
                             <Eye size={16} />
                           </Button>
-                          <Link href={`/inventory/products/${p.id}/edit`}>
-                            <Button variant="secondary" type="button" className="doc-action-trigger">
-                              Edit
+                          <div className="doc-action-menu">
+                            <Button
+                              variant="secondary"
+                              type="button"
+                              className="doc-action-trigger"
+                              disabled={busy}
+                              ref={(el) => {
+                                if (el) triggerRefs.current.set(p.id, el);
+                                else triggerRefs.current.delete(p.id);
+                              }}
+                              onClick={() => toggleMenu(p.id)}
+                              aria-haspopup="menu"
+                              aria-expanded={openMenuId === p.id}
+                            >
+                              Actions
+                              <ChevronDown size={14} />
                             </Button>
-                          </Link>
-                          {p.isActive === '1' ? (
-                            <Button variant="ghost" type="button" onClick={() => setConfirm({ type: 'archive', product: p })}>
-                              Archive
-                            </Button>
-                          ) : (
-                            <Button variant="ghost" type="button" onClick={() => setConfirm({ type: 'restore', product: p })}>
-                              Restore
-                            </Button>
-                          )}
-                          <Button variant="ghost" type="button" onClick={() => onDelete(p)}>
-                            Delete
-                          </Button>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -216,7 +478,12 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
               </span>
               {filtered.length > PAGE_SIZE ? (
                 <div className="party-pagination-actions">
-                  <Button variant="secondary" type="button" disabled={safePage <= 1} onClick={() => setPage((p) => p - 1)}>
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
                     Previous
                   </Button>
                   <Button
@@ -234,22 +501,40 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
         </div>
       </Card>
 
+      {menuPortal}
+
       <ConfirmDialog
         open={Boolean(confirm)}
-        title={confirm?.type === 'delete' ? 'Delete product?' : confirm?.type === 'archive' ? 'Archive product?' : 'Restore product?'}
+        title={
+          confirm?.type === 'delete'
+            ? 'Delete product?'
+            : confirm?.type === 'archive'
+              ? 'Archive product?'
+              : 'Restore product?'
+        }
         message={
           confirm
             ? `${confirm.type === 'delete' ? 'Soft-delete' : confirm.type === 'archive' ? 'Archive' : 'Restore'} “${confirm.product.name}”?`
             : undefined
         }
-        confirmLabel={confirm?.type === 'delete' ? 'Delete' : confirm?.type === 'archive' ? 'Archive' : 'Restore'}
+        confirmLabel={
+          confirm?.type === 'delete' ? 'Delete' : confirm?.type === 'archive' ? 'Archive' : 'Restore'
+        }
         tone={confirm?.type === 'delete' ? 'danger' : 'primary'}
         onCancel={() => setConfirm(null)}
         onConfirm={runAction}
         busy={busy}
       />
 
-      <ConfirmDialog open={Boolean(block)} title="Cannot delete" confirmLabel="OK" cancelLabel="Close" tone="primary" onCancel={() => setBlock(null)} onConfirm={() => setBlock(null)}>
+      <ConfirmDialog
+        open={Boolean(block)}
+        title="Cannot delete"
+        confirmLabel="OK"
+        cancelLabel="Close"
+        tone="primary"
+        onCancel={() => setBlock(null)}
+        onConfirm={() => setBlock(null)}
+      >
         <p className="modal-message">
           <strong>{block?.product.name}</strong> is connected:
         </p>

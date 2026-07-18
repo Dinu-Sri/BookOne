@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { createCommercialDocumentFromForm } from '@/app/actions/commercial-docs';
 import { formatLKR, todayString } from '@/components/module/list-page';
+import { ProductAddSearch, type ProductPick } from '@/components/module/product-add-search';
 import { Button } from '@/components/ui/bookone-ui';
 
-type ProductOpt = { id: string; name: string; sellPrice: number; unitCost: number };
+type ProductOpt = ProductPick;
 type PartyOpt = {
   id: string;
   name: string;
@@ -18,18 +19,13 @@ type PartyOpt = {
 type DiscountOpt = { id: string; name: string; discountType: string; value: string | number };
 
 type LineState = {
+  key: string;
   productId: string;
   description: string;
   quantity: string;
   unitPrice: string;
+  sku?: string;
 };
-
-const EMPTY_LINE = (): LineState => ({
-  productId: '',
-  description: '',
-  quantity: '',
-  unitPrice: '',
-});
 
 function money(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -39,6 +35,10 @@ function addDaysIso(iso: string, days: number) {
   const d = new Date(`${iso}T12:00:00`);
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+function newKey() {
+  return `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export function QuotationForm({
@@ -57,31 +57,15 @@ export function QuotationForm({
   const [goodThru, setGoodThru] = useState(addDaysIso(today, 30));
   const [headerDiscount, setHeaderDiscount] = useState('0');
   const [discountId, setDiscountId] = useState('');
-  const [lines, setLines] = useState<LineState[]>(() => {
-    const first = products[0];
-    return [
-      {
-        productId: first?.id ?? '',
-        description: first?.name ?? '',
-        quantity: '1',
-        unitPrice: first ? String(first.sellPrice) : '',
-      },
-      EMPTY_LINE(),
-      EMPTY_LINE(),
-      EMPTY_LINE(),
-      EMPTY_LINE(),
-    ];
-  });
-
-  const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  /** Committed lines only — add via search UX */
+  const [lines, setLines] = useState<LineState[]>([]);
 
   const computed = useMemo(() => {
     let subtotal = 0;
     const lineAmounts = lines.map((line) => {
       const qty = Number(String(line.quantity).replace(/[^0-9.-]/g, '')) || 0;
       const price = Number(String(line.unitPrice).replace(/[^0-9.-]/g, '')) || 0;
-      const hasContent = Boolean(line.productId || line.description.trim());
-      const amount = hasContent ? Math.round(qty * price * 100) / 100 : 0;
+      const amount = Math.round(qty * price * 100) / 100;
       subtotal = Math.round((subtotal + amount) * 100) / 100;
       return amount;
     });
@@ -101,31 +85,32 @@ export function QuotationForm({
     return { subtotal, discountAmt, total, lineAmounts };
   }, [lines, headerDiscount, discountId, discounts]);
 
-  function updateLine(index: number, patch: Partial<LineState>) {
-    setLines((prev) => {
-      const next = [...prev];
-      const line = { ...next[index], ...patch };
-      if (patch.productId !== undefined) {
-        const p = productMap.get(patch.productId);
-        if (p) {
-          line.description = p.name;
-          line.unitPrice = String(p.sellPrice);
-          if (!line.quantity) line.quantity = '1';
-        }
-      }
-      next[index] = line;
-      return next;
-    });
+  function pickProduct(p: ProductPick) {
+    setLines((prev) => [
+      ...prev,
+      {
+        key: newKey(),
+        productId: p.id,
+        description: p.name,
+        quantity: '1',
+        unitPrice: String(p.sellPrice),
+        sku: p.sku,
+      },
+    ]);
   }
 
-  function addLine() {
-    setLines((prev) => [...prev, EMPTY_LINE()]);
+  function updateLine(key: string, patch: Partial<LineState>) {
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  function removeLine(key: string) {
+    setLines((prev) => prev.filter((l) => l.key !== key));
   }
 
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">
       <input type="hidden" name="documentType" value="quotation" />
-      <input type="hidden" name="lineCount" value={String(lines.length)} />
+      <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
 
       <div className="party-form-top">
@@ -144,7 +129,6 @@ export function QuotationForm({
       </div>
 
       <div className="doc-form-scroll">
-        {/* Sage-style header: customer + dates + refs */}
         <div className="doc-form-header">
           <div className="field field-span-2">
             <label>Customer *</label>
@@ -243,50 +227,38 @@ export function QuotationForm({
           )}
         </div>
 
-        {/* Line grid — scrollable so rows never clip */}
         <div className="doc-lines-card">
           <div className="doc-lines-head">
             <span>Line items</span>
-            <button type="button" className="button secondary" style={{ minHeight: 30, padding: '4px 10px' }} onClick={addLine}>
-              + Add line
-            </button>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)' }}>
+              Search SKU / name · 1 match auto-adds
+            </span>
           </div>
           <div className="doc-lines-scroll">
             <table className="doc-lines-table">
               <thead>
                 <tr>
-                  <th className="col-item">Item</th>
+                  <th className="col-item">SKU</th>
                   <th>Description</th>
                   <th className="col-qty">Qty</th>
                   <th className="col-price">Unit price</th>
                   <th className="col-amt">Amount</th>
+                  <th style={{ width: 40 }} />
                 </tr>
               </thead>
               <tbody>
                 {lines.map((line, i) => (
-                  <tr key={i}>
+                  <tr key={line.key}>
                     <td>
-                      <select
-                        className="input"
-                        name={`line_${i}_productId`}
-                        value={line.productId}
-                        onChange={(e) => updateLine(i, { productId: e.target.value })}
-                      >
-                        <option value="">Free text</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
+                      <input type="hidden" name={`line_${i}_productId`} value={line.productId} />
+                      <span className="doc-line-sku">{line.sku || '—'}</span>
                     </td>
                     <td>
                       <input
                         className="input"
                         name={`line_${i}_description`}
                         value={line.description}
-                        onChange={(e) => updateLine(i, { description: e.target.value })}
-                        placeholder={i === 0 ? 'Description' : 'Optional'}
+                        onChange={(e) => updateLine(line.key, { description: e.target.value })}
                       />
                     </td>
                     <td>
@@ -295,7 +267,7 @@ export function QuotationForm({
                         name={`line_${i}_quantity`}
                         inputMode="decimal"
                         value={line.quantity}
-                        onChange={(e) => updateLine(i, { quantity: e.target.value })}
+                        onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
                       />
                     </td>
                     <td>
@@ -304,14 +276,51 @@ export function QuotationForm({
                         name={`line_${i}_unitPrice`}
                         inputMode="decimal"
                         value={line.unitPrice}
-                        onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
+                        onChange={(e) => updateLine(line.key, { unitPrice: e.target.value })}
                       />
                     </td>
                     <td className="num">{money(computed.lineAmounts[i] ?? 0)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="doc-line-remove"
+                        aria-label="Remove line"
+                        onClick={() => removeLine(line.key)}
+                      >
+                        ×
+                      </button>
+                    </td>
                   </tr>
                 ))}
+                {lines.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ color: 'var(--ink-soft)', fontSize: 13, padding: '10px 8px' }}>
+                      No lines yet — search below to add products.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
+
+            {/* Always-visible add field (new empty row for next item) */}
+            <div className="product-add-row">
+              <label className="product-add-label">Add product</label>
+              <ProductAddSearch
+                products={products}
+                onPick={pickProduct}
+                placeholder="Type SKU or product name…"
+                autoFocus
+              />
+            </div>
+            {/* Fallback so empty submit still has a description if someone only types free text later */}
+            {lines.length === 0 ? (
+              <>
+                <input type="hidden" name="line_0_productId" value="" />
+                <input type="hidden" name="line_0_description" value="" />
+                <input type="hidden" name="line_0_quantity" value="" />
+                <input type="hidden" name="line_0_unitPrice" value="" />
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -343,7 +352,7 @@ export function QuotationForm({
             Cancel
           </Button>
         </Link>
-        <Button variant="primary" type="submit">
+        <Button variant="primary" type="submit" disabled={lines.length === 0}>
           Save quotation
         </Button>
       </div>

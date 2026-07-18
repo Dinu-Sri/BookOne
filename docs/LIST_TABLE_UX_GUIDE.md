@@ -87,10 +87,30 @@ Do **not** rely on `position: absolute` inside `.table-wrap` (overflow clips men
 |------|--------|
 | Render | Portal menu to `document.body` |
 | Position | `position: fixed` from trigger `getBoundingClientRect()` |
-| Flip | Open **upward** when near bottom of viewport |
+| Flip | Prefer **open down**; only open up when space below &lt; panel height **and** space above is enough |
+| Transform | When open up: `transform: translateY(-100%)` with `top` at trigger top (avoids off-screen first rows) |
+| z-index | ≥ **200** so menu paints above sticky chrome / table heads |
 | Close | Outside click, scroll, resize |
 
 Classes: `doc-action-panel doc-action-panel-fixed`.
+
+---
+
+## 4b. Product add on forms (quotes / orders / invoices)
+
+**Do not** use a full product `<select>` when catalogues can be large.
+
+| Rule | Detail |
+|------|--------|
+| Control | Single **search field** under the lines table |
+| Query | SKU, product name, barcode |
+| Multiple matches | Show suggestion list; keyboard ↑↓ + Enter; click to select |
+| Exactly one match | **Auto-add** after short debounce (or immediately on exact SKU/barcode) |
+| After add | Clear search; focus stays on field for next item |
+| Lines | Committed rows show SKU, editable qty/price/description, remove |
+| Component | `components/module/product-add-search.tsx` (`ProductAddSearch`) |
+
+This is the **universal product-entry UX** for all commercial document forms.
 
 ---
 

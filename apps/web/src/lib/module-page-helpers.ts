@@ -27,9 +27,11 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
   return {
     products: products.map((p) => ({
       id: p.id,
+      sku: p.sku,
       name: p.name,
       sellPrice: p.sellPrice,
       unitCost: p.unitCost,
+      barcode: p.barcode,
     })),
     discounts,
     paymentAccounts: options.paymentAccounts,

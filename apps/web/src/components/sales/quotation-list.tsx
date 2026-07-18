@@ -113,10 +113,14 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
 
   function placeMenu(btn: HTMLButtonElement) {
     const rect = btn.getBoundingClientRect();
-    const panelH = 200;
-    const openUp = rect.bottom + panelH > window.innerHeight - 8 && rect.top > panelH;
+    const panelW = 180;
+    const panelH = 230;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    // Prefer open down; only flip up when not enough space below AND enough above
+    const openUp = spaceBelow < panelH && rect.top > panelH;
     const top = openUp ? rect.top - 4 : rect.bottom + 4;
-    const left = Math.min(rect.right, window.innerWidth - 12);
+    let left = rect.right - panelW;
+    left = Math.max(8, Math.min(left, window.innerWidth - panelW - 8));
     setMenuPos({ top, left, openUp });
   }
 
@@ -127,8 +131,12 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
       return;
     }
     const btn = triggerRefs.current.get(rowId);
-    if (btn) placeMenu(btn);
     setOpenMenuId(rowId);
+    // Place after state flush so panel can measure; first paint uses estimate
+    if (btn) {
+      placeMenu(btn);
+      requestAnimationFrame(() => placeMenu(btn));
+    }
   }
 
   const filtered = useMemo(() => {
@@ -284,10 +292,11 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
             role="menu"
             style={{
               position: 'fixed',
-              top: menuPos.openUp ? undefined : menuPos.top,
-              bottom: menuPos.openUp ? window.innerHeight - menuPos.top : undefined,
-              left: Math.max(12, menuPos.left - 168),
-              zIndex: 80,
+              top: menuPos.top,
+              left: menuPos.left,
+              transform: menuPos.openUp ? 'translateY(-100%)' : undefined,
+              zIndex: 200,
+              minWidth: 180,
             }}
           >
             {canEdit(openRow) ? (

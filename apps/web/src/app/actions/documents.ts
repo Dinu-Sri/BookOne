@@ -382,11 +382,16 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
       if (!document) throw new Error('Document not found.');
       if (!document.transactionId) throw new Error('Document has no posted transaction to allocate against.');
       const balanceDue = Number(document.balanceDue);
-      if (parsed.amount > balanceDue) throw new Error('Payment cannot exceed balance due.');
+      if (parsed.amount > balanceDue + 0.005) throw new Error('Payment cannot exceed balance due.');
 
       const paymentAccount = await resolveAccount(user.tenantId, parsed.paymentAccountCode);
-      const isInvoice =
-        document.documentType === 'customer_invoice' || document.documentType === 'sales_invoice';
+      const arTypes = new Set(['customer_invoice', 'sales_invoice', 'pos_sale']);
+      const apTypes = new Set(['purchase', 'import_purchase', 'vendor_bill']);
+      const isInvoice = arTypes.has(document.documentType);
+      const isApBill = apTypes.has(document.documentType);
+      if (!isInvoice && !isApBill) {
+        throw new Error('Payments can only be allocated to sales invoices or purchase bills.');
+      }
       const controlAccount = await resolveAccount(user.tenantId, isInvoice ? '1300' : '2100');
 
       await db().transaction(async (tx) => {
@@ -479,6 +484,10 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
     revalidatePath('/transactions');
     revalidatePath('/journal');
     revalidatePath('/reports');
+    revalidatePath('/purchase/purchases');
+    revalidatePath('/purchase/import');
+    revalidatePath('/purchase/payments');
+    revalidatePath('/sales/invoices');
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not allocate payment.';
@@ -487,12 +496,44 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
 }
 
 export async function allocateDocumentPaymentFromForm(formData: FormData): Promise<void> {
-  await allocateDocumentPayment({
+  const result = await allocateDocumentPayment({
     documentId: String(formData.get('documentId') ?? ''),
     paymentDate: String(formData.get('paymentDate') ?? new Date().toISOString().slice(0, 10)),
     paymentAccountCode: String(formData.get('paymentAccountCode') ?? '1100'),
     amount: parseMoney(formData.get('amount')),
   });
+  if (!result.ok) {
+    throw new Error(result.error ?? 'Payment failed');
+  }
+}
+
+/** Pay one or more AP bills in sequence (same bank account / date). */
+export async function payVendorBills(input: {
+  paymentDate: string;
+  paymentAccountCode: string;
+  allocations: { documentId: string; amount: number }[];
+}): Promise<{ ok: boolean; error?: string; paidCount?: number }> {
+  try {
+    const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(input.paymentDate);
+    const account = z.string().min(1).max(20).parse(input.paymentAccountCode);
+    const allocations = input.allocations.filter((a) => a.amount > 0);
+    if (allocations.length === 0) return { ok: false, error: 'Select at least one bill with an amount.' };
+
+    let paidCount = 0;
+    for (const row of allocations) {
+      const res = await allocateDocumentPayment({
+        documentId: row.documentId,
+        paymentDate: date,
+        paymentAccountCode: account,
+        amount: row.amount,
+      });
+      if (!res.ok) return { ok: false, error: res.error, paidCount };
+      paidCount += 1;
+    }
+    return { ok: true, paidCount };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Pay vendors failed.' };
+  }
 }
 
 export async function getDocumentFormOptions(): Promise<{

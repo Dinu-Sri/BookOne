@@ -28,6 +28,8 @@ export default async function ImportPurchasesPage() {
             searchPlaceholder: 'Search by vendor name or number…',
             newHref: '/purchase/import/new',
             newLabel: 'New import purchase',
+            detailHrefPattern: '/purchase/import/:id',
+            payHrefPattern: '/purchase/payments/new?documentId=:id',
           }}
         />
       </Suspense>

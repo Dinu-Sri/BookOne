@@ -12,7 +12,8 @@ export function QuotationList({ rows }: { rows: CommercialDocRow[] }) {
         searchPlaceholder: 'Search by customer name or number…',
         newHref: '/sales/quotations/new',
         newLabel: 'New quotation',
-        editHref: (id) => `/sales/quotations/${id}/edit`,
+        editHrefPattern: '/sales/quotations/:id/edit',
+        detailHrefPattern: '/sales/quotations/:id',
         convertTo: 'sales_order',
         convertLabel: 'Convert to order',
       }}

@@ -427,6 +427,7 @@ export async function createCommercialDocument(
       }
 
       // Enrich lines from products
+      const isPurchaseDoc = isPurchaseBillType(parsed.documentType);
       const enriched = [];
       for (const line of parsed.lines) {
         let unitCost = line.unitCost ?? 0;
@@ -445,10 +446,16 @@ export async function createCommercialDocument(
             )
             .limit(1);
           if (product) {
-            unitCost = Number(product.unitCost);
+            // Purchases: cost is what we pay (line unit price). Sales: use product cost for COGS.
+            unitCost = isPurchaseDoc
+              ? line.unitPrice
+              : Number(product.unitCost) || line.unitCost || 0;
             productType = product.productType === 'stocked' ? 'physical' : product.productType;
             if (!description) description = product.name;
           }
+        } else if (isPurchaseDoc) {
+          // Free-text purchase line — treat cost as unit price for expense total consistency
+          unitCost = line.unitPrice;
         }
         const lineGross = line.quantity * line.unitPrice;
         const discountAmount = line.discountAmount ?? 0;
@@ -793,6 +800,18 @@ export async function createCommercialDocument(
               transactionId,
               memo: documentNumber,
             });
+          }
+          // Last-cost policy: physical purchase updates product master unit cost
+          if (isPurchase && line.unitCost > 0) {
+            await db()
+              .update(inventoryProducts)
+              .set({ unitCost: line.unitCost.toFixed(2), updatedAt: new Date() })
+              .where(
+                and(
+                  eq(inventoryProducts.tenantId, user.tenantId),
+                  eq(inventoryProducts.id, line.productId),
+                ),
+              );
           }
         }
       }
@@ -1172,6 +1191,7 @@ export interface CommercialDocDetail {
   id: string;
   documentType: string;
   documentNumber: string;
+  partyId: string | null;
   partyName: string;
   issueDate: string;
   dueDate: string | null;
@@ -1180,12 +1200,15 @@ export interface CommercialDocDetail {
   discountTotal: number;
   taxTotal: number;
   total: number;
+  paidAmount: number;
   balanceDue: number;
   currency: string;
   notes: string | null;
   paymentMode: string | null;
   saleChannel: string;
   invoiceKind: string;
+  transactionId: string | null;
+  sourceDocumentId: string | null;
   lines: {
     id: string;
     description: string;
@@ -1228,6 +1251,7 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       id: doc.id,
       documentType: doc.documentType,
       documentNumber: doc.documentNumber,
+      partyId: doc.partyId ?? null,
       partyName: party?.name ?? 'Unknown',
       issueDate: doc.issueDate,
       dueDate: doc.dueDate,
@@ -1236,12 +1260,15 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       discountTotal: Number(doc.discountTotal),
       taxTotal: Number(doc.taxTotal),
       total: Number(doc.total),
+      paidAmount: Number(doc.paidAmount ?? 0),
       balanceDue: Number(doc.balanceDue),
       currency: doc.currency,
       notes: doc.notes,
       paymentMode: doc.paymentMode,
       saleChannel: doc.saleChannel ?? 'local',
       invoiceKind: doc.invoiceKind ?? 'commercial',
+      transactionId: doc.transactionId ?? null,
+      sourceDocumentId: doc.sourceDocumentId ?? null,
       lines: lines.map((l) => ({
         id: l.id,
         description: l.description,
@@ -1250,6 +1277,62 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
         lineTotal: Number(l.lineTotal),
       })),
     };
+  });
+}
+
+const AP_BILL_TYPES = ['purchase', 'import_purchase', 'vendor_bill'] as const;
+
+export type OpenApBill = {
+  id: string;
+  documentType: string;
+  documentNumber: string;
+  partyName: string;
+  issueDate: string;
+  dueDate: string | null;
+  total: number;
+  balanceDue: number;
+  status: string;
+};
+
+/** Open AP bills for Pay vendors (balance due > 0). */
+export async function listOpenApBills(): Promise<OpenApBill[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const rows = await db()
+      .select({
+        id: businessDocuments.id,
+        documentType: businessDocuments.documentType,
+        documentNumber: businessDocuments.documentNumber,
+        partyName: parties.name,
+        issueDate: businessDocuments.issueDate,
+        dueDate: businessDocuments.dueDate,
+        total: businessDocuments.total,
+        balanceDue: businessDocuments.balanceDue,
+        status: businessDocuments.status,
+      })
+      .from(businessDocuments)
+      .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          inArray(businessDocuments.documentType, [...AP_BILL_TYPES]),
+          isNull(businessDocuments.voidedAt),
+          sql`CAST(${businessDocuments.balanceDue} AS numeric) > 0.005`,
+        ),
+      )
+      .orderBy(desc(businessDocuments.issueDate));
+
+    return rows.map((r) => ({
+      id: r.id,
+      documentType: r.documentType,
+      documentNumber: r.documentNumber,
+      partyName: r.partyName ?? 'Unknown',
+      issueDate: r.issueDate,
+      dueDate: r.dueDate,
+      total: Number(r.total),
+      balanceDue: Number(r.balanceDue),
+      status: r.status,
+    }));
   });
 }
 

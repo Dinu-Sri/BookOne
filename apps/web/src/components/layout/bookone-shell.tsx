@@ -95,6 +95,7 @@ const navSuites: NavSuite[] = [
       { label: 'Purchases', icon: ReceiptText, href: '/purchase/purchases' },
       { label: 'Import Purchases', icon: Globe2, href: '/purchase/import' },
       { label: 'Purchase Returns', icon: BookOpenCheck, href: '/purchase/returns' },
+      { label: 'Pay Vendors', icon: Landmark, href: '/purchase/payments' },
     ],
   },
   {

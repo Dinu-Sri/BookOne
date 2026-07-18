@@ -42,12 +42,27 @@ export type CommercialListConfig = {
   newLabel: string;
   /** Column header for party (default Customer) */
   partyLabel?: string;
-  editHref?: (id: string) => string | null;
+  /**
+   * Serializable path templates — use `:id` placeholder.
+   * Functions cannot cross the RSC → client boundary.
+   * Example: `/sales/quotations/:id/edit`
+   */
+  editHrefPattern?: string;
   convertTo?: 'sales_order' | 'sales_invoice' | 'purchase_order' | 'purchase' | 'vendor_bill';
   convertLabel?: string;
   showTaxCols?: boolean;
-  printHref?: (id: string) => string | null;
+  /** Example: `/sales/invoices/:id/print` */
+  printHrefPattern?: string;
+  /** Example: `/purchase/payments/new?documentId=:id` */
+  payHrefPattern?: string;
+  /** Detail page for eye/view deep link optional */
+  detailHrefPattern?: string;
 };
+
+function hrefFromPattern(pattern: string | undefined, id: string): string | null {
+  if (!pattern) return null;
+  return pattern.replaceAll(':id', id);
+}
 
 export function CommercialDocumentList({
   rows: initialRows,
@@ -241,6 +256,11 @@ export function CommercialDocumentList({
     setOpenMenuId(null);
     setMenuPos(null);
     try {
+      const detailPath = hrefFromPattern(config.detailHrefPattern, id);
+      if (detailPath) {
+        router.push(detailPath);
+        return;
+      }
       const detail = await getCommercialDocument(id);
       if (!detail) {
         pushStatusToast({ kind: 'error', message: `${config.title} not found` });
@@ -250,7 +270,7 @@ export function CommercialDocumentList({
     } catch (e) {
       pushStatusToast({
         kind: 'error',
-        message: e instanceof Error ? e.message : 'Could not load quotation',
+        message: e instanceof Error ? e.message : 'Could not load document',
       });
     } finally {
       setBusy(false);
@@ -316,7 +336,7 @@ export function CommercialDocumentList({
 
   function renderMenuItems(row: CommercialDocRow) {
     const items: ReactNode[] = [];
-    const editTo = config.editHref?.(row.id);
+    const editTo = hrefFromPattern(config.editHrefPattern, row.id);
     if (canEdit(row) && editTo) {
       items.push(
         <Link
@@ -344,7 +364,24 @@ export function CommercialDocumentList({
         </form>,
       );
     }
-    const printTo = config.printHref?.(row.id);
+    const payTo = hrefFromPattern(config.payHrefPattern, row.id);
+    if (payTo && Number(row.balanceDue) > 0.005 && row.status !== 'void' && row.status !== 'converted') {
+      items.push(
+        <Link
+          key="pay"
+          href={payTo}
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+          }}
+        >
+          Pay
+        </Link>,
+      );
+    }
+    const printTo = hrefFromPattern(config.printHrefPattern, row.id);
     if (printTo) {
       items.push(
         <Link
@@ -358,6 +395,23 @@ export function CommercialDocumentList({
           }}
         >
           Print
+        </Link>,
+      );
+    }
+    const detailTo = hrefFromPattern(config.detailHrefPattern, row.id);
+    if (detailTo) {
+      items.push(
+        <Link
+          key="open"
+          href={detailTo}
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+          }}
+        >
+          Open
         </Link>,
       );
     }

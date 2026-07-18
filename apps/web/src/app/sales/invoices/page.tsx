@@ -28,7 +28,8 @@ export default async function SalesInvoicesPage() {
             newHref: '/sales/invoices/new',
             newLabel: 'New invoice',
             showTaxCols: true,
-            printHref: (id) => `/sales/invoices/${id}/print`,
+            printHrefPattern: '/sales/invoices/:id/print',
+            detailHrefPattern: '/sales/invoices/:id',
           }}
         />
       </Suspense>

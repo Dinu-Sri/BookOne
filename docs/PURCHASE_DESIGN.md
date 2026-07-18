@@ -1,6 +1,6 @@
 # BookOne Purchase (AP) — product design
 
-**Status:** planned design (2026-07-18)  
+**Status:** design locked · **P0 implemented 2026-07-18** (detail pages, Pay vendors, last-cost on purchase)  
 **Audience:** SL SME — mixed goods + services, local + import suppliers  
 **Peers studied:** QuickBooks Online / Desktop patterns, Sage Business Cloud / mid-market PO→bill→pay  
 
@@ -252,19 +252,18 @@ Legacy `/purchase/bills` stays redirect to Purchases.
 
 ## 7. Implementation phases
 
-### Phase P0 — “AP can close” (highest value)
+### Phase P0 — “AP can close” (highest value) ✅
 
-1. **Document detail pages** for PO / purchase / import / return  
-   - Snapshot: vendor, lines, totals, balance, source link, journal link  
-   - Actions: Edit (if open), Convert, Pay, Print, Archive, Delete  
-2. **Pay vendors**  
-   - List unpaid bills (`balanceDue > 0`)  
-   - Payment form: vendor, date, bank account, amount, multi-bill allocation  
-   - Reuse/extend `allocateDocumentPayment`  
+1. **Document detail pages** for PO / purchase / import / return ✅  
+   - `/purchase/{orders|purchases|import|returns}/[id]` + invoice detail  
+   - Actions: Convert, Pay, Print, Archive, Delete  
+2. **Pay vendors** ✅  
+   - `/purchase/payments` + `/purchase/payments/new`  
+   - Multi-bill allocation via `payVendorBills` → `allocateDocumentPayment`  
    - Posting: Dr 2100, Cr bank; update `balanceDue` / status `paid` / `partial`  
-3. **Edit** routes for non-converted open docs  
-4. **Unit cost**: on physical purchase, update product cost policy (document choice: last cost vs weighted avg — recommend **last cost** for v1 SME simplicity)  
-5. List actions: **Pay** on open purchases  
+3. **Edit** routes for non-converted open docs — deferred (header-only later)  
+4. **Unit cost**: last-cost on physical purchase ✅  
+5. List actions: **Pay** / **Open** on purchases ✅  
 
 ### Phase P1 — Parity with sales + QBO Expense
 

@@ -28,6 +28,7 @@ export default async function PurchaseReturnsPage() {
             searchPlaceholder: 'Search by vendor name or number…',
             newHref: '/purchase/returns/new',
             newLabel: 'New purchase return',
+            detailHrefPattern: '/purchase/returns/:id',
           }}
         />
       </Suspense>

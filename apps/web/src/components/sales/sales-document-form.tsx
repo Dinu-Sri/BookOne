@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * Shared create form for sales_order (and similar) using quote-grade line UX.
+ */
+
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import { createCommercialDocumentFromForm } from '@/app/actions/commercial-docs';
@@ -16,9 +20,9 @@ type PartyOpt = {
   id: string;
   name: string;
   code: string | null;
-  creditLimit: number | null;
-  openBalance: number;
-  status: string;
+  creditLimit?: number | null;
+  openBalance?: number;
+  status?: string;
 };
 type DiscountOpt = { id: string; name: string; discountType: string; value: string | number };
 
@@ -26,26 +30,31 @@ function money(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function addDaysIso(iso: string, days: number) {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-export function QuotationForm({
+export function SalesDocumentForm({
+  documentType,
+  backHref,
+  backLabel,
+  submitLabel,
   products: initialProducts,
   partyOptions,
-  discounts,
-  backHref = '/sales/quotations',
+  discounts = [],
+  showPaymentAccount,
+  paymentAccounts,
+  defaultPaymentCode,
+  banner,
 }: {
+  documentType: 'sales_order' | 'sales_invoice' | 'pos_sale' | 'sales_return';
+  backHref: string;
+  backLabel: string;
+  submitLabel: string;
   products: ProductPick[];
   partyOptions: PartyOpt[];
-  discounts: DiscountOpt[];
-  backHref?: string;
+  discounts?: DiscountOpt[];
+  showPaymentAccount?: boolean;
+  paymentAccounts?: { code: string; name: string }[];
+  defaultPaymentCode?: string;
+  banner?: string;
 }) {
-  const today = todayString();
-  const [issueDate, setIssueDate] = useState(today);
-  const [goodThru, setGoodThru] = useState(addDaysIso(today, 30));
   const [headerDiscount, setHeaderDiscount] = useState('0');
   const [discountId, setDiscountId] = useState('');
   const [lines, setLines] = useState<DocLineState[]>([]);
@@ -65,11 +74,6 @@ export function QuotationForm({
     [pinDetailsExpanded],
   );
 
-  function expandDetails() {
-    setDetailsCollapsed(false);
-    setPinDetailsExpanded(true);
-  }
-
   const computed = useMemo(() => {
     const lineAmounts = computeLineAmounts(lines);
     const subtotal = Math.round(lineAmounts.reduce((s, a) => s + a, 0) * 100) / 100;
@@ -84,13 +88,12 @@ export function QuotationForm({
       }
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
-    const total = Math.round((subtotal - discountAmt) * 100) / 100;
-    return { subtotal, discountAmt, total };
+    return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
   }, [lines, headerDiscount, discountId, discounts]);
 
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">
-      <input type="hidden" name="documentType" value="quotation" />
+      <input type="hidden" name="documentType" value={documentType} />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
 
@@ -101,20 +104,29 @@ export function QuotationForm({
           </span>
           <span>
             <strong>Back to list</strong>
-            <small>Quotations</small>
+            <small>{backLabel}</small>
           </span>
         </Link>
-        <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-          Quote · no GL until invoice
-        </div>
+        {banner ? (
+          <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
+            {banner}
+          </div>
+        ) : null}
       </div>
 
       <div className="doc-form-scroll">
         {detailsCollapsed ? (
-          <button type="button" className="doc-details-collapsed-bar" onClick={expandDetails}>
+          <button
+            type="button"
+            className="doc-details-collapsed-bar"
+            onClick={() => {
+              setDetailsCollapsed(false);
+              setPinDetailsExpanded(true);
+            }}
+          >
             <span>
-              <strong>Quotation details</strong>
-              <small>Click to expand customer, dates, terms…</small>
+              <strong>Document details</strong>
+              <small>Click to expand</small>
             </span>
             <span className="doc-details-collapsed-hint">Expand</span>
           </button>
@@ -141,55 +153,16 @@ export function QuotationForm({
             <input className="input" name="partyNameOverride" placeholder="Walk-in / new" />
           </div>
           <div className="field">
-            <label>Quote date *</label>
-            <input
-              className="input"
-              name="issueDate"
-              type="date"
-              required
-              value={issueDate}
-              onChange={(e) => {
-                setIssueDate(e.target.value);
-                setGoodThru(addDaysIso(e.target.value, 30));
-              }}
-            />
+            <label>Date *</label>
+            <input className="input" name="issueDate" type="date" defaultValue={todayString()} required />
           </div>
           <div className="field">
-            <label>Good thru</label>
-            <input
-              className="input"
-              name="dueDate"
-              type="date"
-              value={goodThru}
-              onChange={(e) => setGoodThru(e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label>Customer P.O.</label>
-            <input className="input" name="exportRef" placeholder="Optional PO / ref" />
-          </div>
-          <div className="field">
-            <label>Ship via</label>
-            <select className="input" name="paymentMode" defaultValue="">
-              <option value="">—</option>
-              <option value="Pickup">Customer pickup</option>
-              <option value="Courier">Courier</option>
-              <option value="Own delivery">Own delivery</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>Terms</label>
-            <select className="input" name="placeOfSupply" defaultValue="Net 30">
-              <option value="Net 30">Net 30</option>
-              <option value="Net 15">Net 15</option>
-              <option value="Due on receipt">Due on receipt</option>
-              <option value="COD">COD</option>
-            </select>
+            <label>Due date</label>
+            <input className="input" name="dueDate" type="date" />
           </div>
           {discounts.length > 0 ? (
             <div className="field">
-              <label>Discount scheme</label>
+              <label>Discount</label>
               <select
                 className="input"
                 name="discountId"
@@ -216,6 +189,18 @@ export function QuotationForm({
               />
             </div>
           )}
+          {showPaymentAccount && paymentAccounts ? (
+            <div className="field">
+              <label>Payment account</label>
+              <select className="input" name="paymentAccountCode" defaultValue={defaultPaymentCode ?? '1000'}>
+                {paymentAccounts.map((a) => (
+                  <option key={a.code} value={a.code}>
+                    {a.code} — {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
         </div>
 
         <DocumentLinesEditor
@@ -230,8 +215,8 @@ export function QuotationForm({
 
         <div className="doc-form-bottom">
           <div className="field doc-notes" style={{ margin: 0 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)' }}>Notes / message</label>
-            <textarea className="input" name="notes" rows={3} placeholder="Optional notes on quote" />
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)' }}>Notes</label>
+            <input className="input" name="notes" placeholder="Optional notes" />
           </div>
           <div className="doc-totals" aria-live="polite">
             <div className="doc-totals-row">
@@ -243,7 +228,7 @@ export function QuotationForm({
               <strong>LKR {money(computed.discountAmt)}</strong>
             </div>
             <div className="doc-totals-row is-total">
-              <span>Quote total</span>
+              <span>Total</span>
               <strong>LKR {money(computed.total)}</strong>
             </div>
           </div>
@@ -257,7 +242,7 @@ export function QuotationForm({
           </Button>
         </Link>
         <Button variant="primary" type="submit" disabled={lines.length === 0}>
-          Save quotation
+          {submitLabel}
         </Button>
       </div>
     </form>

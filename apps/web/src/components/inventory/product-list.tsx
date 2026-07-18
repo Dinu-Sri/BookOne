@@ -114,8 +114,8 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
             className="input party-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search products…"
-            aria-label="Search"
+            placeholder="Search by SKU or product name…"
+            aria-label="Search products by SKU or name"
           />
         </div>
         <div className="party-toolbar-period">
@@ -136,7 +136,7 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
               <p>Create physical, digital, or service items for sales and stock.</p>
             </div>
           ) : (
-            <div className="table-wrap">
+            <div className="table-wrap table-wrap-actions">
               <table className="table">
                 <thead>
                   <tr>
@@ -148,7 +148,7 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                     <th>Price</th>
                     <th>Qty</th>
                     <th>Status</th>
-                    <th />
+                    <th className="th-actions" />
                   </tr>
                 </thead>
                 <tbody>
@@ -177,13 +177,13 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                       <td>
                         <StatusBadge status={p.isActive === '1' ? 'active' : 'inactive'} />
                       </td>
-                      <td>
-                        <div className="party-row-actions">
+                      <td className="td-actions">
+                        <div className="party-row-actions party-row-actions-inline">
                           <Button variant="ghost" className="icon" type="button" title="Quick view" onClick={() => setPreview(p)}>
                             <Eye size={16} />
                           </Button>
                           <Link href={`/inventory/products/${p.id}/edit`}>
-                            <Button variant="secondary" type="button">
+                            <Button variant="secondary" type="button" className="doc-action-trigger">
                               Edit
                             </Button>
                           </Link>

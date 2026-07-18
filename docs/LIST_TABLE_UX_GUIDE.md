@@ -306,15 +306,36 @@ Invoice / POS / GL post
 
 ---
 
-## K. Screens to roll this out to
+## K. Rollout status (2026-07-18)
 
-| Module | List | Form product search |
-|--------|------|---------------------|
-| Quotations | ✅ reference | ✅ reference |
-| Sales Orders (Dispatch Note) | Apply list guide | Apply `ProductAddSearch` |
-| Sales Invoices | Apply list guide | Apply `ProductAddSearch` |
-| Purchase Orders / Purchases | Apply list guide | Apply `ProductAddSearch` |
-| Parties / Products | Partially aligned | N/A / own patterns |
+| Module | List UX | Form / lines UX |
+|--------|---------|-----------------|
+| **Quotations** | ✅ `QuotationList` → `CommercialDocumentList` | ✅ `QuotationForm` + `DocumentLinesEditor` |
+| **Sales Orders** | ✅ same list component | ✅ `SalesDocumentForm` |
+| **Sales Invoices** | ✅ list + tax cols + print | ✅ `InvoiceDocumentForm` |
+| **Sales Returns** | list (basic) | ✅ `SalesDocumentForm` |
+| **POS** | history list | ✅ Full-screen `/pos` (not office form) |
+| **Inventory products** | ✅ search + period + pagination + inline actions | Product form (existing) |
+| Purchase orders/bills | Still older `CommercialDocList` shell | Can adopt `DocumentLinesEditor` next |
+
+### Shared building blocks
+
+| Block | File |
+|-------|------|
+| Document list | `components/sales/commercial-document-list.tsx` |
+| Line editor + free text + **Save as product** | `components/module/document-lines-editor.tsx` |
+| Product typeahead | `components/module/product-add-search.tsx` |
+| Qty steppers | `components/module/qty-stepper.tsx` |
+| Quick create product | `createQuickProduct` in `app/actions/inventory.ts` |
+
+### Save as product (free-text → catalog)
+
+On each **Manual** line:
+
+1. Type dropdown: **Service (default)** / Physical / Digital  
+2. **Save** → `createQuickProduct` → product master + link `productId` on the line  
+3. Physical gets stock level 0; invoice/POS later uses type for COGS/stock  
+4. SKU auto: `Q-{NAME}-{stamp}`  
 
 POS full-screen remains separate — see `docs/POS_DESIGN.md`.
 

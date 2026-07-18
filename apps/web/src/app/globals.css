@@ -4511,3 +4511,33 @@ textarea.input {
   border: 1px solid var(--line);
   background: var(--surface-muted);
 }
+
+/* Save as product on free-text document lines */
+.doc-save-as-product {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.doc-save-as-type {
+  min-height: 32px !important;
+  padding: 2px 6px !important;
+  font-size: 11px !important;
+  min-width: 0;
+  flex: 1;
+}
+.doc-save-as-btn {
+  min-height: 32px !important;
+  padding: 0 8px !important;
+  font-size: 11px !important;
+  flex-shrink: 0;
+}
+.doc-line-linked {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--success, #15835f);
+}
+.doc-line-linked.muted {
+  color: var(--ink-soft);
+  font-weight: 600;
+}

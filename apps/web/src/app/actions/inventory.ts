@@ -467,6 +467,147 @@ function toProductValues(tenantId: string, parsed: ProductInput) {
   };
 }
 
+/**
+ * Quick-create product from free-text sales lines (quote/SO/invoice).
+ * Default type: service. Returns product pick fields for linking the line.
+ */
+export async function createQuickProduct(input: {
+  name: string;
+  productType?: 'physical' | 'digital' | 'service';
+  sellPrice?: number;
+  unitCost?: number;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  product?: {
+    id: string;
+    sku: string;
+    name: string;
+    sellPrice: number;
+    unitCost: number;
+    productType: string;
+    barcode: string | null;
+    imageUrl: string | null;
+  };
+}> {
+  try {
+    const name = input.name.trim();
+    if (!name) return { ok: false, error: 'Name is required.' };
+    const type = normalizeType(input.productType ?? 'service');
+    const sellPrice = Math.max(0, Number(input.sellPrice) || 0);
+    const unitCost = Math.max(0, Number(input.unitCost) || 0);
+    const user = await requireTenantContext();
+
+    const product = await withTenantContext(user.tenantId, async () => {
+      const base = name
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 12);
+      const stamp = Date.now().toString(36).toUpperCase().slice(-4);
+      let sku = `Q-${base || 'ITEM'}-${stamp}`.slice(0, 40);
+
+      for (let i = 0; i < 5; i++) {
+        const trySku = i === 0 ? sku : `${sku.slice(0, 36)}-${i}`;
+        const [dup] = await db()
+          .select({ id: inventoryProducts.id })
+          .from(inventoryProducts)
+          .where(
+            and(
+              eq(inventoryProducts.tenantId, user.tenantId),
+              sql`lower(${inventoryProducts.sku}) = lower(${trySku})`,
+              isNull(inventoryProducts.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (!dup) {
+          sku = trySku;
+          break;
+        }
+      }
+
+      const [created] = await db()
+        .insert(inventoryProducts)
+        .values(
+          toProductValues(user.tenantId, {
+            sku,
+            name,
+            description: name,
+            productType: type,
+            unit: 'ea',
+            unitCost,
+            sellPrice,
+            openingQty: 0,
+            category: type === 'service' ? 'Services' : type === 'digital' ? 'Digital' : 'General',
+            barcode: '',
+            sellable: true,
+            purchasable: type === 'physical',
+            taxStatus: 'standard',
+            reorderLevel: null,
+            reorderQty: null,
+            revenueAccountCode: '4000',
+            cogsAccountCode: '5000',
+            inventoryAccountCode: '5100',
+            expenseAccountCode: '6800',
+            notes: 'Quick-created from sales document free-text line',
+            isActive: true,
+          }),
+        )
+        .returning({
+          id: inventoryProducts.id,
+          sku: inventoryProducts.sku,
+          name: inventoryProducts.name,
+          sellPrice: inventoryProducts.sellPrice,
+          unitCost: inventoryProducts.unitCost,
+          productType: inventoryProducts.productType,
+        });
+
+      if (type === 'physical') {
+        await db().insert(inventoryStockLevels).values({
+          tenantId: user.tenantId,
+          productId: created.id,
+          locationId: null,
+          qtyOnHand: '0',
+        });
+      }
+
+      await db().insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'CREATE',
+        tableName: 'inventory_products',
+        recordId: created.id,
+        newValues: { sku: created.sku, name: created.name, productType: type, source: 'quick' },
+        notes: 'Quick-created product from free-text line.',
+      });
+
+      return created;
+    });
+
+    revalidatePath('/inventory/products');
+    revalidatePath('/sales/quotations');
+    revalidatePath('/sales/orders');
+    revalidatePath('/sales/invoices');
+    revalidatePath('/pos');
+
+    return {
+      ok: true,
+      product: {
+        id: product.id,
+        sku: product.sku,
+        name: product.name,
+        sellPrice: Number(product.sellPrice),
+        unitCost: Number(product.unitCost),
+        productType: product.productType,
+        barcode: null,
+        imageUrl: null,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not create product.' };
+  }
+}
+
 export async function createProductFromForm(formData: FormData): Promise<void> {
   const parsed = productInputSchema.parse(formToProductInput(formData));
   const type = normalizeType(parsed.productType);

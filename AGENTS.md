@@ -199,6 +199,7 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 - `docs/PRODUCTION_RULES.md` — Rules that must never be broken
 - `docs/KNOWN_ERRORS.md` — Common issues and fixes
 - `docs/TASK_LOG.md` — Track completed/in-progress tasks
+- `docs/LIST_TABLE_UX_GUIDE.md` — Universal list tables: search, duration filter, sort, pagination, view+Actions menu
 - `ai/AI_CONTEXT.generated.md` — Auto-generated project context
 - `ai/start-session.prompt.md` — Prompt for new AI sessions
 

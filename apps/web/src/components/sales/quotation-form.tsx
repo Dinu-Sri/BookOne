@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { createCommercialDocumentFromForm } from '@/app/actions/commercial-docs';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import { ProductAddSearch, type ProductPick } from '@/components/module/product-add-search';
@@ -61,6 +61,25 @@ export function QuotationForm({
   const [lines, setLines] = useState<LineState[]>([]);
   /** Collapse header while typing product search for more suggestion space */
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
+  /** User forced expand while still searching — do not auto-re-collapse until search clears */
+  const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
+
+  const handleSearchActive = useCallback(
+    (active: boolean) => {
+      if (active) {
+        if (!pinDetailsExpanded) setDetailsCollapsed(true);
+      } else {
+        setDetailsCollapsed(false);
+        setPinDetailsExpanded(false);
+      }
+    },
+    [pinDetailsExpanded],
+  );
+
+  function expandDetails() {
+    setDetailsCollapsed(false);
+    setPinDetailsExpanded(true);
+  }
 
   const computed = useMemo(() => {
     let subtotal = 0;
@@ -132,11 +151,7 @@ export function QuotationForm({
 
       <div className="doc-form-scroll">
         {detailsCollapsed ? (
-          <button
-            type="button"
-            className="doc-details-collapsed-bar"
-            onClick={() => setDetailsCollapsed(false)}
-          >
+          <button type="button" className="doc-details-collapsed-bar" onClick={expandDetails}>
             <span>
               <strong>Quotation details</strong>
               <small>Click to expand customer, dates, terms…</small>
@@ -145,13 +160,7 @@ export function QuotationForm({
           </button>
         ) : null}
 
-        <div
-          className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}
-          onClick={() => {
-            if (detailsCollapsed) setDetailsCollapsed(false);
-          }}
-          role={detailsCollapsed ? 'button' : undefined}
-        >
+        <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
           <div className="field field-span-2">
             <label>Customer *</label>
             {partyOptions.length > 0 ? (
@@ -332,9 +341,7 @@ export function QuotationForm({
                 onPick={pickProduct}
                 placeholder="Type SKU or product name…"
                 autoFocus
-                onSearchActive={(active) => {
-                  if (active) setDetailsCollapsed(true);
-                }}
+                onSearchActive={handleSearchActive}
               />
             </div>
             {/* Fallback so empty submit still has a description if someone only types free text later */}

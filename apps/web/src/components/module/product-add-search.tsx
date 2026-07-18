@@ -112,9 +112,16 @@ export function ProductAddSearch({
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  // Notify parent of search focus without thrashing when callback identity changes
+  const onSearchActiveRef = useRef(onSearchActive);
+  onSearchActiveRef.current = onSearchActive;
+  const lastActiveRef = useRef(false);
   useEffect(() => {
-    onSearchActive?.(q.trim().length > 0);
-  }, [q, onSearchActive]);
+    const active = q.trim().length > 0;
+    if (active === lastActiveRef.current) return;
+    lastActiveRef.current = active;
+    onSearchActiveRef.current?.(active);
+  }, [q]);
 
   // Auto-add: exact SKU/barcode immediately, or sole fuzzy match after debounce
   useEffect(() => {

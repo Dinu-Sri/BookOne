@@ -166,7 +166,9 @@ Classes: `doc-action-panel`, `doc-action-panel-fixed`, `doc-action-item`, `doc-a
 3. User types **SKU**, **product name**, or **barcode**.  
 4. **While typing (search active):**  
    - **Collapse** the upper document details section (customer, dates, terms) to free vertical space.  
-   - Show a slim **“Quotation details — Expand”** bar; click anywhere on it (or the top area) to restore details.  
+   - Show a slim **“Quotation details — Expand”** bar.  
+   - **Expand** must stick open while the user still has text in the search field (`pinDetailsExpanded`); only auto-collapse again after search is cleared. Do not re-collapse on every parent re-render of `onSearchActive`.  
+   - Use a stable callback (`useCallback` + ref in `ProductAddSearch`) so expand does not “refresh/flicker”.  
 5. **Suggestions:**  
    - **Multiple matches** → portaled list (not clipped by table/footer); ↑↓ + Enter or click.  
    - Each suggestion: **1:1 thumbnail** (36×36) + SKU + name + price. Fallback initial if no image.  

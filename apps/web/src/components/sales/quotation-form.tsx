@@ -59,6 +59,8 @@ export function QuotationForm({
   const [discountId, setDiscountId] = useState('');
   /** Committed lines only — add via search UX */
   const [lines, setLines] = useState<LineState[]>([]);
+  /** Collapse header while typing product search for more suggestion space */
+  const [detailsCollapsed, setDetailsCollapsed] = useState(false);
 
   const computed = useMemo(() => {
     let subtotal = 0;
@@ -129,7 +131,27 @@ export function QuotationForm({
       </div>
 
       <div className="doc-form-scroll">
-        <div className="doc-form-header">
+        {detailsCollapsed ? (
+          <button
+            type="button"
+            className="doc-details-collapsed-bar"
+            onClick={() => setDetailsCollapsed(false)}
+          >
+            <span>
+              <strong>Quotation details</strong>
+              <small>Click to expand customer, dates, terms…</small>
+            </span>
+            <span className="doc-details-collapsed-hint">Expand</span>
+          </button>
+        ) : null}
+
+        <div
+          className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}
+          onClick={() => {
+            if (detailsCollapsed) setDetailsCollapsed(false);
+          }}
+          role={detailsCollapsed ? 'button' : undefined}
+        >
           <div className="field field-span-2">
             <label>Customer *</label>
             {partyOptions.length > 0 ? (
@@ -310,6 +332,9 @@ export function QuotationForm({
                 onPick={pickProduct}
                 placeholder="Type SKU or product name…"
                 autoFocus
+                onSearchActive={(active) => {
+                  if (active) setDetailsCollapsed(true);
+                }}
               />
             </div>
             {/* Fallback so empty submit still has a description if someone only types free text later */}

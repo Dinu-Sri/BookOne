@@ -4264,6 +4264,48 @@ textarea.input {
   background: var(--danger-soft);
 }
 
+/* Collapsible document header while adding products */
+.doc-form-header.is-collapsed {
+  display: none;
+}
+.doc-details-collapsed-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  padding: 10px 14px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.doc-details-collapsed-bar:hover {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.doc-details-collapsed-bar strong {
+  display: block;
+  font-size: 13px;
+}
+.doc-details-collapsed-bar small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.doc-details-collapsed-hint {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
 /* Product add search (forms) — full-width under lines; slightly taller for touch/desktop */
 .product-add-search {
   position: relative;
@@ -4276,26 +4318,24 @@ textarea.input {
   font-size: 14px;
 }
 .product-add-search-list {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 50;
   margin: 0;
   padding: 8px;
   list-style: none;
-  max-height: 280px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+}
+/* Portaled suggestions — not clipped by table/footer */
+.product-add-search-list-fixed {
+  z-index: 220;
 }
 .product-add-search-option {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   text-align: left;
   border: 0;
@@ -4305,6 +4345,28 @@ textarea.input {
   cursor: pointer;
   font: inherit;
   color: var(--ink);
+}
+.product-add-thumb {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-subtle);
+  display: grid;
+  place-items: center;
+}
+.product-add-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  aspect-ratio: 1 / 1;
+}
+.product-add-thumb-fallback {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-soft);
 }
 .product-add-search-option:hover,
 .product-add-search-option.active {
@@ -4380,4 +4442,15 @@ textarea.input {
   color: var(--ink);
   border: 1px solid var(--line);
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+  max-height: min(70vh, 320px);
+  overflow-y: auto;
+}
+.doc-action-item-muted {
+  color: var(--ink-soft) !important;
+  cursor: default !important;
+  font-weight: 600 !important;
+}
+.doc-action-item-muted:hover {
+  background: transparent !important;
+  color: var(--ink-soft) !important;
 }

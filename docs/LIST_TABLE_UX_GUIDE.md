@@ -110,8 +110,10 @@ Never require manual Cancel to dismiss the menu.
 | Position | `position: fixed` from trigger `getBoundingClientRect()` |
 | Open direction | Prefer **down**; open **up** only if not enough space below **and** enough space above |
 | Open-up technique | `top` at trigger top + `transform: translateY(-100%)` |
-| z-index | **≥ 200** |
+| z-index | **≥ 300** on the portaled panel |
 | Background | Solid surface + shadow so text never “disappears” over table |
+| Empty state | If no actions apply (e.g. converted), show **“No actions available”** — never an empty shell |
+| Resolve row | Look up open menu row from **pageRows → filtered → all rows** so first/last pages never miss items |
 | Close | Outside click, scroll, resize |
 
 Classes: `doc-action-panel`, `doc-action-panel-fixed`, `doc-action-item`, `doc-action-trigger`.
@@ -162,29 +164,46 @@ Classes: `doc-action-panel`, `doc-action-panel-fixed`, `doc-action-item`, `doc-a
 1. Lines table shows **committed** rows only (SKU, description, qty, unit price, amount, remove).  
 2. Below the table: one always-visible **Add product** search field (full width, min-height ~**44px**).  
 3. User types **SKU**, **product name**, or **barcode**.  
-4. **While typing:**  
-   - **Multiple matches** → suggestion list (max ~12); ↑↓ + Enter or click.  
+4. **While typing (search active):**  
+   - **Collapse** the upper document details section (customer, dates, terms) to free vertical space.  
+   - Show a slim **“Quotation details — Expand”** bar; click anywhere on it (or the top area) to restore details.  
+5. **Suggestions:**  
+   - **Multiple matches** → portaled list (not clipped by table/footer); ↑↓ + Enter or click.  
+   - Each suggestion: **1:1 thumbnail** (36×36) + SKU + name + price. Fallback initial if no image.  
    - **Exact SKU/barcode** → **auto-add immediately**.  
    - **Exactly one fuzzy match** (query length ≥ 2) → **auto-add after ~400ms debounce**.  
-5. On add: append line (qty default `1`, price from product); **clear search**; **keep focus** for next item.  
-6. User can edit qty/price/description on the line; × removes the line.  
-7. Save disabled (or validated) when there are **zero** lines.
+6. On add: append line (qty default `1`, price from product); **clear search**; **keep focus** for next item.  
+7. User can edit qty/price/description on the line; × removes the line.  
+8. Save disabled (or validated) when there are **zero** lines.
+
+### Suggestion list clipping
+
+| Rule | Detail |
+|------|--------|
+| Render | Portal to `document.body` |
+| Position | `position: fixed` under (or above) the search input |
+| Max height | From available viewport space (min ~160, max ~320) |
+| Flip | Open **up** when bottom space is tight |
+| z-index | ≥ **220** |
 
 ### Implementation
 
 | Piece | Path / class |
 |-------|----------------|
 | Component | `ProductAddSearch` — `components/module/product-add-search.tsx` |
-| Styles | `.product-add-search*`, `.product-add-row`, `.doc-line-sku`, `.doc-line-remove` |
-| Form data | `loadSalesFormData` supplies `id`, `sku`, `name`, `sellPrice`, `unitCost`, `barcode` |
+| Collapse | `onSearchActive` → parent sets `detailsCollapsed`; bar `.doc-details-collapsed-bar` |
+| Styles | `.product-add-search*`, `.product-add-thumb`, `.product-add-row`, `.doc-line-sku` |
+| Form data | `loadSalesFormData` supplies `id`, `sku`, `name`, `sellPrice`, `unitCost`, `barcode`, **`imageUrl`** |
 | Reference form | `quotation-form.tsx` |
 
 ### Reuse checklist (forms)
 
 - [ ] No product `<select>` for catalogues  
 - [ ] `ProductAddSearch` under lines  
+- [ ] Suggestions **portaled** (not cut by footer)  
+- [ ] Thumbnails 1:1 on suggestions  
+- [ ] Collapse details while searching; expand on bar click  
 - [ ] Auto-add single / exact match  
-- [ ] Multi-match suggestions  
 - [ ] Focus retained after add  
 - [ ] Hidden inputs / line indices still post correctly to server actions  
 

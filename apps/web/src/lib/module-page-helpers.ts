@@ -32,6 +32,7 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
       sellPrice: p.sellPrice,
       unitCost: p.unitCost,
       barcode: p.barcode,
+      imageUrl: p.imageUrl ?? null,
     })),
     discounts,
     paymentAccounts: options.paymentAccounts,

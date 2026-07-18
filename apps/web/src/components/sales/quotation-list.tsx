@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Eye } from 'lucide-react';
 import {
@@ -281,7 +281,102 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
     return row.status !== 'converted' && row.status !== 'void';
   }
 
-  const openRow = openMenuId ? rows.find((r) => r.id === openMenuId) : null;
+  // Prefer pageRows so open menu always resolves even if list filtered/sorted
+  const openRow = openMenuId
+    ? pageRows.find((r) => r.id === openMenuId) ||
+      filtered.find((r) => r.id === openMenuId) ||
+      rows.find((r) => r.id === openMenuId) ||
+      null
+    : null;
+
+  function renderMenuItems(row: CommercialDocRow) {
+    const items: ReactNode[] = [];
+    if (canEdit(row)) {
+      items.push(
+        <Link
+          key="edit"
+          href={`/sales/quotations/${row.id}/edit`}
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+          }}
+        >
+          Edit
+        </Link>,
+      );
+    }
+    if (canConvert(row)) {
+      items.push(
+        <form key="convert" action={convertDocumentAction}>
+          <input type="hidden" name="sourceId" value={row.id} />
+          <input type="hidden" name="targetType" value="sales_order" />
+          <button type="submit" className="doc-action-item" role="menuitem">
+            Convert to order
+          </button>
+        </form>,
+      );
+    }
+    if (row.status === 'archived') {
+      items.push(
+        <button
+          key="restore"
+          type="button"
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+            setConfirm({ type: 'restore', row });
+          }}
+        >
+          Restore
+        </button>,
+      );
+    } else if (canEdit(row)) {
+      items.push(
+        <button
+          key="archive"
+          type="button"
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+            setConfirm({ type: 'archive', row });
+          }}
+        >
+          Archive
+        </button>,
+      );
+    }
+    if (row.status !== 'converted') {
+      items.push(
+        <button
+          key="delete"
+          type="button"
+          className="doc-action-item danger"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+            setConfirm({ type: 'delete', row });
+          }}
+        >
+          Delete
+        </button>,
+      );
+    }
+    if (items.length === 0) {
+      items.push(
+        <div key="none" className="doc-action-item doc-action-item-muted" role="menuitem">
+          No actions available
+        </div>,
+      );
+    }
+    return items;
+  }
 
   const menuPortal =
     mounted && openMenuId && menuPos && openRow
@@ -294,77 +389,15 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
               position: 'fixed',
               top: menuPos.top,
               left: menuPos.left,
-              transform: menuPos.openUp ? 'translateY(-100%)' : undefined,
-              zIndex: 200,
+              transform: menuPos.openUp ? 'translateY(-100%)' : 'none',
+              zIndex: 300,
               minWidth: 220,
+              visibility: 'visible',
+              opacity: 1,
+              pointerEvents: 'auto',
             }}
           >
-            {canEdit(openRow) ? (
-              <Link
-                href={`/sales/quotations/${openRow.id}/edit`}
-                className="doc-action-item"
-                role="menuitem"
-                onClick={() => {
-                  setOpenMenuId(null);
-                  setMenuPos(null);
-                }}
-              >
-                Edit
-              </Link>
-            ) : null}
-
-            {canConvert(openRow) ? (
-              <form action={convertDocumentAction}>
-                <input type="hidden" name="sourceId" value={openRow.id} />
-                <input type="hidden" name="targetType" value="sales_order" />
-                <button type="submit" className="doc-action-item" role="menuitem">
-                  Convert to order
-                </button>
-              </form>
-            ) : null}
-
-            {openRow.status === 'archived' ? (
-              <button
-                type="button"
-                className="doc-action-item"
-                role="menuitem"
-                onClick={() => {
-                  setOpenMenuId(null);
-                  setMenuPos(null);
-                  setConfirm({ type: 'restore', row: openRow });
-                }}
-              >
-                Restore
-              </button>
-            ) : canEdit(openRow) ? (
-              <button
-                type="button"
-                className="doc-action-item"
-                role="menuitem"
-                onClick={() => {
-                  setOpenMenuId(null);
-                  setMenuPos(null);
-                  setConfirm({ type: 'archive', row: openRow });
-                }}
-              >
-                Archive
-              </button>
-            ) : null}
-
-            {openRow.status !== 'converted' ? (
-              <button
-                type="button"
-                className="doc-action-item danger"
-                role="menuitem"
-                onClick={() => {
-                  setOpenMenuId(null);
-                  setMenuPos(null);
-                  setConfirm({ type: 'delete', row: openRow });
-                }}
-              >
-                Delete
-              </button>
-            ) : null}
+            {renderMenuItems(openRow)}
           </div>,
           document.body,
         )

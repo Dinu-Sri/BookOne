@@ -1167,3 +1167,268 @@ export async function listActiveDiscounts() {
       );
   });
 }
+
+export interface CommercialDocDetail {
+  id: string;
+  documentType: string;
+  documentNumber: string;
+  partyName: string;
+  issueDate: string;
+  dueDate: string | null;
+  status: string;
+  subtotal: number;
+  discountTotal: number;
+  taxTotal: number;
+  total: number;
+  balanceDue: number;
+  currency: string;
+  notes: string | null;
+  paymentMode: string | null;
+  saleChannel: string;
+  invoiceKind: string;
+  lines: {
+    id: string;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }[];
+}
+
+export async function getCommercialDocument(id: string): Promise<CommercialDocDetail | null> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const [doc] = await db()
+      .select()
+      .from(businessDocuments)
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          eq(businessDocuments.id, id),
+          isNull(businessDocuments.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (!doc) return null;
+
+    const [party] = await db()
+      .select({ name: parties.name })
+      .from(parties)
+      .where(eq(parties.id, doc.partyId))
+      .limit(1);
+
+    const lines = await db()
+      .select()
+      .from(businessDocumentLines)
+      .where(
+        and(eq(businessDocumentLines.documentId, doc.id), isNull(businessDocumentLines.voidedAt)),
+      );
+
+    return {
+      id: doc.id,
+      documentType: doc.documentType,
+      documentNumber: doc.documentNumber,
+      partyName: party?.name ?? 'Unknown',
+      issueDate: doc.issueDate,
+      dueDate: doc.dueDate,
+      status: doc.status,
+      subtotal: Number(doc.subtotal),
+      discountTotal: Number(doc.discountTotal),
+      taxTotal: Number(doc.taxTotal),
+      total: Number(doc.total),
+      balanceDue: Number(doc.balanceDue),
+      currency: doc.currency,
+      notes: doc.notes,
+      paymentMode: doc.paymentMode,
+      saleChannel: doc.saleChannel ?? 'local',
+      invoiceKind: doc.invoiceKind ?? 'commercial',
+      lines: lines.map((l) => ({
+        id: l.id,
+        description: l.description,
+        quantity: Number(l.quantity),
+        unitPrice: Number(l.unitPrice),
+        lineTotal: Number(l.lineTotal),
+      })),
+    };
+  });
+}
+
+const NON_GL_TYPES = new Set(['quotation', 'sales_order', 'purchase_order']);
+
+/** Soft-delete (void). Blocked if posted to GL (has transaction). */
+export async function deleteCommercialDocument(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const user = await requireTenantContext();
+    await withTenantContext(user.tenantId, async () => {
+      const [doc] = await db()
+        .select()
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, user.tenantId),
+            eq(businessDocuments.id, id),
+            isNull(businessDocuments.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!doc) throw new Error('Document not found.');
+      if (doc.transactionId) {
+        throw new Error('Cannot delete a posted document. Void it from accounting controls later.');
+      }
+      if (doc.status === 'converted' || doc.status === 'fully_invoiced') {
+        throw new Error('Cannot delete a converted / fully invoiced document. Archive instead.');
+      }
+
+      await db()
+        .update(businessDocuments)
+        .set({ voidedAt: new Date(), status: 'void', updatedAt: new Date() })
+        .where(eq(businessDocuments.id, id));
+
+      await db().insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'DELETE',
+        tableName: 'business_documents',
+        recordId: id,
+        notes: `Deleted ${doc.documentType} ${doc.documentNumber}`,
+      });
+    });
+    revalidatePath('/sales/quotations');
+    revalidatePath('/sales/orders');
+    revalidatePath('/sales/invoices');
+    revalidatePath('/purchase/orders');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Delete failed.' };
+  }
+}
+
+/** Archive = hide from active workflow (status archived). */
+export async function archiveCommercialDocument(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const user = await requireTenantContext();
+    await withTenantContext(user.tenantId, async () => {
+      const [doc] = await db()
+        .select()
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, user.tenantId),
+            eq(businessDocuments.id, id),
+            isNull(businessDocuments.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!doc) throw new Error('Document not found.');
+      if (doc.status === 'converted' || doc.status === 'fully_invoiced') {
+        throw new Error('Already converted — leave as historical record.');
+      }
+
+      await db()
+        .update(businessDocuments)
+        .set({ status: 'archived', updatedAt: new Date() })
+        .where(eq(businessDocuments.id, id));
+
+      await db().insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'UPDATE',
+        tableName: 'business_documents',
+        recordId: id,
+        notes: `Archived ${doc.documentNumber}`,
+      });
+    });
+    revalidatePath('/sales/quotations');
+    revalidatePath('/sales/orders');
+    revalidatePath('/sales/invoices');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Archive failed.' };
+  }
+}
+
+export async function restoreCommercialDocument(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const user = await requireTenantContext();
+    await withTenantContext(user.tenantId, async () => {
+      const [doc] = await db()
+        .select()
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, user.tenantId),
+            eq(businessDocuments.id, id),
+            isNull(businessDocuments.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!doc) throw new Error('Document not found.');
+      if (doc.status !== 'archived') throw new Error('Only archived documents can be restored.');
+
+      const nextStatus = NON_GL_TYPES.has(doc.documentType)
+        ? doc.documentType === 'quotation'
+          ? 'draft'
+          : 'confirmed'
+        : 'open';
+
+      await db()
+        .update(businessDocuments)
+        .set({ status: nextStatus, updatedAt: new Date() })
+        .where(eq(businessDocuments.id, id));
+    });
+    revalidatePath('/sales/quotations');
+    revalidatePath('/sales/orders');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Restore failed.' };
+  }
+}
+
+/** Update header fields on non-posted commercial docs (quotes / orders). */
+export async function updateCommercialDocumentHeaderFromForm(formData: FormData): Promise<void> {
+  const id = String(formData.get('id') ?? '');
+  const status = String(formData.get('status') ?? '').trim();
+  const issueDate = String(formData.get('issueDate') ?? '').trim();
+  const dueDate = String(formData.get('dueDate') ?? '').trim();
+  const notes = String(formData.get('notes') ?? '').trim();
+  if (!id) throw new Error('Document id required.');
+
+  const user = await requireTenantContext();
+  await withTenantContext(user.tenantId, async () => {
+    const [doc] = await db()
+      .select()
+      .from(businessDocuments)
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          eq(businessDocuments.id, id),
+          isNull(businessDocuments.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (!doc) throw new Error('Document not found.');
+    if (doc.transactionId) throw new Error('Posted documents cannot be edited here.');
+    if (doc.status === 'converted' || doc.status === 'fully_invoiced') {
+      throw new Error('Converted documents cannot be edited.');
+    }
+
+    await db()
+      .update(businessDocuments)
+      .set({
+        status: status || doc.status,
+        issueDate: /^\d{4}-\d{2}-\d{2}$/.test(issueDate) ? issueDate : doc.issueDate,
+        dueDate: dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate) ? dueDate : dueDate === '' ? null : doc.dueDate,
+        notes: notes || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(businessDocuments.id, id));
+  });
+
+  revalidatePath('/sales/quotations');
+  revalidatePath('/sales/orders');
+  const { redirect } = await import('next/navigation');
+  const type = String(formData.get('documentType') ?? 'quotation');
+  if (type === 'sales_order') redirect('/sales/orders?flash=saved');
+  redirect('/sales/quotations?flash=saved');
+}
+

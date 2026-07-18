@@ -2402,6 +2402,60 @@ textarea.input {
   justify-content: flex-end;
 }
 
+/* Keep view + Actions on one row (list tables) */
+.party-row-actions-inline {
+  flex-wrap: nowrap;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.td-actions {
+  width: 1%;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.th-actions {
+  width: 132px;
+}
+
+.th-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.th-sort-btn:hover {
+  color: var(--ink);
+}
+
+.th-sort-icon {
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
+.th-sort-icon.active {
+  opacity: 1;
+  color: var(--brand);
+}
+
+/* Allow row action menus to escape table clip when using portal; keep horizontal scroll */
+.table-wrap-actions {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
 .party-form-shell {
   display: flex;
   flex-direction: column;
@@ -4159,6 +4213,7 @@ textarea.input {
 .doc-action-menu {
   position: relative;
   display: inline-flex;
+  flex-shrink: 0;
 }
 .doc-action-trigger {
   display: inline-flex !important;
@@ -4167,12 +4222,9 @@ textarea.input {
   min-height: 32px !important;
   padding: 0 10px !important;
   font-size: 12px !important;
+  white-space: nowrap;
 }
 .doc-action-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 40;
   min-width: 168px;
   padding: 6px;
   border-radius: 10px;
@@ -4181,6 +4233,10 @@ textarea.input {
   box-shadow: var(--shadow-md);
   display: grid;
   gap: 2px;
+}
+/* Portaled menu — escapes table overflow clipping on first/last rows */
+.doc-action-panel-fixed {
+  z-index: 80;
 }
 .doc-action-item {
   display: block;
@@ -4206,7 +4262,4 @@ textarea.input {
 }
 .doc-action-item.danger:hover {
   background: var(--danger-soft);
-}
-form .doc-action-item {
-  /* form submit styled as menu item */
 }

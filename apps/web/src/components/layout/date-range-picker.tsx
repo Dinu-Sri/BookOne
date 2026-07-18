@@ -2,7 +2,7 @@
 
 import { CalendarDays, Check, ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -30,16 +30,42 @@ function formatShort(iso: string) {
 /**
  * From–to period picker using the same trigger/menu style as the header date widget.
  * Writes `from` + `to` query params (YYYY-MM-DD). Clear = all time.
+ * Closes automatically when clicking outside.
  */
 export function DateRangePicker({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const fromParam = searchParams.get('from') ?? '';
   const toParam = searchParams.get('to') ?? '';
   const [from, setFrom] = useState(fromParam);
   const [to, setTo] = useState(toParam);
+
+  useEffect(() => {
+    setFrom(fromParam);
+    setTo(toParam);
+  }, [fromParam, toParam]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   const label = useMemo(() => {
     if (fromParam && toParam) return `${formatShort(fromParam)} → ${formatShort(toParam)}`;
@@ -82,7 +108,7 @@ export function DateRangePicker({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <div className={`date-quick period-picker ${compact ? 'compact' : ''}`}>
+    <div ref={rootRef} className={`date-quick period-picker ${compact ? 'compact' : ''}`}>
       <button
         className="date-trigger period-trigger"
         type="button"

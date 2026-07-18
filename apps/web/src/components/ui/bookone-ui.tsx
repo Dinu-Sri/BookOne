@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -20,9 +20,12 @@ export function BrandLockup({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function Button({ variant = 'secondary', className = '', ...props }: ComponentPropsWithoutRef<'button'> & { variant?: 'primary' | 'secondary' | 'ghost' | 'icon' }) {
-  return <button className={`button ${variant} ${className}`.trim()} type="button" {...props} />;
-}
+export const Button = forwardRef<
+  HTMLButtonElement,
+  ComponentPropsWithoutRef<'button'> & { variant?: 'primary' | 'secondary' | 'ghost' | 'icon' }
+>(function Button({ variant = 'secondary', className = '', type = 'button', ...props }, ref) {
+  return <button ref={ref} className={`button ${variant} ${className}`.trim()} type={type} {...props} />;
+});
 
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
   return <span className={`badge ${tone}`}>{children}</span>;

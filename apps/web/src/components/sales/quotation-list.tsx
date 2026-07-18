@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { ChevronDown, Eye } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Eye } from 'lucide-react';
 import {
   archiveCommercialDocument,
   convertDocumentAction,
@@ -13,6 +14,7 @@ import {
   type CommercialDocDetail,
   type CommercialDocRow,
 } from '@/app/actions/commercial-docs';
+import { DateRangePicker } from '@/components/layout/date-range-picker';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { QuotationSnapshotDialog } from '@/components/sales/quotation-snapshot';
@@ -21,52 +23,173 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const PAGE_SIZE = 10;
 
+type SortKey = 'documentNumber' | 'partyName' | 'issueDate' | 'status' | 'total';
+type SortDir = 'asc' | 'desc';
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <ArrowUpDown size={13} className="th-sort-icon" aria-hidden />;
+  return dir === 'asc' ? (
+    <ArrowUp size={13} className="th-sort-icon active" aria-hidden />
+  ) : (
+    <ArrowDown size={13} className="th-sort-icon active" aria-hidden />
+  );
+}
+
 export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const fromParam = searchParams.get('from') ?? '';
+  const toParam = searchParams.get('to') ?? '';
+
   const [rows, setRows] = useState(initialRows);
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState(searchParams.get('q') ?? '');
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page') ?? '1') || 1));
+  const [sortKey, setSortKey] = useState<SortKey>(
+    (searchParams.get('sort') as SortKey) || 'issueDate',
+  );
+  const [sortDir, setSortDir] = useState<SortDir>(
+    searchParams.get('dir') === 'asc' ? 'asc' : 'desc',
+  );
+
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; openUp: boolean } | null>(
+    null,
+  );
   const [preview, setPreview] = useState<CommercialDocDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [confirm, setConfirm] = useState<null | { type: 'archive' | 'delete' | 'restore'; row: CommercialDocRow }>(
-    null,
-  );
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [confirm, setConfirm] = useState<
+    null | { type: 'archive' | 'delete' | 'restore'; row: CommercialDocRow }
+  >(null);
+  const [mounted, setMounted] = useState(false);
+  const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const menuPanelRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    setRows(initialRows);
-  }, [initialRows]);
+  useEffect(() => setMounted(true), []);
+  useEffect(() => setRows(initialRows), [initialRows]);
 
+  // Debounce search → URL
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!menuRef.current) return;
-      if (!menuRef.current.contains(e.target as Node)) setOpenMenuId(null);
+    const handle = window.setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if ((params.get('q') ?? '') === query) return;
+      if (query) params.set('q', query);
+      else params.delete('q');
+      params.delete('page');
+      startTransition(() => {
+        router.replace(params.toString() ? `${pathname}?${params}` : pathname, { scroll: false });
+      });
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [query, pathname, router, searchParams]);
+
+  // Close action menu on outside click / scroll / resize
+  useEffect(() => {
+    if (!openMenuId) return;
+    function close(e: Event) {
+      const t = e.target as Node;
+      if (menuPanelRef.current?.contains(t)) return;
+      const btn = triggerRefs.current.get(openMenuId!);
+      if (btn?.contains(t)) return;
+      setOpenMenuId(null);
+      setMenuPos(null);
     }
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, []);
+    function reposition() {
+      const btn = triggerRefs.current.get(openMenuId!);
+      if (!btn) return;
+      placeMenu(btn);
+    }
+    document.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [openMenuId]);
+
+  function placeMenu(btn: HTMLButtonElement) {
+    const rect = btn.getBoundingClientRect();
+    const panelH = 200;
+    const openUp = rect.bottom + panelH > window.innerHeight - 8 && rect.top > panelH;
+    const top = openUp ? rect.top - 4 : rect.bottom + 4;
+    const left = Math.min(rect.right, window.innerWidth - 12);
+    setMenuPos({ top, left, openUp });
+  }
+
+  function toggleMenu(rowId: string) {
+    if (openMenuId === rowId) {
+      setOpenMenuId(null);
+      setMenuPos(null);
+      return;
+    }
+    const btn = triggerRefs.current.get(rowId);
+    if (btn) placeMenu(btn);
+    setOpenMenuId(rowId);
+  }
 
   const filtered = useMemo(() => {
+    let list = rows;
+
+    // Duration filter on issue date (YYYY-MM-DD)
+    if (fromParam) list = list.filter((r) => r.issueDate >= fromParam);
+    if (toParam) list = list.filter((r) => r.issueDate <= toParam);
+
     const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => {
-      const blob = [
-        r.documentNumber,
-        r.taxInvoiceNumber,
-        r.partyName,
-        r.status,
-        r.issueDate,
-        r.dueDate,
-        String(r.total),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return blob.includes(q);
+    if (q) {
+      list = list.filter((r) => {
+        const blob = [
+          r.documentNumber,
+          r.taxInvoiceNumber,
+          r.partyName,
+          r.status,
+          r.issueDate,
+          r.dueDate,
+          String(r.total),
+          String(r.subtotal),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return blob.includes(q);
+      });
+    }
+
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const sorted = [...list].sort((a, b) => {
+      let av: string | number = '';
+      let bv: string | number = '';
+      switch (sortKey) {
+        case 'documentNumber':
+          av = a.documentNumber.toLowerCase();
+          bv = b.documentNumber.toLowerCase();
+          break;
+        case 'partyName':
+          av = a.partyName.toLowerCase();
+          bv = b.partyName.toLowerCase();
+          break;
+        case 'issueDate':
+          av = a.issueDate;
+          bv = b.issueDate;
+          break;
+        case 'status':
+          av = a.status.toLowerCase();
+          bv = b.status.toLowerCase();
+          break;
+        case 'total':
+          av = a.total;
+          bv = b.total;
+          break;
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
     });
-  }, [rows, query]);
+    return sorted;
+  }, [rows, query, fromParam, toParam, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -74,11 +197,21 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
 
   useEffect(() => {
     setPage(1);
-  }, [query]);
+  }, [query, fromParam, toParam, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'issueDate' || key === 'total' ? 'desc' : 'asc');
+    }
+  }
 
   async function openView(id: string) {
     setBusy(true);
     setOpenMenuId(null);
+    setMenuPos(null);
     try {
       const detail = await getCommercialDocument(id);
       if (!detail) {
@@ -140,6 +273,94 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
     return row.status !== 'converted' && row.status !== 'void';
   }
 
+  const openRow = openMenuId ? rows.find((r) => r.id === openMenuId) : null;
+
+  const menuPortal =
+    mounted && openMenuId && menuPos && openRow
+      ? createPortal(
+          <div
+            ref={menuPanelRef}
+            className={`doc-action-panel doc-action-panel-fixed ${menuPos.openUp ? 'open-up' : ''}`}
+            role="menu"
+            style={{
+              position: 'fixed',
+              top: menuPos.openUp ? undefined : menuPos.top,
+              bottom: menuPos.openUp ? window.innerHeight - menuPos.top : undefined,
+              left: Math.max(12, menuPos.left - 168),
+              zIndex: 80,
+            }}
+          >
+            {canEdit(openRow) ? (
+              <Link
+                href={`/sales/quotations/${openRow.id}/edit`}
+                className="doc-action-item"
+                role="menuitem"
+                onClick={() => {
+                  setOpenMenuId(null);
+                  setMenuPos(null);
+                }}
+              >
+                Edit
+              </Link>
+            ) : null}
+
+            {canConvert(openRow) ? (
+              <form action={convertDocumentAction}>
+                <input type="hidden" name="sourceId" value={openRow.id} />
+                <input type="hidden" name="targetType" value="sales_order" />
+                <button type="submit" className="doc-action-item" role="menuitem">
+                  Convert to order
+                </button>
+              </form>
+            ) : null}
+
+            {openRow.status === 'archived' ? (
+              <button
+                type="button"
+                className="doc-action-item"
+                role="menuitem"
+                onClick={() => {
+                  setOpenMenuId(null);
+                  setMenuPos(null);
+                  setConfirm({ type: 'restore', row: openRow });
+                }}
+              >
+                Restore
+              </button>
+            ) : canEdit(openRow) ? (
+              <button
+                type="button"
+                className="doc-action-item"
+                role="menuitem"
+                onClick={() => {
+                  setOpenMenuId(null);
+                  setMenuPos(null);
+                  setConfirm({ type: 'archive', row: openRow });
+                }}
+              >
+                Archive
+              </button>
+            ) : null}
+
+            {openRow.status !== 'converted' ? (
+              <button
+                type="button"
+                className="doc-action-item danger"
+                role="menuitem"
+                onClick={() => {
+                  setOpenMenuId(null);
+                  setMenuPos(null);
+                  setConfirm({ type: 'delete', row: openRow });
+                }}
+              >
+                Delete
+              </button>
+            ) : null}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div className="workspace party-workspace">
       <div className="party-toolbar">
@@ -148,10 +369,13 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
             className="input party-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search quotations…"
-            aria-label="Search quotations"
+            placeholder="Search by customer name or number…"
+            aria-label="Search quotations by customer name or number"
             autoComplete="off"
           />
+        </div>
+        <div className="party-toolbar-period">
+          <DateRangePicker compact />
         </div>
         <Link href="/sales/quotations/new">
           <Button variant="primary" type="button">
@@ -168,20 +392,45 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
               <p style={{ marginTop: 6 }}>
                 {rows.length === 0
                   ? 'Create a quotation to get started.'
-                  : 'Try another search term.'}
+                  : 'Try another search or date range.'}
               </p>
             </div>
           ) : (
-            <div className="table-wrap">
+            <div className="table-wrap table-wrap-actions">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Number</th>
-                    <th>Customer</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Total</th>
-                    <th style={{ width: 120 }} />
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('documentNumber')}>
+                        Number
+                        <SortIcon active={sortKey === 'documentNumber'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('partyName')}>
+                        Customer
+                        <SortIcon active={sortKey === 'partyName'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('issueDate')}>
+                        Date
+                        <SortIcon active={sortKey === 'issueDate'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('status')}>
+                        Status
+                        <SortIcon active={sortKey === 'status'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('total')}>
+                        Total
+                        <SortIcon active={sortKey === 'total'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th className="th-actions" style={{ width: 132 }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -196,8 +445,8 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
                         <StatusBadge status={row.status} />
                       </td>
                       <td>{formatLKR(row.total)}</td>
-                      <td>
-                        <div className="party-row-actions" ref={openMenuId === row.id ? menuRef : undefined}>
+                      <td className="td-actions">
+                        <div className="party-row-actions party-row-actions-inline">
                           <Button
                             variant="ghost"
                             className="icon"
@@ -210,85 +459,23 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
                             <Eye size={16} />
                           </Button>
 
-                          <div className={`doc-action-menu ${openMenuId === row.id ? 'open' : ''}`}>
+                          <div className="doc-action-menu">
                             <Button
                               variant="secondary"
                               type="button"
                               className="doc-action-trigger"
                               disabled={busy}
-                              onClick={() =>
-                                setOpenMenuId((id) => (id === row.id ? null : row.id))
-                              }
+                              ref={(el) => {
+                                if (el) triggerRefs.current.set(row.id, el);
+                                else triggerRefs.current.delete(row.id);
+                              }}
+                              onClick={() => toggleMenu(row.id)}
                               aria-haspopup="menu"
                               aria-expanded={openMenuId === row.id}
                             >
                               Actions
                               <ChevronDown size={14} />
                             </Button>
-                            {openMenuId === row.id ? (
-                              <div className="doc-action-panel" role="menu">
-                                {canEdit(row) ? (
-                                  <Link
-                                    href={`/sales/quotations/${row.id}/edit`}
-                                    className="doc-action-item"
-                                    role="menuitem"
-                                    onClick={() => setOpenMenuId(null)}
-                                  >
-                                    Edit
-                                  </Link>
-                                ) : null}
-
-                                {canConvert(row) ? (
-                                  <form action={convertDocumentAction}>
-                                    <input type="hidden" name="sourceId" value={row.id} />
-                                    <input type="hidden" name="targetType" value="sales_order" />
-                                    <button type="submit" className="doc-action-item" role="menuitem">
-                                      Convert to order
-                                    </button>
-                                  </form>
-                                ) : null}
-
-                                {row.status === 'archived' ? (
-                                  <button
-                                    type="button"
-                                    className="doc-action-item"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      setConfirm({ type: 'restore', row });
-                                    }}
-                                  >
-                                    Restore
-                                  </button>
-                                ) : canEdit(row) ? (
-                                  <button
-                                    type="button"
-                                    className="doc-action-item"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      setConfirm({ type: 'archive', row });
-                                    }}
-                                  >
-                                    Archive
-                                  </button>
-                                ) : null}
-
-                                {row.status !== 'converted' ? (
-                                  <button
-                                    type="button"
-                                    className="doc-action-item danger"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      setConfirm({ type: 'delete', row });
-                                    }}
-                                  >
-                                    Delete
-                                  </button>
-                                ) : null}
-                              </div>
-                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -333,6 +520,8 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
           ) : null}
         </div>
       </Card>
+
+      {menuPortal}
 
       {preview ? <QuotationSnapshotDialog doc={preview} onClose={() => setPreview(null)} /> : null}
 

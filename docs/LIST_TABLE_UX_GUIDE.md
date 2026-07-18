@@ -1,183 +1,243 @@
-# BookOne list table & universal search — design guide
+# BookOne list tables, search & form line entry — design guide
 
-**Purpose:** Reuse the same list UX across Parties, Inventory, Sales documents, Purchase, etc.  
-**Status:** Canonical patterns (updated 2026-07-18).  
-**Reference implementation:** `apps/web/src/components/sales/quotation-list.tsx`, `party-list.tsx`, `product-list.tsx`, `date-range-picker.tsx`.
+**Purpose:** Canonical UI/UX for reusable list screens and product line entry across Sales, Purchase, Inventory, Parties.  
+**Status:** Living standard (updated **2026-07-18**).  
+**Primary references:**
+
+| Screen | Implementation |
+|--------|----------------|
+| Quotations list | `apps/web/src/components/sales/quotation-list.tsx` |
+| Quotation create form | `apps/web/src/components/sales/quotation-form.tsx` |
+| Product typeahead | `apps/web/src/components/module/product-add-search.tsx` |
+| Parties list | `apps/web/src/components/parties/party-list.tsx` |
+| Products list | `apps/web/src/components/inventory/product-list.tsx` |
+| Date range | `apps/web/src/components/layout/date-range-picker.tsx` |
+| Styles | `apps/web/src/app/globals.css` (`party-*`, `doc-action-*`, `th-sort-*`, `product-add-*`) |
+
+Also linked from `AGENTS.md`.
 
 ---
 
-## 1. Toolbar layout (universal)
+## A. List screen shell
 
-Order left → right:
+### Toolbar (left → right)
 
-1. **Universal search** (flex grow) — `party-search-form` + `input.party-search`
-2. **Duration / period picker** — `DateRangePicker compact` in `party-toolbar-period`
-3. **Primary action** — e.g. New quotation / New customer
+1. **Universal search** — `party-search-form` + `input.party-search` (flex grow)  
+2. **Duration filter** — `DateRangePicker compact` in `party-toolbar-period`  
+3. **Primary CTA** — e.g. New quotation  
 
 ```tsx
-<div className="party-toolbar">
-  <div className="party-search-form">
-    <input className="input party-search" placeholder="Search by …" />
+<div className="workspace party-workspace">
+  <div className="party-toolbar">
+    <div className="party-search-form">
+      <input className="input party-search" placeholder="Search by customer name or number…" />
+    </div>
+    <div className="party-toolbar-period">
+      <DateRangePicker compact />
+    </div>
+    <Link href="…/new"><Button variant="primary">New …</Button></Link>
   </div>
-  <div className="party-toolbar-period">
-    <DateRangePicker compact />
-  </div>
-  <Link href="…/new"><Button variant="primary">New …</Button></Link>
+  {/* Card + table + pagination */}
 </div>
 ```
 
-Shell: `workspace party-workspace` — **no page H1 / eyebrow / lead** on list screens.
+### List chrome rules
+
+| Do | Don’t |
+|----|--------|
+| `workspace party-workspace` | Page H1 / eyebrow / long lead (`ModulePageHeader`) |
+| Compact table in `Card` | Nested page titles |
+| `party-back-btn` on create/edit | One-off back link styles |
 
 ---
 
-## 2. Universal search
+## B. Universal search
 
 | Rule | Detail |
 |------|--------|
-| Live filter | Client-side debounce ~250ms optional; filter as user types |
-| Fields | Always include **primary code/number** and **party/name**; plus status, dates, totals as useful |
-| Placeholder | Explicit: e.g. `Search by customer name or number…` |
-| Empty state | Distinguish “no records yet” vs “no matches for filter” |
-| URL (optional) | Sync `q` query param for shareable state (`product-list` pattern) |
-
-**Quotations:** search blob includes `documentNumber`, `partyName`, status, dates, totals.
+| Live filter | Filter as user types; optional ~250ms debounce when syncing URL |
+| **Must search** | Document/code **number** + **customer/party name** (or product name/SKU) |
+| Also useful | Status, dates, totals, codes |
+| Placeholder | Explicit: `Search by customer name or number…` |
+| Empty states | “No records yet” vs “No matches” / “Try another search or date range” |
+| URL (optional) | `q` query param for shareable filters |
 
 ---
 
-## 3. Duration (date range) filter
+## C. Duration (date range) filter
 
 | Rule | Detail |
 |------|--------|
-| Component | `DateRangePicker` (`components/layout/date-range-picker.tsx`) |
-| Query params | `from`, `to` as `YYYY-MM-DD`; empty = all time |
-| Document lists | Filter on **issue date** (`issueDate >= from && issueDate <= to`) |
-| Outside click | **Must close** picker on mousedown outside root + Escape |
+| Component | `DateRangePicker` |
+| Params | `from`, `to` as `YYYY-MM-DD`; empty = all time |
+| Document lists | Filter **issue date**: `issueDate >= from && issueDate <= to` |
+| Outside click | **Close** on mousedown outside root + **Escape** |
 | Presets | All time, Last 7 days, Last 30 days, This month |
 
-Do not leave the period menu open until Cancel is pressed.
+Never require manual Cancel to dismiss the menu.
 
 ---
 
-## 4. Table structure
+## D. Table layout
 
 ### Columns
 
-- Prefer **compact** data columns (number, party, date, status, amount).
-- Avoid stacking many action buttons as separate columns.
+- Prefer: **Number · Party · Date · Status · Total** (+ compact actions).  
+- Avoid a separate column per action (Edit / Archive / Delete each as a button).
 
-### Row actions (required pattern)
+### Row actions (required)
 
-| Control | Placement |
-|---------|-----------|
-| **View** | Eye icon (`Button variant="ghost" className="icon"`) |
-| **Actions** | Single dropdown: Edit, domain actions (convert…), Archive/Restore, Delete |
+| Control | Spec |
+|---------|------|
+| **View** | Eye icon — `Button variant="ghost" className="icon"` |
+| **Actions** | One dropdown: Edit, convert/domain ops, Archive/Restore, Delete |
 
-**Same line, never wrap:**
+**Same line — never wrap** (keeps row height tight):
 
 ```css
-.party-row-actions-inline { flex-wrap: nowrap; white-space: nowrap; }
-.td-actions { white-space: nowrap; width: 1%; }
+.party-row-actions-inline { flex-wrap: nowrap; white-space: nowrap; align-items: center; }
+.td-actions { white-space: nowrap; width: 1%; vertical-align: middle; }
+.th-actions { width: ~132–140px; }
 ```
 
-### Dropdown clipping (first/last rows)
-
-Do **not** rely on `position: absolute` inside `.table-wrap` (overflow clips menus).
+### Actions dropdown — sizing & visibility
 
 | Rule | Detail |
 |------|--------|
-| Render | Portal menu to `document.body` |
+| Min width | **220px** (`min-width` / portal `minWidth`) |
+| Item padding | Comfortable: ~`10px 12px` |
+| Render | **Portal** to `document.body` (not inside `.table-wrap`) |
 | Position | `position: fixed` from trigger `getBoundingClientRect()` |
-| Flip | Prefer **open down**; only open up when space below &lt; panel height **and** space above is enough |
-| Transform | When open up: `transform: translateY(-100%)` with `top` at trigger top (avoids off-screen first rows) |
-| z-index | ≥ **200** so menu paints above sticky chrome / table heads |
+| Open direction | Prefer **down**; open **up** only if not enough space below **and** enough space above |
+| Open-up technique | `top` at trigger top + `transform: translateY(-100%)` |
+| z-index | **≥ 200** |
+| Background | Solid surface + shadow so text never “disappears” over table |
 | Close | Outside click, scroll, resize |
 
-Classes: `doc-action-panel doc-action-panel-fixed`.
+Classes: `doc-action-panel`, `doc-action-panel-fixed`, `doc-action-item`, `doc-action-trigger`.
 
 ---
 
-## 4b. Product add on forms (quotes / orders / invoices)
-
-**Do not** use a full product `<select>` when catalogues can be large.
+## E. Sorting
 
 | Rule | Detail |
 |------|--------|
-| Control | Single **search field** under the lines table |
-| Query | SKU, product name, barcode |
-| Multiple matches | Show suggestion list; keyboard ↑↓ + Enter; click to select |
-| Exactly one match | **Auto-add** after short debounce (or immediately on exact SKU/barcode) |
-| After add | Clear search; focus stays on field for next item |
-| Lines | Committed rows show SKU, editable qty/price/description, remove |
-| Component | `components/module/product-add-search.tsx` (`ProductAddSearch`) |
-
-This is the **universal product-entry UX** for all commercial document forms.
+| Headers | Clickable `th-sort-btn` on each sortable column |
+| Icon | Idle `ArrowUpDown`; active `ArrowUp` / `ArrowDown` (`.th-sort-icon.active`) |
+| Toggle | Same column flips asc/desc; new column uses sensible default (dates/totals often **desc**) |
 
 ---
 
-## 5. Sorting
+## F. Pagination
 
 | Rule | Detail |
 |------|--------|
-| Headers | Clickable sort control on each sortable column |
-| Icon | Neutral `ArrowUpDown`; active `ArrowUp` / `ArrowDown` |
-| Toggle | Same column → flip asc/desc; new column → sensible default (dates/totals often desc) |
-| Class | `th-sort-btn` + `th-sort-icon` / `.active` |
-
----
-
-## 6. Pagination
-
-| Rule | Detail |
-|------|--------|
-| Page size | **10** rows (`PAGE_SIZE = 10`) |
+| Page size | **10** (`PAGE_SIZE = 10`) |
 | UI | `party-pagination` + Previous / Next |
 | Copy | `{n} total · page X of Y` |
 | Reset page | When search, date range, or sort changes |
 
 ---
 
-## 7. Destructive / soft actions
+## G. Soft / destructive actions
 
 | Action | Behavior |
 |--------|----------|
-| View | Snapshot modal (no navigation) |
-| Edit | Dedicated edit route when fields need forms |
-| Archive | Soft status `archived`; restorable |
-| Delete | Soft void (`voidedAt`); confirm dialog; block if posted/converted |
-| Confirm | `ConfirmDialog` with danger tone for delete |
-
-Toasts via `pushStatusToast` after success/failure.
-
----
-
-## 8. Checklist for a new list screen
-
-1. [ ] `party-workspace` + toolbar (search + duration + primary CTA)
-2. [ ] Live search includes name/number (and domain keys)
-3. [ ] `DateRangePicker` with outside-click close
-4. [ ] Sortable column headers with icons
-5. [ ] Pagination 10/page
-6. [ ] View icon + Actions dropdown **inline**
-7. [ ] Actions menu portaled (no table clip)
-8. [ ] Confirm for archive/delete
-9. [ ] No ModulePageHeader / long lead on list
-10. [ ] Same patterns for back button on create/edit (`party-back-btn`)
+| View | Snapshot modal (lines + totals); no navigation |
+| Edit | Dedicated route when fields need a form |
+| Archive | Status `archived`; restorable |
+| Delete | Soft void (`voidedAt`); confirm; **block** if posted/converted |
+| Confirm | `ConfirmDialog` (danger tone for delete) |
+| Feedback | `pushStatusToast` |
 
 ---
 
-## 9. Key files
+## H. Product add on document forms (quotes → orders → invoices)
 
-| Piece | Path |
-|-------|------|
-| Quotation list (reference) | `apps/web/src/components/sales/quotation-list.tsx` |
-| Parties list | `apps/web/src/components/parties/party-list.tsx` |
-| Products list | `apps/web/src/components/inventory/product-list.tsx` |
+**Canonical flow** for large catalogues (thousands of SKUs).  
+**Do not** use a full product `<select>`.
+
+### UX flow
+
+1. Lines table shows **committed** rows only (SKU, description, qty, unit price, amount, remove).  
+2. Below the table: one always-visible **Add product** search field (full width, min-height ~**44px**).  
+3. User types **SKU**, **product name**, or **barcode**.  
+4. **While typing:**  
+   - **Multiple matches** → suggestion list (max ~12); ↑↓ + Enter or click.  
+   - **Exact SKU/barcode** → **auto-add immediately**.  
+   - **Exactly one fuzzy match** (query length ≥ 2) → **auto-add after ~400ms debounce**.  
+5. On add: append line (qty default `1`, price from product); **clear search**; **keep focus** for next item.  
+6. User can edit qty/price/description on the line; × removes the line.  
+7. Save disabled (or validated) when there are **zero** lines.
+
+### Implementation
+
+| Piece | Path / class |
+|-------|----------------|
+| Component | `ProductAddSearch` — `components/module/product-add-search.tsx` |
+| Styles | `.product-add-search*`, `.product-add-row`, `.doc-line-sku`, `.doc-line-remove` |
+| Form data | `loadSalesFormData` supplies `id`, `sku`, `name`, `sellPrice`, `unitCost`, `barcode` |
+| Reference form | `quotation-form.tsx` |
+
+### Reuse checklist (forms)
+
+- [ ] No product `<select>` for catalogues  
+- [ ] `ProductAddSearch` under lines  
+- [ ] Auto-add single / exact match  
+- [ ] Multi-match suggestions  
+- [ ] Focus retained after add  
+- [ ] Hidden inputs / line indices still post correctly to server actions  
+
+---
+
+## I. Checklist — new **list** screen
+
+1. [ ] `party-workspace` + toolbar (search + duration + primary CTA)  
+2. [ ] Live search includes **name + number**  
+3. [ ] `DateRangePicker` with outside-click close  
+4. [ ] Sortable headers with icons  
+5. [ ] Pagination 10/page  
+6. [ ] View icon + Actions dropdown **on one line**  
+7. [ ] Actions menu **portaled**, min-width **220px**, z-index ≥ 200  
+8. [ ] Confirm for archive/delete  
+9. [ ] No ModulePageHeader on list  
+10. [ ] Create/edit uses `party-back-btn` + compact form shell  
+
+---
+
+## J. Checklist — new **document form** (quote / SO / invoice)
+
+1. [ ] Compact shell (`doc-form-shell` / party form patterns)  
+2. [ ] Header fields (party, dates, terms)  
+3. [ ] Lines table + **ProductAddSearch** (not product dropdown)  
+4. [ ] Live totals (subtotal / discount / total)  
+5. [ ] Sticky footer Cancel / Save  
+
+---
+
+## K. Screens to roll this out to
+
+| Module | List | Form product search |
+|--------|------|---------------------|
+| Quotations | ✅ reference | ✅ reference |
+| Sales Orders (Dispatch Note) | Apply list guide | Apply `ProductAddSearch` |
+| Sales Invoices | Apply list guide | Apply `ProductAddSearch` |
+| Purchase Orders / Purchases | Apply list guide | Apply `ProductAddSearch` |
+| Parties / Products | Partially aligned | N/A / own patterns |
+
+POS full-screen remains separate — see `docs/POS_DESIGN.md`.
+
+---
+
+## L. Key file index
+
+| Concern | File |
+|---------|------|
+| Quotation list | `apps/web/src/components/sales/quotation-list.tsx` |
+| Quotation form | `apps/web/src/components/sales/quotation-form.tsx` |
+| Product typeahead | `apps/web/src/components/module/product-add-search.tsx` |
+| Snapshot view | `apps/web/src/components/sales/quotation-snapshot.tsx` |
+| Doc archive/delete | `apps/web/src/app/actions/commercial-docs.ts` |
 | Date range | `apps/web/src/components/layout/date-range-picker.tsx` |
-| Shared styles | `apps/web/src/app/globals.css` (party-*, doc-action-*, th-sort-*) |
-| Confirm dialog | `apps/web/src/components/ui/confirm-dialog.tsx` |
-
----
-
-## 10. Reuse note
-
-When adding **Sales Orders**, **Invoices**, **Purchase Orders** lists, clone the quotation list patterns rather than inventing new toolbars or multi-button action columns. Keep POS full-screen UX separate (see `docs/POS_DESIGN.md`).
+| Shared CSS | `apps/web/src/app/globals.css` |
+| This guide | `docs/LIST_TABLE_UX_GUIDE.md` |

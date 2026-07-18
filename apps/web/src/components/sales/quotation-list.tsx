@@ -113,8 +113,8 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
 
   function placeMenu(btn: HTMLButtonElement) {
     const rect = btn.getBoundingClientRect();
-    const panelW = 180;
-    const panelH = 230;
+    const panelW = 220;
+    const panelH = 250;
     const spaceBelow = window.innerHeight - rect.bottom;
     // Prefer open down; only flip up when not enough space below AND enough above
     const openUp = spaceBelow < panelH && rect.top > panelH;
@@ -296,7 +296,7 @@ export function QuotationList({ rows: initialRows }: { rows: CommercialDocRow[] 
               left: menuPos.left,
               transform: menuPos.openUp ? 'translateY(-100%)' : undefined,
               zIndex: 200,
-              minWidth: 180,
+              minWidth: 220,
             }}
           >
             {canEdit(openRow) ? (

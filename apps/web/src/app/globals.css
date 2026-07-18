@@ -4225,8 +4225,8 @@ textarea.input {
   white-space: nowrap;
 }
 .doc-action-panel {
-  min-width: 168px;
-  padding: 6px;
+  min-width: 220px;
+  padding: 8px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -4236,7 +4236,7 @@ textarea.input {
 }
 /* Portaled menu — escapes table overflow clipping on first/last rows */
 .doc-action-panel-fixed {
-  z-index: 80;
+  z-index: 200;
 }
 .doc-action-item {
   display: block;
@@ -4248,7 +4248,7 @@ textarea.input {
   font: inherit;
   font-size: 13px;
   font-weight: 650;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
   text-decoration: none;
@@ -4264,13 +4264,16 @@ textarea.input {
   background: var(--danger-soft);
 }
 
-/* Product add search (forms) */
+/* Product add search (forms) — full-width under lines; slightly taller for touch/desktop */
 .product-add-search {
   position: relative;
   width: 100%;
+  max-width: 100%;
 }
 .product-add-search-input {
   width: 100%;
+  min-height: 44px;
+  font-size: 14px;
 }
 .product-add-search-list {
   position: absolute;
@@ -4279,9 +4282,9 @@ textarea.input {
   top: calc(100% + 4px);
   z-index: 50;
   margin: 0;
-  padding: 6px;
+  padding: 8px;
   list-style: none;
-  max-height: 240px;
+  max-height: 280px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -4337,9 +4340,10 @@ textarea.input {
   color: var(--ink-soft);
 }
 .product-add-row {
-  padding: 10px 12px 12px;
+  padding: 12px 14px 14px;
   border-top: 1px solid var(--line);
   background: var(--surface-muted);
+  min-width: 0;
 }
 .product-add-label {
   display: block;

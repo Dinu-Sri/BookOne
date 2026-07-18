@@ -6,6 +6,7 @@ import {
   buildSalesInvoicePosting,
   buildSalesReturnPosting,
   buildVendorBillPosting,
+  buildCashPurchasePosting,
   buildPurchaseReturnPosting,
   isPhysicalProduct,
   amountInWordsLkr,
@@ -50,6 +51,7 @@ export type CommercialDocType =
   | 'purchase_order'
   | 'purchase' // local purchase (AP)
   | 'import_purchase' // import purchase (AP + inventory)
+  | 'cash_purchase' // paid now — no AP (QBO Expense)
   | 'purchase_return'
   | 'vendor_bill' // legacy alias of purchase
   | 'customer_invoice'; // legacy
@@ -74,6 +76,7 @@ const createSchema = z.object({
     'purchase_order',
     'purchase',
     'import_purchase',
+    'cash_purchase',
     'purchase_return',
     'vendor_bill',
   ]),
@@ -87,11 +90,12 @@ const createSchema = z.object({
   headerDiscount: z.number().min(0).optional().default(0),
   sourceDocumentId: z.string().uuid().optional().nullable(),
   sourceOrderIds: z.array(z.string().uuid()).optional(),
-  paymentAccountCode: z.string().max(20).optional(), // POS / cash invoice
+  paymentAccountCode: z.string().max(20).optional(), // POS / cash invoice / cash purchase
   saleChannel: z.enum(['local', 'export']).optional().default('local'),
   invoiceKind: z.enum(['commercial', 'tax_invoice']).optional().default('commercial'),
   placeOfSupply: z.string().max(255).optional(),
   paymentMode: z.string().max(40).optional(),
+  supplierInvoiceNumber: z.string().max(80).optional(),
   exportCountry: z.string().max(100).optional(),
   exportRef: z.string().max(120).optional(),
   purchaserTin: z.string().max(50).optional(),
@@ -172,6 +176,7 @@ const PREFIX: Record<string, string> = {
   purchase_order: 'PO',
   purchase: 'PUR',
   import_purchase: 'IMP',
+  cash_purchase: 'CSH',
   purchase_return: 'PR',
   vendor_bill: 'BILL',
   customer_invoice: 'INV',
@@ -182,12 +187,19 @@ const PURCHASE_TYPES = [
   'purchase_order',
   'purchase',
   'import_purchase',
+  'cash_purchase',
   'purchase_return',
   'vendor_bill',
 ] as const;
 
+/** Credit purchase bills that open AP */
 function isPurchaseBillType(type: string) {
   return type === 'purchase' || type === 'import_purchase' || type === 'vendor_bill';
+}
+
+/** Purchases that move stock / update last cost */
+function isStockInPurchaseType(type: string) {
+  return isPurchaseBillType(type) || type === 'cash_purchase';
 }
 
 function postsToGl(type: string) {
@@ -197,6 +209,7 @@ function postsToGl(type: string) {
     'pos_sale',
     'purchase',
     'import_purchase',
+    'cash_purchase',
     'purchase_return',
     'vendor_bill',
     'customer_invoice',
@@ -206,7 +219,7 @@ function postsToGl(type: string) {
 function defaultStatus(type: string) {
   if (type === 'quotation') return 'draft';
   if (type === 'sales_order' || type === 'purchase_order') return 'confirmed';
-  if (type === 'pos_sale') return 'paid';
+  if (type === 'pos_sale' || type === 'cash_purchase') return 'paid';
   if (type === 'sales_return') return 'open';
   return 'open';
 }
@@ -427,7 +440,7 @@ export async function createCommercialDocument(
       }
 
       // Enrich lines from products
-      const isPurchaseDoc = isPurchaseBillType(parsed.documentType);
+      const isPurchaseDoc = isStockInPurchaseType(parsed.documentType);
       const enriched = [];
       for (const line of parsed.lines) {
         let unitCost = line.unitCost ?? 0;
@@ -522,6 +535,7 @@ export async function createCommercialDocument(
       let status = defaultStatus(parsed.documentType);
       const settled =
         parsed.documentType === 'pos_sale' ||
+        parsed.documentType === 'cash_purchase' ||
         (parsed.documentType === 'sales_return' &&
           Boolean(parsed.paymentAccountCode) &&
           parsed.posMode === 'return') ||
@@ -534,6 +548,9 @@ export async function createCommercialDocument(
         );
       if (parsed.documentType === 'sales_return' && settled) {
         status = 'refunded';
+      }
+      if (parsed.documentType === 'cash_purchase') {
+        status = 'paid';
       }
 
       let transactionId: string | null = null;
@@ -567,6 +584,21 @@ export async function createCommercialDocument(
           direction = 'money_out';
           paymentAccountCode = parsed.paymentAccountCode ?? '1300';
           postedTotal = built.netTotal;
+        } else if (parsed.documentType === 'cash_purchase') {
+          const expenseCode = enriched[0]?.accountCode || '6800';
+          const forceInventory = enriched.some((l) => isPhysicalProduct(l.productType));
+          const payCode = parsed.paymentAccountCode || '1000';
+          postingLines = buildCashPurchasePosting({
+            total: supplyExVat,
+            expenseAccountCode: expenseCode,
+            paymentAccountCode: payCode,
+            memo: documentNumber,
+            isInventoryPurchase: forceInventory,
+          });
+          accountingType = 'purchase';
+          direction = 'money_out';
+          paymentAccountCode = payCode;
+          postedTotal = supplyExVat;
         } else if (isPurchaseBillType(parsed.documentType)) {
           const expenseCode = enriched[0]?.accountCode || '6800';
           const forceInventory =
@@ -693,8 +725,14 @@ export async function createCommercialDocument(
           subtotal: supplyExVat.toFixed(2),
           taxTotal: vatTotal.toFixed(2),
           total: total.toFixed(2),
-          paidAmount: settled || parsed.documentType === 'pos_sale' ? total.toFixed(2) : '0',
-          balanceDue: settled || parsed.documentType === 'pos_sale' ? '0' : total.toFixed(2),
+          paidAmount:
+            settled || parsed.documentType === 'pos_sale' || parsed.documentType === 'cash_purchase'
+              ? total.toFixed(2)
+              : '0',
+          balanceDue:
+            settled || parsed.documentType === 'pos_sale' || parsed.documentType === 'cash_purchase'
+              ? '0'
+              : total.toFixed(2),
           currency: 'LKR',
           notes: parsed.notes ?? null,
           saleChannel,
@@ -703,6 +741,7 @@ export async function createCommercialDocument(
           placeOfSupply: parsed.placeOfSupply || null,
           paymentMode: parsed.paymentMode || null,
           taxInvoiceNumber,
+          supplierInvoiceNumber: parsed.supplierInvoiceNumber?.trim() || null,
           exportCountry: saleChannel === 'export' ? parsed.exportCountry || null : null,
           exportRef: saleChannel === 'export' ? parsed.exportRef || null : null,
           additionalInfo: parsed.additionalInfo || null,
@@ -779,7 +818,7 @@ export async function createCommercialDocument(
         if (line.productId && isPhysicalProduct(line.productType) && postsToGl(parsed.documentType)) {
           const isSalesReturn = parsed.documentType === 'sales_return';
           const isSale = ['sales_invoice', 'pos_sale', 'customer_invoice'].includes(parsed.documentType);
-          const isPurchase = isPurchaseBillType(parsed.documentType);
+          const isPurchase = isStockInPurchaseType(parsed.documentType);
           const isPurchaseReturn = parsed.documentType === 'purchase_return';
           let delta = 0;
           if (isSale) delta = -line.quantity;
@@ -851,7 +890,10 @@ export async function createCommercialDocument(
     revalidatePath('/purchase/orders');
     revalidatePath('/purchase/purchases');
     revalidatePath('/purchase/import');
+    revalidatePath('/purchase/expenses');
     revalidatePath('/purchase/returns');
+    revalidatePath('/purchase/payments');
+    revalidatePath('/purchase/aging');
     revalidatePath('/purchase/bills');
     revalidatePath('/documents');
     revalidatePath('/transactions');
@@ -928,6 +970,7 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     invoiceKind: (String(formData.get('invoiceKind') ?? 'commercial') as 'commercial' | 'tax_invoice') || 'commercial',
     placeOfSupply: String(formData.get('placeOfSupply') ?? ''),
     paymentMode: String(formData.get('paymentMode') ?? ''),
+    supplierInvoiceNumber: String(formData.get('supplierInvoiceNumber') ?? ''),
     exportCountry: String(formData.get('exportCountry') ?? ''),
     exportRef: String(formData.get('exportRef') ?? ''),
     purchaserTin: String(formData.get('purchaserTin') ?? ''),
@@ -950,15 +993,139 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     purchase_order: '/purchase/orders',
     purchase: '/purchase/purchases',
     import_purchase: '/purchase/import',
+    cash_purchase: '/purchase/expenses',
     purchase_return: '/purchase/returns',
     vendor_bill: '/purchase/purchases',
   };
   redirect(listPath[documentType] ?? '/sales/invoices');
 }
 
+function lineKey(productId: string | null, description: string) {
+  return `${productId ?? ''}|${description.trim().toLowerCase()}`;
+}
+
+/** Qty already billed from this PO (or other source) via child documents. */
+async function billedQtyByLineKey(tenantId: string, sourceId: string): Promise<Map<string, number>> {
+  const children = await db()
+    .select({ id: businessDocuments.id })
+    .from(businessDocuments)
+    .where(
+      and(
+        eq(businessDocuments.tenantId, tenantId),
+        eq(businessDocuments.sourceDocumentId, sourceId),
+        isNull(businessDocuments.voidedAt),
+        inArray(businessDocuments.documentType, ['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase']),
+      ),
+    );
+  const map = new Map<string, number>();
+  for (const child of children) {
+    const lines = await db()
+      .select()
+      .from(businessDocumentLines)
+      .where(
+        and(eq(businessDocumentLines.documentId, child.id), isNull(businessDocumentLines.voidedAt)),
+      );
+    for (const l of lines) {
+      const k = lineKey(l.productId, l.description);
+      map.set(k, (map.get(k) ?? 0) + Number(l.quantity));
+    }
+  }
+  return map;
+}
+
+export type PoRemainingLine = {
+  id: string;
+  productId: string | null;
+  description: string;
+  orderedQty: number;
+  billedQty: number;
+  remainingQty: number;
+  unitPrice: number;
+  unitCost: number;
+  discountAmount: number;
+};
+
+export async function getPurchaseOrderRemainingLines(poId: string): Promise<{
+  ok: boolean;
+  error?: string;
+  partyName?: string;
+  documentNumber?: string;
+  status?: string;
+  lines?: PoRemainingLine[];
+}> {
+  try {
+    const user = await requireTenantContext();
+    return withTenantContext(user.tenantId, async () => {
+      const [source] = await db()
+        .select()
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, user.tenantId),
+            eq(businessDocuments.id, poId),
+            isNull(businessDocuments.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!source || source.documentType !== 'purchase_order') {
+        return { ok: false, error: 'Purchase order not found.' };
+      }
+      const [party] = await db()
+        .select({ name: parties.name })
+        .from(parties)
+        .where(eq(parties.id, source.partyId))
+        .limit(1);
+      const lines = await db()
+        .select()
+        .from(businessDocumentLines)
+        .where(
+          and(
+            eq(businessDocumentLines.documentId, poId),
+            isNull(businessDocumentLines.voidedAt),
+          ),
+        );
+      const billed = await billedQtyByLineKey(user.tenantId, poId);
+      return {
+        ok: true,
+        partyName: party?.name ?? 'Unknown',
+        documentNumber: source.documentNumber,
+        status: source.status,
+        lines: lines.map((l) => {
+          const ordered = Number(l.quantity);
+          const billedQty = billed.get(lineKey(l.productId, l.description)) ?? 0;
+          return {
+            id: l.id,
+            productId: l.productId,
+            description: l.description,
+            orderedQty: ordered,
+            billedQty,
+            remainingQty: Math.max(0, Math.round((ordered - billedQty) * 10000) / 10000),
+            unitPrice: Number(l.unitPrice),
+            unitCost: Number(l.unitCost),
+            discountAmount: Number(l.discountAmount),
+          };
+        }),
+      };
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not load PO lines.' };
+  }
+}
+
 export async function convertDocument(
   sourceId: string,
   targetType: 'sales_order' | 'sales_invoice' | 'purchase_order' | 'purchase' | 'vendor_bill',
+  options?: {
+    /** Partial convert: only these lines (qty already remaining-checked by caller) */
+    lines?: {
+      productId?: string | null;
+      description: string;
+      quantity: number;
+      unitPrice: number;
+      unitCost?: number;
+      discountAmount?: number;
+    }[];
+  },
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
     const user = await requireTenantContext();
@@ -982,7 +1149,7 @@ export async function convertDocument(
         .where(eq(parties.id, source.partyId))
         .limit(1);
 
-      const lines = await db()
+      const sourceLines = await db()
         .select()
         .from(businessDocumentLines)
         .where(
@@ -992,7 +1159,44 @@ export async function convertDocument(
           ),
         );
 
-      return createCommercialDocument({
+      let convertLines = options?.lines;
+      if (!convertLines) {
+        if (source.documentType === 'purchase_order' && targetType === 'purchase') {
+          const billed = await billedQtyByLineKey(user.tenantId, sourceId);
+          convertLines = sourceLines
+            .map((l) => {
+              const remaining = Math.max(
+                0,
+                Number(l.quantity) - (billed.get(lineKey(l.productId, l.description)) ?? 0),
+              );
+              return {
+                productId: l.productId,
+                description: l.description,
+                quantity: remaining,
+                unitPrice: Number(l.unitPrice),
+                unitCost: Number(l.unitCost),
+                discountAmount: Number(l.discountAmount),
+              };
+            })
+            .filter((l) => l.quantity > 0);
+        } else {
+          convertLines = sourceLines.map((l) => ({
+            productId: l.productId,
+            description: l.description,
+            quantity: Number(l.quantity),
+            unitPrice: Number(l.unitPrice),
+            unitCost: Number(l.unitCost),
+            discountAmount: Number(l.discountAmount),
+          }));
+        }
+      }
+
+      convertLines = convertLines.filter((l) => l.quantity > 0);
+      if (convertLines.length === 0) throw new Error('No remaining quantity to convert.');
+
+      // Create without auto-marking full converted when partial — createCommercialDocument always marks converted.
+      // We'll recompute PO status after.
+      const result = await createCommercialDocument({
         documentType: targetType,
         partyName: party?.name ?? 'Unknown',
         issueDate: new Date().toISOString().slice(0, 10),
@@ -1000,15 +1204,27 @@ export async function convertDocument(
         notes: source.notes ?? undefined,
         sourceDocumentId: source.id,
         headerDiscount: Number(source.discountTotal),
-        lines: lines.map((l) => ({
-          productId: l.productId,
-          description: l.description,
-          quantity: Number(l.quantity),
-          unitPrice: Number(l.unitPrice),
-          unitCost: Number(l.unitCost),
-          discountAmount: Number(l.discountAmount),
-        })),
+        supplierInvoiceNumber: source.supplierInvoiceNumber ?? undefined,
+        paymentMode: source.paymentMode ?? undefined,
+        deliveryDate: source.deliveryDate ?? undefined,
+        lines: convertLines,
       });
+
+      if (result.ok && source.documentType === 'purchase_order') {
+        const remaining = await getPurchaseOrderRemainingLines(sourceId);
+        const left = remaining.lines?.reduce((s, l) => s + l.remainingQty, 0) ?? 0;
+        await db()
+          .update(businessDocuments)
+          .set({
+            status: left > 0.0001 ? 'partial' : 'converted',
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(businessDocuments.tenantId, user.tenantId), eq(businessDocuments.id, sourceId)),
+          );
+      }
+
+      return result;
     });
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Convert failed.' };
@@ -1023,7 +1239,37 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
     | 'purchase_order'
     | 'purchase'
     | 'vendor_bill';
-  await convertDocument(sourceId, targetType);
+
+  const lineCount = Number(formData.get('lineCount') ?? 0);
+  let lines:
+    | {
+        productId?: string | null;
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        unitCost?: number;
+        discountAmount?: number;
+      }[]
+    | undefined;
+  if (lineCount > 0) {
+    lines = [];
+    for (let i = 0; i < lineCount; i++) {
+      const qty = Number(String(formData.get(`line_${i}_quantity`) ?? '0').replace(/[^0-9.-]/g, '')) || 0;
+      if (qty <= 0) continue;
+      lines.push({
+        productId: String(formData.get(`line_${i}_productId`) ?? '') || null,
+        description: String(formData.get(`line_${i}_description`) ?? 'Line'),
+        quantity: qty,
+        unitPrice: Number(String(formData.get(`line_${i}_unitPrice`) ?? '0').replace(/[^0-9.-]/g, '')) || 0,
+        unitCost: Number(String(formData.get(`line_${i}_unitCost`) ?? '0').replace(/[^0-9.-]/g, '')) || 0,
+        discountAmount:
+          Number(String(formData.get(`line_${i}_discount`) ?? '0').replace(/[^0-9.-]/g, '')) || 0,
+      });
+    }
+  }
+
+  const result = await convertDocument(sourceId, targetType, lines ? { lines } : undefined);
+  if (!result.ok) throw new Error(result.error ?? 'Convert failed');
   const { redirect } = await import('next/navigation');
   const listPath: Record<string, string> = {
     sales_order: '/sales/orders',
@@ -1032,7 +1278,80 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
     purchase: '/purchase/purchases',
     vendor_bill: '/purchase/purchases',
   };
+  if (targetType === 'purchase' && result.id) {
+    redirect(`/purchase/purchases/${result.id}`);
+  }
   redirect(listPath[targetType] ?? '/sales/orders');
+}
+
+/** Create purchase return from an open/paid bill (credit against vendor). */
+export async function createReturnFromBillAction(formData: FormData): Promise<void> {
+  const sourceId = String(formData.get('sourceId') ?? '');
+  const user = await requireTenantContext();
+  const detail = await getCommercialDocument(sourceId);
+  if (!detail) throw new Error('Bill not found.');
+  if (!['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase'].includes(detail.documentType)) {
+    throw new Error('Returns can only be created from purchase bills.');
+  }
+
+  const lineCount = Number(formData.get('lineCount') ?? 0);
+  let lines = detail.lines.map((l) => ({
+    productId: null as string | null,
+    description: l.description,
+    quantity: l.quantity,
+    unitPrice: l.unitPrice,
+    unitCost: 0,
+    discountAmount: 0,
+  }));
+
+  // Prefer product ids from DB lines
+  const dbLines = await withTenantContext(user.tenantId, async () =>
+    db()
+      .select()
+      .from(businessDocumentLines)
+      .where(
+        and(eq(businessDocumentLines.documentId, sourceId), isNull(businessDocumentLines.voidedAt)),
+      ),
+  );
+  lines = dbLines.map((l) => ({
+    productId: l.productId,
+    description: l.description,
+    quantity: Number(l.quantity),
+    unitPrice: Number(l.unitPrice),
+    unitCost: Number(l.unitCost),
+    discountAmount: Number(l.discountAmount),
+  }));
+
+  if (lineCount > 0) {
+    const partial: typeof lines = [];
+    for (let i = 0; i < lineCount; i++) {
+      const qty = Number(String(formData.get(`line_${i}_quantity`) ?? '0').replace(/[^0-9.-]/g, '')) || 0;
+      if (qty <= 0) continue;
+      const src = dbLines[i];
+      if (!src) continue;
+      partial.push({
+        productId: src.productId,
+        description: src.description,
+        quantity: Math.min(qty, Number(src.quantity)),
+        unitPrice: Number(src.unitPrice),
+        unitCost: Number(src.unitCost),
+        discountAmount: 0,
+      });
+    }
+    if (partial.length) lines = partial;
+  }
+
+  const result = await createCommercialDocument({
+    documentType: 'purchase_return',
+    partyName: detail.partyName,
+    issueDate: new Date().toISOString().slice(0, 10),
+    notes: `Return from ${detail.documentNumber}`,
+    sourceDocumentId: sourceId,
+    lines,
+  });
+  if (!result.ok) throw new Error(result.error ?? 'Could not create return');
+  const { redirect } = await import('next/navigation');
+  redirect(result.id ? `/purchase/returns/${result.id}` : '/purchase/returns');
 }
 
 /** Combine multiple sales orders into one sales invoice. */
@@ -1205,12 +1524,15 @@ export interface CommercialDocDetail {
   currency: string;
   notes: string | null;
   paymentMode: string | null;
+  supplierInvoiceNumber: string | null;
+  deliveryDate: string | null;
   saleChannel: string;
   invoiceKind: string;
   transactionId: string | null;
   sourceDocumentId: string | null;
   lines: {
     id: string;
+    productId: string | null;
     description: string;
     quantity: number;
     unitPrice: number;
@@ -1265,12 +1587,15 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       currency: doc.currency,
       notes: doc.notes,
       paymentMode: doc.paymentMode,
+      supplierInvoiceNumber: doc.supplierInvoiceNumber ?? null,
+      deliveryDate: doc.deliveryDate ?? null,
       saleChannel: doc.saleChannel ?? 'local',
       invoiceKind: doc.invoiceKind ?? 'commercial',
       transactionId: doc.transactionId ?? null,
       sourceDocumentId: doc.sourceDocumentId ?? null,
       lines: lines.map((l) => ({
         id: l.id,
+        productId: l.productId,
         description: l.description,
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
@@ -1334,6 +1659,77 @@ export async function listOpenApBills(): Promise<OpenApBill[]> {
       status: r.status,
     }));
   });
+}
+
+export type ApAgingBucket = 'current' | 'd1_30' | 'd31_60' | 'd61_90' | 'd90_plus';
+
+export type ApAgingRow = OpenApBill & {
+  agingDate: string;
+  daysPastDue: number;
+  bucket: ApAgingBucket;
+};
+
+export type ApAgingSummary = {
+  rows: ApAgingRow[];
+  totals: Record<ApAgingBucket, number>;
+  grandTotal: number;
+};
+
+function agingBucket(daysPastDue: number): ApAgingBucket {
+  if (daysPastDue <= 0) return 'current';
+  if (daysPastDue <= 30) return 'd1_30';
+  if (daysPastDue <= 60) return 'd31_60';
+  if (daysPastDue <= 90) return 'd61_90';
+  return 'd90_plus';
+}
+
+/** AP aging by due date (or issue date if no due). */
+export async function getApAgingSummary(asOfDate?: string): Promise<ApAgingSummary> {
+  const asOf = asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
+    ? asOfDate
+    : new Date().toISOString().slice(0, 10);
+  const bills = await listOpenApBills();
+  const asOfMs = new Date(`${asOf}T12:00:00`).getTime();
+  const rows: ApAgingRow[] = bills.map((b) => {
+    const agingDate = b.dueDate || b.issueDate;
+    const daysPastDue = Math.floor(
+      (asOfMs - new Date(`${agingDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24),
+    );
+    return {
+      ...b,
+      agingDate,
+      daysPastDue,
+      bucket: agingBucket(daysPastDue),
+    };
+  });
+  rows.sort((a, b) => b.daysPastDue - a.daysPastDue || a.partyName.localeCompare(b.partyName));
+  const totals: Record<ApAgingBucket, number> = {
+    current: 0,
+    d1_30: 0,
+    d31_60: 0,
+    d61_90: 0,
+    d90_plus: 0,
+  };
+  for (const r of rows) totals[r.bucket] += r.balanceDue;
+  const grandTotal = Object.values(totals).reduce((s, n) => s + n, 0);
+  return { rows, totals, grandTotal: Math.round(grandTotal * 100) / 100 };
+}
+
+/** Lightweight print data for PO / purchase bill / cash / return */
+export async function getPurchasePrintData(id: string) {
+  const detail = await getCommercialDocument(id);
+  if (!detail) return null;
+  const user = await requireTenantContext();
+  const company = await withTenantContext(user.tenantId, async () => {
+    const { companyProfiles } = await import('@bookone/db');
+    const [c] = await db()
+      .select()
+      .from(companyProfiles)
+      .where(eq(companyProfiles.tenantId, user.tenantId))
+      .limit(1);
+    return c ?? null;
+  }).catch(() => null);
+  return { doc: detail, company };
 }
 
 const NON_GL_TYPES = new Set(['quotation', 'sales_order', 'purchase_order']);

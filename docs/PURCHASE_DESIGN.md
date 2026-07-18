@@ -1,6 +1,7 @@
 # BookOne Purchase (AP) — product design
 
-**Status:** design locked · **P0 implemented 2026-07-18** (detail pages, Pay vendors, last-cost on purchase)  
+**Status:** design locked · **P0 + P1 implemented 2026-07-18**  
+(P0: detail, Pay vendors, last-cost · P1: cash purchase, aging, print, return-from-bill, partial PO convert, supplier inv #)  
 **Audience:** SL SME — mixed goods + services, local + import suppliers  
 **Peers studied:** QuickBooks Online / Desktop patterns, Sage Business Cloud / mid-market PO→bill→pay  
 
@@ -265,14 +266,14 @@ Legacy `/purchase/bills` stays redirect to Purchases.
 4. **Unit cost**: last-cost on physical purchase ✅  
 5. List actions: **Pay** / **Open** on purchases ✅  
 
-### Phase P1 — Parity with sales + QBO Expense
+### Phase P1 — Parity with sales + QBO Expense ✅ (2026-07-18)
 
-1. Cash purchase (`paidNow` or `purchase_expense`)  
-2. AP aging report / list filters (Current, 30, 60, 90+)  
-3. Print templates (PO, bill, return)  
-4. Purchase return **from bill** with residual qty  
-5. Partial convert PO → bill (line qty remaining)  
-6. Dedicated purchase form shell (not only generic `CommercialDocNewForm`) — delivery date, terms, supplier invoice #  
+1. Cash purchase `cash_purchase` ✅ `/purchase/expenses` — Dr exp/5100 Cr bank, no AP  
+2. AP aging ✅ `/purchase/aging` (Current / 1–30 / 31–60 / 61–90 / 90+)  
+3. Print templates ✅ `/purchase/print/[id]` (PO, bill, import, cash, return)  
+4. Purchase return **from bill** ✅ detail “Create return”  
+5. Partial convert PO → bill ✅ remaining qty panel on PO detail  
+6. Purchase form extras ✅ delivery date, terms, supplier invoice # (migration 014)  
 
 ### Phase P2 — Inventory discipline + SL import
 

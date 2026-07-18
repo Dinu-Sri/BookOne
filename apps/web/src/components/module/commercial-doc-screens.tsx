@@ -162,8 +162,12 @@ export function CommercialDocNewForm({
   defaultPaymentCode,
   expenseAccounts,
   showExpenseAccount,
+  showPurchaseExtras,
   creditWarning,
+  banner,
   submitLabel = 'Save',
+  sourceDocumentId,
+  initialLines,
 }: {
   backHref: string;
   backLabel: string;
@@ -185,10 +189,15 @@ export function CommercialDocNewForm({
   defaultPaymentCode?: string;
   expenseAccounts?: { code: string; name: string }[];
   showExpenseAccount?: boolean;
+  /** Supplier inv #, terms, delivery date */
+  showPurchaseExtras?: boolean;
   creditWarning?: boolean;
+  banner?: string;
   submitLabel?: string;
+  sourceDocumentId?: string | null;
+  initialLines?: DocLineState[];
 }) {
-  const [lines, setLines] = useState<DocLineState[]>([]);
+  const [lines, setLines] = useState<DocLineState[]>(initialLines ?? []);
   const [catalog, setCatalog] = useState<ProductPick[]>(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
@@ -233,6 +242,9 @@ export function CommercialDocNewForm({
         <input type="hidden" name="documentType" value={documentType} />
         <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
         <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
+        {sourceDocumentId ? (
+          <input type="hidden" name="sourceDocumentId" value={sourceDocumentId} />
+        ) : null}
 
         <div className="party-form-top">
           <Link href={backHref} className="party-back-btn">
@@ -244,6 +256,11 @@ export function CommercialDocNewForm({
               <small>{backLabel}</small>
             </span>
           </Link>
+          {banner ? (
+            <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
+              {banner}
+            </div>
+          ) : null}
         </div>
 
         <div className="doc-form-scroll">
@@ -297,6 +314,35 @@ export function CommercialDocNewForm({
               <label>Due date</label>
               <input className="input" name="dueDate" type="date" />
             </div>
+            {showPurchaseExtras ? (
+              <>
+                <div className="field">
+                  <label>Delivery date</label>
+                  <input className="input" name="deliveryDate" type="date" />
+                </div>
+                <div className="field">
+                  <label>Supplier invoice #</label>
+                  <input
+                    className="input"
+                    name="supplierInvoiceNumber"
+                    placeholder="Vendor bill / invoice no."
+                    maxLength={80}
+                  />
+                </div>
+                <div className="field">
+                  <label>Payment terms</label>
+                  <select className="input" name="paymentMode" defaultValue="">
+                    <option value="">—</option>
+                    <option value="Due on receipt">Due on receipt</option>
+                    <option value="Net 7">Net 7</option>
+                    <option value="Net 15">Net 15</option>
+                    <option value="Net 30">Net 30</option>
+                    <option value="Net 45">Net 45</option>
+                    <option value="Net 60">Net 60</option>
+                  </select>
+                </div>
+              </>
+            ) : null}
             {discounts && discounts.length > 0 ? (
               <div className="field">
                 <label>Discount</label>

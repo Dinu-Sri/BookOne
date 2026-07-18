@@ -12,6 +12,7 @@ export {
   buildSalesInvoicePosting,
   buildSalesReturnPosting,
   buildVendorBillPosting,
+  buildCashPurchasePosting,
   buildPurchaseReturnPosting,
   buildStockAdjustmentPosting,
   sumSides,

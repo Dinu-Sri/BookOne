@@ -11,7 +11,7 @@ import { salesDiscounts } from './sales-discounts';
 /**
  * Commercial documents across Sales + Purchase.
  * Types: quotation | sales_order | sales_invoice | sales_return | pos_sale
- *        | purchase_order | purchase | import_purchase | purchase_return
+ *        | purchase_order | purchase | import_purchase | purchase_return | cash_purchase
  * Legacy: customer_invoice, vendor_bill
  */
 export const businessDocuments = pgTable('business_documents', {
@@ -43,6 +43,8 @@ export const businessDocuments = pgTable('business_documents', {
   placeOfSupply: varchar('place_of_supply', { length: 255 }),
   paymentMode: varchar('payment_mode', { length: 40 }),
   taxInvoiceNumber: varchar('tax_invoice_number', { length: 80 }),
+  /** Vendor's invoice / bill number (AP matching / duplicate guard) */
+  supplierInvoiceNumber: varchar('supplier_invoice_number', { length: 80 }),
   exportCountry: varchar('export_country', { length: 100 }),
   exportRef: varchar('export_ref', { length: 120 }),
   additionalInfo: text('additional_info'),

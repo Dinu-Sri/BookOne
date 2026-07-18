@@ -4,7 +4,7 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
 
-export default async function ImportPurchaseDetailPage({
+export default async function CashPurchaseDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -17,16 +17,15 @@ export default async function ImportPurchaseDetailPage({
   } catch {
     redirect('/login');
   }
-  if (!doc || doc.documentType !== 'import_purchase') redirect('/purchase/import');
+  if (!doc || doc.documentType !== 'cash_purchase') redirect('/purchase/expenses');
 
   return (
-    <BookOneShell active="Import Purchases" tenant={tenant}>
+    <BookOneShell active="Cash Purchases" tenant={tenant}>
       <CommercialDocumentDetail
         doc={doc}
-        listHref="/purchase/import"
-        listLabel="Import purchases"
-        payHref={doc.balanceDue > 0.005 ? `/purchase/payments/new?documentId=${doc.id}` : null}
-        printHref={`/purchase/print/${doc.id}`}
+        listHref="/purchase/expenses"
+        listLabel="Cash purchases"
+        printHref={`/purchase/expenses/${doc.id}/print`}
         returnFromBill
       />
     </BookOneShell>

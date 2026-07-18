@@ -28,6 +28,7 @@ export default async function PurchaseOrdersPage() {
             convertTo: 'purchase',
             convertLabel: 'To purchase',
             detailHrefPattern: '/purchase/orders/:id',
+            printHrefPattern: '/purchase/print/:id',
           }}
         />
       </Suspense>

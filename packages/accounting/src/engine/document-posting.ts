@@ -213,6 +213,26 @@ export function buildVendorBillPosting(input: {
   return lines;
 }
 
+/** Cash purchase (QBO Expense): Dr Expense/Inventory, Cr Bank/Cash — no AP */
+export function buildCashPurchasePosting(input: {
+  total: number;
+  expenseAccountCode: string;
+  paymentAccountCode: string;
+  memo?: string;
+  isInventoryPurchase?: boolean;
+}): PostingLine[] {
+  const total = round2(input.total);
+  const debitCode = input.isInventoryPurchase ? '5100' : input.expenseAccountCode;
+  const payCode = input.paymentAccountCode || '1000';
+  const memo = input.memo ?? 'Cash purchase';
+  const lines: PostingLine[] = [
+    { accountCode: debitCode, side: 'debit', amount: total, memo },
+    { accountCode: payCode, side: 'credit', amount: total, memo },
+  ];
+  assertBalanced(lines);
+  return lines;
+}
+
 /**
  * Purchase return: reverse a bill.
  * Dr AP 2100, Cr Inventory 5100 (stocked) or expense account.

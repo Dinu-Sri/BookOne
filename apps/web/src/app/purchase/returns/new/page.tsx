@@ -4,7 +4,12 @@ import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocNewForm } from '@/components/module/commercial-doc-screens';
 import { loadSalesFormData } from '@/lib/module-page-helpers';
 
-export default async function NewPurchaseReturnPage() {
+export default async function NewPurchaseReturnPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const sp = await searchParams;
   let tenant;
   let form;
   try {
@@ -24,8 +29,11 @@ export default async function NewPurchaseReturnPage() {
         products={form.products}
         partyOptions={form.partyOptions}
         showExpenseAccount
+        showPurchaseExtras
         expenseAccounts={form.expenseAccounts}
         submitLabel="Save purchase return"
+        sourceDocumentId={sp.from ?? null}
+        banner="Reduces AP / stock for physical items"
       />
     </BookOneShell>
   );

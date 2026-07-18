@@ -24,8 +24,10 @@ export default async function NewPurchasePage() {
         products={form.products}
         partyOptions={form.partyOptions}
         showExpenseAccount
+        showPurchaseExtras
         expenseAccounts={form.expenseAccounts}
         submitLabel="Save purchase"
+        banner="Credit purchase · opens AP 2100"
       />
     </BookOneShell>
   );

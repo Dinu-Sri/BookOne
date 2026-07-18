@@ -5,32 +5,31 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentList } from '@/components/sales/commercial-document-list';
 
-export default async function ImportPurchasesPage() {
+export default async function CashPurchasesPage() {
   let tenant;
   let rows;
   try {
     [tenant, rows] = await Promise.all([
       getTenantInfo(),
-      listCommercialDocuments(['import_purchase']),
+      listCommercialDocuments(['cash_purchase']),
     ]);
   } catch {
     redirect('/login');
   }
 
   return (
-    <BookOneShell active="Import Purchases" tenant={tenant}>
+    <BookOneShell active="Cash Purchases" tenant={tenant}>
       <Suspense fallback={<div className="workspace party-workspace">Loading…</div>}>
         <CommercialDocumentList
           rows={rows}
           config={{
-            title: 'Import purchase',
+            title: 'Cash purchase',
             partyLabel: 'Vendor',
             searchPlaceholder: 'Search by vendor name or number…',
-            newHref: '/purchase/import/new',
-            newLabel: 'New import purchase',
-            detailHrefPattern: '/purchase/import/:id',
-            payHrefPattern: '/purchase/payments/new?documentId=:id',
-            printHrefPattern: '/purchase/print/:id',
+            newHref: '/purchase/expenses/new',
+            newLabel: 'New cash purchase',
+            detailHrefPattern: '/purchase/expenses/:id',
+            printHrefPattern: '/purchase/expenses/:id/print',
           }}
         />
       </Suspense>

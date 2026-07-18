@@ -29,6 +29,7 @@ export default async function PurchaseReturnsPage() {
             newHref: '/purchase/returns/new',
             newLabel: 'New purchase return',
             detailHrefPattern: '/purchase/returns/:id',
+            printHrefPattern: '/purchase/print/:id',
           }}
         />
       </Suspense>

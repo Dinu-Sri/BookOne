@@ -4,6 +4,7 @@ import {
   buildSalesReturnPosting,
   buildStockAdjustmentPosting,
   buildVendorBillPosting,
+  buildCashPurchasePosting,
   buildPurchaseReturnPosting,
   sumSides,
 } from '../src/engine/document-posting';
@@ -110,6 +111,19 @@ describe('vendor bill + purchase return + stock adjustment', () => {
     });
     expect(lines.some((l) => l.accountCode === '5100' && l.side === 'debit')).toBe(true);
     expect(lines.some((l) => l.accountCode === '2100' && l.side === 'credit')).toBe(true);
+  });
+
+  it('posts cash purchase to inventory/bank without AP', () => {
+    const lines = buildCashPurchasePosting({
+      total: 300,
+      expenseAccountCode: '6800',
+      paymentAccountCode: '1000',
+      isInventoryPurchase: true,
+    });
+    expect(lines.some((l) => l.accountCode === '5100' && l.side === 'debit')).toBe(true);
+    expect(lines.some((l) => l.accountCode === '1000' && l.side === 'credit')).toBe(true);
+    expect(lines.some((l) => l.accountCode === '2100')).toBe(false);
+    expect(sumSides(lines)).toEqual({ debit: 300, credit: 300 });
   });
 
   it('posts purchase return reversing AP and inventory', () => {

@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, type ReactNode } from 'react';
 import {
   archiveCommercialDocument,
   convertDocumentAction,
+  createReturnFromBillAction,
   deleteCommercialDocument,
   type CommercialDocDetail,
 } from '@/app/actions/commercial-docs';
@@ -18,6 +19,7 @@ const TYPE_LABEL: Record<string, string> = {
   purchase_order: 'Purchase order',
   purchase: 'Purchase',
   import_purchase: 'Import purchase',
+  cash_purchase: 'Cash purchase',
   purchase_return: 'Purchase return',
   vendor_bill: 'Vendor bill',
   sales_invoice: 'Invoice',
@@ -36,6 +38,8 @@ export function CommercialDocumentDetail({
   printHref,
   convertTo,
   convertLabel,
+  returnFromBill,
+  convertPanel,
 }: {
   doc: CommercialDocDetail;
   listHref: string;
@@ -44,6 +48,10 @@ export function CommercialDocumentDetail({
   printHref?: string | null;
   convertTo?: 'sales_order' | 'sales_invoice' | 'purchase' | 'vendor_bill';
   convertLabel?: string;
+  /** Show "Create return" for purchase bills */
+  returnFromBill?: boolean;
+  /** Extra panel (e.g. partial PO convert) */
+  convertPanel?: ReactNode;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -58,6 +66,10 @@ export function CommercialDocumentDetail({
     doc.status !== 'void' &&
     doc.status !== 'fully_invoiced' &&
     doc.status !== 'paid';
+  const canReturn =
+    returnFromBill &&
+    ['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase'].includes(doc.documentType) &&
+    doc.status !== 'void';
 
   async function runConfirm() {
     if (!confirm) return;
@@ -110,7 +122,15 @@ export function CommercialDocumentDetail({
               </Button>
             </Link>
           ) : null}
-          {canConvert && convertTo ? (
+          {canReturn ? (
+            <form action={createReturnFromBillAction}>
+              <input type="hidden" name="sourceId" value={doc.id} />
+              <Button variant="secondary" type="submit" disabled={pending}>
+                Create return
+              </Button>
+            </form>
+          ) : null}
+          {canConvert && convertTo && !convertPanel ? (
             <form action={convertDocumentAction}>
               <input type="hidden" name="sourceId" value={doc.id} />
               <input type="hidden" name="targetType" value={convertTo} />
@@ -194,6 +214,24 @@ export function CommercialDocumentDetail({
               </div>
             </div>
             <div>
+              <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Delivery</span>
+              <div>
+                <strong>{doc.deliveryDate || '—'}</strong>
+              </div>
+            </div>
+            <div>
+              <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Supplier inv #</span>
+              <div>
+                <strong>{doc.supplierInvoiceNumber || '—'}</strong>
+              </div>
+            </div>
+            <div>
+              <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Terms</span>
+              <div>
+                <strong>{doc.paymentMode || '—'}</strong>
+              </div>
+            </div>
+            <div>
               <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Currency</span>
               <div>
                 <strong>{doc.currency}</strong>
@@ -255,6 +293,8 @@ export function CommercialDocumentDetail({
           </div>
         </div>
       </Card>
+
+      {convertPanel ? <div style={{ marginTop: 16 }}>{convertPanel}</div> : null}
 
       <ConfirmDialog
         open={Boolean(confirm)}

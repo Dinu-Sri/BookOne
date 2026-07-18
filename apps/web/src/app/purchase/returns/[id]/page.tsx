@@ -21,7 +21,12 @@ export default async function PurchaseReturnDetailPage({
 
   return (
     <BookOneShell active="Purchase Returns" tenant={tenant}>
-      <CommercialDocumentDetail doc={doc} listHref="/purchase/returns" listLabel="Purchase returns" />
+      <CommercialDocumentDetail
+        doc={doc}
+        listHref="/purchase/returns"
+        listLabel="Purchase returns"
+        printHref={`/purchase/print/${doc.id}`}
+      />
     </BookOneShell>
   );
 }

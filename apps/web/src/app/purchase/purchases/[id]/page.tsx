@@ -15,9 +15,12 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
   }
   if (!doc) redirect('/purchase/purchases');
   if (!['purchase', 'vendor_bill', 'import_purchase'].includes(doc.documentType)) {
-    // Allow import docs if linked from wrong list
     if (doc.documentType === 'import_purchase') {
-      /* ok */
+      /* allow */
+    } else if (doc.documentType === 'cash_purchase') {
+      redirect(`/purchase/expenses/${id}`);
+    } else {
+      redirect('/purchase/purchases');
     }
   }
 
@@ -32,6 +35,8 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         listHref={listHref}
         listLabel={listLabel}
         payHref={doc.balanceDue > 0.005 ? `/purchase/payments/new?documentId=${doc.id}` : null}
+        printHref={`/purchase/print/${doc.id}`}
+        returnFromBill
       />
     </BookOneShell>
   );

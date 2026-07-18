@@ -93,9 +93,11 @@ const navSuites: NavSuite[] = [
     items: [
       { label: 'Purchase Orders', icon: ClipboardList, href: '/purchase/orders' },
       { label: 'Purchases', icon: ReceiptText, href: '/purchase/purchases' },
+      { label: 'Cash Purchases', icon: ShoppingCart, href: '/purchase/expenses' },
       { label: 'Import Purchases', icon: Globe2, href: '/purchase/import' },
       { label: 'Purchase Returns', icon: BookOpenCheck, href: '/purchase/returns' },
       { label: 'Pay Vendors', icon: Landmark, href: '/purchase/payments' },
+      { label: 'AP Aging', icon: CalendarDays, href: '/purchase/aging' },
     ],
   },
   {

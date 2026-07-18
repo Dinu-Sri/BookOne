@@ -24,8 +24,10 @@ export default async function NewImportPurchasePage() {
         products={form.products}
         partyOptions={form.partyOptions}
         showExpenseAccount
+        showPurchaseExtras
         expenseAccounts={form.expenseAccounts}
         submitLabel="Save import purchase"
+        banner="Import · inventory 5100 + AP"
       />
     </BookOneShell>
   );

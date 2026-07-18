@@ -4,7 +4,7 @@ import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocNewForm } from '@/components/module/commercial-doc-screens';
 import { loadSalesFormData } from '@/lib/module-page-helpers';
 
-export default async function NewPurchaseOrderPage() {
+export default async function NewCashPurchasePage() {
   let tenant;
   let form;
   try {
@@ -14,20 +14,23 @@ export default async function NewPurchaseOrderPage() {
   }
 
   return (
-    <BookOneShell active="Purchase Orders" tenant={tenant}>
+    <BookOneShell active="Cash Purchases" tenant={tenant}>
       <CommercialDocNewForm
-        backHref="/purchase/orders"
-        backLabel="Purchase orders"
-        documentType="purchase_order"
+        backHref="/purchase/expenses"
+        backLabel="Cash purchases"
+        documentType="cash_purchase"
         partyLabel="Vendor"
         partyPlaceholder="Vendor name"
         products={form.products}
         partyOptions={form.partyOptions}
         showExpenseAccount
         showPurchaseExtras
+        showPaymentAccount
+        paymentAccounts={form.paymentAccounts}
+        defaultPaymentCode="1000"
         expenseAccounts={form.expenseAccounts}
-        submitLabel="Save purchase order"
-        banner="No GL until converted to purchase"
+        submitLabel="Save cash purchase"
+        banner="Paid now · Dr expense/inventory · Cr bank — no AP"
       />
     </BookOneShell>
   );

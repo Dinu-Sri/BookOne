@@ -118,7 +118,33 @@ export function buildSalesInvoicePosting(input: {
   const settleCode = input.settledCashAccountCode ?? null;
   const controlCode = settleCode ?? '1300';
   const vatCode = input.outputVatAccountCode ?? '2200';
-  const revenueCode = input.lines[0]?.revenueAccountCode ?? '4000';
+
+  // Allocate net revenue across lines (by line contribution), honour product revenue accounts
+  const lineNets = input.lines.map((line) => {
+    const lineGross = round2(line.quantity * line.unitPrice);
+    const disc = round2(line.discountAmount ?? 0);
+    return Math.max(0, lineGross - disc);
+  });
+  const lineNetSum = lineNets.reduce((s, n) => s + n, 0) || 1;
+  // Spread header discount proportionally
+  const revByAccount = new Map<string, number>();
+  for (let i = 0; i < input.lines.length; i++) {
+    const line = input.lines[i]!;
+    const share = lineNets[i]! / lineNetSum;
+    const lineRev = round2(lineNets[i]! - headerDiscount * share);
+    if (lineRev <= 0) continue;
+    const code = line.revenueAccountCode || '4000';
+    revByAccount.set(code, round2((revByAccount.get(code) ?? 0) + lineRev));
+  }
+  // Fix rounding so revenue credits equal netTotal
+  let revSum = round2([...revByAccount.values()].reduce((s, n) => s + n, 0));
+  if (revByAccount.size > 0 && revSum !== netTotal) {
+    const firstKey = revByAccount.keys().next().value as string;
+    revByAccount.set(firstKey, round2((revByAccount.get(firstKey) ?? 0) + (netTotal - revSum)));
+  }
+  if (revByAccount.size === 0 && netTotal > 0) {
+    revByAccount.set('4000', netTotal);
+  }
 
   const lines: PostingLine[] = [
     {
@@ -127,13 +153,12 @@ export function buildSalesInvoicePosting(input: {
       amount: grandTotal,
       memo,
     },
-    {
-      accountCode: revenueCode,
-      side: 'credit',
-      amount: netTotal,
-      memo,
-    },
   ];
+  for (const [code, amt] of revByAccount) {
+    if (amt > 0) {
+      lines.push({ accountCode: code, side: 'credit', amount: amt, memo });
+    }
+  }
   if (vatTotal > 0) {
     lines.push({
       accountCode: vatCode,

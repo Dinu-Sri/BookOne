@@ -89,6 +89,21 @@ export default async function CompanySalesSettingsPage() {
                     <option value="tax_invoice">Tax invoice</option>
                   </select>
                 </div>
+                <div className="field field-full">
+                  <label className="party-check">
+                    <input
+                      type="checkbox"
+                      name="enforceCreditLimit"
+                      value="on"
+                      defaultChecked={settings.enforceCreditLimit}
+                    />
+                    Enforce customer credit limits on credit sales invoices
+                  </label>
+                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                    When on, invoices that would push open AR above the party credit limit are blocked.
+                    Set limits on the customer party master.
+                  </p>
+                </div>
               </div>
             </div>
             <div className="party-form-footer">

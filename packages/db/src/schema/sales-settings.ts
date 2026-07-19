@@ -12,6 +12,8 @@ export const salesSettings = pgTable('sales_settings', {
   taxInvoiceSerialReset: varchar('tax_invoice_serial_reset', { length: 20 }).notNull().default('monthly'),
   defaultSaleChannel: varchar('default_sale_channel', { length: 20 }).notNull().default('local'),
   defaultInvoiceKind: varchar('default_invoice_kind', { length: 20 }).notNull().default('commercial'),
+  /** When '1', block sales invoices that would exceed party creditLimit */
+  enforceCreditLimit: varchar('enforce_credit_limit', { length: 1 }).notNull().default('0'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

@@ -82,6 +82,46 @@ describe('sales invoice posting', () => {
     });
     expect(result.netTotal).toBe(90);
   });
+
+  it('splits revenue across product revenue accounts and uses product COGS/inventory codes', () => {
+    const result = buildSalesInvoicePosting({
+      lines: [
+        {
+          description: 'Consulting',
+          quantity: 1,
+          unitPrice: 200,
+          unitCost: 0,
+          productType: 'service',
+          revenueAccountCode: '4010',
+        },
+        {
+          description: 'Widget',
+          quantity: 1,
+          unitPrice: 100,
+          unitCost: 40,
+          productType: 'physical',
+          revenueAccountCode: '4020',
+          cogsAccountCode: '5010',
+          inventoryAccountCode: '5110',
+        },
+      ],
+    });
+    expect(result.netTotal).toBe(300);
+    expect(result.cogsTotal).toBe(40);
+    expect(result.lines.some((l) => l.accountCode === '4010' && l.side === 'credit' && l.amount === 200)).toBe(
+      true,
+    );
+    expect(result.lines.some((l) => l.accountCode === '4020' && l.side === 'credit' && l.amount === 100)).toBe(
+      true,
+    );
+    expect(result.lines.some((l) => l.accountCode === '5010' && l.side === 'debit' && l.amount === 40)).toBe(
+      true,
+    );
+    expect(result.lines.some((l) => l.accountCode === '5110' && l.side === 'credit' && l.amount === 40)).toBe(
+      true,
+    );
+    expect(sumSides(result.lines)).toEqual({ debit: 340, credit: 340 });
+  });
 });
 
 describe('sales return posting', () => {

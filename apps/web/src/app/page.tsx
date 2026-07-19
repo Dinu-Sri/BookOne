@@ -55,6 +55,9 @@ const ACCOUNT_LABEL: Record<Direction, string> = {
   invoice_bill: 'Settle to',
 };
 
+type MoneyInType = 'new_sale' | 'customer_payment' | 'owner_contribution';
+type InvoiceBillType = 'customer_invoice' | 'vendor_bill';
+
 const PAYMENT_METHODS = ['Cash', 'Bank', 'Card', 'Online', 'Credit'] as const;
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -107,16 +110,42 @@ export default function Home() {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<RecordEntryResult | null>(null);
   const [forceDuplicate, setForceDuplicate] = useState(false);
+  const [moneyInType, setMoneyInType] = useState<MoneyInType>('new_sale');
+  const [invoiceBillType, setInvoiceBillType] = useState<InvoiceBillType>('customer_invoice');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const partyInputRef = useRef<HTMLInputElement>(null);
 
-  const partyLabel = PARTY_LABELS[direction];
-  const accountLabel = ACCOUNT_LABEL[direction];
+  const partyLabel =
+    direction === 'invoice_bill'
+      ? invoiceBillType === 'vendor_bill'
+        ? 'Vendor'
+        : 'Customer'
+      : direction === 'money_in' && moneyInType === 'customer_payment'
+        ? 'Customer'
+        : PARTY_LABELS[direction];
+  const accountLabel =
+    direction === 'invoice_bill'
+      ? invoiceBillType === 'vendor_bill'
+        ? 'AP / note'
+        : 'AR settle account'
+      : direction === 'money_in' && moneyInType === 'customer_payment'
+        ? 'Deposit to'
+        : ACCOUNT_LABEL[direction];
   const activeModeIndex = entryModes.findIndex((mode) => mode.direction === direction);
   const actionLabel =
-    direction === 'money_in' ? 'Record Money In' :
-    direction === 'move_money' ? 'Record Transfer' :
-    direction === 'invoice_bill' ? 'Create Document' : 'Record Money Out';
+    direction === 'money_in'
+      ? moneyInType === 'customer_payment'
+        ? 'Record customer payment'
+        : moneyInType === 'owner_contribution'
+          ? 'Record contribution'
+          : 'Record sale'
+      : direction === 'move_money'
+        ? 'Record Transfer'
+        : direction === 'invoice_bill'
+          ? invoiceBillType === 'vendor_bill'
+            ? 'Create vendor bill'
+            : 'Create customer invoice'
+          : 'Record Money Out';
 
   useEffect(() => {
     let cancelled = false;
@@ -196,7 +225,7 @@ export default function Home() {
     }
     const handle = setTimeout(() => {
       const invoiceType: 'customer_invoice' | 'vendor_bill' | undefined =
-        direction === 'invoice_bill' ? 'vendor_bill' : undefined;
+        direction === 'invoice_bill' ? invoiceBillType : undefined;
       previewCategory({
         description: description.trim(),
         party: party.trim(),
@@ -208,7 +237,7 @@ export default function Home() {
         .catch(() => setCategoryPreview(null));
     }, 350);
     return () => clearTimeout(handle);
-  }, [description, party, direction, categoryOverride]);
+  }, [description, party, direction, categoryOverride, invoiceBillType]);
 
   function focusPartyField() {
     window.requestAnimationFrame(() => partyInputRef.current?.focus());
@@ -313,7 +342,7 @@ export default function Home() {
     } else if (direction === 'money_in') {
       input = {
         direction: 'money_in',
-        moneyInType: 'new_sale',
+        moneyInType,
         ...base,
         ...withForce,
         ...(categoryOverride ? { categoryOverride } : {}),
@@ -329,7 +358,7 @@ export default function Home() {
     } else {
       input = {
         direction: 'invoice_bill',
-        invoiceType: 'customer_invoice',
+        invoiceType: invoiceBillType,
         ...base,
         ...withForce,
         ...(categoryOverride ? { categoryOverride } : {}),
@@ -349,7 +378,9 @@ export default function Home() {
     });
   }
 
-  const showCategorySection = direction === 'money_out' || direction === 'invoice_bill';
+  const showCategorySection =
+    direction === 'money_out' ||
+    (direction === 'invoice_bill' && invoiceBillType === 'vendor_bill');
   const showFromAccount = direction === 'move_money';
   const selectedMode = entryModes[activeModeIndex] ?? entryModes[1];
   const SelectedIcon = selectedMode.icon;
@@ -401,6 +432,45 @@ export default function Home() {
               </div>
 
               <div className="entry-form">
+                {direction === 'money_in' ? (
+                  <div className="field field-full">
+                    <label>Money in type</label>
+                    <select
+                      className="input large"
+                      value={moneyInType}
+                      onChange={(e) => setMoneyInType(e.target.value as MoneyInType)}
+                    >
+                      <option value="new_sale">New cash sale (revenue)</option>
+                      <option value="customer_payment">Customer payment (clear AR)</option>
+                      <option value="owner_contribution">Owner contribution</option>
+                    </select>
+                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                      {moneyInType === 'customer_payment'
+                        ? 'Credits AR 1300 — does not create a sales invoice document. Prefer Sales → Receive payments for invoice allocation.'
+                        : moneyInType === 'owner_contribution'
+                          ? 'Credits Owner Equity 3000.'
+                          : 'Credits Sales Revenue 4000 (cash sale). Prefer Sales invoices for stocked goods.'}
+                    </p>
+                  </div>
+                ) : null}
+                {direction === 'invoice_bill' ? (
+                  <div className="field field-full">
+                    <label>Document type</label>
+                    <select
+                      className="input large"
+                      value={invoiceBillType}
+                      onChange={(e) => setInvoiceBillType(e.target.value as InvoiceBillType)}
+                    >
+                      <option value="customer_invoice">Customer invoice (AR + sales)</option>
+                      <option value="vendor_bill">Vendor bill (expense + AP)</option>
+                    </select>
+                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                      {invoiceBillType === 'vendor_bill'
+                        ? 'Dr expense / Cr AP 2100. Prefer Purchase module for inventory & multi-line bills.'
+                        : 'Dr AR 1300 / Cr Sales 4000. Prefer Sales → Invoices for products, VAT, and stock.'}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="field">
                   <label>{partyLabel}</label>
                   <input
@@ -410,9 +480,12 @@ export default function Home() {
                     onChange={(e) => setParty(e.target.value)}
                     placeholder={
                       direction === 'money_out' ? 'Supplier name' :
-                      direction === 'money_in' ? 'Customer or source' :
-                      direction === 'move_money' ? 'Reference / memo' :
-                      'Customer or vendor name'
+                      direction === 'money_in'
+                        ? moneyInType === 'owner_contribution'
+                          ? 'Owner name'
+                          : 'Customer or source'
+                        : direction === 'move_money' ? 'Reference / memo' :
+                      invoiceBillType === 'vendor_bill' ? 'Vendor name' : 'Customer name'
                     }
                     autoFocus
                     required

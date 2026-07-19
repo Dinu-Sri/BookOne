@@ -230,7 +230,7 @@ Until deeper engineering fixes land, run the business like this:
 2. Sell physical goods as free-text lines.  
 3. Leave GRNs unbilled for long periods if you care about BS inventory.  
 4. Expect Simple Entry AR to show on AR aging.  
-5. Expect sales returns to auto-clear the original invoice balance (create credit + optionally reduce manually / future fix).
+5. ~~Expect sales returns to auto-clear the original invoice balance~~ ✅ P1 applies return against source `balanceDue` when open.
 
 ---
 
@@ -246,13 +246,13 @@ Until deeper engineering fixes land, run the business like this:
 6. **Opening stock GL** ✅ Dr 5100 / Cr 3000 on product create with opening qty  
 7. **Bonus:** returns no longer mark source document `converted`
 
-### P1 — subledger integrity
+### P1 — subledger integrity ✅ implemented 2026-07-19
 
-7. Returns reduce / allocate against source document `balanceDue`.  
-8. Don’t mark source `converted` for returns.  
-9. Enforce credit limit (optional setting).  
-10. Pass product account codes into builders.  
-11. Fix Simple Entry Invoice/Bill to support vendor bill + customer payment types.
+7. **Returns reduce / allocate against source** ✅ apply `min(source.balanceDue, returnTotal)`; mark both docs paid/partial; `settlement_allocations` when both have transactions. Cash sources (balanceDue=0) skip apply — refund on return GL.  
+8. **Don’t mark source `converted` for returns** ✅ (shipped with P0).  
+9. **Enforce credit limit (optional)** ✅ `sales_settings.enforce_credit_limit` + Company → Sales checkbox; blocks credit invoices when open AR + this invoice > party `creditLimit`.  
+10. **Product account codes into builders** ✅ enrich lines with product `revenue`/`cogs`/`inventory` codes; multi-revenue grouping in `buildSalesInvoicePosting`.  
+11. **Simple Entry vendor bill + customer payment** ✅ UI selects `moneyInType` / `invoiceType`; category preview only for expense vendor bills.
 
 ### P2 — inventory purity
 
@@ -290,7 +290,7 @@ Use after deploy to prove connectivity:
 
 1. **Simple Entry is a second highway** into the same books — powerful but **not** integrated with AR/AP documents or stock.  
 2. Several **edge cases** (GRN vs inventory asset, last-cost COGS, returns vs balances, mixed bills, cash-purchase returns) mean the system is **strong for happy-path SME ops**, not yet airtight ERP purity.  
-3. Following the **operating rules in §7** keeps books trustworthy until P0/P1 fixes are implemented.
+3. Following the **operating rules in §7** keeps books trustworthy; P0/P1 correctness and subledger fixes are implemented — GRN purity and average cost remain P2.
 
 ---
 

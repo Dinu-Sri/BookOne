@@ -36,6 +36,7 @@ import {
   salesSettings,
   taxInvoiceSequences,
   salesInvoiceSources,
+  settlementAllocations,
   sql,
   transactions,
   withTenantContext,
@@ -595,11 +596,60 @@ export async function createCommercialDocument(
       const otherCharges = Math.max(0, Number(parsed.otherCharges) || 0);
       const landedExtra = Math.round((freightAmount + dutyAmount + otherCharges) * 100) / 100;
 
+      // Credit limit enforcement (optional — Sales Settings)
+      const postsAr =
+        isSales &&
+        ['sales_invoice', 'customer_invoice'].includes(parsed.documentType) &&
+        !parsed.paymentAccountCode;
+      if (postsAr) {
+        const [salesCfg] = await db()
+          .select()
+          .from(salesSettings)
+          .where(eq(salesSettings.tenantId, user.tenantId))
+          .limit(1);
+        if (
+          salesCfg?.enforceCreditLimit === '1' &&
+          party.creditLimit != null &&
+          Number(party.creditLimit) > 0
+        ) {
+          const openAr = await db()
+            .select({
+              bal: sql<string>`coalesce(sum(cast(${businessDocuments.balanceDue} as numeric)), 0)`,
+            })
+            .from(businessDocuments)
+            .where(
+              and(
+                eq(businessDocuments.tenantId, user.tenantId),
+                eq(businessDocuments.partyId, party.id),
+                inArray(businessDocuments.documentType, [
+                  'sales_invoice',
+                  'customer_invoice',
+                  'pos_sale',
+                ]),
+                isNull(businessDocuments.voidedAt),
+              ),
+            );
+          const open = Number(openAr[0]?.bal ?? 0);
+          const thisTotal = parsed.lines.reduce(
+            (s, l) => s + l.quantity * l.unitPrice - (l.discountAmount ?? 0),
+            0,
+          );
+          if (open + thisTotal > Number(party.creditLimit) + 0.005) {
+            throw new Error(
+              `Credit limit exceeded for ${party.name}: open AR LKR ${open.toFixed(2)} + this invoice ~LKR ${thisTotal.toFixed(2)} > limit LKR ${Number(party.creditLimit).toFixed(2)}. Raise limit in Parties or disable enforcement in Sales Settings.`,
+            );
+          }
+        }
+      }
+
       const enriched = [];
       for (const line of parsed.lines) {
         let unitCost = line.unitCost ?? 0;
         let productType = 'service';
         let description = line.description;
+        let revenueAccountCode = '4000';
+        let cogsAccountCode = '5000';
+        let inventoryAccountCode = '5100';
         if (line.productId) {
           const [product] = await db()
             .select()
@@ -619,6 +669,9 @@ export async function createCommercialDocument(
               : Number(product.unitCost) || line.unitCost || 0;
             productType = product.productType === 'stocked' ? 'physical' : product.productType;
             if (!description) description = product.name;
+            revenueAccountCode = String(product.revenueAccountCode ?? '4000') || '4000';
+            cogsAccountCode = String(product.cogsAccountCode ?? '5000') || '5000';
+            inventoryAccountCode = String(product.inventoryAccountCode ?? '5100') || '5100';
           }
         } else if (isPurchaseDoc) {
           // Free-text purchase line — treat cost as unit price for expense total consistency
@@ -634,6 +687,9 @@ export async function createCommercialDocument(
           productType,
           lineTotal,
           discountAmount,
+          revenueAccountCode,
+          cogsAccountCode,
+          inventoryAccountCode,
         });
       }
 
@@ -779,6 +835,9 @@ export async function createCommercialDocument(
           unitCost: l.unitCost,
           discountAmount: l.discountAmount,
           productType: l.productType,
+          revenueAccountCode: l.revenueAccountCode,
+          cogsAccountCode: l.cogsAccountCode,
+          inventoryAccountCode: l.inventoryAccountCode,
         }));
 
         let postingLines;
@@ -1212,13 +1271,74 @@ export async function createCommercialDocument(
           );
       }
 
+      // P1: apply return against source open balance (subledger integrity).
+      // Marks both source invoice/bill and this credit as settled for the applied amount
+      // so party AR/AP rollups do not double-count. Cash sources (balanceDue=0) skip —
+      // refund is already on the return GL via cash/bank control account.
+      if (
+        parsed.sourceDocumentId &&
+        ['sales_return', 'purchase_return'].includes(parsed.documentType) &&
+        postsToGl(parsed.documentType) &&
+        !needsApproval
+      ) {
+        const [src] = await db()
+          .select()
+          .from(businessDocuments)
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.id, parsed.sourceDocumentId),
+              isNull(businessDocuments.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (src) {
+          const applyAmt = Math.min(Number(src.balanceDue), docTotal);
+          if (applyAmt > 0.005) {
+            const newPaid = Number(src.paidAmount) + applyAmt;
+            const newBal = Math.max(0, Number(src.total) - newPaid);
+            await db()
+              .update(businessDocuments)
+              .set({
+                paidAmount: newPaid.toFixed(2),
+                balanceDue: newBal.toFixed(2),
+                status: newBal <= 0.005 ? 'paid' : 'partial',
+                updatedAt: new Date(),
+              })
+              .where(eq(businessDocuments.id, src.id));
+
+            // Close applied portion on the return / credit note
+            const retBal = Math.max(0, docTotal - applyAmt);
+            await db()
+              .update(businessDocuments)
+              .set({
+                paidAmount: applyAmt.toFixed(2),
+                balanceDue: retBal.toFixed(2),
+                status: retBal <= 0.005 ? 'paid' : 'partial',
+                updatedAt: new Date(),
+              })
+              .where(eq(businessDocuments.id, document.id));
+
+            // Link settlement when both sides have transactions
+            if (src.transactionId && transactionId) {
+              await db().insert(settlementAllocations).values({
+                tenantId: user.tenantId,
+                paymentTransactionId: transactionId,
+                invoiceTransactionId: src.transactionId,
+                allocatedAmount: applyAmt.toFixed(2),
+              });
+            }
+          }
+        }
+      }
+
       await db().insert(auditLog).values({
         tenantId: user.tenantId,
         userId: user.id,
         action: 'CREATE',
         tableName: 'business_documents',
         recordId: document.id,
-        newValues: { documentNumber, documentType: parsed.documentType, total },
+        newValues: { documentNumber, documentType: parsed.documentType, total: docTotal },
         notes: postsToGl(parsed.documentType)
           ? 'Created commercial document and posted journal.'
           : 'Created commercial document (no journal).',

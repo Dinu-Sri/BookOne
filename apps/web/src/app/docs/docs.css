@@ -2,7 +2,20 @@
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
 
-/* Docs shell: fill viewport without fighting BookOne app chrome */
+/*
+  Tell Tailwind where utility classes live so they are generated.
+  Paths are relative to this CSS file (src/app/docs/).
+*/
+@source '../../**/*.{ts,tsx}';
+@source '../../../content/docs/**/*.{mdx,md}';
+@source '../../../../node_modules/fumadocs-ui/dist/**/*.js';
+@source '../../../../node_modules/.pnpm/fumadocs-ui@*/node_modules/fumadocs-ui/dist/**/*.js';
+
+/* Docs viewport — light theme defaults for Fumadocs tokens */
+html {
+  color-scheme: light;
+}
+
 html,
 body {
   min-height: 100%;
@@ -12,4 +25,13 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  background: var(--color-fd-background, #f5f5f5);
+  color: var(--color-fd-foreground, #0a0a0a);
+}
+
+/* Isolate docs from BookOne global element resets that break layout */
+#nd-docs-layout,
+[data-docs-layout],
+.fd-docs-layout {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }

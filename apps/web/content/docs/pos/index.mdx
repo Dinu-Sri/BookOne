@@ -1,0 +1,27 @@
+---
+title: Point of sale
+description: Registers, shifts, cash sales, and Z-report.
+---
+
+# Point of sale
+
+## Flow
+
+1. Configure **registers** (payment account, optional location).  
+2. Open a **shift** on the terminal (`/pos`).  
+3. Sell with cash/card/bank tender.  
+4. Close shift → Z-report.
+
+## Accounting
+
+POS sale posts like a **cash invoice**:
+
+- Dr tender account (default register cash/bank/card)  
+- Cr revenue (+ VAT if tax)  
+- COGS for physical products  
+- Stock −qty at register location when set  
+
+## Screens
+
+- Terminal: `/pos`  
+- Sales → POS list / shifts  

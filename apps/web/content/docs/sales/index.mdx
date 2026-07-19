@@ -1,0 +1,34 @@
+---
+title: Sales overview
+description: Quotes, orders, invoices, payments, returns, and aging.
+---
+
+# Sales overview
+
+## Typical flow
+
+```
+Quotation → Sales order → Sales invoice → Receive payment
+                              ↘ Sales return (if needed)
+```
+
+| Document | GL? | Stock? |
+|----------|-----|--------|
+| Quotation | No | No |
+| Sales order | No | No |
+| Sales invoice (credit) | Yes — AR, revenue, COGS | Physical −qty |
+| Sales invoice (cash account) | Yes — cash, revenue, COGS | Physical −qty |
+| POS sale | Yes — tender, revenue, COGS | Physical −qty |
+| Sales return | Yes — reverse revenue/COGS | Physical +qty |
+| Receive payment | Yes — bank/cash vs AR | No |
+
+## Where to click
+
+- **Sales → Quotations / Orders / Invoices / Returns**  
+- **Sales → Payments** — receive customer payments  
+- **Sales → Aging** — open AR by age  
+- **Sales → POS** — list / shifts (terminal under `/pos`)  
+
+## Related settings
+
+Company → **Sales settings** (VAT, credit limit).

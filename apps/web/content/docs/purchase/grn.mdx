@@ -1,0 +1,27 @@
+---
+title: Goods received (GRN)
+description: Receive stock from a PO without necessarily opening AP.
+---
+
+# Goods received (GRN)
+
+## Steps
+
+1. **Purchase → Receipts → New**, or convert from a PO.  
+2. Select vendor / source PO.  
+3. Confirm quantities.  
+4. Save.
+
+## Default behaviour
+
+- **Stock +qty** for physical products  
+- **No GL** (unless GRNI setting is on)
+
+## Optional GRNI
+
+**Company → Purchase settings → Post GRNI on goods receipt**
+
+- GRN posts **Dr 5100 / Cr 2150** (Goods received not invoiced)  
+- Later bill **clears 2150** instead of debiting inventory again for received qty  
+
+Use GRNI when you want inventory on the balance sheet before the vendor bill arrives.

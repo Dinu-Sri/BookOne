@@ -1,0 +1,4 @@
+{
+  "title": "Inventory",
+  "pages": ["index", "products", "stock", "transfers", "costing"]
+}

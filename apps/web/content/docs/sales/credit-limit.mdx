@@ -1,0 +1,23 @@
+---
+title: Credit limits
+description: Optional enforcement of customer credit limits on invoices.
+---
+
+# Credit limits
+
+## Setup
+
+1. On the **customer party**, set **Credit limit** (LKR).  
+2. **Company → Sales settings** → enable **Enforce customer credit limits**.  
+
+## Behaviour
+
+On **credit** sales invoices (no payment account):
+
+```
+open AR + this invoice ≈ limit?
+```
+
+If exceeded → create is **blocked** with a clear error.
+
+Cash/POS sales are not blocked by this rule.

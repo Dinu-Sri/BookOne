@@ -1,0 +1,27 @@
+---
+title: Enter a vendor bill
+description: Create a credit purchase that opens AP and may stock inventory.
+---
+
+# Enter a vendor bill
+
+## Steps
+
+1. **Purchase → Purchases → New** (or Import for landed cost).  
+2. Select **vendor**.  
+3. Enter **supplier invoice #** if required by settings.  
+4. Add lines (products or expense free-text).  
+5. Optional freight/duty/other on imports.  
+6. Save.
+
+## Accounting (inventory bill)
+
+- **Dr 5100** Inventory (and/or expense accounts for services)  
+- **Dr 2300** Input VAT if tax bill  
+- **Cr 2100** Accounts Payable  
+
+If the bill is from a **GRN**, stock is **not** increased again; with GRNI enabled, inventory clear uses **2150**.
+
+## Approval
+
+If **Require bill approval** is on, the bill stays pending until **Approve** on the detail page (then GL + stock post).

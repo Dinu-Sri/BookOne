@@ -1,0 +1,13 @@
+{
+  "title": "BookOne Docs",
+  "pages": [
+    "index",
+    "getting-started",
+    "sales",
+    "purchase",
+    "inventory",
+    "accounting",
+    "pos",
+    "health-check"
+  ]
+}

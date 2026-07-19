@@ -39,6 +39,9 @@
       ],
       "@bookone/modules": [
         "../../packages/modules/src"
+      ],
+      "collections/*": [
+        "./.source/*"
       ]
     },
     "allowJs": true

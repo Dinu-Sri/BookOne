@@ -1,0 +1,64 @@
+---
+title: Company setup
+description: Configure profile, tax, settings, brands, and locations.
+---
+
+# Company setup
+
+## Company details
+
+**Company → Details**
+
+- Legal / trading name  
+- Country, base currency (e.g. LKR), timezone  
+- Address and contact  
+
+These values appear on printed invoices and purchase documents.
+
+## Tax
+
+**Company → Tax**
+
+- TIN, VAT number, SVAT  
+- Default tax rate (informational for tax profile)  
+
+Sales VAT behaviour is controlled mainly under **Sales settings** (`vatRegistered`, rates).
+
+## Sales settings
+
+**Company → Sales settings**
+
+| Setting | Effect |
+|---------|--------|
+| VAT registered | Enables tax invoices and output VAT posting |
+| VAT rate % | Used on tax invoices |
+| Enforce credit limit | Blocks credit invoices over party `creditLimit` |
+| Default channel / kind | Defaults on new invoices |
+
+## Purchase settings
+
+**Company → Purchase settings**
+
+| Setting | Effect |
+|---------|--------|
+| Require bill approval | Bills save as pending until Approve |
+| Require supplier invoice # | Hard required on credit bills |
+| Block duplicate bills | Same vendor + supplier inv # |
+| Require GRN before bill | PO with products needs GRN first |
+| Post GRNI on receipt | GRN posts Dr Inventory / Cr GRNI 2150 |
+
+## Inventory settings
+
+**Company → Inventory settings**
+
+| Setting | Effect |
+|---------|--------|
+| Costing method | `last` or weighted `average` |
+| Negative stock | `allow` or `block` oversell |
+
+## Brands & locations
+
+- **Brands** — optional dimension on Simple Entry when present  
+- **Locations** — warehouses for stock on commercial docs and transfers  
+
+If you have locations, prefer selecting one on purchases and sales so stock levels stay location-aware.

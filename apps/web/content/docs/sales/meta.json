@@ -1,0 +1,4 @@
+{
+  "title": "Sales",
+  "pages": ["index", "invoice", "receive-payment", "returns", "credit-limit"]
+}

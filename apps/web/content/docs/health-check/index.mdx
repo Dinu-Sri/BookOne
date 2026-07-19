@@ -1,0 +1,38 @@
+---
+title: ERP Health Check
+description: Automated staging suite that exercises real posting engines.
+---
+
+# ERP Health Check
+
+**Control Room → ERP Health Check** (super admin).
+
+## Purpose
+
+Run a **mini business day** automatically and assert:
+
+- Correct GL account mapping  
+- Stock movements  
+- Payment journals  
+- Optional VAT, Simple Entry, credit limit, negative stock, POS, average cost, transfers  
+
+## Steps
+
+1. Mark company **Staging**.  
+2. Turn **off** purchase bill approval (suite needs immediate post).  
+3. **Run full suite** (or core only).  
+4. Read pass/fail per step.  
+5. Optionally **wipe this run** or use **Master wipe**.  
+
+## Full suite highlights
+
+- Purchase → pay vendor → sale → return → receive  
+- GRN path without double stock  
+- Tax invoice output VAT 2200  
+- Simple Entry money out  
+- Credit limit & negative stock **must block**  
+- POS open sale **and close shift**  
+- Weighted average cost  
+- Multi-location transfer  
+
+Numbers vary by **seed** so runs are not identical.

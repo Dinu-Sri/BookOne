@@ -1,3 +1,5 @@
+import { createMDX } from 'fumadocs-mdx/next';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
@@ -17,4 +19,8 @@ const nextConfig = {
   // build stamp in the HTML to force a fresh fetch when the deploy changes.
 };
 
-module.exports = nextConfig;
+const withMDX = createMDX({
+  configPath: 'source.config.ts',
+});
+
+export default withMDX(nextConfig);

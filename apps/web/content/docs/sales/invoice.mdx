@@ -1,0 +1,36 @@
+---
+title: Create a sales invoice
+description: Step-by-step credit or cash sales invoice with products.
+---
+
+# Create a sales invoice
+
+## Steps
+
+1. Open **Sales → Invoices → New**.  
+2. Choose **customer** (or type a new name).  
+3. Set **date**, optional **due date**, **sale channel**, **invoice kind** (commercial vs tax).  
+4. If you use warehouses, select **location**.  
+5. Add **lines**:
+   - Search a product, or type free text  
+   - Quantity and unit price  
+   - Physical products reduce stock and post COGS  
+6. Optional: link open **sales orders**, header discount, notes.  
+7. **Save**.
+
+## What posts to the books (credit invoice)
+
+- **Dr 1300** Accounts Receivable (incl. VAT if tax invoice)  
+- **Cr 4000** Sales revenue (ex-VAT)  
+- **Cr 2200** Output VAT (tax invoice only)  
+- For physical goods: **Dr 5000** COGS / **Cr 5100** Inventory  
+
+## Cash / paid-now invoice
+
+If you select a **payment account** (cash/bank), AR is skipped and that account is debited instead (similar to a cash sale).
+
+## Tips
+
+- Prefer products over free-text for stocked goods so cost and accounts come from the product master.  
+- Tax invoices need **VAT registered** in Sales settings.  
+- Credit limit (if enforced) only applies to **credit** invoices without a payment account.

@@ -1,0 +1,26 @@
+---
+title: Sales returns
+description: Credit notes, restock, and applying to the original invoice.
+---
+
+# Sales returns
+
+## Steps
+
+1. **Sales → Returns → New**.  
+2. Select customer and optionally **source invoice**.  
+3. Enter return lines (product, qty, price).  
+4. Save.
+
+## Accounting
+
+- **Dr 4100** Sales returns  
+- **Cr 1300** AR (or cash if refund account set)  
+- Reverse COGS for physical goods (restock inventory)  
+- Optional VAT reverse on tax returns  
+
+## Source invoice balance
+
+When a return links to an **open** invoice, BookOne applies the return against that invoice’s `balanceDue` (P1 subledger).  
+
+If the invoice is already fully paid, the return creates credit on AR without reducing the invoice further — handle refunds carefully.

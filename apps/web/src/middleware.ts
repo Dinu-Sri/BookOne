@@ -44,6 +44,8 @@ export const config = {
   // Exclude Next.js internals, the auth API routes, and static assets.
   // Order of alternation matters: more specific prefixes first.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|favicon.webp|logo.webp|api/auth).*)',
+    // Exclude Next internals, auth API, and static public assets.
+    // /api/search stays authenticated (docs require login).
+    '/((?!_next/static|_next/image|favicon.ico|favicon.webp|logo.webp|api/auth|products/).*)',
   ],
 };

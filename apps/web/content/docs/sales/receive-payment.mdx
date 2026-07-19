@@ -1,0 +1,24 @@
+---
+title: Receive a customer payment
+description: Clear open AR invoices with cash or bank.
+---
+
+# Receive a customer payment
+
+## Steps
+
+1. Open **Sales → Payments → New** (or Payments list).  
+2. Choose **payment date** and **deposit account** (Cash 1000, Bank 1100, Card 1200).  
+3. Select open invoices and enter amounts (cannot exceed balance due).  
+4. Submit.
+
+## What posts
+
+- **Dr** cash/bank account  
+- **Cr 1300** Accounts Receivable  
+- Invoice `paidAmount` / `balanceDue` update; status → partial or paid  
+- A **settlement allocation** links payment to invoice transactions  
+
+## Prefer this over Simple Entry
+
+Simple Entry **customer payment** credits AR globally but does **not** allocate to invoice documents. Use **Sales → Payments** for proper subledger matching.

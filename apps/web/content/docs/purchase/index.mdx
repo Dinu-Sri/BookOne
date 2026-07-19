@@ -1,0 +1,31 @@
+---
+title: Purchase overview
+description: PO, GRN, bills, cash purchases, pay vendors, aging.
+---
+
+# Purchase overview
+
+## Typical flows
+
+**Credit purchase (inventory)**
+
+```
+Purchase order → GRN (stock) → Purchase bill (AP) → Pay vendor
+```
+
+**Direct bill** (no PO): create **Purchase** with products → stock + AP.
+
+**Cash purchase**: paid now, no AP.
+
+| Document | GL? | Stock? |
+|----------|-----|--------|
+| PO | No | No |
+| GRN | Optional GRNI | +qty |
+| Purchase / import bill | Yes — AP + inv/exp | +qty unless already on GRN |
+| Cash purchase | Yes — cash | +qty |
+| Purchase return | Yes | −qty |
+
+## Screens
+
+- Purchases, Import, Expenses (cash), Orders, Receipts (GRN), Returns  
+- Payments / Remittance, AP Aging, Suppliers  

@@ -2,6 +2,7 @@
 
 import {
   Bell,
+  BookOpen,
   BookOpenCheck,
   Building2,
   CalendarDays,
@@ -62,6 +63,7 @@ const navSuites: NavSuite[] = [
       { label: 'Reports', icon: LineChart, href: '/reports' },
       { label: 'Accounts', icon: Landmark, href: '/accounts' },
       { label: 'Reconciliation', icon: ShieldCheck, href: '/reconciliation' },
+      { label: 'Documentation', icon: BookOpen, href: '/docs' },
     ],
   },
   {

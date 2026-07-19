@@ -401,13 +401,19 @@ export function HealthCheckPanel({
             <strong>Full: credit limit / neg stock</strong> — must <em>block</em> bad posts
           </li>
           <li>
-            <strong>Full: POS</strong> — open shift + cash sale
+            <strong>Full: POS</strong> — open shift + cash sale + <em>close shift</em>
           </li>
           <li>
-            <strong>Final</strong> — stock formula + <em>this run only</em> journals balance (not whole company noise)
+            <strong>Full: average cost</strong> — 10@100 + 10@200 → unit cost 150 (then restore setting)
           </li>
           <li>
-            <strong>Wipe</strong> — voids run journals/docs, reverses stock movements (staging only)
+            <strong>Full: transfer</strong> — multi-warehouse move, total qty unchanged, no GL
+          </li>
+          <li>
+            <strong>Final</strong> — stock formula + <em>this run only</em> journals balance
+          </li>
+          <li>
+            <strong>Wipe</strong> — voids journals/docs, reverses commercial + transfer stock (staging only)
           </li>
         </ul>
       </section>

@@ -5,7 +5,8 @@
  *
  * Paths exercised:
  *  createQuickProduct, createCommercialDocument (purchase/invoice/return/GRN/PO/POS),
- *  allocateDocumentPayment, recordEntry (Simple Entry), inventory/sales settings gates.
+ *  allocateDocumentPayment, recordEntry (Simple Entry), createStockTransfer,
+ *  weighted-average costing, inventory/sales settings gates, POS open+close shift.
  */
 
 import { revalidatePath } from 'next/cache';
@@ -24,6 +25,7 @@ import {
   inventoryMovements,
   inventoryProducts,
   inventorySettings,
+  inventoryStockDocs,
   inventoryStockLevels,
   journalEntries,
   journalLines,
@@ -39,10 +41,10 @@ import {
 } from '@bookone/db';
 import { createCommercialDocument, getCommercialDocument } from '@/app/actions/commercial-docs';
 import { allocateDocumentPayment } from '@/app/actions/documents';
-import { createQuickProduct } from '@/app/actions/inventory';
+import { createQuickProduct, createStockTransfer } from '@/app/actions/inventory';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { recordEntry } from '@/app/actions/record-entry';
-import { completePosSale, openPosShift } from '@/app/actions/pos-session';
+import { closePosShift, completePosSale, openPosShift } from '@/app/actions/pos-session';
 
 export type HealthStepStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped';
 
@@ -439,7 +441,12 @@ export async function runHealthCheckSuite(input?: {
       enforceCreditLimit: string;
       vatRatePercent: string;
     } | null = null;
-    let invSnap: { id?: string; negativeStockPolicy: string } | null = null;
+    let invSnap: {
+      id?: string;
+      negativeStockPolicy: string;
+      costingMethod: string;
+    } | null = null;
+    let transferQty = 0;
 
     async function step(
       id: string,
@@ -571,7 +578,11 @@ export async function runHealthCheckSuite(input?: {
           .where(eq(inventorySettings.tenantId, user.tenantId))
           .limit(1);
         if (is) {
-          invSnap = { id: is.id, negativeStockPolicy: is.negativeStockPolicy };
+          invSnap = {
+            id: is.id,
+            negativeStockPolicy: is.negativeStockPolicy,
+            costingMethod: is.costingMethod ?? 'last',
+          };
         }
       });
 
@@ -1310,9 +1321,313 @@ export async function runHealthCheckSuite(input?: {
         if (Math.abs(qtyAfter - qtyBefore + 1) > 0.001) {
           throw new Error(`POS stock −1 failed (${qtyBefore} → ${qtyAfter})`);
         }
+
+        // Professional close: do not leave health-check shifts open
+        const closed = await closePosShift({
+          shiftId: shift.shiftId,
+          closingCashCount: sellPrice, // cash sale tender ≈ expected till for this lone sale
+          notes: `health-check auto-close ${runId}`,
+        });
+        if (!closed.ok) {
+          throw new Error(closed.error ?? 'POS shift close failed');
+        }
+        created.posShiftClosed = '1';
+
         return {
-          detail: `POS ${doc.documentNumber} · cash sale · stock −1`,
-          meta: { posSaleId: sale.id },
+          detail: `POS ${doc.documentNumber} · cash sale · stock −1 · shift closed`,
+          meta: { posSaleId: sale.id, shiftId: shift.shiftId },
+        };
+      });
+    }
+
+    // ── full: weighted average cost ──────────────────────────────
+    if (suite === 'full') {
+      await step('avg_cost', '13. Weighted average cost on receipts', async () => {
+        // Enable average costing for this step
+        await withTenantContext(user.tenantId, async () => {
+          const [is] = await db()
+            .select()
+            .from(inventorySettings)
+            .where(eq(inventorySettings.tenantId, user.tenantId))
+            .limit(1);
+          if (is) {
+            await db()
+              .update(inventorySettings)
+              .set({ costingMethod: 'average', updatedAt: new Date() })
+              .where(eq(inventorySettings.id, is.id));
+          } else {
+            await db().insert(inventorySettings).values({
+              tenantId: user.tenantId,
+              costingMethod: 'average',
+              negativeStockPolicy: 'allow',
+            });
+          }
+        });
+
+        const avgName = `HC AvgCost ${seed}`;
+        const p1 = await createQuickProduct({
+          name: avgName,
+          productType: 'physical',
+          unitCost: 100,
+          sellPrice: 150,
+        });
+        if (!p1.ok || !p1.product) throw new Error(p1.error ?? 'Avg product create failed');
+        created.avgProductId = p1.product.id;
+
+        const q1 = 10;
+        const c1 = 100;
+        const buy1 = await createCommercialDocument({
+          documentType: 'purchase',
+          partyName: `HC Avg Vendor ${seed}`,
+          issueDate,
+          notes: `health-check avg lot1 ${runId}`,
+          supplierInvoiceNumber: `HC-AVG1-${seed}`,
+          locationId: locationId,
+          lines: [
+            {
+              productId: p1.product.id,
+              description: avgName,
+              quantity: q1,
+              unitPrice: c1,
+              unitCost: c1,
+              discountAmount: 0,
+            },
+          ],
+        });
+        if (!buy1.ok || !buy1.id) throw new Error(buy1.error ?? 'Avg purchase 1 failed');
+        trackDoc(buy1.id, 'avgPurchase1Id');
+        const d1 = await getCommercialDocument(buy1.id);
+        trackTx(d1?.transactionId);
+
+        const [after1] = await withTenantContext(user.tenantId, async () => {
+          return db()
+            .select({ unitCost: inventoryProducts.unitCost })
+            .from(inventoryProducts)
+            .where(eq(inventoryProducts.id, p1.product!.id))
+            .limit(1);
+        });
+        if (Math.abs(Number(after1?.unitCost ?? 0) - 100) > 0.02) {
+          throw new Error(`After first receipt unit cost should be 100, got ${after1?.unitCost}`);
+        }
+
+        const q2 = 10;
+        const c2 = 200;
+        // Expected WAC = (10*100 + 10*200) / 20 = 150
+        const buy2 = await createCommercialDocument({
+          documentType: 'purchase',
+          partyName: `HC Avg Vendor ${seed}`,
+          issueDate,
+          notes: `health-check avg lot2 ${runId}`,
+          supplierInvoiceNumber: `HC-AVG2-${seed}`,
+          locationId: locationId,
+          lines: [
+            {
+              productId: p1.product.id,
+              description: avgName,
+              quantity: q2,
+              unitPrice: c2,
+              unitCost: c2,
+              discountAmount: 0,
+            },
+          ],
+        });
+        if (!buy2.ok || !buy2.id) throw new Error(buy2.error ?? 'Avg purchase 2 failed');
+        trackDoc(buy2.id, 'avgPurchase2Id');
+        const d2 = await getCommercialDocument(buy2.id);
+        trackTx(d2?.transactionId);
+
+        const [after2] = await withTenantContext(user.tenantId, async () => {
+          return db()
+            .select({ unitCost: inventoryProducts.unitCost })
+            .from(inventoryProducts)
+            .where(eq(inventoryProducts.id, p1.product!.id))
+            .limit(1);
+        });
+        const wac = Number(after2?.unitCost ?? 0);
+        if (Math.abs(wac - 150) > 0.05) {
+          throw new Error(
+            `Weighted average should be 150 after 10@100 + 10@200, got ${wac}`,
+          );
+        }
+
+        // Restore costing method for rest of company defaults
+        await withTenantContext(user.tenantId, async () => {
+          const [is] = await db()
+            .select()
+            .from(inventorySettings)
+            .where(eq(inventorySettings.tenantId, user.tenantId))
+            .limit(1);
+          if (is) {
+            await db()
+              .update(inventorySettings)
+              .set({
+                costingMethod: invSnap?.costingMethod ?? 'last',
+                updatedAt: new Date(),
+              })
+              .where(eq(inventorySettings.id, is.id));
+          }
+        });
+
+        return {
+          detail: `WAC OK: 10@100 + 10@200 → unit cost ${wac.toFixed(2)}`,
+          meta: { wac, avgProductId: p1.product.id },
+        };
+      });
+    }
+
+    // ── full: multi-location transfer ────────────────────────────
+    if (suite === 'full') {
+      await step('transfer', '14. Multi-location stock transfer (no GL)', async () => {
+        if (!created.productId) throw new Error('No product');
+
+        // Ensure two distinct warehouses
+        const locs = await withTenantContext(user.tenantId, async () => {
+          let rows = await db()
+            .select({ id: locations.id, name: locations.name, code: locations.code })
+            .from(locations)
+            .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)));
+
+          if (rows.length < 1) {
+            const [a] = await db()
+              .insert(locations)
+              .values({
+                tenantId: user.tenantId,
+                name: 'HC Warehouse A',
+                code: 'HC-A',
+                locationType: 'warehouse',
+                status: 'active',
+              })
+              .returning({ id: locations.id, name: locations.name, code: locations.code });
+            rows = [a];
+            created.hcLocationA = a.id;
+          }
+          if (rows.length < 2) {
+            const [b] = await db()
+              .insert(locations)
+              .values({
+                tenantId: user.tenantId,
+                name: 'HC Warehouse B',
+                code: 'HC-B',
+                locationType: 'warehouse',
+                status: 'active',
+              })
+              .returning({ id: locations.id, name: locations.name, code: locations.code });
+            rows = [...rows, b];
+            created.hcLocationB = b.id;
+          }
+          return rows;
+        });
+
+        const fromId = locationId && locs.some((l) => l.id === locationId) ? locationId : locs[0]!.id;
+        const toId = locs.find((l) => l.id !== fromId)!.id;
+        created.transferFromId = fromId;
+        created.transferToId = toId;
+
+        // Source location must hold stock for main product (purchases used locationId or null)
+        // If stock sits on null location, move a seed qty onto fromId first via purchase-less adjust:
+        // ensure stock at fromId by transferring from null bucket if needed
+        const atFrom = await withTenantContext(user.tenantId, () =>
+          productQty(user.tenantId, created.productId!, fromId),
+        );
+        const atNull = await withTenantContext(user.tenantId, async () => {
+          const [row] = await db()
+            .select({
+              q: sql<string>`coalesce(sum(cast(${inventoryStockLevels.qtyOnHand} as numeric)), 0)`,
+            })
+            .from(inventoryStockLevels)
+            .where(
+              and(
+                eq(inventoryStockLevels.tenantId, user.tenantId),
+                eq(inventoryStockLevels.productId, created.productId!),
+                sql`${inventoryStockLevels.locationId} is null`,
+              ),
+            );
+          return Number(row?.q ?? 0);
+        });
+
+        if (atFrom < 2 && atNull >= 2) {
+          // Relocate 2 units from unassigned bucket to from warehouse so transfer can run
+          await withTenantContext(user.tenantId, async () => {
+            await applyStockDelta(user.tenantId, created.productId!, null, -2);
+            await applyStockDelta(user.tenantId, created.productId!, fromId, 2);
+          });
+        }
+
+        const fromBefore = await withTenantContext(user.tenantId, () =>
+          productQty(user.tenantId, created.productId!, fromId),
+        );
+        const toBefore = await withTenantContext(user.tenantId, () =>
+          productQty(user.tenantId, created.productId!, toId),
+        );
+        const totalBefore = await withTenantContext(user.tenantId, () =>
+          productQty(user.tenantId, created.productId!),
+        );
+
+        if (fromBefore < 2) {
+          throw new Error(
+            `Need ≥2 units at source warehouse for transfer (have ${fromBefore}). Ensure purchases use a location.`,
+          );
+        }
+
+        transferQty = 2;
+        const tr = await createStockTransfer({
+          docDate: issueDate,
+          fromLocationId: fromId,
+          toLocationId: toId,
+          reason: 'Health check transfer',
+          notes: `health-check ${runId}`,
+          lines: [{ productId: created.productId, quantity: transferQty }],
+        });
+        if (!tr.ok || !tr.id) throw new Error(tr.error ?? 'Transfer failed');
+        created.transferDocId = tr.id;
+
+        const fromAfter = await withTenantContext(user.tenantId, () =>
+          productQty(user.tenantId, created.productId!, fromId),
+        );
+        const toAfter = await withTenantContext(user.tenantId, () =>
+          productQty(user.tenantId, created.productId!, toId),
+        );
+        const totalAfter = await withTenantContext(user.tenantId, () =>
+          productQty(user.tenantId, created.productId!),
+        );
+
+        if (Math.abs(fromAfter - (fromBefore - transferQty)) > 0.001) {
+          throw new Error(`From location should −${transferQty}: ${fromBefore} → ${fromAfter}`);
+        }
+        if (Math.abs(toAfter - (toBefore + transferQty)) > 0.001) {
+          throw new Error(`To location should +${transferQty}: ${toBefore} → ${toAfter}`);
+        }
+        if (Math.abs(totalAfter - totalBefore) > 0.001) {
+          throw new Error(
+            `Transfer must not change total qty (${totalBefore} → ${totalAfter}) — no GL / no double stock`,
+          );
+        }
+
+        // Transfer is stock-only — no transaction/GL
+        const [stockDoc] = await withTenantContext(user.tenantId, async () => {
+          return db()
+            .select({
+              transactionId: inventoryStockDocs.transactionId,
+              docType: inventoryStockDocs.docType,
+            })
+            .from(inventoryStockDocs)
+            .where(eq(inventoryStockDocs.id, tr.id!))
+            .limit(1);
+        });
+        if (stockDoc?.transactionId) {
+          throw new Error('Stock transfer must not create a GL transaction');
+        }
+
+        return {
+          detail: `${tr.documentNumber}: ${transferQty} units A→B · totals unchanged · no GL`,
+          meta: {
+            transferDocId: tr.id,
+            fromId,
+            toId,
+            fromAfter,
+            toAfter,
+            totalAfter,
+          },
         };
       });
     }
@@ -1321,6 +1636,7 @@ export async function runHealthCheckSuite(input?: {
     await step('balance', 'Final. Run-scoped TB + stock formula', async () => {
       if (!created.productId) throw new Error('No product');
       const retQty = suite === 'full' ? 1 : 0;
+      // Transfer does not change total qty
       const expectedQty = buyQty - sellQty + retQty + grnQty - taxQtyOut - posQty;
       const actualQty = await withTenantContext(user.tenantId, () =>
         productQty(user.tenantId, created.productId!),
@@ -1373,6 +1689,7 @@ export async function runHealthCheckSuite(input?: {
           .update(inventorySettings)
           .set({
             negativeStockPolicy: invSnap.negativeStockPolicy,
+            costingMethod: invSnap.costingMethod ?? 'last',
             updatedAt: new Date(),
           })
           .where(eq(inventorySettings.id, invSnap.id));
@@ -1517,32 +1834,53 @@ export async function wipeHealthCheckRun(
       let count = 0;
       let stockReversals = 0;
 
-      // 1. Reverse stock from movements
-      if (docs.length > 0) {
+      // 1. Reverse stock from commercial doc + stock_doc (transfer) movements
+      const movementRefIds = [...docs];
+      if (created.transferDocId && !movementRefIds.includes(created.transferDocId)) {
+        movementRefIds.push(created.transferDocId);
+      }
+      if (movementRefIds.length > 0) {
         const movs = await db()
           .select()
           .from(inventoryMovements)
           .where(
             and(
               eq(inventoryMovements.tenantId, user.tenantId),
-              eq(inventoryMovements.referenceType, 'business_document'),
-              inArray(inventoryMovements.referenceId, docs),
+              inArray(inventoryMovements.referenceId, movementRefIds),
             ),
           );
         for (const m of movs) {
           const qty = Number(m.quantity);
-          // reverse the delta
-          if (qty > 0 && m.toLocationId !== undefined) {
+          if (m.movementType === 'transfer') {
+            // Transfer stored as absolute qty: reverse = to −qty, from +qty
+            await applyStockDelta(user.tenantId, m.productId, m.toLocationId ?? null, -Math.abs(qty));
+            await applyStockDelta(user.tenantId, m.productId, m.fromLocationId ?? null, Math.abs(qty));
+            stockReversals++;
+            continue;
+          }
+          // Sale/purchase style: quantity is signed delta on one location
+          if (qty > 0) {
             await applyStockDelta(user.tenantId, m.productId, m.toLocationId ?? null, -qty);
             stockReversals++;
           } else if (qty < 0) {
             await applyStockDelta(user.tenantId, m.productId, m.fromLocationId ?? null, -qty);
             stockReversals++;
-          } else if (qty > 0) {
-            await applyStockDelta(user.tenantId, m.productId, null, -qty);
-            stockReversals++;
           }
         }
+      }
+
+      // Void transfer stock doc
+      if (created.transferDocId) {
+        await db()
+          .update(inventoryStockDocs)
+          .set({ voidedAt: now, updatedAt: now, status: 'void' })
+          .where(
+            and(
+              eq(inventoryStockDocs.id, created.transferDocId),
+              eq(inventoryStockDocs.tenantId, user.tenantId),
+              isNull(inventoryStockDocs.voidedAt),
+            ),
+          );
       }
 
       // 2. Void journals for run transactions
@@ -1635,14 +1973,15 @@ export async function wipeHealthCheckRun(
         count += dr.length;
       }
 
-      // 4. Void product + zero levels
-      if (created.productId) {
+      // 4. Void products (main + average-cost test) + zero levels
+      const productIds = [created.productId, created.avgProductId].filter(Boolean) as string[];
+      for (const pid of productIds) {
         const pr = await db()
           .update(inventoryProducts)
           .set({ voidedAt: now, isActive: '0', updatedAt: now })
           .where(
             and(
-              eq(inventoryProducts.id, created.productId),
+              eq(inventoryProducts.id, pid),
               eq(inventoryProducts.tenantId, user.tenantId),
               isNull(inventoryProducts.voidedAt),
             ),
@@ -1653,10 +1992,7 @@ export async function wipeHealthCheckRun(
           .update(inventoryStockLevels)
           .set({ qtyOnHand: '0', updatedAt: now })
           .where(
-            and(
-              eq(inventoryStockLevels.tenantId, user.tenantId),
-              eq(inventoryStockLevels.productId, created.productId),
-            ),
+            and(eq(inventoryStockLevels.tenantId, user.tenantId), eq(inventoryStockLevels.productId, pid)),
           );
       }
 

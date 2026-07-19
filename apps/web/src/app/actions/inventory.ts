@@ -1274,3 +1274,140 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
   const { redirect } = await import('next/navigation');
   redirect(docType === 'transfer' ? '/inventory/transfers?flash=created' : '/inventory/adjustments?flash=created');
 }
+
+/**
+ * Programmatic warehouse transfer (no GL) — used by ERP Health Check and API callers.
+ * Moves qty from one location to another and records stock doc + movements.
+ */
+export async function createStockTransfer(input: {
+  docDate?: string;
+  fromLocationId: string;
+  toLocationId: string;
+  reason?: string;
+  notes?: string;
+  lines: { productId: string; quantity: number }[];
+}): Promise<{ ok: boolean; error?: string; id?: string; documentNumber?: string }> {
+  try {
+    const docDate = input.docDate && /^\d{4}-\d{2}-\d{2}$/.test(input.docDate)
+      ? input.docDate
+      : new Date().toISOString().slice(0, 10);
+    const fromLocationId = input.fromLocationId?.trim();
+    const toLocationId = input.toLocationId?.trim();
+    if (!fromLocationId || !toLocationId) {
+      return { ok: false, error: 'From and to locations are required.' };
+    }
+    if (fromLocationId === toLocationId) {
+      return { ok: false, error: 'From and to locations must differ.' };
+    }
+    const lines = (input.lines ?? [])
+      .map((l) => ({
+        productId: l.productId,
+        quantity: Math.abs(Number(l.quantity) || 0),
+      }))
+      .filter((l) => l.productId && l.quantity > 0);
+    if (lines.length === 0) return { ok: false, error: 'Add at least one transfer line.' };
+
+    const user = await requireTenantContext();
+    const result = await withTenantContext(user.tenantId, async () => {
+      for (const line of lines) {
+        const [product] = await db()
+          .select()
+          .from(inventoryProducts)
+          .where(eq(inventoryProducts.id, line.productId))
+          .limit(1);
+        if (!product || !isPhysicalProduct(product.productType)) {
+          throw new Error('Only physical products can be transferred.');
+        }
+      }
+
+      const compact = docDate.replace(/-/g, '');
+      const [{ total }] = await db()
+        .select({ total: sql<number>`count(*)` })
+        .from(inventoryStockDocs)
+        .where(
+          and(
+            eq(inventoryStockDocs.tenantId, user.tenantId),
+            eq(inventoryStockDocs.docType, 'transfer'),
+            isNull(inventoryStockDocs.voidedAt),
+          ),
+        );
+      const documentNumber = `TRF-${compact}-${String(Number(total ?? 0) + 1).padStart(4, '0')}`;
+
+      const [doc] = await db()
+        .insert(inventoryStockDocs)
+        .values({
+          tenantId: user.tenantId,
+          userId: user.id,
+          docType: 'transfer',
+          documentNumber,
+          docDate,
+          status: 'posted',
+          fromLocationId,
+          toLocationId,
+          reason: input.reason?.trim() || 'Transfer',
+          notes: input.notes?.trim() || null,
+          transactionId: null,
+        })
+        .returning({ id: inventoryStockDocs.id });
+
+      const { getInventorySettings } = await import('@/app/actions/inventory-settings');
+      const invCfg = await getInventorySettings().catch(() => ({
+        negativeStockPolicy: 'allow' as const,
+      }));
+      const blockNeg = invCfg.negativeStockPolicy === 'block';
+
+      for (const line of lines) {
+        const [product] = await db()
+          .select()
+          .from(inventoryProducts)
+          .where(eq(inventoryProducts.id, line.productId))
+          .limit(1);
+        const unitCost = Number(product?.unitCost ?? 0);
+
+        await db().insert(inventoryStockDocLines).values({
+          tenantId: user.tenantId,
+          stockDocId: doc.id,
+          productId: line.productId,
+          quantity: line.quantity.toFixed(4),
+          unitCost: unitCost.toFixed(2),
+        });
+
+        await applyQtyDelta(user.tenantId, line.productId, -line.quantity, fromLocationId, {
+          blockNegative: blockNeg,
+        });
+        await applyQtyDelta(user.tenantId, line.productId, line.quantity, toLocationId);
+        await db().insert(inventoryMovements).values({
+          tenantId: user.tenantId,
+          userId: user.id,
+          movementType: 'transfer',
+          productId: line.productId,
+          quantity: line.quantity.toFixed(4),
+          unitCost: unitCost.toFixed(2),
+          fromLocationId,
+          toLocationId,
+          referenceType: 'stock_doc',
+          referenceId: doc.id,
+          memo: documentNumber,
+          movementDate: docDate,
+        });
+      }
+
+      await db().insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'CREATE',
+        tableName: 'inventory_stock_docs',
+        recordId: doc.id,
+        newValues: { documentNumber, docType: 'transfer' },
+        notes: 'Stock transfer (no GL).',
+      });
+
+      return { id: doc.id, documentNumber };
+    });
+
+    revalidateInventory();
+    return { ok: true, id: result.id, documentNumber: result.documentNumber };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Transfer failed.' };
+  }
+}

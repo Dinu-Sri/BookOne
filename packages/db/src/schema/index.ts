@@ -29,4 +29,5 @@ export { salesDiscounts } from './sales-discounts';
 export { salesSettings, taxInvoiceSequences, salesInvoiceSources } from './sales-settings';
 export { purchaseSettings } from './purchase-settings';
 export { inventorySettings } from './inventory-settings';
+export { healthCheckRuns } from './health-check';
 export { posRegisters, posShifts } from './pos';

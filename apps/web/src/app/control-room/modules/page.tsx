@@ -1,6 +1,8 @@
+import Link from 'next/link';
 import { BookOpenCheck, Building2, Calculator, CheckCircle2, Package, ShieldCheck, ShoppingCart, Users } from 'lucide-react';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
+import { Button } from '@/components/ui/bookone-ui';
 
 const moduleRows = [
   {
@@ -62,6 +64,22 @@ export default async function ControlRoomModulesPage() {
           <span className="badge info">
             <ShieldCheck size={14} /> Super admin
           </span>
+        </div>
+
+        <div className="card pad" style={{ marginBottom: 14 }}>
+          <div className="cluster" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <h2 className="card-title">ERP Health Check</h2>
+              <p className="card-subtitle" style={{ marginTop: 4 }}>
+                Run a mini business day on a staging company and see pass/fail for every step in one place.
+              </p>
+            </div>
+            <Link href="/control-room/health-check">
+              <Button variant="primary" type="button">
+                Open health check
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <div className="grid three">

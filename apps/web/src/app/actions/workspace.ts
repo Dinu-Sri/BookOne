@@ -26,6 +26,8 @@ export interface TenantInfo {
   name: string;
   slug: string;
   plan: string;
+  /** production | staging — health checks only on staging */
+  environment?: string;
   userEmail?: string;
   userRole?: string;
 }
@@ -81,12 +83,23 @@ export async function getTenantInfo(): Promise<TenantInfo> {
   const user = await requireTenantContext();
   const { tenants } = await import('@bookone/db');
   const [t] = await db()
-    .select({ id: tenants.id, name: tenants.name, slug: tenants.slug, plan: tenants.plan })
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      slug: tenants.slug,
+      plan: tenants.plan,
+      environment: tenants.environment,
+    })
     .from(tenants)
     .where(eq(tenants.id, user.tenantId))
     .limit(1);
   if (!t) throw new Error('Tenant not found.');
-  return { ...t, userEmail: user.email, userRole: user.role };
+  return {
+    ...t,
+    environment: t.environment ?? 'production',
+    userEmail: user.email,
+    userRole: user.role,
+  };
 }
 
 /**

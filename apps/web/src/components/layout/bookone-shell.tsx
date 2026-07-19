@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Calculator,
   Check,
+  CheckCircle2,
   ChevronDown,
   ClipboardList,
   FileText,
@@ -139,6 +140,7 @@ const navSuites: NavSuite[] = [
     superAdminOnly: true,
     items: [
       { label: 'Modules', icon: SlidersHorizontal, href: '/control-room/modules' },
+      { label: 'ERP Health Check', icon: CheckCircle2, href: '/control-room/health-check' },
       { label: 'Access Rules', icon: ShieldCheck },
       { label: 'Audit Controls', icon: ClipboardList },
     ],

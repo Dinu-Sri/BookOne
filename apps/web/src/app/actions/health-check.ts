@@ -41,8 +41,6 @@ import { createCommercialDocument, getCommercialDocument } from '@/app/actions/c
 import { allocateDocumentPayment } from '@/app/actions/documents';
 import { createQuickProduct } from '@/app/actions/inventory';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
-import { getSalesSettings } from '@/app/actions/sales-settings';
-import { getInventorySettings } from '@/app/actions/inventory-settings';
 import { recordEntry } from '@/app/actions/record-entry';
 import { completePosSale, openPosShift } from '@/app/actions/pos-session';
 

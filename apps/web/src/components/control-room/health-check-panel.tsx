@@ -158,11 +158,16 @@ export function HealthCheckPanel({
         setError(res.error ?? 'Wipe failed');
         return;
       }
-      setMessage(`Wiped ${res.wiped ?? 0} records from run.`);
+      setMessage(
+        `Wipe complete: ${res.detail ?? `${res.wiped ?? 0} records`} (journals voided, stock reversed).`,
+      );
       setRuns((prev) =>
         prev.map((r) =>
           r.id === runId
-            ? { ...r, summary: `${r.summary ?? ''} · wiped ${res.wiped}`.trim() }
+            ? {
+                ...r,
+                summary: `${r.summary ?? ''} · WIPED`.trim(),
+              }
             : r,
         ),
       );
@@ -377,28 +382,32 @@ export function HealthCheckPanel({
         <div className="eyebrow">WHAT EACH STEP MEANS</div>
         <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
           <li>
-            <strong>Product</strong> — inventory master (physical, qty starts 0)
+            <strong>Core path</strong> — product → purchase (5100/2100) → pay vendor (payment journal) → sale
+            (AR+COGS) → receive (payment journal)
           </li>
           <li>
-            <strong>Purchase</strong> — real <code>createCommercialDocument</code> → Dr 5100 / Cr 2100 + stock in
+            <strong>Full: return</strong> — while invoice open (tests AR apply) + restock
           </li>
           <li>
-            <strong>Pay vendor</strong> — <code>allocateDocumentPayment</code> → Dr 2100 / Cr Cash
+            <strong>Full: GRN</strong> — PO (no GL) → receive stock → bill without double stock
           </li>
           <li>
-            <strong>Sale</strong> — invoice → Dr 1300 / Cr 4000 + COGS 5000/5100 + stock out
+            <strong>Full: tax VAT</strong> — tax invoice posts Output VAT 2200
           </li>
           <li>
-            <strong>Return</strong> (full) — <em>before</em> full payment so source AR is reduced (P1 apply)
+            <strong>Full: Simple Entry</strong> — money out via <code>recordEntry</code> / inferTransaction
           </li>
           <li>
-            <strong>Receive</strong> — remaining AR cleared with cash
+            <strong>Full: credit limit / neg stock</strong> — must <em>block</em> bad posts
           </li>
           <li>
-            <strong>GRN path</strong> (full) — PO (no GL) → GRN stock+ → bill AP with stock unchanged
+            <strong>Full: POS</strong> — open shift + cash sale
           </li>
           <li>
-            <strong>Final</strong> — stock formula + whole-company journals still balance
+            <strong>Final</strong> — stock formula + <em>this run only</em> journals balance (not whole company noise)
+          </li>
+          <li>
+            <strong>Wipe</strong> — voids run journals/docs, reverses stock movements (staging only)
           </li>
         </ul>
       </section>

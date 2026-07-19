@@ -14,11 +14,14 @@ import {
   brands,
   locations,
   periodLocks,
+  businessDocuments,
+  parties,
   withTenantContext,
   eq,
   and,
   isNull,
   desc,
+  sql,
 } from '@bookone/db';
 import { entrySchema, type EntryInput } from '@/lib/entry-schema';
 
@@ -27,6 +30,8 @@ export interface RecordEntryResult {
   transactionId?: string;
   journalId?: string;
   error?: string;
+  /** Soft notice when force-posted after duplicate warning */
+  warning?: string;
 }
 
 export interface ReversalResult {
@@ -99,6 +104,41 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
         success: false,
         error: `Period ${entryPeriod} is locked. Create a reversing entry in the current period instead.`,
       };
+    }
+
+    // P0: soft block possible double-post vs commercial documents (same day, party, amount)
+    if (!parsed.forceDuplicate && parsed.direction !== 'move_money') {
+      const dup = await withTenantContext(user.tenantId, async () => {
+        const amt = parsed.amount.toFixed(2);
+        const partyQ = parsed.party.trim().toLowerCase();
+        const docs = await db()
+          .select({
+            documentNumber: businessDocuments.documentNumber,
+            documentType: businessDocuments.documentType,
+            total: businessDocuments.total,
+            partyName: parties.name,
+          })
+          .from(businessDocuments)
+          .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.issueDate, parsed.date),
+              isNull(businessDocuments.voidedAt),
+              sql`abs(CAST(${businessDocuments.total} AS numeric) - ${amt}::numeric) < 0.02`,
+              sql`lower(coalesce(${parties.name}, '')) = ${partyQ}`,
+            ),
+          )
+          .limit(3);
+        return docs;
+      });
+      if (dup.length > 0) {
+        const d = dup[0]!;
+        return {
+          success: false,
+          error: `Possible double-post: commercial ${d.documentType} ${d.documentNumber} already exists for “${d.partyName}” on ${parsed.date} (~LKR ${d.total}). Prefer Sales/Purchase modules for invoices & bills. To force this Simple Entry, set forceDuplicate and submit again.`,
+        };
+      }
     }
 
     const engineEntry = {

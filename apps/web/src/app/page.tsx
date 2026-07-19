@@ -106,6 +106,7 @@ export default function Home() {
 
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<RecordEntryResult | null>(null);
+  const [forceDuplicate, setForceDuplicate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const partyInputRef = useRef<HTMLInputElement>(null);
 
@@ -300,11 +301,13 @@ export default function Home() {
       receiptRef: receipt?.key,
     };
 
+    const withForce = forceDuplicate ? { forceDuplicate: true as const } : {};
     let input: EntryInput;
     if (direction === 'money_out') {
       input = {
         direction: 'money_out',
         ...base,
+        ...withForce,
         ...(categoryOverride ? { categoryOverride } : {}),
       };
     } else if (direction === 'money_in') {
@@ -312,6 +315,7 @@ export default function Home() {
         direction: 'money_in',
         moneyInType: 'new_sale',
         ...base,
+        ...withForce,
         ...(categoryOverride ? { categoryOverride } : {}),
       };
     } else if (direction === 'move_money') {
@@ -320,12 +324,14 @@ export default function Home() {
         fromAccount: { kind: 'code', value: fromAccountCode },
         toAccount: { kind: 'code', value: paymentAccountCode },
         ...base,
+        ...withForce,
       };
     } else {
       input = {
         direction: 'invoice_bill',
         invoiceType: 'customer_invoice',
         ...base,
+        ...withForce,
         ...(categoryOverride ? { categoryOverride } : {}),
       };
     }
@@ -334,7 +340,10 @@ export default function Home() {
       recordEntry(input).then((res) => {
         setResult(res);
         if (res.success) {
+          setForceDuplicate(false);
           clearForm({ keepResult: true });
+        } else if (res.error?.includes('Possible double-post')) {
+          setForceDuplicate(true);
         }
       });
     });
@@ -521,7 +530,19 @@ export default function Home() {
               ) : null}
 
               {result?.error ? (
-                <p className="entry-result error">{result.error}</p>
+                <div className="entry-result error" style={{ display: 'grid', gap: 8 }}>
+                  <p style={{ margin: 0 }}>{result.error}</p>
+                  {result.error.includes('Possible double-post') || forceDuplicate ? (
+                    <label className="party-check" style={{ fontSize: 13, color: 'inherit' }}>
+                      <input
+                        type="checkbox"
+                        checked={forceDuplicate}
+                        onChange={(e) => setForceDuplicate(e.target.checked)}
+                      />
+                      I understand — force post this Simple Entry anyway
+                    </label>
+                  ) : null}
+                </div>
               ) : null}
 
               {result?.success ? (

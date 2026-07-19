@@ -16,6 +16,8 @@ export const baseEntrySchema = z.object({
   locationId: z.string().uuid().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format'),
   receiptRef: z.string().max(500).optional(),
+  /** Bypass possible double-post warning vs commercial documents */
+  forceDuplicate: z.boolean().optional(),
 });
 
 export const moneyInSchema = baseEntrySchema.extend({

@@ -15,7 +15,13 @@ export {
   buildCashPurchasePosting,
   buildPurchaseReturnPosting,
   buildStockAdjustmentPosting,
+  buildOpeningStockPosting,
   sumSides,
 } from './engine/document-posting';
-export type { PostingLine, SaleLineInput, BuiltSalePosting } from './engine/document-posting';
+export type {
+  PostingLine,
+  SaleLineInput,
+  BuiltSalePosting,
+  PurchaseLineBucket,
+} from './engine/document-posting';
 export { amountInWordsLkr, formatDateMmDdYyyy } from './amount-in-words';

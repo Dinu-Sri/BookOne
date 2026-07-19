@@ -637,9 +637,11 @@ export async function createCommercialDocument(
         });
       }
 
-      // Allocate landed extras into unit cost for inventory import (value-weighted)
+      // Allocate landed extras into unit cost for inventory purchases (value-weighted)
       if (
-        (parsed.documentType === 'import_purchase' || parsed.documentType === 'purchase') &&
+        (parsed.documentType === 'import_purchase' ||
+          parsed.documentType === 'purchase' ||
+          parsed.documentType === 'cash_purchase') &&
         landedExtra > 0
       ) {
         const goodsBase = enriched.reduce((s, l) => s + l.lineTotal, 0) || 1;
@@ -764,6 +766,9 @@ export async function createCommercialDocument(
       let transactionId: string | null = null;
       let postedAt: Date | null = null;
       let amountInWords: string | null = null;
+      // May be adjusted when sales return reverses VAT
+      let docTaxTotal = vatTotal;
+      let docTotal = total;
 
       // Defer GL until Approve when purchase settings require bill approval
       if (postsToGl(parsed.documentType) && !needsApproval) {
@@ -782,17 +787,70 @@ export async function createCommercialDocument(
         let paymentAccountCode = '1300';
         let postedTotal = total;
 
+        // Per-line inventory vs expense buckets (mixed bills)
+        const purchaseBuckets = enriched.map((l) => ({
+          amount: Math.max(0, l.lineTotal),
+          isInventory: isPhysicalProduct(l.productType),
+          expenseAccountCode: l.accountCode || '6800',
+        }));
+        // Scale buckets so they sum to supplyExVat (header discounts)
+        const bucketSum = purchaseBuckets.reduce((s, b) => s + b.amount, 0) || 1;
+        const scaledBuckets = purchaseBuckets.map((b) => ({
+          ...b,
+          amount: Math.round(((b.amount / bucketSum) * supplyExVat) * 100) / 100,
+        }));
+
         if (parsed.documentType === 'sales_return') {
+          // Reverse output VAT when original sale / return is tax-rated
+          let returnVatRate = 0;
+          if (parsed.sourceDocumentId) {
+            const [src] = await db()
+              .select({
+                vatRate: businessDocuments.vatRate,
+                invoiceKind: businessDocuments.invoiceKind,
+              })
+              .from(businessDocuments)
+              .where(eq(businessDocuments.id, parsed.sourceDocumentId))
+              .limit(1);
+            if (src?.invoiceKind === 'tax_invoice' || Number(src?.vatRate) > 0) {
+              returnVatRate = Number(src?.vatRate) || 0;
+              if (returnVatRate <= 0) {
+                const [settings] = await db()
+                  .select()
+                  .from(salesSettings)
+                  .where(eq(salesSettings.tenantId, user.tenantId))
+                  .limit(1);
+                if (settings?.vatRegistered === '1') {
+                  returnVatRate = Number(settings.vatRatePercent ?? 18);
+                }
+              }
+            }
+          } else if (invoiceKind === 'tax_invoice') {
+            returnVatRate = effectiveVatRate || purchaseVatRate || 0;
+            if (returnVatRate <= 0) {
+              const [settings] = await db()
+                .select()
+                .from(salesSettings)
+                .where(eq(salesSettings.tenantId, user.tenantId))
+                .limit(1);
+              if (settings?.vatRegistered === '1') {
+                returnVatRate = Number(settings.vatRatePercent ?? 18);
+              }
+            }
+          }
           const built = buildSalesReturnPosting({
             lines: saleLines,
             refundCashAccountCode: parsed.paymentAccountCode ?? null,
+            vatRatePercent: returnVatRate,
             memo: documentNumber,
           });
           postingLines = built.lines;
           accountingType = 'sales_return';
           direction = 'money_out';
           paymentAccountCode = parsed.paymentAccountCode ?? '1300';
-          postedTotal = built.netTotal;
+          postedTotal = built.grandTotal;
+          docTaxTotal = built.vatTotal;
+          docTotal = built.grandTotal;
         } else if (parsed.documentType === 'cash_purchase') {
           const expenseCode = enriched[0]?.accountCode || '6800';
           const forceInventory = enriched.some((l) => isPhysicalProduct(l.productType));
@@ -804,7 +862,8 @@ export async function createCommercialDocument(
             memo: documentNumber,
             isInventoryPurchase: forceInventory,
             vatRatePercent: effectiveVatRate,
-            landedExtra: 0,
+            landedExtra,
+            lineBuckets: scaledBuckets,
           });
           accountingType = 'purchase';
           direction = 'money_out';
@@ -813,14 +872,17 @@ export async function createCommercialDocument(
         } else if (isPurchaseBillType(parsed.documentType)) {
           const expenseCode = enriched[0]?.accountCode || '6800';
           const forceInventory =
-            parsed.documentType === 'import_purchase' || enriched.some((l) => isPhysicalProduct(l.productType));
+            parsed.documentType === 'import_purchase' ||
+            enriched.some((l) => isPhysicalProduct(l.productType));
           postingLines = buildVendorBillPosting({
             total: supplyExVat,
             expenseAccountCode: expenseCode,
             memo: documentNumber,
             isInventoryPurchase: forceInventory,
             vatRatePercent: effectiveVatRate,
-            landedExtra: parsed.documentType === 'import_purchase' ? landedExtra : 0,
+            // Landed extras on any bill (import or local) when provided
+            landedExtra,
+            lineBuckets: scaledBuckets,
           });
           accountingType = parsed.documentType === 'import_purchase' ? 'import_purchase' : 'invoice_bill';
           direction = 'money_out';
@@ -828,16 +890,33 @@ export async function createCommercialDocument(
           postedTotal = total;
         } else if (parsed.documentType === 'purchase_return') {
           const expenseCode = enriched[0]?.accountCode || '6800';
+          // Cash purchase returns refund cash; credit bills reduce AP
+          let refundCash: string | null = null;
+          if (parsed.sourceDocumentId) {
+            const [src] = await db()
+              .select({ documentType: businessDocuments.documentType })
+              .from(businessDocuments)
+              .where(eq(businessDocuments.id, parsed.sourceDocumentId))
+              .limit(1);
+            if (src?.documentType === 'cash_purchase') {
+              refundCash = parsed.paymentAccountCode || '1000';
+            }
+          } else if (parsed.paymentAccountCode) {
+            // Explicit refund account on free-standing return
+            refundCash = parsed.paymentAccountCode;
+          }
           postingLines = buildPurchaseReturnPosting({
             total: supplyExVat,
             expenseAccountCode: expenseCode,
             isInventoryPurchase: enriched.some((l) => isPhysicalProduct(l.productType)),
             memo: documentNumber,
             vatRatePercent: effectiveVatRate,
+            refundCashAccountCode: refundCash,
+            lineBuckets: scaledBuckets,
           });
           accountingType = 'purchase_return';
           direction = 'money_in';
-          paymentAccountCode = '2100';
+          paymentAccountCode = refundCash ?? '2100';
           postedTotal = total;
         } else {
           // sales_invoice | pos_sale
@@ -937,11 +1016,11 @@ export async function createCommercialDocument(
           discountId: parsed.discountId ?? null,
           discountTotal: headerDiscount.toFixed(2),
           subtotal: supplyExVat.toFixed(2),
-          taxTotal: vatTotal.toFixed(2),
-          total: total.toFixed(2),
+          taxTotal: docTaxTotal.toFixed(2),
+          total: docTotal.toFixed(2),
           paidAmount:
             settled || parsed.documentType === 'pos_sale' || parsed.documentType === 'cash_purchase'
-              ? total.toFixed(2)
+              ? docTotal.toFixed(2)
               : '0',
           balanceDue:
             settled ||
@@ -949,7 +1028,7 @@ export async function createCommercialDocument(
             parsed.documentType === 'cash_purchase' ||
             parsed.documentType === 'goods_receipt'
               ? '0'
-              : total.toFixed(2),
+              : docTotal.toFixed(2),
           currency: 'LKR',
           notes: parsed.notes ?? null,
           saleChannel,
@@ -966,14 +1045,18 @@ export async function createCommercialDocument(
           freightAmount: freightAmount.toFixed(2),
           dutyAmount: dutyAmount.toFixed(2),
           otherCharges: otherCharges.toFixed(2),
-          vatRate: effectiveVatRate.toFixed(2),
+          vatRate:
+            parsed.documentType === 'sales_return' && docTaxTotal > 0
+              ? // store rate implied by return
+                (supplyExVat > 0 ? ((docTaxTotal / supplyExVat) * 100).toFixed(2) : effectiveVatRate.toFixed(2))
+              : effectiveVatRate.toFixed(2),
           amountInWords:
             amountInWords ??
             (appliesSalesVat ||
             appliesPurchaseVat ||
             isPosSale ||
             (parsed.documentType === 'sales_return' && settled)
-              ? amountInWordsLkr(total)
+              ? amountInWordsLkr(docTotal)
               : null),
           purchaserTin: parsed.purchaserTin || party.tin || null,
           purchaserPhone: parsed.purchaserPhone || party.phoneMobile || party.phone || null,
@@ -1113,7 +1196,11 @@ export async function createCommercialDocument(
         }
       }
 
-      if (parsed.sourceDocumentId) {
+      // Mark source converted only for true conversions (not returns / credits)
+      if (
+        parsed.sourceDocumentId &&
+        !['sales_return', 'purchase_return'].includes(parsed.documentType)
+      ) {
         await db()
           .update(businessDocuments)
           .set({ status: 'converted', updatedAt: new Date() })
@@ -1643,6 +1730,8 @@ export async function createReturnFromBillAction(formData: FormData): Promise<vo
     issueDate: new Date().toISOString().slice(0, 10),
     notes: `Return from ${detail.documentNumber}`,
     sourceDocumentId: sourceId,
+    // Cash purchase returns refund cash (not AP)
+    paymentAccountCode: detail.documentType === 'cash_purchase' ? '1000' : undefined,
     lines,
   });
   if (!result.ok) throw new Error(result.error ?? 'Could not create return');
@@ -2196,6 +2285,17 @@ export async function approvePurchaseDocument(
         doc.documentType === 'import_purchase' ||
         enriched.some((l) => isPhysicalProduct(l.productType));
 
+      const lineBuckets = enriched.map((l) => ({
+        amount: Math.max(0, l.lineTotal),
+        isInventory: isPhysicalProduct(l.productType),
+        expenseAccountCode: '6800',
+      }));
+      const bucketSum = lineBuckets.reduce((s, b) => s + b.amount, 0) || 1;
+      const scaledBuckets = lineBuckets.map((b) => ({
+        ...b,
+        amount: Math.round(((b.amount / bucketSum) * supplyExVat) * 100) / 100,
+      }));
+
       const postingLines = buildVendorBillPosting({
         total: supplyExVat,
         expenseAccountCode: expenseCode,
@@ -2203,6 +2303,7 @@ export async function approvePurchaseDocument(
         isInventoryPurchase: forceInventory,
         vatRatePercent: vatRate,
         landedExtra,
+        lineBuckets: scaledBuckets,
       });
 
       const accountMap = new Map<string, { id: string; code: string; name: string }>();

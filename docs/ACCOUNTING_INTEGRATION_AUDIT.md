@@ -236,14 +236,15 @@ Until deeper engineering fixes land, run the business like this:
 
 ## 8. Fix backlog (engineering priority)
 
-### P0 — correctness
+### P0 — correctness ✅ implemented 2026-07-19
 
-1. **Sales return VAT reverse** (and optional link to original invoice).  
-2. **Purchase return from cash purchase** → refund cash, not Dr AP.  
-3. **Cash purchase landedExtra** into GL (or exclude from document total).  
-4. **Mixed purchase bills** → per-line inventory vs expense.  
-5. **Block SE vs commercial double-post** soft warnings (same party + amount + date).  
-6. **Opening stock** → optional GL (Dr 5100 / Cr equity or opening balance equity).
+1. **Sales return VAT reverse** ✅ `buildSalesReturnPosting` + source/tax rate wiring  
+2. **Purchase return from cash purchase** → refund cash ✅ `refundCashAccountCode`  
+3. **Cash purchase landedExtra** into GL ✅ (+ unit-cost allocation)  
+4. **Mixed purchase bills** → per-line inventory vs expense ✅ `lineBuckets`  
+5. **SE vs commercial double-post** warning ✅ Simple Entry blocks with force checkbox  
+6. **Opening stock GL** ✅ Dr 5100 / Cr 3000 on product create with opening qty  
+7. **Bonus:** returns no longer mark source document `converted`
 
 ### P1 — subledger integrity
 

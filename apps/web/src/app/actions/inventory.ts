@@ -2,7 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { buildStockAdjustmentPosting, isPhysicalProduct } from '@bookone/accounting';
+import {
+  buildOpeningStockPosting,
+  buildStockAdjustmentPosting,
+  isPhysicalProduct,
+} from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -653,7 +657,8 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
         locationId: null,
         qtyOnHand: parsed.openingQty.toFixed(4),
       });
-      if (parsed.openingQty !== 0) {
+      if (parsed.openingQty > 0) {
+        const openDate = new Date().toISOString().slice(0, 10);
         await db().insert(inventoryMovements).values({
           tenantId: user.tenantId,
           userId: user.id,
@@ -664,8 +669,91 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
           referenceType: 'opening',
           referenceId: product.id,
           memo: 'Opening stock',
-          movementDate: new Date().toISOString().slice(0, 10),
+          movementDate: openDate,
         });
+
+        // P0: capitalise opening inventory (Dr 5100 / Cr Owner Equity 3000)
+        const glLines = buildOpeningStockPosting({
+          quantity: parsed.openingQty,
+          unitCost: parsed.unitCost,
+          memo: `Opening stock ${parsed.sku}`,
+        });
+        if (glLines.length > 0) {
+          const accountMap = new Map<string, string>();
+          for (const pl of glLines) {
+            if (!accountMap.has(pl.accountCode)) {
+              const [acc] = await db()
+                .select({ id: accounts.id })
+                .from(accounts)
+                .where(
+                  and(
+                    eq(accounts.tenantId, user.tenantId),
+                    eq(accounts.code, pl.accountCode),
+                    isNull(accounts.voidedAt),
+                  ),
+                )
+                .limit(1);
+              if (!acc) throw new Error(`Account ${pl.accountCode} not found for opening stock.`);
+              accountMap.set(pl.accountCode, acc.id);
+            }
+          }
+          const amount = Math.round(parsed.openingQty * parsed.unitCost * 100) / 100;
+          const [txRow] = await db()
+            .insert(transactions)
+            .values({
+              tenantId: user.tenantId,
+              userId: user.id,
+              accountingType: 'adjustment',
+              direction: 'move_money',
+              party: 'Opening balance',
+              description: `Opening stock ${parsed.sku} ${parsed.name}`.slice(0, 1000),
+              amount: amount.toFixed(2),
+              currency: 'LKR',
+              paymentMethod: 'Credit',
+              paymentAccountId: accountMap.get('5100')!,
+              date: openDate,
+              categoryCode: '5100',
+              categoryName: 'Inventory',
+              categoryConfidence: '1.00',
+              categorySource: 'document',
+              invoiceRef: parsed.sku,
+              isAlreadySettled: '1',
+              notes: 'Opening stock capitalisation',
+            })
+            .returning({ id: transactions.id });
+          const [journal] = await db()
+            .insert(journalEntries)
+            .values({
+              tenantId: user.tenantId,
+              userId: user.id,
+              transactionId: txRow.id,
+              memo: `Opening stock ${parsed.sku}`,
+              entryDate: openDate,
+              isBalanced: '1',
+            })
+            .returning({ id: journalEntries.id });
+          await db().insert(journalLines).values(
+            glLines.map((pl) => ({
+              tenantId: user.tenantId,
+              journalEntryId: journal.id,
+              accountId: accountMap.get(pl.accountCode)!,
+              side: pl.side,
+              amount: pl.amount.toFixed(2),
+              memo: pl.memo,
+            })),
+          );
+          await db()
+            .update(inventoryMovements)
+            .set({ transactionId: txRow.id })
+            .where(
+              and(
+                eq(inventoryMovements.tenantId, user.tenantId),
+                eq(inventoryMovements.productId, product.id),
+                eq(inventoryMovements.referenceType, 'opening'),
+                eq(inventoryMovements.referenceId, product.id),
+              ),
+            );
+        }
       }
     }
 

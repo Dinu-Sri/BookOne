@@ -41,6 +41,15 @@ export interface BuiltSalePosting {
   lines: PostingLine[];
 }
 
+/** Purchase line bucket for mixed inventory + expense bills */
+export interface PurchaseLineBucket {
+  /** Line amount ex-VAT (after discounts) */
+  amount: number;
+  /** true → inventory 5100; false → expense account */
+  isInventory: boolean;
+  expenseAccountCode?: string;
+}
+
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -61,8 +70,7 @@ function assertBalanced(lines: PostingLine[]) {
 export function buildSalesInvoicePosting(input: {
   lines: SaleLineInput[];
   headerDiscount?: number;
-  settledCashAccountCode?: string | null; // if set, cash sale instead of AR
-  /** VAT % applied on supply (e.g. 18). 0 = commercial / zero-rated */
+  settledCashAccountCode?: string | null;
   vatRatePercent?: number;
   outputVatAccountCode?: string;
   memo?: string;
@@ -110,6 +118,7 @@ export function buildSalesInvoicePosting(input: {
   const settleCode = input.settledCashAccountCode ?? null;
   const controlCode = settleCode ?? '1300';
   const vatCode = input.outputVatAccountCode ?? '2200';
+  const revenueCode = input.lines[0]?.revenueAccountCode ?? '4000';
 
   const lines: PostingLine[] = [
     {
@@ -119,7 +128,7 @@ export function buildSalesInvoicePosting(input: {
       memo,
     },
     {
-      accountCode: '4000',
+      accountCode: revenueCode,
       side: 'credit',
       amount: netTotal,
       memo,
@@ -139,13 +148,20 @@ export function buildSalesInvoicePosting(input: {
   return { netTotal, vatTotal, grandTotal, cogsTotal, lines };
 }
 
-/** Sales return: Dr Sales Returns 4100, Cr AR/Cash; reverse COGS for stocked */
+/**
+ * Sales return: Dr Sales Returns 4100, optional Dr Output VAT reverse 2200,
+ * Cr AR/Cash (incl. VAT); reverse COGS for stocked.
+ */
 export function buildSalesReturnPosting(input: {
   lines: SaleLineInput[];
   refundCashAccountCode?: string | null;
+  /** Reverse output VAT at this % on net (matches tax invoice sales) */
+  vatRatePercent?: number;
+  outputVatAccountCode?: string;
   memo?: string;
 }): BuiltSalePosting {
   const memo = input.memo ?? 'Sales return';
+  const vatRate = Math.max(0, input.vatRatePercent ?? 0);
   let netTotal = 0;
   let cogsTotal = 0;
   const cogsLines: PostingLine[] = [];
@@ -175,7 +191,11 @@ export function buildSalesReturnPosting(input: {
     }
   }
 
+  const vatTotal = round2((netTotal * vatRate) / 100);
+  const grandTotal = round2(netTotal + vatTotal);
   const controlCode = input.refundCashAccountCode ?? '1300';
+  const vatCode = input.outputVatAccountCode ?? '2200';
+
   const lines: PostingLine[] = [
     {
       accountCode: '4100',
@@ -183,23 +203,96 @@ export function buildSalesReturnPosting(input: {
       amount: netTotal,
       memo,
     },
-    {
-      accountCode: controlCode,
-      side: 'credit',
-      amount: netTotal,
-      memo,
-    },
-    ...cogsLines,
   ];
+  if (vatTotal > 0) {
+    // Reverse original Cr Output VAT
+    lines.push({
+      accountCode: vatCode,
+      side: 'debit',
+      amount: vatTotal,
+      memo: `Output VAT reverse ${vatRate}%`,
+    });
+  }
+  lines.push({
+    accountCode: controlCode,
+    side: 'credit',
+    amount: grandTotal,
+    memo,
+  });
+  lines.push(...cogsLines);
 
   assertBalanced(lines);
-  return { netTotal, vatTotal: 0, grandTotal: netTotal, cogsTotal, lines };
+  return { netTotal, vatTotal, grandTotal, cogsTotal, lines };
+}
+
+function buildPurchaseDebits(input: {
+  goodsTotal: number;
+  landedExtra: number;
+  expenseAccountCode: string;
+  isInventoryPurchase?: boolean;
+  lineBuckets?: PurchaseLineBucket[];
+  memo: string;
+}): { debits: PostingLine[]; inventoryDebit: number; expenseDebit: number } {
+  const goods = round2(input.goodsTotal);
+  const landed = round2(Math.max(0, input.landedExtra));
+  const memo = input.memo;
+
+  // Mixed-line path: per-line inventory vs expense
+  if (input.lineBuckets && input.lineBuckets.length > 0) {
+    let inv = 0;
+    const expMap = new Map<string, number>();
+    for (const b of input.lineBuckets) {
+      const amt = round2(Math.max(0, b.amount));
+      if (amt <= 0) continue;
+      if (b.isInventory) inv = round2(inv + amt);
+      else {
+        const code = b.expenseAccountCode || input.expenseAccountCode || '6800';
+        expMap.set(code, round2((expMap.get(code) ?? 0) + amt));
+      }
+    }
+    // Landed extras capitalise into inventory if any stock lines, else default expense
+    if (landed > 0) {
+      if (inv > 0) inv = round2(inv + landed);
+      else {
+        const code = input.expenseAccountCode || '6800';
+        expMap.set(code, round2((expMap.get(code) ?? 0) + landed));
+      }
+    }
+    const debits: PostingLine[] = [];
+    if (inv > 0) debits.push({ accountCode: '5100', side: 'debit', amount: inv, memo });
+    for (const [code, amt] of expMap) {
+      if (amt > 0) debits.push({ accountCode: code, side: 'debit', amount: amt, memo });
+    }
+    if (debits.length === 0) {
+      debits.push({
+        accountCode: input.isInventoryPurchase ? '5100' : input.expenseAccountCode || '6800',
+        side: 'debit',
+        amount: round2(goods + landed),
+        memo,
+      });
+    }
+    const expenseDebit = round2(
+      debits.filter((d) => d.accountCode !== '5100').reduce((s, d) => s + d.amount, 0),
+    );
+    const inventoryDebit = round2(
+      debits.filter((d) => d.accountCode === '5100').reduce((s, d) => s + d.amount, 0),
+    );
+    return { debits, inventoryDebit, expenseDebit };
+  }
+
+  // Legacy all-or-nothing
+  const base = round2(goods + landed);
+  const debitCode = input.isInventoryPurchase ? '5100' : input.expenseAccountCode || '6800';
+  return {
+    debits: [{ accountCode: debitCode, side: 'debit', amount: base, memo }],
+    inventoryDebit: input.isInventoryPurchase ? base : 0,
+    expenseDebit: input.isInventoryPurchase ? 0 : base,
+  };
 }
 
 /**
- * Vendor bill / local or import purchase: Dr Expense/Inventory (+ optional Input VAT), Cr AP.
- * `total` is **ex-VAT** goods/landed base. `vatRatePercent` adds recoverable input VAT.
- * `landedExtra` is added into inventory/expense debit (freight/duty/other) and into AP.
+ * Vendor bill: Dr Inventory and/or Expense (+ Input VAT), Cr AP.
+ * Prefer `lineBuckets` for mixed goods/services; else `isInventoryPurchase` all-or-nothing.
  */
 export function buildVendorBillPosting(input: {
   total: number;
@@ -208,23 +301,29 @@ export function buildVendorBillPosting(input: {
   isInventoryPurchase?: boolean;
   vatRatePercent?: number;
   inputVatAccountCode?: string;
-  /** Extra costs capitalized into inventory / expense (freight, duty, other) */
   landedExtra?: number;
+  /** Mixed-line split (amounts ex-VAT, before landed) */
+  lineBuckets?: PurchaseLineBucket[];
 }): PostingLine[] {
   const goods = round2(input.total);
   const landed = round2(Math.max(0, input.landedExtra ?? 0));
-  const base = round2(goods + landed);
   const vatRate = Math.max(0, input.vatRatePercent ?? 0);
-  // Input VAT typically on goods only (not always on freight/duty) — use goods base for SL SME simplicity
-  const vatBase = goods;
-  const vatTotal = round2((vatBase * vatRate) / 100);
-  const debitCode = input.isInventoryPurchase ? '5100' : input.expenseAccountCode;
+  const vatTotal = round2((goods * vatRate) / 100);
   const vatCode = input.inputVatAccountCode ?? '2300';
-  const apTotal = round2(base + vatTotal);
   const memo = input.memo ?? 'Vendor bill';
-  const lines: PostingLine[] = [
-    { accountCode: debitCode, side: 'debit', amount: base, memo },
-  ];
+
+  const { debits } = buildPurchaseDebits({
+    goodsTotal: goods,
+    landedExtra: landed,
+    expenseAccountCode: input.expenseAccountCode,
+    isInventoryPurchase: input.isInventoryPurchase,
+    lineBuckets: input.lineBuckets,
+    memo,
+  });
+
+  const baseDebit = round2(debits.reduce((s, d) => s + d.amount, 0));
+  const apTotal = round2(baseDebit + vatTotal);
+  const lines: PostingLine[] = [...debits];
   if (vatTotal > 0) {
     lines.push({ accountCode: vatCode, side: 'debit', amount: vatTotal, memo: `Input VAT ${vatRate}%` });
   }
@@ -233,7 +332,7 @@ export function buildVendorBillPosting(input: {
   return lines;
 }
 
-/** Cash purchase (QBO Expense): Dr Expense/Inventory (+ Input VAT), Cr Bank/Cash — no AP */
+/** Cash purchase: Dr Inv/Expense (+ Input VAT), Cr Bank/Cash — no AP */
 export function buildCashPurchasePosting(input: {
   total: number;
   expenseAccountCode: string;
@@ -243,18 +342,28 @@ export function buildCashPurchasePosting(input: {
   vatRatePercent?: number;
   inputVatAccountCode?: string;
   landedExtra?: number;
+  lineBuckets?: PurchaseLineBucket[];
 }): PostingLine[] {
   const goods = round2(input.total);
   const landed = round2(Math.max(0, input.landedExtra ?? 0));
-  const base = round2(goods + landed);
   const vatRate = Math.max(0, input.vatRatePercent ?? 0);
   const vatTotal = round2((goods * vatRate) / 100);
-  const debitCode = input.isInventoryPurchase ? '5100' : input.expenseAccountCode;
   const payCode = input.paymentAccountCode || '1000';
   const vatCode = input.inputVatAccountCode ?? '2300';
-  const payTotal = round2(base + vatTotal);
   const memo = input.memo ?? 'Cash purchase';
-  const lines: PostingLine[] = [{ accountCode: debitCode, side: 'debit', amount: base, memo }];
+
+  const { debits } = buildPurchaseDebits({
+    goodsTotal: goods,
+    landedExtra: landed,
+    expenseAccountCode: input.expenseAccountCode,
+    isInventoryPurchase: input.isInventoryPurchase,
+    lineBuckets: input.lineBuckets,
+    memo,
+  });
+
+  const baseDebit = round2(debits.reduce((s, d) => s + d.amount, 0));
+  const payTotal = round2(baseDebit + vatTotal);
+  const lines: PostingLine[] = [...debits];
   if (vatTotal > 0) {
     lines.push({ accountCode: vatCode, side: 'debit', amount: vatTotal, memo: `Input VAT ${vatRate}%` });
   }
@@ -264,8 +373,10 @@ export function buildCashPurchasePosting(input: {
 }
 
 /**
- * Purchase return: reverse a bill.
- * Dr AP 2100, Cr Inventory 5100 (stocked) or expense account (+ reverse Input VAT).
+ * Purchase return.
+ * Credit purchase: Dr AP 2100 …
+ * Cash purchase return: Dr refund cash account (not AP) …
+ * Cr Inventory/Expense (+ reverse Input VAT).
  */
 export function buildPurchaseReturnPosting(input: {
   total: number;
@@ -274,20 +385,56 @@ export function buildPurchaseReturnPosting(input: {
   memo?: string;
   vatRatePercent?: number;
   inputVatAccountCode?: string;
+  /**
+   * When set (e.g. 1000/1100), refunds cash/bank instead of reducing AP.
+   * Use for returns of cash purchases.
+   */
+  refundCashAccountCode?: string | null;
+  lineBuckets?: PurchaseLineBucket[];
 }): PostingLine[] {
   const goods = round2(input.total);
   const vatRate = Math.max(0, input.vatRatePercent ?? 0);
   const vatTotal = round2((goods * vatRate) / 100);
-  const creditCode = input.isInventoryPurchase ? '5100' : input.expenseAccountCode ?? '6800';
   const vatCode = input.inputVatAccountCode ?? '2300';
-  const apTotal = round2(goods + vatTotal);
   const memo = input.memo ?? 'Purchase return';
+  const settleCode = input.refundCashAccountCode?.trim() || '2100';
+  const settleTotal = round2(goods + vatTotal);
+
+  // Credit inventory / expense
+  const creditLines: PostingLine[] = [];
+  if (input.lineBuckets && input.lineBuckets.length > 0) {
+    let inv = 0;
+    const expMap = new Map<string, number>();
+    for (const b of input.lineBuckets) {
+      const amt = round2(Math.max(0, b.amount));
+      if (amt <= 0) continue;
+      if (b.isInventory) inv = round2(inv + amt);
+      else {
+        const code = b.expenseAccountCode || input.expenseAccountCode || '6800';
+        expMap.set(code, round2((expMap.get(code) ?? 0) + amt));
+      }
+    }
+    if (inv > 0) creditLines.push({ accountCode: '5100', side: 'credit', amount: inv, memo });
+    for (const [code, amt] of expMap) {
+      if (amt > 0) creditLines.push({ accountCode: code, side: 'credit', amount: amt, memo });
+    }
+  }
+  if (creditLines.length === 0) {
+    const creditCode = input.isInventoryPurchase ? '5100' : input.expenseAccountCode ?? '6800';
+    creditLines.push({ accountCode: creditCode, side: 'credit', amount: goods, memo });
+  }
+
   const lines: PostingLine[] = [
-    { accountCode: '2100', side: 'debit', amount: apTotal, memo },
-    { accountCode: creditCode, side: 'credit', amount: goods, memo },
+    { accountCode: settleCode, side: 'debit', amount: settleTotal, memo },
+    ...creditLines,
   ];
   if (vatTotal > 0) {
-    lines.push({ accountCode: vatCode, side: 'credit', amount: vatTotal, memo: `Input VAT reverse ${vatRate}%` });
+    lines.push({
+      accountCode: vatCode,
+      side: 'credit',
+      amount: vatTotal,
+      memo: `Input VAT reverse ${vatRate}%`,
+    });
   }
   assertBalanced(lines);
   return lines;
@@ -314,6 +461,28 @@ export function buildStockAdjustmentPosting(input: {
         { accountCode: expense, side: 'debit', amount, memo },
         { accountCode: '5100', side: 'credit', amount, memo },
       ];
+  assertBalanced(lines);
+  return lines;
+}
+
+/**
+ * Opening stock: capitalise inventory against equity (SME opening balance).
+ * Dr 5100 Inventory · Cr 3000 Owner Equity (or opening equity code).
+ */
+export function buildOpeningStockPosting(input: {
+  quantity: number;
+  unitCost: number;
+  equityAccountCode?: string;
+  memo?: string;
+}): PostingLine[] {
+  const amount = round2(Math.abs(input.quantity) * input.unitCost);
+  if (amount === 0 || input.quantity <= 0) return [];
+  const equity = input.equityAccountCode ?? '3000';
+  const memo = input.memo ?? 'Opening stock';
+  const lines: PostingLine[] = [
+    { accountCode: '5100', side: 'debit', amount, memo },
+    { accountCode: equity, side: 'credit', amount, memo },
+  ];
   assertBalanced(lines);
   return lines;
 }

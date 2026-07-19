@@ -273,6 +273,7 @@ export async function completePosSale(
       registerId: parsed.registerId,
       shiftId: parsed.shiftId,
       posMode: 'sale',
+      locationId: register.locationId ?? null,
       lines: parsed.lines.map((l) => ({
         productId: l.productId ?? null,
         description: l.description,
@@ -617,6 +618,7 @@ export async function completePosReturn(
       posMode: 'return',
       sourcePosSaleId: parsed.sourcePosSaleId ?? null,
       sourceDocumentId: parsed.sourcePosSaleId ?? null,
+      locationId: register.locationId ?? null,
       lines: parsed.lines.map((l) => ({
         productId: l.productId ?? null,
         description: l.description,

@@ -8,6 +8,7 @@ import {
   buildVendorBillPosting,
   buildCashPurchasePosting,
   buildPurchaseReturnPosting,
+  buildGrnPosting,
   isPhysicalProduct,
   amountInWordsLkr,
 } from '@bookone/accounting';
@@ -43,6 +44,7 @@ import {
 } from '@bookone/db';
 import { ensureParty } from '@/app/actions/parties';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
+import { getInventorySettings } from '@/app/actions/inventory-settings';
 
 export type CommercialDocType =
   | 'quotation'
@@ -112,6 +114,8 @@ const createSchema = z.object({
   shiftId: z.string().uuid().optional().nullable(),
   posMode: z.enum(['sale', 'return']).optional().nullable(),
   sourcePosSaleId: z.string().uuid().optional().nullable(),
+  /** Warehouse / branch for stock movements */
+  locationId: z.string().uuid().optional().nullable(),
   lines: z.array(lineSchema).min(1),
 });
 
@@ -294,6 +298,101 @@ async function resolveAccount(tenantId: string, code: string) {
   return account;
 }
 
+/** Ensure system account exists (e.g. GRNI 2150 on older tenants). */
+async function ensureSystemAccount(
+  tenantId: string,
+  code: string,
+  name: string,
+  type: string,
+  normalSide: string,
+) {
+  try {
+    return await resolveAccount(tenantId, code);
+  } catch {
+    const [created] = await db()
+      .insert(accounts)
+      .values({ tenantId, code, name, type, normalSide })
+      .returning({ id: accounts.id, code: accounts.code, name: accounts.name, type: accounts.type });
+    return created;
+  }
+}
+
+async function productQtyOnHand(tenantId: string, productId: string): Promise<number> {
+  const [row] = await db()
+    .select({
+      q: sql<string>`coalesce(sum(cast(${inventoryStockLevels.qtyOnHand} as numeric)), 0)`,
+    })
+    .from(inventoryStockLevels)
+    .where(
+      and(
+        eq(inventoryStockLevels.tenantId, tenantId),
+        eq(inventoryStockLevels.productId, productId),
+      ),
+    );
+  return Number(row?.q ?? 0);
+}
+
+/** Weighted average unit cost after a receipt of qtyIn @ unitCostIn (qty before receipt). */
+function weightedAverageUnitCost(
+  qtyBefore: number,
+  costBefore: number,
+  qtyIn: number,
+  unitCostIn: number,
+): number {
+  if (qtyIn <= 0) return costBefore;
+  if (qtyBefore <= 0.00005) return Math.round(unitCostIn * 100) / 100;
+  const total = qtyBefore * costBefore + qtyIn * unitCostIn;
+  return Math.round((total / (qtyBefore + qtyIn)) * 100) / 100;
+}
+
+/**
+ * Inventory value already capitalised via GRNI that this bill should clear (Dr 2150).
+ * Pro-rates line totals by received qty when billing a PO with partial GRN.
+ */
+async function computeGrniClearAmount(
+  tenantId: string,
+  sourceDocumentId: string | null | undefined,
+  lines: {
+    productId?: string | null;
+    description: string;
+    quantity: number;
+    lineTotal: number;
+    productType: string;
+  }[],
+  postGrni: boolean,
+): Promise<number> {
+  if (!postGrni || !sourceDocumentId) return 0;
+  const [src] = await db()
+    .select({ id: businessDocuments.id, documentType: businessDocuments.documentType })
+    .from(businessDocuments)
+    .where(
+      and(
+        eq(businessDocuments.tenantId, tenantId),
+        eq(businessDocuments.id, sourceDocumentId),
+        isNull(businessDocuments.voidedAt),
+      ),
+    )
+    .limit(1);
+  if (!src) return 0;
+
+  let clear = 0;
+  if (src.documentType === 'goods_receipt') {
+    for (const l of lines) {
+      if (isPhysicalProduct(l.productType)) clear += Math.max(0, l.lineTotal);
+    }
+  } else if (src.documentType === 'purchase_order') {
+    const received = await receivedQtyByLineKey(tenantId, src.id);
+    for (const l of lines) {
+      if (!isPhysicalProduct(l.productType)) continue;
+      const rec = received.get(lineMatchKey(l.productId, l.description)) ?? 0;
+      if (rec <= 0 || l.quantity <= 0) continue;
+      const share = Math.min(1, rec / l.quantity);
+      clear += Math.max(0, l.lineTotal) * share;
+    }
+  }
+  return Math.round(clear * 100) / 100;
+}
+
 async function assertOpenPeriod(tenantId: string, date: string) {
   const period = date.slice(0, 7);
   const [lock] = await db()
@@ -343,6 +442,8 @@ async function adjustStock(params: {
   transactionId?: string | null;
   memo?: string;
   locationId?: string | null;
+  /** When true, refuse if this location level would go negative */
+  blockNegative?: boolean;
 }) {
   const [level] = await db()
     .select()
@@ -360,6 +461,18 @@ async function adjustStock(params: {
 
   const current = Number(level?.qtyOnHand ?? 0);
   const next = current + params.quantityDelta;
+
+  if (params.blockNegative && params.quantityDelta < 0 && next < -0.00005) {
+    const [prod] = await db()
+      .select({ sku: inventoryProducts.sku, name: inventoryProducts.name })
+      .from(inventoryProducts)
+      .where(eq(inventoryProducts.id, params.productId))
+      .limit(1);
+    const label = prod ? `${prod.sku} ${prod.name}` : params.productId;
+    throw new Error(
+      `Insufficient stock for ${label}: on hand ${current.toFixed(4)}, need ${Math.abs(params.quantityDelta).toFixed(4)}. Adjust stock or allow negative stock in Inventory Settings.`,
+    );
+  }
 
   if (level) {
     await db()
@@ -500,9 +613,16 @@ export async function createCommercialDocument(
       requireSupplierInvoiceNo: false,
       blockDuplicateBills: true,
       requireGrnBeforeBill: false,
+      postGrniOnReceipt: false,
       defaultPaymentTerms: 'Net 30',
       defaultExpenseAccount: '6800',
     }));
+    const invCfg = await getInventorySettings().catch(() => ({
+      negativeStockPolicy: 'allow' as const,
+      costingMethod: 'last' as const,
+    }));
+    const blockNegative = invCfg.negativeStockPolicy === 'block';
+    const costingMethod = invCfg.costingMethod;
 
     const isApBill = isPurchaseBillType(parsed.documentType);
     const supplierInv = parsed.supplierInvoiceNumber?.trim() || '';
@@ -827,7 +947,10 @@ export async function createCommercialDocument(
       let docTotal = total;
 
       // Defer GL until Approve when purchase settings require bill approval
-      if (postsToGl(parsed.documentType) && !needsApproval) {
+      // GRN optionally posts GRNI when purchase setting enabled
+      const isGrnDoc = parsed.documentType === 'goods_receipt';
+      const postGrni = isGrnDoc && purchaseCfg.postGrniOnReceipt;
+      if ((postsToGl(parsed.documentType) && !needsApproval) || postGrni) {
         const saleLines = enriched.map((l) => ({
           description: l.description,
           quantity: l.quantity,
@@ -859,7 +982,35 @@ export async function createCommercialDocument(
           amount: Math.round(((b.amount / bucketSum) * supplyExVat) * 100) / 100,
         }));
 
-        if (parsed.documentType === 'sales_return') {
+        const grniClearAmount = await computeGrniClearAmount(
+          user.tenantId,
+          parsed.sourceDocumentId,
+          enriched,
+          purchaseCfg.postGrniOnReceipt,
+        );
+
+        if (postGrni) {
+          const grnInvAmt = Math.round(
+            enriched
+              .filter((l) => isPhysicalProduct(l.productType))
+              .reduce((s, l) => s + Math.max(0, l.quantity * l.unitCost), 0) * 100,
+          ) / 100;
+          await ensureSystemAccount(
+            user.tenantId,
+            '2150',
+            'Goods Received Not Invoiced',
+            'liability',
+            'credit',
+          );
+          postingLines = buildGrnPosting({
+            inventoryAmount: grnInvAmt,
+            memo: documentNumber,
+          });
+          accountingType = 'goods_receipt';
+          direction = 'move_money';
+          paymentAccountCode = '5100';
+          postedTotal = grnInvAmt;
+        } else if (parsed.documentType === 'sales_return') {
           // Reverse output VAT when original sale / return is tax-rated
           let returnVatRate = 0;
           if (parsed.sourceDocumentId) {
@@ -914,6 +1065,15 @@ export async function createCommercialDocument(
           const expenseCode = enriched[0]?.accountCode || '6800';
           const forceInventory = enriched.some((l) => isPhysicalProduct(l.productType));
           const payCode = parsed.paymentAccountCode || '1000';
+          if (grniClearAmount > 0) {
+            await ensureSystemAccount(
+              user.tenantId,
+              '2150',
+              'Goods Received Not Invoiced',
+              'liability',
+              'credit',
+            );
+          }
           postingLines = buildCashPurchasePosting({
             total: supplyExVat,
             expenseAccountCode: expenseCode,
@@ -923,6 +1083,7 @@ export async function createCommercialDocument(
             vatRatePercent: effectiveVatRate,
             landedExtra,
             lineBuckets: scaledBuckets,
+            grniClearAmount,
           });
           accountingType = 'purchase';
           direction = 'money_out';
@@ -933,6 +1094,15 @@ export async function createCommercialDocument(
           const forceInventory =
             parsed.documentType === 'import_purchase' ||
             enriched.some((l) => isPhysicalProduct(l.productType));
+          if (grniClearAmount > 0) {
+            await ensureSystemAccount(
+              user.tenantId,
+              '2150',
+              'Goods Received Not Invoiced',
+              'liability',
+              'credit',
+            );
+          }
           postingLines = buildVendorBillPosting({
             total: supplyExVat,
             expenseAccountCode: expenseCode,
@@ -942,6 +1112,7 @@ export async function createCommercialDocument(
             // Landed extras on any bill (import or local) when provided
             landedExtra,
             lineBuckets: scaledBuckets,
+            grniClearAmount,
           });
           accountingType = parsed.documentType === 'import_purchase' ? 'import_purchase' : 'invoice_bill';
           direction = 'money_out';
@@ -998,65 +1169,87 @@ export async function createCommercialDocument(
           amountInWords = amountInWordsLkr(built.grandTotal);
         }
 
-        // Resolve account ids and write journal
-        const accountMap = new Map<string, { id: string; code: string; name: string }>();
-        for (const pl of postingLines) {
-          if (!accountMap.has(pl.accountCode)) {
-            accountMap.set(pl.accountCode, await resolveAccount(user.tenantId, pl.accountCode));
+        // Resolve account ids and write journal (skip empty GRN with zero inventory value)
+        if (postingLines && postingLines.length > 0) {
+          const accountMap = new Map<string, { id: string; code: string; name: string }>();
+          for (const pl of postingLines) {
+            if (!accountMap.has(pl.accountCode)) {
+              accountMap.set(pl.accountCode, await resolveAccount(user.tenantId, pl.accountCode));
+            }
           }
+          const paymentAccount =
+            accountMap.get(paymentAccountCode) ??
+            (await resolveAccount(user.tenantId, paymentAccountCode));
+
+          const [createdTx] = await db()
+            .insert(transactions)
+            .values({
+              tenantId: user.tenantId,
+              userId: user.id,
+              accountingType,
+              direction,
+              party: party.name,
+              description:
+                `${taxInvoiceNumber ?? documentNumber}: ${enriched[0]?.description ?? parsed.documentType}`.slice(
+                  0,
+                  1000,
+                ),
+              amount: postedTotal.toFixed(2),
+              currency: 'LKR',
+              paymentMethod:
+                paymentAccount.code === '1000'
+                  ? 'Cash'
+                  : paymentAccount.code === '1200'
+                    ? 'Card'
+                    : paymentAccount.code === '1100'
+                      ? 'Bank'
+                      : 'Credit',
+              paymentAccountId: paymentAccount.id,
+              date: parsed.issueDate,
+              categoryCode:
+                postingLines.find(
+                  (l) =>
+                    l.accountCode === '4000' ||
+                    l.accountCode === '4100' ||
+                    l.accountCode === '5100' ||
+                    l.accountCode.startsWith('6'),
+                )?.accountCode ?? null,
+              categoryName: null,
+              categoryConfidence: '1.00',
+              categorySource: 'document',
+              invoiceRef: documentNumber,
+              isAlreadySettled:
+                settled || parsed.documentType === 'pos_sale' || postGrni ? '1' : '0',
+              notes: parsed.notes ?? null,
+            })
+            .returning({ id: transactions.id });
+
+          transactionId = createdTx.id;
+          postedAt = new Date();
+
+          const [journal] = await db()
+            .insert(journalEntries)
+            .values({
+              tenantId: user.tenantId,
+              userId: user.id,
+              transactionId: createdTx.id,
+              memo: `${documentNumber} ${party.name}`,
+              entryDate: parsed.issueDate,
+              isBalanced: '1',
+            })
+            .returning({ id: journalEntries.id });
+
+          await db().insert(journalLines).values(
+            postingLines.map((pl) => ({
+              tenantId: user.tenantId,
+              journalEntryId: journal.id,
+              accountId: accountMap.get(pl.accountCode)!.id,
+              side: pl.side,
+              amount: pl.amount.toFixed(2),
+              memo: pl.memo,
+            })),
+          );
         }
-        const paymentAccount = accountMap.get(paymentAccountCode) ?? (await resolveAccount(user.tenantId, paymentAccountCode));
-
-        const [createdTx] = await db()
-          .insert(transactions)
-          .values({
-            tenantId: user.tenantId,
-            userId: user.id,
-            accountingType,
-            direction,
-            party: party.name,
-            description: `${taxInvoiceNumber ?? documentNumber}: ${enriched[0]?.description ?? parsed.documentType}`.slice(0, 1000),
-            amount: postedTotal.toFixed(2),
-            currency: 'LKR',
-            paymentMethod:
-              paymentAccount.code === '1000' ? 'Cash' : paymentAccount.code === '1200' ? 'Card' : paymentAccount.code === '1100' ? 'Bank' : 'Credit',
-            paymentAccountId: paymentAccount.id,
-            date: parsed.issueDate,
-            categoryCode: postingLines.find((l) => l.accountCode === '4000' || l.accountCode === '4100' || l.accountCode.startsWith('6'))?.accountCode ?? null,
-            categoryName: null,
-            categoryConfidence: '1.00',
-            categorySource: 'document',
-            invoiceRef: documentNumber,
-            isAlreadySettled: settled || parsed.documentType === 'pos_sale' ? '1' : '0',
-            notes: parsed.notes ?? null,
-          })
-          .returning({ id: transactions.id });
-
-        transactionId = createdTx.id;
-        postedAt = new Date();
-
-        const [journal] = await db()
-          .insert(journalEntries)
-          .values({
-            tenantId: user.tenantId,
-            userId: user.id,
-            transactionId: createdTx.id,
-            memo: `${documentNumber} ${party.name}`,
-            entryDate: parsed.issueDate,
-            isBalanced: '1',
-          })
-          .returning({ id: journalEntries.id });
-
-        await db().insert(journalLines).values(
-          postingLines.map((pl) => ({
-            tenantId: user.tenantId,
-            journalEntryId: journal.id,
-            accountId: accountMap.get(pl.accountCode)!.id,
-            side: pl.side,
-            amount: pl.amount.toFixed(2),
-            memo: pl.memo,
-          })),
-        );
       }
 
       const [document] = await db()
@@ -1074,6 +1267,7 @@ export async function createCommercialDocument(
           sourceDocumentId: parsed.sourceDocumentId ?? null,
           discountId: parsed.discountId ?? null,
           discountTotal: headerDiscount.toFixed(2),
+          locationId: parsed.locationId ?? null,
           subtotal: supplyExVat.toFixed(2),
           taxTotal: docTaxTotal.toFixed(2),
           total: docTotal.toFixed(2),
@@ -1226,6 +1420,19 @@ export async function createCommercialDocument(
             }
           }
           if (delta !== 0) {
+            // For average cost receipts, read qty before this movement
+            let qtyBefore = 0;
+            let costBefore = 0;
+            if ((isPurchase || isGrn) && delta > 0 && costingMethod === 'average' && line.unitCost > 0) {
+              qtyBefore = await productQtyOnHand(user.tenantId, line.productId);
+              const [p] = await db()
+                .select({ unitCost: inventoryProducts.unitCost })
+                .from(inventoryProducts)
+                .where(eq(inventoryProducts.id, line.productId))
+                .limit(1);
+              costBefore = Number(p?.unitCost ?? 0);
+            }
+
             await adjustStock({
               tenantId: user.tenantId,
               userId: user.id,
@@ -1238,10 +1445,28 @@ export async function createCommercialDocument(
               referenceId: document.id,
               transactionId,
               memo: documentNumber,
+              locationId: parsed.locationId ?? null,
+              blockNegative: blockNegative && delta < 0,
             });
-          }
-          // Last-cost policy: physical purchase/GRN updates product master unit cost
-          if ((isPurchase || isGrn) && line.unitCost > 0) {
+
+            // Costing: last cost or weighted average on physical purchase/GRN stock-in
+            if ((isPurchase || isGrn) && line.unitCost > 0 && delta > 0) {
+              const newCost =
+                costingMethod === 'average'
+                  ? weightedAverageUnitCost(qtyBefore, costBefore, delta, line.unitCost)
+                  : line.unitCost;
+              await db()
+                .update(inventoryProducts)
+                .set({ unitCost: newCost.toFixed(2), updatedAt: new Date() })
+                .where(
+                  and(
+                    eq(inventoryProducts.tenantId, user.tenantId),
+                    eq(inventoryProducts.id, line.productId),
+                  ),
+                );
+            }
+          } else if ((isPurchase || isGrn) && line.unitCost > 0 && costingMethod === 'last') {
+            // Bill of fully GRN'd goods: still refresh last cost from invoice price
             await db()
               .update(inventoryProducts)
               .set({ unitCost: line.unitCost.toFixed(2), updatedAt: new Date() })
@@ -1445,6 +1670,7 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     purchaserTin: String(formData.get('purchaserTin') ?? ''),
     purchaserPhone: String(formData.get('purchaserPhone') ?? ''),
     purchaserAddress: String(formData.get('purchaserAddress') ?? ''),
+    locationId: String(formData.get('locationId') ?? '') || null,
     lines,
   });
 
@@ -1698,6 +1924,7 @@ export async function convertDocument(
         supplierInvoiceNumber: source.supplierInvoiceNumber ?? undefined,
         paymentMode: source.paymentMode ?? undefined,
         deliveryDate: source.deliveryDate ?? undefined,
+        locationId: source.locationId ?? null,
         lines: convertLines,
       });
 
@@ -1852,6 +2079,7 @@ export async function createReturnFromBillAction(formData: FormData): Promise<vo
     sourceDocumentId: sourceId,
     // Cash purchase returns refund cash (not AP)
     paymentAccountCode: detail.documentType === 'cash_purchase' ? '1000' : undefined,
+    locationId: detail.locationId ?? null,
     lines,
   });
   if (!result.ok) throw new Error(result.error ?? 'Could not create return');
@@ -2035,6 +2263,7 @@ export interface CommercialDocDetail {
   invoiceKind: string;
   transactionId: string | null;
   sourceDocumentId: string | null;
+  locationId: string | null;
   lines: {
     id: string;
     productId: string | null;
@@ -2098,6 +2327,7 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       invoiceKind: doc.invoiceKind ?? 'commercial',
       transactionId: doc.transactionId ?? null,
       sourceDocumentId: doc.sourceDocumentId ?? null,
+      locationId: doc.locationId ?? null,
       lines: lines.map((l) => ({
         id: l.id,
         productId: l.productId,
@@ -2416,6 +2646,29 @@ export async function approvePurchaseDocument(
         amount: Math.round(((b.amount / bucketSum) * supplyExVat) * 100) / 100,
       }));
 
+      const purchaseCfg = await getPurchaseSettings().catch(() => ({
+        postGrniOnReceipt: false,
+      }));
+      const invCfg = await getInventorySettings().catch(() => ({
+        negativeStockPolicy: 'allow' as const,
+        costingMethod: 'last' as const,
+      }));
+      const grniClearAmount = await computeGrniClearAmount(
+        user.tenantId,
+        doc.sourceDocumentId,
+        enriched,
+        !!purchaseCfg.postGrniOnReceipt,
+      );
+      if (grniClearAmount > 0) {
+        await ensureSystemAccount(
+          user.tenantId,
+          '2150',
+          'Goods Received Not Invoiced',
+          'liability',
+          'credit',
+        );
+      }
+
       const postingLines = buildVendorBillPosting({
         total: supplyExVat,
         expenseAccountCode: expenseCode,
@@ -2424,6 +2677,7 @@ export async function approvePurchaseDocument(
         vatRatePercent: vatRate,
         landedExtra,
         lineBuckets: scaledBuckets,
+        grniClearAmount,
       });
 
       const accountMap = new Map<string, { id: string; code: string; name: string }>();
@@ -2500,6 +2754,17 @@ export async function approvePurchaseDocument(
           }
         }
         if (stockQty !== 0) {
+          let qtyBefore = 0;
+          let costBefore = 0;
+          if (stockQty > 0 && invCfg.costingMethod === 'average' && line.unitCost > 0) {
+            qtyBefore = await productQtyOnHand(user.tenantId, line.productId);
+            const [p] = await db()
+              .select({ unitCost: inventoryProducts.unitCost })
+              .from(inventoryProducts)
+              .where(eq(inventoryProducts.id, line.productId))
+              .limit(1);
+            costBefore = Number(p?.unitCost ?? 0);
+          }
           await adjustStock({
             tenantId: user.tenantId,
             userId: user.id,
@@ -2512,9 +2777,24 @@ export async function approvePurchaseDocument(
             referenceId: doc.id,
             transactionId: createdTx.id,
             memo: doc.documentNumber,
+            locationId: doc.locationId ?? null,
           });
-        }
-        if (line.unitCost > 0) {
+          if (line.unitCost > 0 && stockQty > 0) {
+            const newCost =
+              invCfg.costingMethod === 'average'
+                ? weightedAverageUnitCost(qtyBefore, costBefore, stockQty, line.unitCost)
+                : line.unitCost;
+            await db()
+              .update(inventoryProducts)
+              .set({ unitCost: newCost.toFixed(2), updatedAt: new Date() })
+              .where(
+                and(
+                  eq(inventoryProducts.tenantId, user.tenantId),
+                  eq(inventoryProducts.id, line.productId),
+                ),
+              );
+          }
+        } else if (line.unitCost > 0 && invCfg.costingMethod === 'last') {
           await db()
             .update(inventoryProducts)
             .set({ unitCost: line.unitCost.toFixed(2), updatedAt: new Date() })

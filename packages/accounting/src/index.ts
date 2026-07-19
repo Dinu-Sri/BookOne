@@ -14,6 +14,7 @@ export {
   buildVendorBillPosting,
   buildCashPurchasePosting,
   buildPurchaseReturnPosting,
+  buildGrnPosting,
   buildStockAdjustmentPosting,
   buildOpeningStockPosting,
   sumSides,

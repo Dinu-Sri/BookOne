@@ -6,6 +6,7 @@ import { getDocumentFormOptions } from '@/app/actions/documents';
 import { listPartyOptions } from '@/app/actions/parties';
 import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
+import { getCompanySettingsData } from '@/app/actions/company-settings';
 
 export async function requireTenant() {
   try {
@@ -16,7 +17,7 @@ export async function requireTenant() {
 }
 
 export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'customer') {
-  const [products, discounts, options, partyOptions, salesSettings, purchaseSettings] =
+  const [products, discounts, options, partyOptions, salesSettings, purchaseSettings, company] =
     await Promise.all([
       listProducts().catch(() => []),
       listActiveDiscounts().catch(() => []),
@@ -39,9 +40,11 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
         requireSupplierInvoiceNo: false,
         blockDuplicateBills: true,
         requireGrnBeforeBill: false,
+        postGrniOnReceipt: false,
         defaultPaymentTerms: 'Net 30',
         defaultExpenseAccount: '6800',
       })),
+      getCompanySettingsData().catch(() => null),
     ]);
   return {
     products: products.map((p) => ({
@@ -60,5 +63,10 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
     vatRegistered: salesSettings.vatRegistered,
     vatRatePercent: salesSettings.vatRatePercent,
     purchaseSettings,
+    locations: (company?.locations ?? []).map((l) => ({
+      id: l.id,
+      name: l.name,
+      code: l.code,
+    })),
   };
 }

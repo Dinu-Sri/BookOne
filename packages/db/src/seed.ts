@@ -80,6 +80,7 @@ async function seed() {
       { code: '1200', name: 'Card Clearing', type: 'asset', normalSide: 'debit' },
       { code: '1300', name: 'Accounts Receivable', type: 'asset', normalSide: 'debit' },
       { code: '2100', name: 'Accounts Payable', type: 'liability', normalSide: 'credit' },
+      { code: '2150', name: 'Goods Received Not Invoiced', type: 'liability', normalSide: 'credit' },
       { code: '2200', name: 'Output VAT', type: 'liability', normalSide: 'credit' },
       { code: '2300', name: 'Input VAT', type: 'asset', normalSide: 'debit' },
       { code: '3000', name: 'Owner Equity', type: 'equity', normalSide: 'credit' },

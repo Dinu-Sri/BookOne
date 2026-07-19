@@ -32,6 +32,7 @@ export default async function NewCashPurchasePage() {
         paymentAccounts={form.paymentAccounts}
         defaultPaymentCode="1000"
         expenseAccounts={form.expenseAccounts}
+        locations={form.locations}
         submitLabel="Save cash purchase"
         banner="Paid now · Dr expense/inventory · Cr bank — no AP"
       />

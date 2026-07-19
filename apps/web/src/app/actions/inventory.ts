@@ -188,6 +188,7 @@ async function applyQtyDelta(
   productId: string,
   delta: number,
   locationId: string | null,
+  opts?: { blockNegative?: boolean },
 ) {
   const [level] = await db()
     .select()
@@ -203,11 +204,25 @@ async function applyQtyDelta(
     )
     .limit(1);
 
+  const current = Number(level?.qtyOnHand ?? 0);
+  const next = current + delta;
+  if (opts?.blockNegative && delta < 0 && next < -0.00005) {
+    const [prod] = await db()
+      .select({ sku: inventoryProducts.sku, name: inventoryProducts.name })
+      .from(inventoryProducts)
+      .where(eq(inventoryProducts.id, productId))
+      .limit(1);
+    const label = prod ? `${prod.sku} ${prod.name}` : productId;
+    throw new Error(
+      `Insufficient stock for ${label}: on hand ${current.toFixed(4)}, need ${Math.abs(delta).toFixed(4)}. Allow negative stock in Inventory Settings or adjust levels.`,
+    );
+  }
+
   if (level) {
     await db()
       .update(inventoryStockLevels)
       .set({
-        qtyOnHand: (Number(level.qtyOnHand) + delta).toFixed(4),
+        qtyOnHand: next.toFixed(4),
         updatedAt: new Date(),
       })
       .where(eq(inventoryStockLevels.id, level.id));
@@ -216,7 +231,7 @@ async function applyQtyDelta(
       tenantId,
       productId,
       locationId,
-      qtyOnHand: delta.toFixed(4),
+      qtyOnHand: next.toFixed(4),
     });
   }
 }
@@ -1182,6 +1197,12 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
       })
       .returning({ id: inventoryStockDocs.id });
 
+    const { getInventorySettings } = await import('@/app/actions/inventory-settings');
+    const invCfg = await getInventorySettings().catch(() => ({
+      negativeStockPolicy: 'allow' as const,
+    }));
+    const blockNeg = invCfg.negativeStockPolicy === 'block';
+
     for (const line of lines) {
       const [product] = await db()
         .select()
@@ -1199,7 +1220,9 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
       });
 
       if (docType === 'transfer') {
-        await applyQtyDelta(user.tenantId, line.productId, -Math.abs(line.quantity), fromLocationId);
+        await applyQtyDelta(user.tenantId, line.productId, -Math.abs(line.quantity), fromLocationId, {
+          blockNegative: blockNeg,
+        });
         await applyQtyDelta(user.tenantId, line.productId, Math.abs(line.quantity), toLocationId);
         await db().insert(inventoryMovements).values({
           tenantId: user.tenantId,
@@ -1216,7 +1239,9 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
           movementDate: docDate,
         });
       } else {
-        await applyQtyDelta(user.tenantId, line.productId, line.quantity, null);
+        await applyQtyDelta(user.tenantId, line.productId, line.quantity, null, {
+          blockNegative: blockNeg,
+        });
         await db().insert(inventoryMovements).values({
           tenantId: user.tenantId,
           userId: user.id,

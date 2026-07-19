@@ -86,6 +86,22 @@ export default async function CompanyPurchaseSettingsPage() {
                     Require goods receipt (GRN) before billing a purchase order with products
                   </label>
                 </div>
+                <div className="field field-full">
+                  <label className="party-check">
+                    <input
+                      type="checkbox"
+                      name="postGrniOnReceipt"
+                      value="on"
+                      defaultChecked={settings.postGrniOnReceipt}
+                    />
+                    Post GRNI on goods receipt (Dr Inventory 5100 / Cr GRNI 2150)
+                  </label>
+                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                    When on, GRNs capitalise inventory early. Vendor bills for already-received goods
+                    clear liability 2150 instead of debiting inventory again. Leave off for qty-only
+                    GRNs (default).
+                  </p>
+                </div>
                 <div className="field">
                   <label>Default payment terms</label>
                   <select

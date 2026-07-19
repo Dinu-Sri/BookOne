@@ -23,6 +23,7 @@ export default async function NewSalesReturnPage() {
           submitLabel="Save return"
           products={form.products}
           partyOptions={form.partyOptions}
+          locations={form.locations}
           banner="Restocks physical products · posts sales returns"
         />
       </div>

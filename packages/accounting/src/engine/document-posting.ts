@@ -250,6 +250,30 @@ export function buildSalesReturnPosting(input: {
   return { netTotal, vatTotal, grandTotal, cogsTotal, lines };
 }
 
+function splitInventoryDebits(
+  invTotal: number,
+  grniClearAmount: number | undefined,
+  memo: string,
+): PostingLine[] {
+  const inv = round2(Math.max(0, invTotal));
+  if (inv <= 0) return [];
+  const clear = round2(Math.min(Math.max(0, grniClearAmount ?? 0), inv));
+  const fresh = round2(inv - clear);
+  const debits: PostingLine[] = [];
+  if (clear > 0) {
+    debits.push({
+      accountCode: '2150',
+      side: 'debit',
+      amount: clear,
+      memo: `${memo} · clear GRNI`,
+    });
+  }
+  if (fresh > 0) {
+    debits.push({ accountCode: '5100', side: 'debit', amount: fresh, memo });
+  }
+  return debits;
+}
+
 function buildPurchaseDebits(input: {
   goodsTotal: number;
   landedExtra: number;
@@ -257,6 +281,11 @@ function buildPurchaseDebits(input: {
   isInventoryPurchase?: boolean;
   lineBuckets?: PurchaseLineBucket[];
   memo: string;
+  /**
+   * Inventory amount already capitalised on GRN (Dr 5100 / Cr 2150).
+   * On the bill this portion Dr 2150 (clear liability) instead of Dr 5100 again.
+   */
+  grniClearAmount?: number;
 }): { debits: PostingLine[]; inventoryDebit: number; expenseDebit: number } {
   const goods = round2(input.goodsTotal);
   const landed = round2(Math.max(0, input.landedExtra));
@@ -283,8 +312,7 @@ function buildPurchaseDebits(input: {
         expMap.set(code, round2((expMap.get(code) ?? 0) + landed));
       }
     }
-    const debits: PostingLine[] = [];
-    if (inv > 0) debits.push({ accountCode: '5100', side: 'debit', amount: inv, memo });
+    const debits: PostingLine[] = [...splitInventoryDebits(inv, input.grniClearAmount, memo)];
     for (const [code, amt] of expMap) {
       if (amt > 0) debits.push({ accountCode: code, side: 'debit', amount: amt, memo });
     }
@@ -297,22 +325,67 @@ function buildPurchaseDebits(input: {
       });
     }
     const expenseDebit = round2(
-      debits.filter((d) => d.accountCode !== '5100').reduce((s, d) => s + d.amount, 0),
+      debits
+        .filter((d) => d.accountCode !== '5100' && d.accountCode !== '2150')
+        .reduce((s, d) => s + d.amount, 0),
     );
     const inventoryDebit = round2(
-      debits.filter((d) => d.accountCode === '5100').reduce((s, d) => s + d.amount, 0),
+      debits
+        .filter((d) => d.accountCode === '5100' || d.accountCode === '2150')
+        .reduce((s, d) => s + d.amount, 0),
     );
     return { debits, inventoryDebit, expenseDebit };
   }
 
   // Legacy all-or-nothing
   const base = round2(goods + landed);
-  const debitCode = input.isInventoryPurchase ? '5100' : input.expenseAccountCode || '6800';
+  if (input.isInventoryPurchase) {
+    const debits = splitInventoryDebits(base, input.grniClearAmount, memo);
+    return {
+      debits:
+        debits.length > 0
+          ? debits
+          : [{ accountCode: '5100', side: 'debit', amount: base, memo }],
+      inventoryDebit: base,
+      expenseDebit: 0,
+    };
+  }
   return {
-    debits: [{ accountCode: debitCode, side: 'debit', amount: base, memo }],
-    inventoryDebit: input.isInventoryPurchase ? base : 0,
-    expenseDebit: input.isInventoryPurchase ? 0 : base,
+    debits: [{ accountCode: input.expenseAccountCode || '6800', side: 'debit', amount: base, memo }],
+    inventoryDebit: 0,
+    expenseDebit: base,
   };
+}
+
+/**
+ * GRN with GRNI: Dr Inventory 5100 / Cr Goods received not invoiced 2150.
+ * Qty still moves on the commercial path; this only capitalises BS inventory early.
+ */
+export function buildGrnPosting(input: {
+  inventoryAmount: number;
+  inventoryAccountCode?: string;
+  grniAccountCode?: string;
+  memo?: string;
+}): PostingLine[] {
+  const amt = round2(Math.max(0, input.inventoryAmount));
+  if (amt <= 0) return [];
+  const memo = input.memo ?? 'Goods received';
+  const lines: PostingLine[] = [
+    {
+      accountCode: input.inventoryAccountCode ?? '5100',
+      side: 'debit',
+      amount: amt,
+      memo,
+    },
+    {
+      accountCode: input.grniAccountCode ?? '2150',
+      side: 'credit',
+      amount: amt,
+      memo,
+    },
+  ];
+  assertBalanced(lines);
+  return lines;
 }
 
 /**
@@ -329,6 +402,8 @@ export function buildVendorBillPosting(input: {
   landedExtra?: number;
   /** Mixed-line split (amounts ex-VAT, before landed) */
   lineBuckets?: PurchaseLineBucket[];
+  /** Inventory value already on GRNI — Dr 2150 instead of 5100 for that portion */
+  grniClearAmount?: number;
 }): PostingLine[] {
   const goods = round2(input.total);
   const landed = round2(Math.max(0, input.landedExtra ?? 0));
@@ -343,6 +418,7 @@ export function buildVendorBillPosting(input: {
     expenseAccountCode: input.expenseAccountCode,
     isInventoryPurchase: input.isInventoryPurchase,
     lineBuckets: input.lineBuckets,
+    grniClearAmount: input.grniClearAmount,
     memo,
   });
 
@@ -368,6 +444,7 @@ export function buildCashPurchasePosting(input: {
   inputVatAccountCode?: string;
   landedExtra?: number;
   lineBuckets?: PurchaseLineBucket[];
+  grniClearAmount?: number;
 }): PostingLine[] {
   const goods = round2(input.total);
   const landed = round2(Math.max(0, input.landedExtra ?? 0));
@@ -383,6 +460,7 @@ export function buildCashPurchasePosting(input: {
     expenseAccountCode: input.expenseAccountCode,
     isInventoryPurchase: input.isInventoryPurchase,
     lineBuckets: input.lineBuckets,
+    grniClearAmount: input.grniClearAmount,
     memo,
   });
 

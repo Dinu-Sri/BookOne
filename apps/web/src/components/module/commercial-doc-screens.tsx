@@ -174,6 +174,7 @@ export function CommercialDocNewForm({
   initialLines,
   defaultPaymentTerms,
   defaultExpenseAccount,
+  locations,
 }: {
   backHref: string;
   backLabel: string;
@@ -210,6 +211,7 @@ export function CommercialDocNewForm({
   initialLines?: DocLineState[];
   defaultPaymentTerms?: string;
   defaultExpenseAccount?: string;
+  locations?: { id: string; name: string; code: string | null }[];
 }) {
   const [lines, setLines] = useState<DocLineState[]>(initialLines ?? []);
   const [catalog, setCatalog] = useState<ProductPick[]>(initialProducts);
@@ -331,6 +333,24 @@ export function CommercialDocNewForm({
               <label>Due date</label>
               <input className="input" name="dueDate" type="date" />
             </div>
+            {locations && locations.length > 0 ? (
+              <div className="field">
+                <label>Location / warehouse</label>
+                <select
+                  className="input"
+                  name="locationId"
+                  defaultValue={locations.length === 1 ? locations[0]!.id : ''}
+                >
+                  <option value="">Default (unassigned)</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.code ? `${loc.code} — ` : ''}
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             {showPurchaseExtras ? (
               <>
                 <div className="field">

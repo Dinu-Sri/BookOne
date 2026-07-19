@@ -10,6 +10,7 @@ const schema = z.object({
   requireSupplierInvoiceNo: z.boolean(),
   blockDuplicateBills: z.boolean(),
   requireGrnBeforeBill: z.boolean(),
+  postGrniOnReceipt: z.boolean(),
   defaultPaymentTerms: z.string().max(40),
   defaultExpenseAccount: z.string().max(20),
 });
@@ -19,6 +20,7 @@ export interface PurchaseSettingsRow {
   requireSupplierInvoiceNo: boolean;
   blockDuplicateBills: boolean;
   requireGrnBeforeBill: boolean;
+  postGrniOnReceipt: boolean;
   defaultPaymentTerms: string;
   defaultExpenseAccount: string;
 }
@@ -28,6 +30,7 @@ const DEFAULTS: PurchaseSettingsRow = {
   requireSupplierInvoiceNo: false,
   blockDuplicateBills: true,
   requireGrnBeforeBill: false,
+  postGrniOnReceipt: false,
   defaultPaymentTerms: 'Net 30',
   defaultExpenseAccount: '6800',
 };
@@ -37,6 +40,7 @@ function mapRow(row: {
   requireSupplierInvoiceNo: string;
   blockDuplicateBills: string;
   requireGrnBeforeBill: string;
+  postGrniOnReceipt?: string | null;
   defaultPaymentTerms: string;
   defaultExpenseAccount: string;
 }): PurchaseSettingsRow {
@@ -45,6 +49,7 @@ function mapRow(row: {
     requireSupplierInvoiceNo: row.requireSupplierInvoiceNo === '1',
     blockDuplicateBills: row.blockDuplicateBills === '1',
     requireGrnBeforeBill: row.requireGrnBeforeBill === '1',
+    postGrniOnReceipt: row.postGrniOnReceipt === '1',
     defaultPaymentTerms: row.defaultPaymentTerms || 'Net 30',
     defaultExpenseAccount: row.defaultExpenseAccount || '6800',
   };
@@ -74,6 +79,8 @@ export async function savePurchaseSettingsFromForm(formData: FormData): Promise<
       formData.get('blockDuplicateBills') === 'on' || formData.get('blockDuplicateBills') === '1',
     requireGrnBeforeBill:
       formData.get('requireGrnBeforeBill') === 'on' || formData.get('requireGrnBeforeBill') === '1',
+    postGrniOnReceipt:
+      formData.get('postGrniOnReceipt') === 'on' || formData.get('postGrniOnReceipt') === '1',
     defaultPaymentTerms: String(formData.get('defaultPaymentTerms') ?? 'Net 30').trim() || 'Net 30',
     defaultExpenseAccount: String(formData.get('defaultExpenseAccount') ?? '6800').trim() || '6800',
   });
@@ -91,6 +98,7 @@ export async function savePurchaseSettingsFromForm(formData: FormData): Promise<
       requireSupplierInvoiceNo: parsed.requireSupplierInvoiceNo ? '1' : '0',
       blockDuplicateBills: parsed.blockDuplicateBills ? '1' : '0',
       requireGrnBeforeBill: parsed.requireGrnBeforeBill ? '1' : '0',
+      postGrniOnReceipt: parsed.postGrniOnReceipt ? '1' : '0',
       defaultPaymentTerms: parsed.defaultPaymentTerms,
       defaultExpenseAccount: parsed.defaultExpenseAccount,
       updatedAt: new Date(),

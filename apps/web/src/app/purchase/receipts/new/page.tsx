@@ -30,8 +30,13 @@ export default async function NewGoodsReceiptPage({
         partyOptions={form.partyOptions}
         showPurchaseExtras
         sourceDocumentId={sp.from ?? null}
+        locations={form.locations}
         submitLabel="Save GRN"
-        banner="Stocks physical items · no GL until billed"
+        banner={
+          form.purchaseSettings.postGrniOnReceipt
+            ? 'Stocks items · posts Dr Inventory / Cr GRNI 2150 when enabled'
+            : 'Stocks physical items · no GL until billed (enable GRNI in Purchase Settings)'
+        }
       />
     </BookOneShell>
   );

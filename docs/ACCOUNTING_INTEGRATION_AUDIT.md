@@ -47,6 +47,7 @@
 | 1200 | Card | POS/card |
 | 1300 | AR | Credit sales, receive payment, SaleCredit |
 | 2100 | AP | Credit bills, pay vendors |
+| 2150 | GRNI | Optional GRN liability until bill |
 | 2200 | Output VAT | Tax sales invoices / POS tax |
 | 2300 | Input VAT | Tax purchase invoices |
 | 4000 | Sales revenue | All commercial sales + SE sales |
@@ -77,7 +78,7 @@
 | Operation | GL? | Journal | Stock |
 |-----------|-----|---------|-------|
 | PO | No | — | No |
-| GRN | **No** | — | **+qty** (+ last cost) |
+| GRN | **Optional** | If GRNI on: Dr **5100** · Cr **2150** | **+qty** (+ last/avg cost) |
 | Purchase / import bill | **Yes*** | Dr **5100** or expense · Dr **2300**? · Cr **2100** | **+qty** unless GRN already received |
 | Cash purchase | **Yes** | Dr inv/exp · Dr 2300? · Cr **bank** | **+qty** |
 | Purchase return | **Yes** | Dr **2100** · Cr inv/exp · VAT reverse? | **−qty** |
@@ -254,12 +255,12 @@ Until deeper engineering fixes land, run the business like this:
 10. **Product account codes into builders** ✅ enrich lines with product `revenue`/`cogs`/`inventory` codes; multi-revenue grouping in `buildSalesInvoicePosting`.  
 11. **Simple Entry vendor bill + customer payment** ✅ UI selects `moneyInType` / `invoiceType`; category preview only for expense vendor bills.
 
-### P2 — inventory purity
+### P2 — inventory purity ✅ implemented 2026-07-19
 
-12. GRN optional **GRNI** liability (Dr 5100 / Cr Goods received not invoiced) until bill.  
-13. Negative stock warning/block setting.  
-14. Average cost option (beyond last cost).  
-15. Location-aware sales/purchases.
+12. **Optional GRNI on GRN** ✅ Purchase Settings `postGrniOnReceipt` → GRN posts Dr **5100** / Cr **2150**; bill clears Dr **2150** for received inventory (no double 5100). Account auto-seeded / ensured.  
+13. **Negative stock block** ✅ Inventory Settings `negativeStockPolicy` allow|block on commercial stock-out, transfers, adjustments.  
+14. **Average cost** ✅ Inventory Settings `costingMethod` last|average (weighted by total qty on hand before receipt).  
+15. **Location-aware sales/purchases** ✅ `locationId` on commercial docs + stock levels; form picker when locations exist; POS uses register location.
 
 ---
 
@@ -274,7 +275,7 @@ Use after deploy to prove connectivity:
 | 3 | Pay vendor full | Dr 2100 · Cr bank · balanceDue 0 |
 | 4 | Sales invoice 2 @ 200 (service? no — physical) | Dr 1300 400 · Cr 4000 400 · Dr 5000 200 · Cr 5100 200 · qty 8 |
 | 5 | Receive payment full | Dr bank · Cr 1300 · invoice paid |
-| 6 | GRN 5 then bill from GRN | GRN qty+ only; bill AP + 5100, **qty no double** |
+| 6 | GRN 5 then bill from GRN | Default: GRN qty+ only; bill AP + 5100, **qty no double**. With GRNI: GRN Dr5100/Cr2150; bill Dr2150/Cr2100 |
 | 7 | Stock adjustment −1 | Dr 6800 · Cr 5100 · qty down |
 | 8 | Simple Entry money out 500 rent | Dr 6100 · Cr bank — **no** purchase doc |
 | 9 | Trial balance | Balanced; AR/AP/cash/inventory match story |
@@ -290,7 +291,7 @@ Use after deploy to prove connectivity:
 
 1. **Simple Entry is a second highway** into the same books — powerful but **not** integrated with AR/AP documents or stock.  
 2. Several **edge cases** (GRN vs inventory asset, last-cost COGS, returns vs balances, mixed bills, cash-purchase returns) mean the system is **strong for happy-path SME ops**, not yet airtight ERP purity.  
-3. Following the **operating rules in §7** keeps books trustworthy; P0/P1 correctness and subledger fixes are implemented — GRN purity and average cost remain P2.
+3. Following the **operating rules in §7** keeps books trustworthy; P0–P2 correctness, subledger, and inventory purity settings are implemented.
 
 ---
 

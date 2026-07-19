@@ -24,6 +24,7 @@ export default async function NewSalesOrderPage() {
           products={form.products}
           partyOptions={form.partyOptions}
           discounts={form.discounts}
+          locations={form.locations}
           banner="Dispatch note · no GL until invoice"
         />
       </div>

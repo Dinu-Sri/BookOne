@@ -7,6 +7,7 @@ import {
   buildVendorBillPosting,
   buildCashPurchasePosting,
   buildPurchaseReturnPosting,
+  buildGrnPosting,
   sumSides,
 } from '../src/engine/document-posting';
 
@@ -236,6 +237,38 @@ describe('vendor bill + purchase return + stock adjustment', () => {
     expect(lines.find((l) => l.accountCode === '6100')?.amount).toBe(300);
     expect(lines.find((l) => l.accountCode === '2100')?.amount).toBe(800);
     expect(sumSides(lines)).toEqual({ debit: 800, credit: 800 });
+  });
+
+  it('posts GRN with GRNI liability', () => {
+    const lines = buildGrnPosting({ inventoryAmount: 750, memo: 'GRN-1' });
+    expect(lines.find((l) => l.accountCode === '5100' && l.side === 'debit')?.amount).toBe(750);
+    expect(lines.find((l) => l.accountCode === '2150' && l.side === 'credit')?.amount).toBe(750);
+    expect(sumSides(lines)).toEqual({ debit: 750, credit: 750 });
+  });
+
+  it('clears GRNI on bill instead of re-debiting inventory', () => {
+    const lines = buildVendorBillPosting({
+      total: 1000,
+      expenseAccountCode: '6800',
+      isInventoryPurchase: true,
+      grniClearAmount: 1000,
+    });
+    expect(lines.find((l) => l.accountCode === '2150' && l.side === 'debit')?.amount).toBe(1000);
+    expect(lines.some((l) => l.accountCode === '5100')).toBe(false);
+    expect(lines.find((l) => l.accountCode === '2100')?.amount).toBe(1000);
+    expect(sumSides(lines)).toEqual({ debit: 1000, credit: 1000 });
+  });
+
+  it('partial GRNI clear leaves residual inventory debit', () => {
+    const lines = buildVendorBillPosting({
+      total: 1000,
+      expenseAccountCode: '6800',
+      isInventoryPurchase: true,
+      grniClearAmount: 400,
+    });
+    expect(lines.find((l) => l.accountCode === '2150')?.amount).toBe(400);
+    expect(lines.find((l) => l.accountCode === '5100')?.amount).toBe(600);
+    expect(sumSides(lines)).toEqual({ debit: 1000, credit: 1000 });
   });
 
   it('posts purchase return reversing AP and inventory', () => {

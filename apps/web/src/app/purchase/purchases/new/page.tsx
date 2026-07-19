@@ -31,6 +31,7 @@ export default async function NewPurchasePage() {
         expenseAccounts={form.expenseAccounts}
         defaultPaymentTerms={form.purchaseSettings.defaultPaymentTerms}
         defaultExpenseAccount={form.purchaseSettings.defaultExpenseAccount}
+        locations={form.locations}
         submitLabel="Save purchase"
         banner={
           form.purchaseSettings.requireBillApproval

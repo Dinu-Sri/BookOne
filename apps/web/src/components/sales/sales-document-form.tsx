@@ -42,6 +42,7 @@ export function SalesDocumentForm({
   paymentAccounts,
   defaultPaymentCode,
   banner,
+  locations,
 }: {
   documentType: 'sales_order' | 'sales_invoice' | 'pos_sale' | 'sales_return';
   backHref: string;
@@ -54,6 +55,7 @@ export function SalesDocumentForm({
   paymentAccounts?: { code: string; name: string }[];
   defaultPaymentCode?: string;
   banner?: string;
+  locations?: { id: string; name: string; code: string | null }[];
 }) {
   const [headerDiscount, setHeaderDiscount] = useState('0');
   const [discountId, setDiscountId] = useState('');
@@ -196,6 +198,24 @@ export function SalesDocumentForm({
                 {paymentAccounts.map((a) => (
                   <option key={a.code} value={a.code}>
                     {a.code} — {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {locations && locations.length > 0 ? (
+            <div className="field">
+              <label>Location / warehouse</label>
+              <select
+                className="input"
+                name="locationId"
+                defaultValue={locations.length === 1 ? locations[0]!.id : ''}
+              >
+                <option value="">Default (unassigned)</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.code ? `${loc.code} — ` : ''}
+                    {loc.name}
                   </option>
                 ))}
               </select>

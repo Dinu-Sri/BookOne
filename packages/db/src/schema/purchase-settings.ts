@@ -16,6 +16,8 @@ export const purchaseSettings = pgTable('purchase_settings', {
   blockDuplicateBills: varchar('block_duplicate_bills', { length: 1 }).notNull().default('1'),
   /** Prefer GRN before billing physical goods from a PO */
   requireGrnBeforeBill: varchar('require_grn_before_bill', { length: 1 }).notNull().default('0'),
+  /** When '1', GRN posts Dr Inventory / Cr GRNI 2150; bill clears GRNI instead of re-debiting inventory */
+  postGrniOnReceipt: varchar('post_grni_on_receipt', { length: 1 }).notNull().default('0'),
   defaultPaymentTerms: varchar('default_payment_terms', { length: 40 }).notNull().default('Net 30'),
   defaultExpenseAccount: varchar('default_expense_account', { length: 20 }).notNull().default('6800'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

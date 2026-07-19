@@ -126,6 +126,7 @@ const navSuites: NavSuite[] = [
       { label: 'Tax Info', icon: FileText, href: '/company/tax' },
       { label: 'Sales Settings', icon: ReceiptText, href: '/company/sales' },
       { label: 'Purchase Settings', icon: ShoppingCart, href: '/company/purchase' },
+      { label: 'Inventory Settings', icon: Package, href: '/company/inventory' },
       { label: 'Brands', icon: Package, href: '/company/brands' },
       { label: 'Locations', icon: Landmark, href: '/company/locations' },
       { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },

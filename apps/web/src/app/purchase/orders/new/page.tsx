@@ -26,6 +26,7 @@ export default async function NewPurchaseOrderPage() {
         showExpenseAccount
         showPurchaseExtras
         expenseAccounts={form.expenseAccounts}
+        locations={form.locations}
         submitLabel="Save purchase order"
         banner="No GL until converted to purchase"
       />

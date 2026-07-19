@@ -11,6 +11,9 @@ export default function Layout({ children }: { children: ReactNode }) {
       theme={{
         enabled: true,
         defaultTheme: 'light',
+        enableSystem: false,
+        attribute: 'class',
+        storageKey: 'bookone-docs-theme',
       }}
       search={{
         enabled: true,
@@ -19,11 +22,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         },
       }}
     >
-      <div className="flex min-h-screen flex-col bg-fd-background text-fd-foreground">
-        <DocsLayout tree={source.getPageTree()} {...baseOptions()}>
-          {children}
-        </DocsLayout>
-      </div>
+      <DocsLayout tree={source.getPageTree()} {...baseOptions()}>
+        {children}
+      </DocsLayout>
     </RootProvider>
   );
 }

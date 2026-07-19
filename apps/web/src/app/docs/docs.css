@@ -3,35 +3,66 @@
 @import 'fumadocs-ui/css/preset.css';
 
 /*
-  Tell Tailwind where utility classes live so they are generated.
-  Paths are relative to this CSS file (src/app/docs/).
+  Content sources for Tailwind (relative to this file: src/app/docs/).
+  preset.css already scans fumadocs-ui/dist; these cover app + MDX.
 */
 @source '../../**/*.{ts,tsx}';
 @source '../../../content/docs/**/*.{mdx,md}';
-@source '../../../../node_modules/fumadocs-ui/dist/**/*.js';
-@source '../../../../node_modules/.pnpm/fumadocs-ui@*/node_modules/fumadocs-ui/dist/**/*.js';
+@source '../../../node_modules/fumadocs-ui/dist/**/*.js';
 
-/* Docs viewport — light theme defaults for Fumadocs tokens */
+/* Force light as the baseline; dark only when .dark is set by next-themes */
 html {
   color-scheme: light;
 }
 
-html,
-body {
-  min-height: 100%;
+html:not(.dark) {
+  color-scheme: light;
 }
 
-body {
+/*
+  When the docs layout is mounted, override BookOne shell chrome on body.
+  Cascade layers already keep BookOne globals below Tailwind utilities.
+*/
+body:has(#nd-docs-layout) {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: var(--color-fd-background, #f5f5f5);
-  color: var(--color-fd-foreground, #0a0a0a);
+  overflow-x: auto;
+  background: var(--color-fd-background);
+  color: var(--color-fd-foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
 }
 
-/* Isolate docs from BookOne global element resets that break layout */
-#nd-docs-layout,
-[data-docs-layout],
-.fd-docs-layout {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+/* Docs layout shell — ensure full-height flex tree */
+#nd-docs-layout {
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* Restore sensible link defaults inside docs (BookOne globals zero-out anchors) */
+#nd-docs-layout a {
+  text-decoration: none;
+}
+
+/* Prose / MDX readability */
+#nd-docs-layout #nd-page {
+  min-width: 0;
+}
+
+#nd-docs-layout #nd-page article {
+  max-width: 100%;
+}
+
+/* Sidebar chrome so it doesn't collapse into a flat stack */
+#nd-sidebar {
+  border-inline-end: 1px solid var(--color-fd-border);
+}
+
+/* Search field / inputs should keep visible borders */
+#nd-docs-layout input,
+#nd-docs-layout button,
+#nd-docs-layout textarea,
+#nd-docs-layout select {
+  font: inherit;
 }

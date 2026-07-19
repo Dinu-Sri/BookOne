@@ -19,12 +19,20 @@ function hasSessionCookie(req: NextRequest): boolean {
   return SESSION_COOKIE_NAMES.some((name) => cookies.has(name));
 }
 
+function isPublicPath(pathname: string): boolean {
+  if (pathname === '/login') return true;
+  // Public product docs + docs search API (no session required).
+  if (pathname === '/docs' || pathname.startsWith('/docs/')) return true;
+  if (pathname === '/api/search') return true;
+  return false;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthed = hasSessionCookie(request);
 
-  // Unauthenticated users can only see /login.
-  if (!isAuthed && pathname !== '/login') {
+  // Unauthenticated users may only access public routes.
+  if (!isAuthed && !isPublicPath(pathname)) {
     const loginUrl = new URL('/login', request.url);
     if (pathname !== '/') {
       loginUrl.searchParams.set('from', pathname);
@@ -45,7 +53,7 @@ export const config = {
   // Order of alternation matters: more specific prefixes first.
   matcher: [
     // Exclude Next internals, auth API, and static public assets.
-    // /api/search stays authenticated (docs require login).
+    // /docs and /api/search are public (handled in isPublicPath).
     '/((?!_next/static|_next/image|favicon.ico|favicon.webp|logo.webp|api/auth|products/).*)',
   ],
 };

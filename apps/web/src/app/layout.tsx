@@ -22,8 +22,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning: Fumadocs theme / next-themes may set class on <html>
-    <html lang="en" suppressHydrationWarning>
+    // Default light; Fumadocs/next-themes may toggle `dark` on <html> for /docs only.
+    <html lang="en" className="light" suppressHydrationWarning>
       <body suppressHydrationWarning>{children}</body>
     </html>
   );

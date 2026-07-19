@@ -1,3 +1,4 @@
+@layer bookone {
 *,
 *::before,
 *::after {
@@ -3153,7 +3154,7 @@ textarea.input {
   }
 }
 
-/* Product photos — always 1:1 + hover zoom */
+/* Product photos â€” always 1:1 + hover zoom */
 .product-img-hover {
   position: relative;
   display: inline-flex;
@@ -3203,7 +3204,7 @@ textarea.input {
   line-height: 1;
 }
 
-/* Fixed portal preview — never clipped by table/card overflow */
+/* Fixed portal preview â€” never clipped by table/card overflow */
 .product-img-zoom-portal {
   position: fixed;
   z-index: 200;
@@ -4283,7 +4284,7 @@ textarea.input {
   display: grid;
   gap: 2px;
 }
-/* Portaled menu — escapes table overflow clipping on first/last rows */
+/* Portaled menu â€” escapes table overflow clipping on first/last rows */
 .doc-action-panel-fixed {
   z-index: 200;
 }
@@ -4355,7 +4356,7 @@ textarea.input {
   flex-shrink: 0;
 }
 
-/* Product add search (forms) — full-width under lines; slightly taller for touch/desktop */
+/* Product add search (forms) â€” full-width under lines; slightly taller for touch/desktop */
 .product-add-search {
   position: relative;
   width: 100%;
@@ -4376,7 +4377,7 @@ textarea.input {
   background: var(--surface);
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
 }
-/* Portaled suggestions — not clipped by table/footer */
+/* Portaled suggestions â€” not clipped by table/footer */
 .product-add-search-list-fixed {
   z-index: 220;
 }
@@ -4589,4 +4590,5 @@ textarea.input {
 .doc-line-linked.muted {
   color: var(--ink-soft);
   font-weight: 600;
+}
 }

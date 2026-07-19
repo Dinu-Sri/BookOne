@@ -41,6 +41,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { ensureParty } from '@/app/actions/parties';
+import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 
 export type CommercialDocType =
   | 'quotation'
@@ -492,8 +493,97 @@ export async function createCommercialDocument(
       return { ok: false, error: 'This party is inactive. Restore them in Parties before posting.' };
     }
 
+    // Purchase P3 controls (defaults if settings row missing)
+    const purchaseCfg = await getPurchaseSettings().catch(() => ({
+      requireBillApproval: false,
+      requireSupplierInvoiceNo: false,
+      blockDuplicateBills: true,
+      requireGrnBeforeBill: false,
+      defaultPaymentTerms: 'Net 30',
+      defaultExpenseAccount: '6800',
+    }));
+
+    const isApBill = isPurchaseBillType(parsed.documentType);
+    const supplierInv = parsed.supplierInvoiceNumber?.trim() || '';
+
+    if (isApBill && purchaseCfg.requireSupplierInvoiceNo && !supplierInv) {
+      return { ok: false, error: 'Supplier invoice number is required (Purchase settings).' };
+    }
+
+    if (isApBill && purchaseCfg.blockDuplicateBills && supplierInv) {
+      const dup = await withTenantContext(user.tenantId, async () => {
+        const rows = await db()
+          .select({
+            id: businessDocuments.id,
+            documentNumber: businessDocuments.documentNumber,
+            total: businessDocuments.total,
+          })
+          .from(businessDocuments)
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.partyId, party.id),
+              eq(businessDocuments.supplierInvoiceNumber, supplierInv),
+              inArray(businessDocuments.documentType, ['purchase', 'import_purchase', 'vendor_bill']),
+              isNull(businessDocuments.voidedAt),
+            ),
+          )
+          .limit(3);
+        return rows;
+      });
+      if (dup.length > 0) {
+        const match = dup[0]!;
+        return {
+          ok: false,
+          error: `Duplicate bill: supplier invoice “${supplierInv}” already on ${match.documentNumber}. Change the number or disable duplicate blocking in Purchase settings.`,
+        };
+      }
+    }
+
+    const needsApproval = isApBill && purchaseCfg.requireBillApproval;
+
     const id = await withTenantContext(user.tenantId, async () => {
-      if (postsToGl(parsed.documentType)) {
+      // GRN-before-bill: if billing a PO that has physical lines, require at least one GRN
+      if (
+        isApBill &&
+        purchaseCfg.requireGrnBeforeBill &&
+        parsed.sourceDocumentId
+      ) {
+        const [src] = await db()
+          .select({ documentType: businessDocuments.documentType })
+          .from(businessDocuments)
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.id, parsed.sourceDocumentId),
+            ),
+          )
+          .limit(1);
+        if (src?.documentType === 'purchase_order') {
+          const hasPhysical = parsed.lines.some((l) => l.productId);
+          if (hasPhysical) {
+            const [grn] = await db()
+              .select({ id: businessDocuments.id })
+              .from(businessDocuments)
+              .where(
+                and(
+                  eq(businessDocuments.tenantId, user.tenantId),
+                  eq(businessDocuments.sourceDocumentId, parsed.sourceDocumentId),
+                  eq(businessDocuments.documentType, 'goods_receipt'),
+                  isNull(businessDocuments.voidedAt),
+                ),
+              )
+              .limit(1);
+            if (!grn) {
+              throw new Error(
+                'Receive goods (GRN) before billing this PO. Enable/disable in Purchase settings.',
+              );
+            }
+          }
+        }
+      }
+
+      if (postsToGl(parsed.documentType) && !needsApproval) {
         await assertOpenPeriod(user.tenantId, parsed.issueDate);
       }
 
@@ -667,12 +757,16 @@ export async function createCommercialDocument(
       if (parsed.documentType === 'cash_purchase') {
         status = 'paid';
       }
+      if (needsApproval) {
+        status = 'pending_approval';
+      }
 
       let transactionId: string | null = null;
       let postedAt: Date | null = null;
       let amountInWords: string | null = null;
 
-      if (postsToGl(parsed.documentType)) {
+      // Defer GL until Approve when purchase settings require bill approval
+      if (postsToGl(parsed.documentType) && !needsApproval) {
         const saleLines = enriched.map((l) => ({
           description: l.description,
           quantity: l.quantity,
@@ -945,7 +1039,8 @@ export async function createCommercialDocument(
         });
 
         // Stock qty for physical products: sales/returns, GRN, purchases (respect GRN match)
-        if (line.productId && isPhysicalProduct(line.productType)) {
+        // Pending-approval bills skip stock until approved
+        if (line.productId && isPhysicalProduct(line.productType) && !needsApproval) {
           const isSalesReturn = parsed.documentType === 'sales_return';
           const isSale = ['sales_invoice', 'pos_sale', 'customer_invoice'].includes(parsed.documentType);
           const isPurchase = isStockInPurchaseType(parsed.documentType);
@@ -1844,6 +1939,7 @@ export async function listOpenApBills(): Promise<OpenApBill[]> {
           inArray(businessDocuments.documentType, [...AP_BILL_TYPES]),
           isNull(businessDocuments.voidedAt),
           sql`CAST(${businessDocuments.balanceDue} AS numeric) > 0.005`,
+          sql`${businessDocuments.status} NOT IN ('pending_approval', 'void', 'rejected', 'archived')`,
         ),
       )
       .orderBy(desc(businessDocuments.issueDate));
@@ -1933,7 +2029,446 @@ export async function getPurchasePrintData(id: string) {
   return { doc: detail, company };
 }
 
-const NON_GL_TYPES = new Set(['quotation', 'sales_order', 'purchase_order']);
+/**
+ * Approve a pending purchase bill: posts GL + stock, status → open.
+ * Used when Purchase settings require bill approval.
+ */
+export async function approvePurchaseDocument(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const user = await requireTenantContext();
+    await withTenantContext(user.tenantId, async () => {
+      const [doc] = await db()
+        .select()
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, user.tenantId),
+            eq(businessDocuments.id, id),
+            isNull(businessDocuments.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!doc) throw new Error('Document not found.');
+      if (doc.status !== 'pending_approval') {
+        throw new Error('Only pending approval bills can be approved.');
+      }
+      if (doc.transactionId) throw new Error('Document already posted.');
+      if (!isPurchaseBillType(doc.documentType)) {
+        throw new Error('Only purchase bills support approval.');
+      }
+
+      await assertOpenPeriod(user.tenantId, doc.issueDate);
+
+      const [party] = await db()
+        .select()
+        .from(parties)
+        .where(eq(parties.id, doc.partyId))
+        .limit(1);
+      if (!party) throw new Error('Vendor not found.');
+
+      const lines = await db()
+        .select()
+        .from(businessDocumentLines)
+        .where(
+          and(eq(businessDocumentLines.documentId, doc.id), isNull(businessDocumentLines.voidedAt)),
+        );
+      if (lines.length === 0) throw new Error('Document has no lines.');
+
+      const enriched = [];
+      for (const line of lines) {
+        let productType = 'service';
+        let unitCost = Number(line.unitCost);
+        if (line.productId) {
+          const [product] = await db()
+            .select()
+            .from(inventoryProducts)
+            .where(
+              and(
+                eq(inventoryProducts.tenantId, user.tenantId),
+                eq(inventoryProducts.id, line.productId),
+                isNull(inventoryProducts.voidedAt),
+              ),
+            )
+            .limit(1);
+          if (product) {
+            productType = product.productType === 'stocked' ? 'physical' : product.productType;
+            unitCost = Number(line.unitPrice);
+          }
+        }
+        enriched.push({
+          productId: line.productId,
+          description: line.description,
+          quantity: Number(line.quantity),
+          unitPrice: Number(line.unitPrice),
+          unitCost,
+          discountAmount: Number(line.discountAmount),
+          productType,
+          lineTotal: Number(line.lineTotal),
+          accountCode: undefined as string | undefined,
+        });
+      }
+
+      const supplyExVat = Number(doc.subtotal);
+      const freightAmount = Number(doc.freightAmount ?? 0);
+      const dutyAmount = Number(doc.dutyAmount ?? 0);
+      const otherCharges = Number(doc.otherCharges ?? 0);
+      const landedExtra =
+        doc.documentType === 'import_purchase'
+          ? Math.round((freightAmount + dutyAmount + otherCharges) * 100) / 100
+          : 0;
+      const vatRate = Number(doc.vatRate ?? 0);
+      const total = Number(doc.total);
+      const expenseCode = '6800';
+      const forceInventory =
+        doc.documentType === 'import_purchase' ||
+        enriched.some((l) => isPhysicalProduct(l.productType));
+
+      const postingLines = buildVendorBillPosting({
+        total: supplyExVat,
+        expenseAccountCode: expenseCode,
+        memo: doc.documentNumber,
+        isInventoryPurchase: forceInventory,
+        vatRatePercent: vatRate,
+        landedExtra,
+      });
+
+      const accountMap = new Map<string, { id: string; code: string; name: string }>();
+      for (const pl of postingLines) {
+        if (!accountMap.has(pl.accountCode)) {
+          accountMap.set(pl.accountCode, await resolveAccount(user.tenantId, pl.accountCode));
+        }
+      }
+      const paymentAccount = await resolveAccount(user.tenantId, '2100');
+
+      const [createdTx] = await db()
+        .insert(transactions)
+        .values({
+          tenantId: user.tenantId,
+          userId: user.id,
+          accountingType: doc.documentType === 'import_purchase' ? 'import_purchase' : 'invoice_bill',
+          direction: 'money_out',
+          party: party.name,
+          description: `${doc.documentNumber}: ${enriched[0]?.description ?? 'Purchase'}`.slice(0, 1000),
+          amount: total.toFixed(2),
+          currency: 'LKR',
+          paymentMethod: 'Credit',
+          paymentAccountId: paymentAccount.id,
+          date: doc.issueDate,
+          categoryCode: '6800',
+          categoryName: null,
+          categoryConfidence: '1.00',
+          categorySource: 'document',
+          invoiceRef: doc.documentNumber,
+          isAlreadySettled: '0',
+          notes: doc.notes ?? null,
+        })
+        .returning({ id: transactions.id });
+
+      const [journal] = await db()
+        .insert(journalEntries)
+        .values({
+          tenantId: user.tenantId,
+          userId: user.id,
+          transactionId: createdTx.id,
+          memo: `${doc.documentNumber} ${party.name} (approved)`,
+          entryDate: doc.issueDate,
+          isBalanced: '1',
+        })
+        .returning({ id: journalEntries.id });
+
+      await db().insert(journalLines).values(
+        postingLines.map((pl) => ({
+          tenantId: user.tenantId,
+          journalEntryId: journal.id,
+          accountId: accountMap.get(pl.accountCode)!.id,
+          side: pl.side,
+          amount: pl.amount.toFixed(2),
+          memo: pl.memo,
+        })),
+      );
+
+      for (const line of enriched) {
+        if (!line.productId || !isPhysicalProduct(line.productType)) continue;
+        let stockQty = line.quantity;
+        if (doc.sourceDocumentId) {
+          const [src] = await db()
+            .select({ documentType: businessDocuments.documentType, id: businessDocuments.id })
+            .from(businessDocuments)
+            .where(eq(businessDocuments.id, doc.sourceDocumentId))
+            .limit(1);
+          if (src?.documentType === 'goods_receipt') stockQty = 0;
+          else if (src?.documentType === 'purchase_order') {
+            const received = await receivedQtyByLineKey(user.tenantId, src.id);
+            const rec = received.get(lineMatchKey(line.productId, line.description)) ?? 0;
+            if (rec > 0) {
+              stockQty = Math.max(0, Math.round((line.quantity - rec) * 10000) / 10000);
+            }
+          }
+        }
+        if (stockQty !== 0) {
+          await adjustStock({
+            tenantId: user.tenantId,
+            userId: user.id,
+            productId: line.productId,
+            quantityDelta: stockQty,
+            unitCost: line.unitCost,
+            movementType: 'purchase',
+            date: doc.issueDate,
+            referenceType: 'business_document',
+            referenceId: doc.id,
+            transactionId: createdTx.id,
+            memo: doc.documentNumber,
+          });
+        }
+        if (line.unitCost > 0) {
+          await db()
+            .update(inventoryProducts)
+            .set({ unitCost: line.unitCost.toFixed(2), updatedAt: new Date() })
+            .where(
+              and(
+                eq(inventoryProducts.tenantId, user.tenantId),
+                eq(inventoryProducts.id, line.productId),
+              ),
+            );
+        }
+      }
+
+      await db()
+        .update(businessDocuments)
+        .set({
+          status: 'open',
+          transactionId: createdTx.id,
+          postedAt: new Date(),
+          balanceDue: total.toFixed(2),
+          paidAmount: '0',
+          updatedAt: new Date(),
+        })
+        .where(eq(businessDocuments.id, doc.id));
+
+      await db().insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'APPROVE',
+        tableName: 'business_documents',
+        recordId: doc.id,
+        newValues: { status: 'open', transactionId: createdTx.id },
+        notes: 'Approved pending purchase bill — GL posted.',
+      });
+    });
+
+    revalidatePath('/purchase/purchases');
+    revalidatePath('/purchase/import');
+    revalidatePath('/purchase/payments');
+    revalidatePath('/journal');
+    revalidatePath('/transactions');
+    revalidatePath(`/purchase/purchases/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Approve failed.' };
+  }
+}
+
+export async function approvePurchaseDocumentAction(formData: FormData): Promise<void> {
+  const id = String(formData.get('documentId') ?? '');
+  const res = await approvePurchaseDocument(id);
+  if (!res.ok) throw new Error(res.error ?? 'Approve failed');
+  const { redirect } = await import('next/navigation');
+  redirect(`/purchase/purchases/${id}`);
+}
+
+/** Reject pending bill (no GL yet) — soft void. */
+export async function rejectPurchaseDocument(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const user = await requireTenantContext();
+    await withTenantContext(user.tenantId, async () => {
+      const [doc] = await db()
+        .select()
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, user.tenantId),
+            eq(businessDocuments.id, id),
+            isNull(businessDocuments.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!doc) throw new Error('Document not found.');
+      if (doc.status !== 'pending_approval') {
+        throw new Error('Only pending approval bills can be rejected.');
+      }
+      if (doc.transactionId) {
+        throw new Error('Cannot reject a posted bill.');
+      }
+      await db()
+        .update(businessDocuments)
+        .set({
+          status: 'rejected',
+          voidedAt: new Date(),
+          balanceDue: '0',
+          updatedAt: new Date(),
+        })
+        .where(eq(businessDocuments.id, doc.id));
+      await db().insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'REJECT',
+        tableName: 'business_documents',
+        recordId: doc.id,
+        newValues: { status: 'rejected' },
+        notes: 'Rejected pending purchase bill.',
+      });
+    });
+    revalidatePath('/purchase/purchases');
+    revalidatePath('/purchase/import');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Reject failed.' };
+  }
+}
+
+export async function rejectPurchaseDocumentAction(formData: FormData): Promise<void> {
+  const id = String(formData.get('documentId') ?? '');
+  const res = await rejectPurchaseDocument(id);
+  if (!res.ok) throw new Error(res.error ?? 'Reject failed');
+  const { redirect } = await import('next/navigation');
+  redirect('/purchase/purchases');
+}
+
+export type SupplierPerformanceRow = {
+  partyId: string;
+  partyName: string;
+  billCount: number;
+  purchaseTotal: number;
+  openAp: number;
+  returnCount: number;
+  returnTotal: number;
+  paidOnTime: number;
+  paidLate: number;
+  onTimePct: number | null;
+};
+
+/** Supplier performance lite — spend, returns, on-time pay rate. */
+export async function getSupplierPerformance(): Promise<SupplierPerformanceRow[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const billTypes = ['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase'];
+    const bills = await db()
+      .select({
+        id: businessDocuments.id,
+        partyId: businessDocuments.partyId,
+        partyName: parties.name,
+        documentType: businessDocuments.documentType,
+        total: businessDocuments.total,
+        balanceDue: businessDocuments.balanceDue,
+        paidAmount: businessDocuments.paidAmount,
+        status: businessDocuments.status,
+        dueDate: businessDocuments.dueDate,
+        issueDate: businessDocuments.issueDate,
+        updatedAt: businessDocuments.updatedAt,
+      })
+      .from(businessDocuments)
+      .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          inArray(businessDocuments.documentType, billTypes),
+          isNull(businessDocuments.voidedAt),
+          sql`${businessDocuments.status} NOT IN ('rejected', 'void')`,
+        ),
+      );
+
+    const returns = await db()
+      .select({
+        partyId: businessDocuments.partyId,
+        total: businessDocuments.total,
+      })
+      .from(businessDocuments)
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          eq(businessDocuments.documentType, 'purchase_return'),
+          isNull(businessDocuments.voidedAt),
+        ),
+      );
+
+    type Acc = {
+      partyId: string;
+      partyName: string;
+      billCount: number;
+      purchaseTotal: number;
+      openAp: number;
+      returnCount: number;
+      returnTotal: number;
+      paidOnTime: number;
+      paidLate: number;
+    };
+    const map = new Map<string, Acc>();
+
+    function acc(partyId: string, name: string): Acc {
+      let a = map.get(partyId);
+      if (!a) {
+        a = {
+          partyId,
+          partyName: name,
+          billCount: 0,
+          purchaseTotal: 0,
+          openAp: 0,
+          returnCount: 0,
+          returnTotal: 0,
+          paidOnTime: 0,
+          paidLate: 0,
+        };
+        map.set(partyId, a);
+      }
+      return a;
+    }
+
+    for (const b of bills) {
+      if (!b.partyId) continue;
+      if (b.status === 'pending_approval') continue;
+      const a = acc(b.partyId, b.partyName ?? 'Unknown');
+      const total = Number(b.total);
+      a.billCount += 1;
+      a.purchaseTotal += total;
+      a.openAp += Number(b.balanceDue);
+      if (Number(b.paidAmount) > 0.005 && Number(b.balanceDue) < 0.005) {
+        // Fully paid — approximate on-time using updatedAt vs dueDate
+        const due = b.dueDate || b.issueDate;
+        const paidDay = b.updatedAt
+          ? b.updatedAt.toISOString().slice(0, 10)
+          : b.issueDate;
+        if (due && paidDay <= due) a.paidOnTime += 1;
+        else a.paidLate += 1;
+      }
+    }
+
+    for (const r of returns) {
+      if (!r.partyId) continue;
+      const a = acc(r.partyId, map.get(r.partyId)?.partyName ?? 'Unknown');
+      a.returnCount += 1;
+      a.returnTotal += Number(r.total);
+    }
+
+    return Array.from(map.values())
+      .map((a) => {
+        const paid = a.paidOnTime + a.paidLate;
+        return {
+          ...a,
+          purchaseTotal: Math.round(a.purchaseTotal * 100) / 100,
+          openAp: Math.round(a.openAp * 100) / 100,
+          returnTotal: Math.round(a.returnTotal * 100) / 100,
+          onTimePct: paid > 0 ? Math.round((a.paidOnTime / paid) * 1000) / 10 : null,
+        };
+      })
+      .sort((x, y) => y.purchaseTotal - x.purchaseTotal);
+  });
+}
+
+const NON_GL_TYPES = new Set(['quotation', 'sales_order', 'purchase_order', 'goods_receipt']);
 
 /** Soft-delete (void). Blocked if posted to GL (has transaction). */
 export async function deleteCommercialDocument(id: string): Promise<{ ok: boolean; error?: string }> {

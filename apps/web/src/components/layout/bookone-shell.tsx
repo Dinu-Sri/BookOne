@@ -99,6 +99,7 @@ const navSuites: NavSuite[] = [
       { label: 'Purchase Returns', icon: BookOpenCheck, href: '/purchase/returns' },
       { label: 'Pay Vendors', icon: Landmark, href: '/purchase/payments' },
       { label: 'AP Aging', icon: CalendarDays, href: '/purchase/aging' },
+      { label: 'Suppliers', icon: Building2, href: '/purchase/suppliers' },
     ],
   },
   {
@@ -121,6 +122,7 @@ const navSuites: NavSuite[] = [
       { label: 'Company Details', icon: Building2, href: '/company/details' },
       { label: 'Tax Info', icon: FileText, href: '/company/tax' },
       { label: 'Sales Settings', icon: ReceiptText, href: '/company/sales' },
+      { label: 'Purchase Settings', icon: ShoppingCart, href: '/company/purchase' },
       { label: 'Brands', icon: Package, href: '/company/brands' },
       { label: 'Locations', icon: Landmark, href: '/company/locations' },
       { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },

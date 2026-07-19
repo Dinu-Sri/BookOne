@@ -5,6 +5,7 @@ import { listActiveDiscounts } from '@/app/actions/commercial-docs';
 import { getDocumentFormOptions } from '@/app/actions/documents';
 import { listPartyOptions } from '@/app/actions/parties';
 import { getSalesSettings } from '@/app/actions/sales-settings';
+import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 
 export async function requireTenant() {
   try {
@@ -15,24 +16,33 @@ export async function requireTenant() {
 }
 
 export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'customer') {
-  const [products, discounts, options, partyOptions, salesSettings] = await Promise.all([
-    listProducts().catch(() => []),
-    listActiveDiscounts().catch(() => []),
-    getDocumentFormOptions().catch(() => ({
-      revenueAccounts: [],
-      expenseAccounts: [],
-      paymentAccounts: [],
-    })),
-    listPartyOptions(partyRole).catch(() => []),
-    getSalesSettings().catch(() => ({
-      vatRegistered: false,
-      vatRatePercent: 18,
-      exportVatRatePercent: 0,
-      taxInvoiceDeptCode: '01',
-      defaultSaleChannel: 'local',
-      defaultInvoiceKind: 'commercial',
-    })),
-  ]);
+  const [products, discounts, options, partyOptions, salesSettings, purchaseSettings] =
+    await Promise.all([
+      listProducts().catch(() => []),
+      listActiveDiscounts().catch(() => []),
+      getDocumentFormOptions().catch(() => ({
+        revenueAccounts: [],
+        expenseAccounts: [],
+        paymentAccounts: [],
+      })),
+      listPartyOptions(partyRole).catch(() => []),
+      getSalesSettings().catch(() => ({
+        vatRegistered: false,
+        vatRatePercent: 18,
+        exportVatRatePercent: 0,
+        taxInvoiceDeptCode: '01',
+        defaultSaleChannel: 'local',
+        defaultInvoiceKind: 'commercial',
+      })),
+      getPurchaseSettings().catch(() => ({
+        requireBillApproval: false,
+        requireSupplierInvoiceNo: false,
+        blockDuplicateBills: true,
+        requireGrnBeforeBill: false,
+        defaultPaymentTerms: 'Net 30',
+        defaultExpenseAccount: '6800',
+      })),
+    ]);
   return {
     products: products.map((p) => ({
       id: p.id,
@@ -49,5 +59,6 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
     partyOptions,
     vatRegistered: salesSettings.vatRegistered,
     vatRatePercent: salesSettings.vatRatePercent,
+    purchaseSettings,
   };
 }

@@ -365,7 +365,14 @@ export function CommercialDocumentList({
       );
     }
     const payTo = hrefFromPattern(config.payHrefPattern, row.id);
-    if (payTo && Number(row.balanceDue) > 0.005 && row.status !== 'void' && row.status !== 'converted') {
+    if (
+      payTo &&
+      Number(row.balanceDue) > 0.005 &&
+      row.status !== 'void' &&
+      row.status !== 'converted' &&
+      row.status !== 'pending_approval' &&
+      row.status !== 'rejected'
+    ) {
       items.push(
         <Link
           key="pay"

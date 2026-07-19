@@ -172,6 +172,8 @@ export function CommercialDocNewForm({
   submitLabel = 'Save',
   sourceDocumentId,
   initialLines,
+  defaultPaymentTerms,
+  defaultExpenseAccount,
 }: {
   backHref: string;
   backLabel: string;
@@ -206,14 +208,19 @@ export function CommercialDocNewForm({
   submitLabel?: string;
   sourceDocumentId?: string | null;
   initialLines?: DocLineState[];
+  defaultPaymentTerms?: string;
+  defaultExpenseAccount?: string;
 }) {
   const [lines, setLines] = useState<DocLineState[]>(initialLines ?? []);
   const [catalog, setCatalog] = useState<ProductPick[]>(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
-  const [expenseCode, setExpenseCode] = useState(
-    expenseAccounts?.find((a) => a.code === '6800')?.code ?? expenseAccounts?.[0]?.code ?? '6800',
-  );
+  const preferredExpense =
+    defaultExpenseAccount ||
+    expenseAccounts?.find((a) => a.code === '6800')?.code ||
+    expenseAccounts?.[0]?.code ||
+    '6800';
+  const [expenseCode, setExpenseCode] = useState(preferredExpense);
   const [headerDiscount, setHeaderDiscount] = useState('0');
   const [discountId, setDiscountId] = useState('');
 
@@ -341,7 +348,11 @@ export function CommercialDocNewForm({
                 </div>
                 <div className="field">
                   <label>Payment terms</label>
-                  <select className="input" name="paymentMode" defaultValue="">
+                  <select
+                    className="input"
+                    name="paymentMode"
+                    defaultValue={defaultPaymentTerms || 'Net 30'}
+                  >
                     <option value="">—</option>
                     <option value="Due on receipt">Due on receipt</option>
                     <option value="Net 7">Net 7</option>

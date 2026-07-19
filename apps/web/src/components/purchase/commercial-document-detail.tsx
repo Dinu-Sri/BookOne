@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition, type ReactNode } from 'react';
 import {
+  approvePurchaseDocumentAction,
   archiveCommercialDocument,
   convertDocumentAction,
   createReturnFromBillAction,
   deleteCommercialDocument,
+  rejectPurchaseDocumentAction,
   type CommercialDocDetail,
 } from '@/app/actions/commercial-docs';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
@@ -70,7 +72,12 @@ export function CommercialDocumentDetail({
   const canReturn =
     returnFromBill &&
     ['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase'].includes(doc.documentType) &&
-    doc.status !== 'void';
+    doc.status !== 'void' &&
+    doc.status !== 'pending_approval' &&
+    doc.status !== 'rejected';
+  const canApprove =
+    doc.status === 'pending_approval' &&
+    ['purchase', 'import_purchase', 'vendor_bill'].includes(doc.documentType);
 
   async function runConfirm() {
     if (!confirm) return;
@@ -109,7 +116,23 @@ export function CommercialDocumentDetail({
           </span>
         </Link>
         <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {canPay && payHref ? (
+          {canApprove ? (
+            <>
+              <form action={approvePurchaseDocumentAction}>
+                <input type="hidden" name="documentId" value={doc.id} />
+                <Button variant="primary" type="submit" disabled={pending}>
+                  Approve &amp; post
+                </Button>
+              </form>
+              <form action={rejectPurchaseDocumentAction}>
+                <input type="hidden" name="documentId" value={doc.id} />
+                <Button variant="ghost" type="submit" disabled={pending}>
+                  Reject
+                </Button>
+              </form>
+            </>
+          ) : null}
+          {canPay && payHref && doc.status !== 'pending_approval' ? (
             <Link href={payHref}>
               <Button variant="primary" type="button">
                 Pay
@@ -163,6 +186,11 @@ export function CommercialDocumentDetail({
                 <StatusBadge status={doc.status} />
                 <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{doc.partyName}</span>
               </div>
+              {doc.status === 'pending_approval' ? (
+                <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--warning, #b45309)' }}>
+                  Awaiting approval — GL and stock will post when approved (Purchase settings).
+                </p>
+              ) : null}
             </div>
             <div className="doc-totals" style={{ minWidth: 200 }}>
               <div className="doc-totals-row">

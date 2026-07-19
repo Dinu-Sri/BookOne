@@ -29,8 +29,14 @@ export default async function NewPurchasePage() {
         vatRegistered={form.vatRegistered}
         vatRatePercent={form.vatRatePercent}
         expenseAccounts={form.expenseAccounts}
+        defaultPaymentTerms={form.purchaseSettings.defaultPaymentTerms}
+        defaultExpenseAccount={form.purchaseSettings.defaultExpenseAccount}
         submitLabel="Save purchase"
-        banner="Credit purchase · opens AP 2100 · optional input VAT"
+        banner={
+          form.purchaseSettings.requireBillApproval
+            ? 'Credit purchase · saves as pending approval until approved'
+            : 'Credit purchase · opens AP 2100 · optional input VAT'
+        }
       />
     </BookOneShell>
   );

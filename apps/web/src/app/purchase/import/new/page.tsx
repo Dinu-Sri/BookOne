@@ -30,6 +30,8 @@ export default async function NewImportPurchasePage() {
         vatRegistered={form.vatRegistered}
         vatRatePercent={form.vatRatePercent}
         expenseAccounts={form.expenseAccounts}
+        defaultPaymentTerms={form.purchaseSettings.defaultPaymentTerms}
+        defaultExpenseAccount={form.purchaseSettings.defaultExpenseAccount}
         submitLabel="Save import purchase"
         banner="Import · inventory 5100 + landed costs + AP · optional input VAT"
       />

@@ -1,7 +1,7 @@
 # BookOne Purchase (AP) — product design
 
-**Status:** design locked · **P0 + P1 + P2 implemented 2026-07-19**  
-(P0: detail, Pay vendors · P1: cash, aging, print, return, partial PO · P2: GRN, landed cost, remittance, input VAT)  
+**Status:** design locked · **P0–P3 complete 2026-07-19**  
+(Purchase module full SME cycle + controls)  
 **Audience:** SL SME — mixed goods + services, local + import suppliers  
 **Peers studied:** QuickBooks Online / Desktop patterns, Sage Business Cloud / mid-market PO→bill→pay  
 
@@ -283,12 +283,12 @@ Legacy `/purchase/bills` stays redirect to Purchases.
 4. Batch pay remittance ✅ `/purchase/payments/remittance` after multi-pay  
 5. Input VAT ✅ account **2300**; claim via VAT kind on purchase/import/cash when company VAT-registered  
 
-### Phase P3 — Controls & polish
+### Phase P3 — Controls & polish ✅ (2026-07-19)
 
-1. Approval workflows (optional)  
-2. Duplicate bill detection (vendor + supplier invoice # + amount)  
-3. Purchase settings  
-4. Supplier performance lite (on-time, returns)  
+1. Approval workflow ✅ optional — bills save `pending_approval`, Approve posts GL/stock  
+2. Duplicate bill detection ✅ same vendor + supplier invoice # (blockable)  
+3. Purchase settings ✅ `/company/purchase`  
+4. Supplier performance lite ✅ `/purchase/suppliers` (spend, open AP, returns, on-time %)  
 
 ---
 

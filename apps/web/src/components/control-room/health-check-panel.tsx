@@ -377,22 +377,28 @@ export function HealthCheckPanel({
         <div className="eyebrow">WHAT EACH STEP MEANS</div>
         <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
           <li>
-            <strong>Product</strong> — inventory master works
+            <strong>Product</strong> — inventory master (physical, qty starts 0)
           </li>
           <li>
-            <strong>Purchase + pay</strong> — stock in, supplier bill, then pay from cash
+            <strong>Purchase</strong> — real <code>createCommercialDocument</code> → Dr 5100 / Cr 2100 + stock in
           </li>
           <li>
-            <strong>Sale + receive</strong> — stock out, customer invoice, then get paid
+            <strong>Pay vendor</strong> — <code>allocateDocumentPayment</code> → Dr 2100 / Cr Cash
           </li>
           <li>
-            <strong>Return</strong> (full) — restock path
+            <strong>Sale</strong> — invoice → Dr 1300 / Cr 4000 + COGS 5000/5100 + stock out
           </li>
           <li>
-            <strong>GRN path</strong> (full) — order → receive goods → bill without double stock
+            <strong>Return</strong> (full) — <em>before</em> full payment so source AR is reduced (P1 apply)
           </li>
           <li>
-            <strong>Books balanced</strong> — every journal debit equals credit
+            <strong>Receive</strong> — remaining AR cleared with cash
+          </li>
+          <li>
+            <strong>GRN path</strong> (full) — PO (no GL) → GRN stock+ → bill AP with stock unchanged
+          </li>
+          <li>
+            <strong>Final</strong> — stock formula + whole-company journals still balance
           </li>
         </ul>
       </section>

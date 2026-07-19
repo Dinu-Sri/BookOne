@@ -8,6 +8,7 @@ import {
   type HealthRunRow,
   type HealthStepResult,
 } from '@/app/actions/health-check';
+import { masterResetStagingCompanyData } from '@/app/actions/reset-company';
 import { Button } from '@/components/ui/bookone-ui';
 
 function statusBadge(status: string) {
@@ -147,7 +148,11 @@ export function HealthCheckPanel({
   }
 
   function wipe(runId: string) {
-    if (!confirm('Void documents and product created by this health-check run? Journals stay for audit.')) {
+    if (
+      !confirm(
+        'Void documents and product created by this health-check run? Journals are voided and stock reversed for that run only.',
+      )
+    ) {
       return;
     }
     setError(null);
@@ -171,6 +176,51 @@ export function HealthCheckPanel({
             : r,
         ),
       );
+    });
+  }
+
+  function masterResetAll() {
+    if (!canRun) {
+      setError('Master wipe only works on Staging companies. Mark as Staging first.');
+      return;
+    }
+    const ok1 = confirm(
+      'MASTER WIPE\n\nThis permanently DELETES all operational data for this company:\n' +
+        '• All journals, transactions, documents\n' +
+        '• All products, stock, parties\n' +
+        '• All payments, POS shifts, health-check history\n\n' +
+        'KEPT: company profile, tax, brands, locations, chart of accounts, users, settings.\n\n' +
+        'This cannot be undone. Continue?',
+    );
+    if (!ok1) return;
+
+    const phrase = window.prompt(
+      'Type MASTER RESET (all caps) to confirm full company data wipe:',
+    );
+    if (phrase !== 'MASTER RESET') {
+      setError('Master wipe cancelled — you must type MASTER RESET exactly.');
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      const res = await masterResetStagingCompanyData(phrase);
+      if (!res.ok) {
+        setError(res.error ?? 'Master wipe failed');
+        return;
+      }
+      setLive(null);
+      setRuns([]);
+      setMessage(
+        `Master wipe complete. Cleared ${res.tablesCleared ?? 0} data groups` +
+          (res.deletedFiles ? `, deleted ${res.deletedFiles} uploaded files` : '') +
+          (res.warning ? `. Note: ${res.warning}` : '.') +
+          ' Company details kept. Reloading…',
+      );
+      window.setTimeout(() => {
+        window.location.href = '/control-room/health-check';
+      }, 1200);
     });
   }
 
@@ -257,6 +307,46 @@ export function HealthCheckPanel({
         {error ? (
           <p style={{ marginTop: 12, fontSize: 13, fontWeight: 600, color: '#b91c1c' }}>{error}</p>
         ) : null}
+      </section>
+
+      {/* Master wipe */}
+      <section
+        className="card pad"
+        style={{ borderColor: 'rgba(185,28,28,0.35)', background: 'rgba(185,28,28,0.04)' }}
+      >
+        <div className="eyebrow" style={{ color: '#b91c1c' }}>
+          DANGER ZONE
+        </div>
+        <h2 className="card-title" style={{ marginTop: 6 }}>
+          Master wipe — reset company data to zero
+        </h2>
+        <p className="card-subtitle" style={{ marginBottom: 12 }}>
+          Permanently <strong>deletes all operational data</strong> for this staging company: ledgers,
+          documents, products, stock, parties, payments, POS shifts, health-check history. Uploaded
+          receipts/product files are removed when storage is configured.
+        </p>
+        <p style={{ fontSize: 13, marginBottom: 12, color: 'var(--ink-soft)' }}>
+          <strong>Kept:</strong> company profile, tax info, brands, locations, domains, financial years,
+          chart of accounts, users, sales/purchase/inventory settings, POS registers.
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={!canRun || pending}
+          onClick={masterResetAll}
+          style={{ borderColor: '#b91c1c', color: '#b91c1c', fontWeight: 700 }}
+        >
+          {pending ? 'Wiping…' : 'Master wipe all data…'}
+        </Button>
+        {!canRun ? (
+          <p style={{ marginTop: 10, fontSize: 12, color: '#b91c1c', fontWeight: 600 }}>
+            Mark company as Staging above before master wipe is enabled.
+          </p>
+        ) : (
+          <p style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
+            You will be asked to type <code>MASTER RESET</code> to confirm.
+          </p>
+        )}
       </section>
 
       {/* Live / latest result */}

@@ -80,6 +80,8 @@ const navSuites: NavSuite[] = [
       { label: 'Quotations', icon: FileText, href: '/sales/quotations' },
       { label: 'Sales Orders', subtitle: 'Dispatch Note', icon: ClipboardList, href: '/sales/orders' },
       { label: 'Sales Invoices', icon: ReceiptText, href: '/sales/invoices' },
+      { label: 'Receive Payments', icon: Landmark, href: '/sales/payments' },
+      { label: 'AR Aging', icon: CalendarDays, href: '/sales/aging' },
       { label: 'Sales Returns', icon: BookOpenCheck, href: '/sales/returns' },
       { label: 'POS', subtitle: 'Terminal', icon: ShoppingCart, href: '/pos' },
       { label: 'POS History', icon: ReceiptText, href: '/sales/pos' },
@@ -109,6 +111,7 @@ const navSuites: NavSuite[] = [
     items: [
       { label: 'Products', icon: Package, href: '/inventory/products' },
       { label: 'Stock Levels', icon: Landmark, href: '/inventory/levels' },
+      { label: 'Low Stock', icon: SlidersHorizontal, href: '/inventory/levels?low=1' },
       { label: 'Stock Ledger', icon: BookOpenCheck, href: '/inventory/ledger' },
       { label: 'Stock Transfers', icon: ClipboardList, href: '/inventory/transfers' },
       { label: 'Stock Adjustments', icon: SlidersHorizontal, href: '/inventory/adjustments' },

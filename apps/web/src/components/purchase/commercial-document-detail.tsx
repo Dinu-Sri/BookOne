@@ -38,6 +38,7 @@ export function CommercialDocumentDetail({
   listHref,
   listLabel,
   payHref,
+  payLabel = 'Pay',
   printHref,
   convertTo,
   convertLabel,
@@ -48,6 +49,7 @@ export function CommercialDocumentDetail({
   listHref: string;
   listLabel: string;
   payHref?: string | null;
+  payLabel?: string;
   printHref?: string | null;
   convertTo?: 'sales_order' | 'sales_invoice' | 'purchase' | 'vendor_bill';
   convertLabel?: string;
@@ -135,7 +137,7 @@ export function CommercialDocumentDetail({
           {canPay && payHref && doc.status !== 'pending_approval' ? (
             <Link href={payHref}>
               <Button variant="primary" type="button">
-                Pay
+                {payLabel}
               </Button>
             </Link>
           ) : null}

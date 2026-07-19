@@ -37,14 +37,27 @@ export function ProductSnapshotDialog({ product, onClose }: { product: ProductRo
             <strong>{formatLKR(product.sellPrice)}</strong>
           </div>
           <div>
-            <span>Unit cost</span>
+            <span>Last cost</span>
             <strong>{formatLKR(product.unitCost)}</strong>
           </div>
           <div>
             <span>Qty on hand</span>
-            <strong>{product.productType === 'physical' ? product.qtyOnHand : '—'}</strong>
+            <strong>
+              {product.productType === 'physical' || product.productType === 'stocked'
+                ? product.qtyOnHand
+                : '—'}
+            </strong>
           </div>
         </div>
+        {product.productType === 'physical' || product.productType === 'stocked' ? (
+          <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '0 0 8px' }}>
+            Cost policy: <strong>last purchase cost</strong> updates when you buy this item. Stock
+            value on levels = qty × last cost.
+            {product.reorderLevel != null
+              ? ` Reorder at ${product.reorderLevel}.`
+              : ' Set reorder level on edit for low-stock alerts.'}
+          </p>
+        ) : null}
         <div className="party-snapshot-grid">
           <div className="party-snapshot-item">
             <div className="party-snapshot-item-label">Unit</div>
@@ -79,6 +92,13 @@ export function ProductSnapshotDialog({ product, onClose }: { product: ProductRo
           <Button variant="secondary" type="button" onClick={onClose}>
             Close
           </Button>
+          {(product.productType === 'physical' || product.productType === 'stocked') && (
+            <Link href={`/inventory/ledger?productId=${product.id}`}>
+              <Button variant="secondary" type="button">
+                Stock ledger
+              </Button>
+            </Link>
+          )}
           <Link href={`/inventory/products/${product.id}/edit`}>
             <Button variant="primary" type="button">
               Edit product

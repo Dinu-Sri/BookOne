@@ -234,6 +234,34 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
         Edit
       </Link>,
     ];
+    if (p.productType === 'physical' || p.productType === 'stocked') {
+      items.push(
+        <Link
+          key="ledger"
+          href={`/inventory/ledger?productId=${p.id}`}
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+          }}
+        >
+          Stock ledger
+        </Link>,
+        <Link
+          key="levels"
+          href="/inventory/levels"
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+          }}
+        >
+          Stock levels
+        </Link>,
+      );
+    }
     if (p.isActive === '1') {
       items.push(
         <button
@@ -426,9 +454,35 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                       <td>
                         <StatusBadge status={p.productType} />
                       </td>
-                      <td>{formatLKR(p.unitCost)}</td>
+                      <td>
+                        {formatLKR(p.unitCost)}
+                        {(p.productType === 'physical' || p.productType === 'stocked') && (
+                          <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>last cost</div>
+                        )}
+                      </td>
                       <td>{formatLKR(p.sellPrice)}</td>
-                      <td>{p.productType === 'physical' || p.productType === 'stocked' ? p.qtyOnHand : '—'}</td>
+                      <td>
+                        {p.productType === 'physical' || p.productType === 'stocked' ? (
+                          <>
+                            <strong
+                              style={
+                                p.reorderLevel != null && p.qtyOnHand <= p.reorderLevel
+                                  ? { color: 'var(--danger, #b91c1c)' }
+                                  : undefined
+                              }
+                            >
+                              {p.qtyOnHand}
+                            </strong>
+                            {p.reorderLevel != null && p.qtyOnHand <= p.reorderLevel ? (
+                              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--danger, #b91c1c)' }}>
+                                low (≤{p.reorderLevel})
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td>
                         <StatusBadge status={p.isActive === '1' ? 'active' : 'inactive'} />
                       </td>

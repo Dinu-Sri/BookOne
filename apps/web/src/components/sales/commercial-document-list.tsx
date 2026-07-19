@@ -384,7 +384,7 @@ export function CommercialDocumentList({
             setMenuPos(null);
           }}
         >
-          Pay
+          {config.payHrefPattern?.includes('/sales/') ? 'Receive' : 'Pay'}
         </Link>,
       );
     }

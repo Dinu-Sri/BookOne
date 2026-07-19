@@ -1902,6 +1902,7 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
 }
 
 const AP_BILL_TYPES = ['purchase', 'import_purchase', 'vendor_bill'] as const;
+const AR_INVOICE_TYPES = ['sales_invoice', 'customer_invoice'] as const;
 
 export type OpenApBill = {
   id: string;
@@ -1914,6 +1915,8 @@ export type OpenApBill = {
   balanceDue: number;
   status: string;
 };
+
+export type OpenArInvoice = OpenApBill;
 
 /** Open AP bills for Pay vendors (balance due > 0). */
 export async function listOpenApBills(): Promise<OpenApBill[]> {
@@ -1972,6 +1975,18 @@ export type ApAgingSummary = {
   grandTotal: number;
 };
 
+export type ArAgingRow = OpenArInvoice & {
+  agingDate: string;
+  daysPastDue: number;
+  bucket: ApAgingBucket;
+};
+
+export type ArAgingSummary = {
+  rows: ArAgingRow[];
+  totals: Record<ApAgingBucket, number>;
+  grandTotal: number;
+};
+
 function agingBucket(daysPastDue: number): ApAgingBucket {
   if (daysPastDue <= 0) return 'current';
   if (daysPastDue <= 30) return 'd1_30';
@@ -1980,14 +1995,9 @@ function agingBucket(daysPastDue: number): ApAgingBucket {
   return 'd90_plus';
 }
 
-/** AP aging by due date (or issue date if no due). */
-export async function getApAgingSummary(asOfDate?: string): Promise<ApAgingSummary> {
-  const asOf = asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
-    ? asOfDate
-    : new Date().toISOString().slice(0, 10);
-  const bills = await listOpenApBills();
+function buildAgingSummary(items: OpenApBill[], asOf: string): ApAgingSummary {
   const asOfMs = new Date(`${asOf}T12:00:00`).getTime();
-  const rows: ApAgingRow[] = bills.map((b) => {
+  const rows: ApAgingRow[] = items.map((b) => {
     const agingDate = b.dueDate || b.issueDate;
     const daysPastDue = Math.floor(
       (asOfMs - new Date(`${agingDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24),
@@ -2010,6 +2020,67 @@ export async function getApAgingSummary(asOfDate?: string): Promise<ApAgingSumma
   for (const r of rows) totals[r.bucket] += r.balanceDue;
   const grandTotal = Object.values(totals).reduce((s, n) => s + n, 0);
   return { rows, totals, grandTotal: Math.round(grandTotal * 100) / 100 };
+}
+
+/** Open AR invoices for Receive payment (balance due > 0). */
+export async function listOpenArInvoices(): Promise<OpenArInvoice[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const rows = await db()
+      .select({
+        id: businessDocuments.id,
+        documentType: businessDocuments.documentType,
+        documentNumber: businessDocuments.documentNumber,
+        partyName: parties.name,
+        issueDate: businessDocuments.issueDate,
+        dueDate: businessDocuments.dueDate,
+        total: businessDocuments.total,
+        balanceDue: businessDocuments.balanceDue,
+        status: businessDocuments.status,
+      })
+      .from(businessDocuments)
+      .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          inArray(businessDocuments.documentType, [...AR_INVOICE_TYPES]),
+          isNull(businessDocuments.voidedAt),
+          sql`CAST(${businessDocuments.balanceDue} AS numeric) > 0.005`,
+          sql`${businessDocuments.status} NOT IN ('void', 'rejected', 'archived', 'pending_approval')`,
+        ),
+      )
+      .orderBy(desc(businessDocuments.issueDate));
+
+    return rows.map((r) => ({
+      id: r.id,
+      documentType: r.documentType,
+      documentNumber: r.documentNumber,
+      partyName: r.partyName ?? 'Unknown',
+      issueDate: r.issueDate,
+      dueDate: r.dueDate,
+      total: Number(r.total),
+      balanceDue: Number(r.balanceDue),
+      status: r.status,
+    }));
+  });
+}
+
+/** AP aging by due date (or issue date if no due). */
+export async function getApAgingSummary(asOfDate?: string): Promise<ApAgingSummary> {
+  const asOf = asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
+    ? asOfDate
+    : new Date().toISOString().slice(0, 10);
+  const bills = await listOpenApBills();
+  return buildAgingSummary(bills, asOf);
+}
+
+/** AR aging by due date (or issue date if no due). */
+export async function getArAgingSummary(asOfDate?: string): Promise<ArAgingSummary> {
+  const asOf = asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
+    ? asOfDate
+    : new Date().toISOString().slice(0, 10);
+  const invoices = await listOpenArInvoices();
+  return buildAgingSummary(invoices, asOf);
 }
 
 /** Lightweight print data for PO / purchase bill / cash / return */

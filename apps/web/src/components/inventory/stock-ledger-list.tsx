@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { StockMovementRow } from '@/app/actions/inventory';
 import { DateRangePicker } from '@/components/layout/date-range-picker';
@@ -8,7 +9,15 @@ import { Button, Card } from '@/components/ui/bookone-ui';
 
 const PAGE_SIZE = 10;
 
-export function StockLedgerList({ rows }: { rows: StockMovementRow[] }) {
+export function StockLedgerList({
+  rows,
+  productId,
+  productLabel,
+}: {
+  rows: StockMovementRow[];
+  productId?: string | null;
+  productLabel?: string | null;
+}) {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
 
@@ -16,7 +25,11 @@ export function StockLedgerList({ rows }: { rows: StockMovementRow[] }) {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) =>
-      [r.sku, r.productName, r.movementType, r.memo].filter(Boolean).join(' ').toLowerCase().includes(q),
+      [r.sku, r.productName, r.movementType, r.memo, r.referenceType]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(q),
     );
   }, [rows, query]);
 
@@ -35,20 +48,36 @@ export function StockLedgerList({ rows }: { rows: StockMovementRow[] }) {
               setQuery(e.target.value);
               setPage(1);
             }}
-            placeholder="Search ledger…"
+            placeholder="Search ledger (SKU, type, memo)…"
           />
         </div>
         <div className="party-toolbar-period">
           <DateRangePicker compact />
         </div>
+        {productId ? (
+          <Link href="/inventory/ledger">
+            <Button variant="secondary" type="button">
+              Clear product filter
+            </Button>
+          </Link>
+        ) : null}
       </div>
+
+      {productId && productLabel ? (
+        <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px' }}>
+          Filtered: {productLabel}{' '}
+          <Link href={`/inventory/products/${productId}/edit`} style={{ fontWeight: 600 }}>
+            Edit product
+          </Link>
+        </p>
+      ) : null}
 
       <Card>
         <div className="card-body" style={{ padding: 0 }}>
           {pageRows.length === 0 ? (
             <div className="empty-state" style={{ padding: 28 }}>
               <h3>No stock movements</h3>
-              <p>Sales, purchases, transfers, and adjustments will appear here.</p>
+              <p>Sales, purchases, GRNs, transfers, and adjustments will appear here.</p>
             </div>
           ) : (
             <div className="table-wrap">
@@ -61,6 +90,7 @@ export function StockLedgerList({ rows }: { rows: StockMovementRow[] }) {
                     <th>Product</th>
                     <th>Qty</th>
                     <th>Unit cost</th>
+                    <th>Source</th>
                     <th>Memo</th>
                   </tr>
                 </thead>
@@ -72,13 +102,31 @@ export function StockLedgerList({ rows }: { rows: StockMovementRow[] }) {
                         <StatusBadge status={r.movementType} />
                       </td>
                       <td>
-                        <strong>{r.sku}</strong>
+                        <Link href={`/inventory/ledger?productId=${r.productId}`}>
+                          <strong>{r.sku}</strong>
+                        </Link>
                       </td>
-                      <td>{r.productName}</td>
-                      <td style={r.quantity < 0 ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>
-                        {r.quantity}
+                      <td>
+                        <Link
+                          href={`/inventory/products/${r.productId}/edit`}
+                          style={{ color: 'inherit' }}
+                        >
+                          {r.productName}
+                        </Link>
+                      </td>
+                      <td
+                        style={
+                          r.quantity < 0
+                            ? { color: 'var(--danger)', fontWeight: 600 }
+                            : { fontWeight: 600 }
+                        }
+                      >
+                        {r.quantity > 0 ? `+${r.quantity}` : r.quantity}
                       </td>
                       <td>{formatLKR(r.unitCost)}</td>
+                      <td style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                        {r.referenceType || '—'}
+                      </td>
                       <td>{r.memo ?? '—'}</td>
                     </tr>
                   ))}
@@ -92,7 +140,12 @@ export function StockLedgerList({ rows }: { rows: StockMovementRow[] }) {
                 {filtered.length} total · page {safePage} of {totalPages}
               </span>
               <div className="party-pagination-actions">
-                <Button variant="secondary" type="button" disabled={safePage <= 1} onClick={() => setPage((p) => p - 1)}>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
                   Previous
                 </Button>
                 <Button

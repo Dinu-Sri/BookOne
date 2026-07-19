@@ -30,6 +30,7 @@ export default async function SalesInvoicesPage() {
             showTaxCols: true,
             printHrefPattern: '/sales/invoices/:id/print',
             detailHrefPattern: '/sales/invoices/:id',
+            payHrefPattern: '/sales/payments/new?documentId=:id',
           }}
         />
       </Suspense>

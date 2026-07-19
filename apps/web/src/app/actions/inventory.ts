@@ -856,6 +856,7 @@ export async function listStockMovements(filter?: {
   q?: string;
   from?: string;
   to?: string;
+  productId?: string;
 }): Promise<StockMovementRow[]> {
   const user = await requireTenantContext();
   const q = filter?.q?.trim().toLowerCase() ?? '';
@@ -863,6 +864,7 @@ export async function listStockMovements(filter?: {
     const conditions = [eq(inventoryMovements.tenantId, user.tenantId)];
     if (filter?.from) conditions.push(sql`${inventoryMovements.movementDate} >= ${filter.from}`);
     if (filter?.to) conditions.push(sql`${inventoryMovements.movementDate} <= ${filter.to}`);
+    if (filter?.productId) conditions.push(eq(inventoryMovements.productId, filter.productId));
 
     const rows = await db()
       .select({

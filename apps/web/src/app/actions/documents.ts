@@ -488,6 +488,8 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
     revalidatePath('/purchase/import');
     revalidatePath('/purchase/payments');
     revalidatePath('/sales/invoices');
+    revalidatePath('/sales/payments');
+    revalidatePath('/sales/aging');
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not allocate payment.';
@@ -533,6 +535,43 @@ export async function payVendorBills(input: {
     return { ok: true, paidCount };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pay vendors failed.' };
+  }
+}
+
+/**
+ * Receive customer payments against open AR invoices (QBO “Receive payment”).
+ * Dr Cash/Bank · Cr AR 1300 per allocation.
+ */
+export async function receiveCustomerPayments(input: {
+  paymentDate: string;
+  paymentAccountCode: string;
+  allocations: { documentId: string; amount: number }[];
+}): Promise<{ ok: boolean; error?: string; paidCount?: number }> {
+  try {
+    const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(input.paymentDate);
+    const account = z.string().min(1).max(20).parse(input.paymentAccountCode);
+    const allocations = input.allocations.filter((a) => a.amount > 0);
+    if (allocations.length === 0) {
+      return { ok: false, error: 'Select at least one invoice with an amount.' };
+    }
+
+    let paidCount = 0;
+    for (const row of allocations) {
+      const res = await allocateDocumentPayment({
+        documentId: row.documentId,
+        paymentDate: date,
+        paymentAccountCode: account,
+        amount: row.amount,
+      });
+      if (!res.ok) return { ok: false, error: res.error, paidCount };
+      paidCount += 1;
+    }
+    revalidatePath('/sales/payments');
+    revalidatePath('/sales/invoices');
+    revalidatePath('/sales/aging');
+    return { ok: true, paidCount };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Receive payment failed.' };
   }
 }
 

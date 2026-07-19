@@ -25,6 +25,12 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         listHref="/sales/invoices"
         listLabel="Invoices"
         printHref={`/sales/invoices/${doc.id}/print`}
+        payHref={
+          doc.balanceDue > 0.005 && doc.transactionId
+            ? `/sales/payments/new?documentId=${doc.id}`
+            : null
+        }
+        payLabel="Receive payment"
       />
     </BookOneShell>
   );

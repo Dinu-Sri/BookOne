@@ -8,6 +8,7 @@ const TITLE: Record<string, string> = {
   purchase: 'PURCHASE BILL',
   import_purchase: 'IMPORT PURCHASE',
   cash_purchase: 'CASH PURCHASE',
+  goods_receipt: 'GOODS RECEIVED NOTE',
   purchase_return: 'PURCHASE RETURN / CREDIT',
   vendor_bill: 'VENDOR BILL',
 };
@@ -35,9 +36,11 @@ export default async function PurchasePrintPage({ params }: { params: Promise<{ 
         ? `/purchase/expenses/${doc.id}`
         : doc.documentType === 'import_purchase'
           ? `/purchase/import/${doc.id}`
-          : doc.documentType === 'purchase_return'
-            ? `/purchase/returns/${doc.id}`
-            : `/purchase/purchases/${doc.id}`;
+          : doc.documentType === 'goods_receipt'
+            ? `/purchase/receipts/${doc.id}`
+            : doc.documentType === 'purchase_return'
+              ? `/purchase/returns/${doc.id}`
+              : `/purchase/purchases/${doc.id}`;
 
   return (
     <div className="tax-invoice-print-root">

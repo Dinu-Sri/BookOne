@@ -20,6 +20,7 @@ const TYPE_LABEL: Record<string, string> = {
   purchase: 'Purchase',
   import_purchase: 'Import purchase',
   cash_purchase: 'Cash purchase',
+  goods_receipt: 'Goods received note',
   purchase_return: 'Purchase return',
   vendor_bill: 'Vendor bill',
   sales_invoice: 'Invoice',

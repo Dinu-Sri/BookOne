@@ -92,6 +92,7 @@ const navSuites: NavSuite[] = [
     icon: Package,
     items: [
       { label: 'Purchase Orders', icon: ClipboardList, href: '/purchase/orders' },
+      { label: 'Goods Received', icon: Package, href: '/purchase/receipts' },
       { label: 'Purchases', icon: ReceiptText, href: '/purchase/purchases' },
       { label: 'Cash Purchases', icon: ShoppingCart, href: '/purchase/expenses' },
       { label: 'Import Purchases', icon: Globe2, href: '/purchase/import' },

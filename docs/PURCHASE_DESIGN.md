@@ -1,7 +1,7 @@
 # BookOne Purchase (AP) — product design
 
-**Status:** design locked · **P0 + P1 implemented 2026-07-18**  
-(P0: detail, Pay vendors, last-cost · P1: cash purchase, aging, print, return-from-bill, partial PO convert, supplier inv #)  
+**Status:** design locked · **P0 + P1 + P2 implemented 2026-07-19**  
+(P0: detail, Pay vendors · P1: cash, aging, print, return, partial PO · P2: GRN, landed cost, remittance, input VAT)  
 **Audience:** SL SME — mixed goods + services, local + import suppliers  
 **Peers studied:** QuickBooks Online / Desktop patterns, Sage Business Cloud / mid-market PO→bill→pay  
 
@@ -275,13 +275,13 @@ Legacy `/purchase/bills` stays redirect to Purchases.
 5. Partial convert PO → bill ✅ remaining qty panel on PO detail  
 6. Purchase form extras ✅ delivery date, terms, supplier invoice # (migration 014)  
 
-### Phase P2 — Inventory discipline + SL import
+### Phase P2 — Inventory discipline + SL import ✅ (2026-07-19)
 
-1. GRN document + company toggle  
-2. Bill match: stock only if not already received  
-3. Import: currency note, freight, duty, CIF fields; simple allocation to lines  
-4. Batch pay + remittance PDF  
-5. Input VAT (when company VAT-registered) on purchases — parallel sales tax invoice design  
+1. GRN `goods_receipt` ✅ `/purchase/receipts` — stock in, no GL; convert PO → GRN or GRN → bill  
+2. Bill match: no double stock when source is GRN or PO with GRN ✅  
+3. Import landed cost ✅ freight / duty / other → inventory 5100 + AP; allocated into unit cost  
+4. Batch pay remittance ✅ `/purchase/payments/remittance` after multi-pay  
+5. Input VAT ✅ account **2300**; claim via VAT kind on purchase/import/cash when company VAT-registered  
 
 ### Phase P3 — Controls & polish
 

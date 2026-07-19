@@ -91,7 +91,16 @@ export function PayVendorsForm({
         kind: 'success',
         message: `Paid ${res.paidCount} bill${res.paidCount === 1 ? '' : 's'} · LKR ${totalPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
       });
-      router.push('/purchase/payments');
+      const params = new URLSearchParams({
+        date: paymentDate,
+        account: accountCode,
+        total: String(totalPay),
+      });
+      for (const a of allocations) {
+        params.append('doc', a.documentId);
+        params.append('amt', String(a.amount));
+      }
+      router.push(`/purchase/payments/remittance?${params.toString()}`);
       router.refresh();
     });
   }

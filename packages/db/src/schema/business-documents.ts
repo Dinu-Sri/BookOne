@@ -12,6 +12,7 @@ import { salesDiscounts } from './sales-discounts';
  * Commercial documents across Sales + Purchase.
  * Types: quotation | sales_order | sales_invoice | sales_return | pos_sale
  *        | purchase_order | purchase | import_purchase | purchase_return | cash_purchase
+ *        | goods_receipt (GRN)
  * Legacy: customer_invoice, vendor_bill
  */
 export const businessDocuments = pgTable('business_documents', {
@@ -48,6 +49,10 @@ export const businessDocuments = pgTable('business_documents', {
   exportCountry: varchar('export_country', { length: 100 }),
   exportRef: varchar('export_ref', { length: 120 }),
   additionalInfo: text('additional_info'),
+  /** Import / landed cost extras (allocated into inventory on import bills) */
+  freightAmount: numeric('freight_amount', { precision: 18, scale: 2 }).notNull().default('0'),
+  dutyAmount: numeric('duty_amount', { precision: 18, scale: 2 }).notNull().default('0'),
+  otherCharges: numeric('other_charges', { precision: 18, scale: 2 }).notNull().default('0'),
   vatRate: numeric('vat_rate', { precision: 8, scale: 2 }).notNull().default('0'),
   amountInWords: text('amount_in_words'),
   purchaserTin: varchar('purchaser_tin', { length: 50 }),

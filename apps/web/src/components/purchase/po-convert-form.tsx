@@ -40,14 +40,14 @@ export function PoConvertForm({
     <Card>
       <div className="card-body" style={{ display: 'grid', gap: 12 }}>
         <div>
-          <strong>Convert to purchase</strong>
+          <strong>Receive or bill from PO</strong>
           <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-soft)' }}>
-            Adjust quantities for a partial bill. Remaining qty stays open on the PO.
+            Adjust quantities. GRN stocks inventory without AP; purchase bill opens AP (no double stock if
+            GRN already received).
           </p>
         </div>
-        <form action={convertDocumentAction}>
+        <form action={convertDocumentAction} id="po-convert-form">
           <input type="hidden" name="sourceId" value={poId} />
-          <input type="hidden" name="targetType" value="purchase" />
           <input type="hidden" name="lineCount" value={String(openLines.length)} />
           <div className="table-wrap">
             <table className="table">
@@ -57,7 +57,7 @@ export function PoConvertForm({
                   <th>Ordered</th>
                   <th>Billed</th>
                   <th>Remaining</th>
-                  <th>This bill qty</th>
+                  <th>This qty</th>
                   <th>Unit price</th>
                 </tr>
               </thead>
@@ -91,8 +91,25 @@ export function PoConvertForm({
               </tbody>
             </table>
           </div>
-          <div style={{ marginTop: 12 }}>
-            <Button variant="primary" type="submit" disabled={!any}>
+          <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <Button
+              variant="secondary"
+              type="submit"
+              name="targetType"
+              value="goods_receipt"
+              disabled={!any}
+              form="po-convert-form"
+            >
+              Receive goods (GRN)
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              name="targetType"
+              value="purchase"
+              disabled={!any}
+              form="po-convert-form"
+            >
               Create purchase bill
             </Button>
           </div>

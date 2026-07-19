@@ -4,6 +4,7 @@ import { listProducts } from '@/app/actions/inventory';
 import { listActiveDiscounts } from '@/app/actions/commercial-docs';
 import { getDocumentFormOptions } from '@/app/actions/documents';
 import { listPartyOptions } from '@/app/actions/parties';
+import { getSalesSettings } from '@/app/actions/sales-settings';
 
 export async function requireTenant() {
   try {
@@ -14,7 +15,7 @@ export async function requireTenant() {
 }
 
 export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'customer') {
-  const [products, discounts, options, partyOptions] = await Promise.all([
+  const [products, discounts, options, partyOptions, salesSettings] = await Promise.all([
     listProducts().catch(() => []),
     listActiveDiscounts().catch(() => []),
     getDocumentFormOptions().catch(() => ({
@@ -23,6 +24,14 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
       paymentAccounts: [],
     })),
     listPartyOptions(partyRole).catch(() => []),
+    getSalesSettings().catch(() => ({
+      vatRegistered: false,
+      vatRatePercent: 18,
+      exportVatRatePercent: 0,
+      taxInvoiceDeptCode: '01',
+      defaultSaleChannel: 'local',
+      defaultInvoiceKind: 'commercial',
+    })),
   ]);
   return {
     products: products.map((p) => ({
@@ -38,5 +47,7 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
     paymentAccounts: options.paymentAccounts,
     expenseAccounts: options.expenseAccounts,
     partyOptions,
+    vatRegistered: salesSettings.vatRegistered,
+    vatRatePercent: salesSettings.vatRatePercent,
   };
 }

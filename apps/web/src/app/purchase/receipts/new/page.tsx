@@ -4,7 +4,12 @@ import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocNewForm } from '@/components/module/commercial-doc-screens';
 import { loadSalesFormData } from '@/lib/module-page-helpers';
 
-export default async function NewPurchasePage() {
+export default async function NewGoodsReceiptPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const sp = await searchParams;
   let tenant;
   let form;
   try {
@@ -14,23 +19,19 @@ export default async function NewPurchasePage() {
   }
 
   return (
-    <BookOneShell active="Purchases" tenant={tenant}>
+    <BookOneShell active="Goods Received" tenant={tenant}>
       <CommercialDocNewForm
-        backHref="/purchase/purchases"
-        backLabel="Purchases"
-        documentType="purchase"
+        backHref="/purchase/receipts"
+        backLabel="Goods received"
+        documentType="goods_receipt"
         partyLabel="Vendor"
         partyPlaceholder="Vendor name"
         products={form.products}
         partyOptions={form.partyOptions}
-        showExpenseAccount
         showPurchaseExtras
-        showPurchaseVat
-        vatRegistered={form.vatRegistered}
-        vatRatePercent={form.vatRatePercent}
-        expenseAccounts={form.expenseAccounts}
-        submitLabel="Save purchase"
-        banner="Credit purchase · opens AP 2100 · optional input VAT"
+        sourceDocumentId={sp.from ?? null}
+        submitLabel="Save GRN"
+        banner="Stocks physical items · no GL until billed"
       />
     </BookOneShell>
   );

@@ -25,6 +25,9 @@ export default async function NewCashPurchasePage() {
         partyOptions={form.partyOptions}
         showExpenseAccount
         showPurchaseExtras
+        showPurchaseVat
+        vatRegistered={form.vatRegistered}
+        vatRatePercent={form.vatRatePercent}
         showPaymentAccount
         paymentAccounts={form.paymentAccounts}
         defaultPaymentCode="1000"

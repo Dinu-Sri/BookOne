@@ -25,9 +25,13 @@ export default async function NewImportPurchasePage() {
         partyOptions={form.partyOptions}
         showExpenseAccount
         showPurchaseExtras
+        showLandedCost
+        showPurchaseVat
+        vatRegistered={form.vatRegistered}
+        vatRatePercent={form.vatRatePercent}
         expenseAccounts={form.expenseAccounts}
         submitLabel="Save import purchase"
-        banner="Import · inventory 5100 + AP"
+        banner="Import · inventory 5100 + landed costs + AP · optional input VAT"
       />
     </BookOneShell>
   );

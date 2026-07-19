@@ -163,6 +163,10 @@ export function CommercialDocNewForm({
   expenseAccounts,
   showExpenseAccount,
   showPurchaseExtras,
+  showLandedCost,
+  showPurchaseVat,
+  vatRegistered,
+  vatRatePercent,
   creditWarning,
   banner,
   submitLabel = 'Save',
@@ -191,6 +195,12 @@ export function CommercialDocNewForm({
   showExpenseAccount?: boolean;
   /** Supplier inv #, terms, delivery date */
   showPurchaseExtras?: boolean;
+  /** Freight / duty / other (import) */
+  showLandedCost?: boolean;
+  /** Input VAT toggle when company VAT-registered */
+  showPurchaseVat?: boolean;
+  vatRegistered?: boolean;
+  vatRatePercent?: number;
   creditWarning?: boolean;
   banner?: string;
   submitLabel?: string;
@@ -340,6 +350,33 @@ export function CommercialDocNewForm({
                     <option value="Net 45">Net 45</option>
                     <option value="Net 60">Net 60</option>
                   </select>
+                </div>
+              </>
+            ) : null}
+            {showPurchaseVat && vatRegistered ? (
+              <div className="field">
+                <label>VAT</label>
+                <select className="input" name="invoiceKind" defaultValue="commercial">
+                  <option value="commercial">No input VAT</option>
+                  <option value="tax_invoice">
+                    Claim input VAT ({vatRatePercent ?? 18}%)
+                  </option>
+                </select>
+              </div>
+            ) : null}
+            {showLandedCost ? (
+              <>
+                <div className="field">
+                  <label>Freight / shipping</label>
+                  <input className="input" name="freightAmount" inputMode="decimal" placeholder="0" />
+                </div>
+                <div className="field">
+                  <label>Customs duty</label>
+                  <input className="input" name="dutyAmount" inputMode="decimal" placeholder="0" />
+                </div>
+                <div className="field">
+                  <label>Other charges</label>
+                  <input className="input" name="otherCharges" inputMode="decimal" placeholder="0" />
                 </div>
               </>
             ) : null}

@@ -9,7 +9,6 @@ import {
   desc,
   eq,
   isNull,
-  locations,
   posRegisters,
   posShifts,
   withTenantContext,

@@ -2,12 +2,17 @@
   "name": "@bookone/e2e-runner",
   "version": "1.0.0",
   "private": true,
-  "description": "Separate QA console + Playwright runner for BookOne (own URL/container)",
+  "description": "Playwright E2E for BookOne — full UI automation + optional standalone console",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "test:e2e": "playwright test",
+    "test:smoke": "playwright test tests/00-smoke.spec.ts",
+    "test:full": "playwright test",
+    "test:auth": "playwright test tests/01-auth.spec.ts",
+    "test:sales": "playwright test tests/06-sales-journey.spec.ts",
+    "test:purchase": "playwright test tests/07-purchase-inventory.spec.ts",
     "postinstall": "playwright install chromium || true"
   },
   "dependencies": {

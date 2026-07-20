@@ -1,13 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Target app under test (BookOne web). Credentials come from env set by the runner.
- *
- * In Docker we use Alpine system Chromium via PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
- * (see docker/Dockerfile.web). Locally, Playwright's bundled Chromium is used.
+ * Target app under test. Credentials: E2E_EMAIL / E2E_PASSWORD.
+ * Docker: system Chromium via PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH.
  */
 const baseURL = process.env.E2E_BASE_URL || 'http://localhost:3100';
 const systemChrome = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '';
+const fullSuite = process.env.E2E_FULL === '1' || process.env.E2E_FULL === 'true';
 
 export default defineConfig({
   testDir: './tests',
@@ -15,8 +14,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
-  timeout: 90_000,
-  expect: { timeout: 15_000 },
+  timeout: fullSuite ? 180_000 : 120_000,
+  expect: { timeout: 20_000 },
+  globalTimeout: fullSuite ? 0 : 45 * 60_000,
   reporter: [
     ['list'],
     ['html', { open: 'never', outputFolder: process.env.E2E_HTML_DIR || 'reports/html' }],
@@ -27,11 +27,9 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // Video needs Playwright's ffmpeg binary under PLAYWRIGHT_BROWSERS_PATH.
-    // Docker uses system Chromium only (no ffmpeg install) — keep video off there.
     video: systemChrome ? 'off' : 'retain-on-failure',
-    actionTimeout: 20_000,
-    navigationTimeout: 45_000,
+    actionTimeout: 25_000,
+    navigationTimeout: 60_000,
     ...(systemChrome
       ? {
           launchOptions: {

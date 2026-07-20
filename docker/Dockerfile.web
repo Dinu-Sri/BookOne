@@ -1,41 +1,22 @@
-# BookOne v2 — Production image
-# Built in GitHub Actions → pushed to GHCR.
-# Portainer pulls the image; do not rebuild on the VPS.
+# BookOne v2 — Production Dockerfile (Next.js standalone)
 FROM node:22-alpine AS base
-RUN apk add --no-cache libc6-compat \
- && npm install -g pnpm@9
+RUN apk add --no-cache libc6-compat
+RUN npm install -g pnpm@9
 
-# ── builder ──────────────────────────────────────────────────────────────────
 FROM base AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
 
-# 1) Manifests only → dependency layer stays cached when only app code changes
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
-COPY apps/web/package.json apps/web/
-COPY apps/workers/package.json apps/workers/
-COPY packages/accounting/package.json packages/accounting/
-COPY packages/auth/package.json packages/auth/
-COPY packages/db/package.json packages/db/
-COPY packages/modules/package.json packages/modules/
-COPY packages/ui/package.json packages/ui/
-
-# Install deps without lifecycle scripts (source not present yet)
-RUN pnpm install --frozen-lockfile --ignore-scripts
-
-# 2) Full source
 COPY . .
 
-# Re-link workspaces + run postinstall (e.g. fumadocs-mdx) with sources present
-RUN pnpm install --frozen-lockfile --prefer-offline
+RUN pnpm install --frozen-lockfile
 
 ARG BUILD_DATE=0
-RUN echo "Build: $BUILD_DATE" \
- && rm -rf apps/web/.next apps/web/.turbo \
- && pnpm --dir apps/web build
+RUN echo "Build: $BUILD_DATE" && rm -rf apps/web/.next apps/web/.turbo
 
-# ── runner ───────────────────────────────────────────────────────────────────
+# Build Next.js
+RUN pnpm --dir apps/web build
+
 FROM base AS runner
 WORKDIR /app
 
@@ -45,12 +26,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
-# Entrypoint needs monorepo layout: pnpm, drizzle-kit, tsx, migrations, next
+# Copy built app and pre-installed deps
 COPY --from=builder --chown=nextjs:nodejs /app ./
 
+# Make a writable cache dir for the nextjs user (Next.js, pnpm store, etc.)
 RUN mkdir -p /app/.cache /app/.next /app/.pnpm-store \
  && chown -R nextjs:nodejs /app/.cache /app/.next /app/.pnpm-store
 
+# Copy and make entrypoint executable
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

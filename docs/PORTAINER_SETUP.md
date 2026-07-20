@@ -1,226 +1,241 @@
 # BookOne v2 — Portainer Stack Setup
 
-> Deploy on your VPS via Portainer. The **web app image is built in GitHub Actions** and pulled from GHCR — the VPS does **not** compile Next.js.
+> **How to deploy on your VPS via Portainer using the GitHub repo and environment variables.**
 
 ---
 
-## Overview (current flow)
+## Overview
+
+The deployment flow:
 
 ```
-git push origin master
-    ↓
-GitHub Actions: docker-publish.yml
-    → docker build (ubuntu-latest + BuildKit cache)
-    → push ghcr.io/dinu-sri/bookone-web:latest (+ sha tags)
-    ↓
-Portainer (GitOps webhook or manual update)
-    → pull compose from GitHub
-    → docker pull ghcr.io/dinu-sri/bookone-web:latest
-    → recreate bookone-web
-    → entrypoint: migrate + next start
+GitHub Repo (Dinu-Sri/BookOne, master branch)
+    ↓  Portainer pulls docker-compose.prod.yml directly from repo
+    ↓  Traefik routes bookone.clossyan.com → Next.js container
+    ↓  Cloudflared tunnel → Cloudflare → public internet
 ```
 
-**You should not build the web image on the VPS.** That is what made deploys take ~30 minutes.
-
-| Component | Where it builds |
-|-----------|-----------------|
-| `bookone-web` | GitHub Actions → GHCR |
-| postgres / redis / minio / traefik / cloudflared | Public Docker Hub images (pull only) |
+**You do NOT need to build Docker images on GitHub Actions.** Portainer builds them directly from the repo. This is simpler and avoids needing a container registry.
 
 ---
 
 ## Step 1: Provision VPS
 
 Requirements:
-
-- Ubuntu 22.04 or 24.04  
-- 2–4 vCPU, 4–8GB RAM is enough now that builds are off-box  
-- Docker + Portainer CE  
+- Ubuntu 22.04 or 24.04
+- 4 vCPU, 8GB RAM, 50GB SSD (minimum)
+- Docker + Portainer CE installed
 
 ```bash
+# Install Docker
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 
+# Install Portainer CE
 docker volume create portainer_data
 docker run -d -p 8000:8000 -p 9443:9443 --name portainer \
   --restart=always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v portainer_data:/data \
   portainer/portainer-ce:latest
+
+# Access Portainer at https://VPS_IP:9443
 ```
 
-Access Portainer at `https://VPS_IP:9443`.
+---
+
+## Step 2: Create Portainer Stack
+
+In Portainer:
+1. Go to **Stacks** → **Add stack**
+2. Name: `bookone`
+3. Build method: **Repository**
+4. Repository URL: `https://github.com/Dinu-Sri/BookOne.git`
+5. Repository reference: `refs/heads/master`
+6. Compose path: `docker/docker-compose.prod.yml`
+7. Enable **GitOps updates** (auto-pull on webhook)
 
 ---
 
-## Step 2: GHCR package visibility (required once)
+## Step 3: Environment Variables (Add in Portainer Stack)
 
-After the first successful **Docker Publish** workflow:
-
-1. GitHub → your profile/org → **Packages** → `bookone-web`  
-2. **Package settings** → either:
-   - **Change visibility → Public** (simplest for Portainer), or  
-   - Keep **Private** and add a registry login in Portainer (below)
-
-### If the package stays private
-
-1. Create a GitHub PAT with `read:packages` (and `write:packages` only if needed).  
-2. Portainer → **Registries** → **Add registry** → **Custom**  
-   - Name: `ghcr`  
-   - Registry URL: `ghcr.io`  
-   - Username: your GitHub username  
-   - Password: the PAT  
-3. Ensure the stack / environment can pull with that registry.
-
----
-
-## Step 3: Create / update Portainer stack
-
-1. **Stacks** → **Add stack** (or edit existing `bookone`)  
-2. Name: `bookone`  
-3. Build method: **Repository**  
-4. Repository URL: `https://github.com/Dinu-Sri/BookOne.git`  
-5. Reference: `refs/heads/master`  
-6. Compose path: **`docker/docker-compose.prod.yml`**  
-7. Enable **GitOps updates** (webhook recommended)  
-8. Enable **Re-pull image** / pull latest when stack updates  
-
-**Important:** The web service uses `image:`, not `build:`.  
-If Portainer still tries to build, your stack is on an old compose file — re-pull the repo compose.
-
-Optional env to pin a version:
-
-| Variable | Example | Purpose |
-|----------|---------|---------|
-| `BOOKONE_WEB_IMAGE` | `ghcr.io/dinu-sri/bookone-web:latest` | Default |
-| `BOOKONE_WEB_IMAGE` | `ghcr.io/dinu-sri/bookone-web:sha-abc1234` | Rollback / pin |
-
----
-
-## Step 4: Environment variables
-
-Same as before (DB, auth, Redis, S3/MinIO, tunnel token, etc.). See historical tables below or `.env.example`.
-
-Minimum for web to start:
-
-- `DATABASE_URL`  
-- `DB_USER` / `DB_PASSWORD` / `DB_NAME` (postgres service)  
-- Auth secrets / URL your app expects  
-- `CLOUDFLARE_TUNNEL_TOKEN` if using cloudflared in the stack  
+Below each variable, I explain what it is and how to get/generate it.
 
 ### Database
 
-| Variable | Example |
-|----------|---------|
-| `DB_USER` | `bookone` |
-| `DB_PASSWORD` | strong secret |
-| `DB_NAME` | `bookone` |
-| `DATABASE_URL` | `postgres://bookone:PASSWORD@postgres:5432/bookone` |
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `DB_HOST` | `postgres` | Internal Docker service name |
+| `DB_PORT` | `5432` | Default |
+| `DB_USER` | `bookone` | Choose a username |
+| `DB_PASSWORD` | `your-strong-password` | Generate: `openssl rand -base64 32` |
+| `DB_NAME` | `bookone` | Choose a database name |
+| `DATABASE_URL` | `postgres://bookone:your-strong-password@postgres:5432/bookone` | Build from above values |
 
-### Redis / S3 / Tunnel
+### Authentication
 
-| Variable | Example |
-|----------|---------|
-| `REDIS_URL` | `redis://redis:6379` |
-| `S3_ENDPOINT` | `http://minio:9000` |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` | your values |
-| `CLOUDFLARE_TUNNEL_TOKEN` | from Zero Trust tunnel |
-| `LETSENCRYPT_EMAIL` | for Traefik ACME (if used) |
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `BETTER_AUTH_SECRET` | `output-of-openssl` | Generate: `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | `https://bookone.clossyan.com` | Your domain |
+| `GOOGLE_CLIENT_ID` | `...apps.googleusercontent.com` | Google Cloud OAuth client |
+| `GOOGLE_CLIENT_SECRET` | `...` | Google Cloud OAuth client secret |
+
+### Redis
+
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `REDIS_URL` | `redis://redis:6379` | Internal Docker service name |
+
+### File Storage (MinIO / S3)
+
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `S3_ENDPOINT` | `http://minio:9000` | Internal Docker service name |
+| `S3_ACCESS_KEY` | `minioadmin` | Change in production! |
+| `S3_SECRET_KEY` | `minioadmin` | Change in production! `openssl rand -base64 32` |
+| `S3_BUCKET` | `bookone` | Bucket will be auto-created |
+
+### AI Assistant (OpenAI)
+
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `OPENAI_API_KEY` | `sk-...` | Get from https://platform.openai.com/api-keys |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Cost-effective default |
+
+### Observability
+
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `SENTRY_DSN` | `https://...@sentry.io/...` | Create project at https://sentry.io |
+| `NEXT_PUBLIC_POSTHOG_KEY` | `phc_...` | Create project at https://app.posthog.com |
+| `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` | Or `https://eu.posthog.com` for EU |
+
+### Cron / Scheduled Jobs
+
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `CRON_SECRET` | `output-of-openssl` | Generate: `openssl rand -base64 32` |
+
+### Email (Resend)
+
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `RESEND_API_KEY` | `re_...` | Get from https://resend.com |
+| `EMAIL_FROM` | `BookOne <noreply@bookone.clossyan.com>` | Your sender address |
+
+### TLS / Let's Encrypt
+
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `LETSENCRYPT_EMAIL` | `your-email@gmail.com` | Your email for Let's Encrypt notifications |
+
+### Cloudflare Tunnel
+
+| Variable | Value | How to Get |
+|----------|-------|------------|
+| `CLOUDFLARE_TUNNEL_TOKEN` | `eyJ...` | Get from Cloudflare Zero Trust → Tunnels → Create Tunnel |
 
 ---
 
-## Step 5: Deploy order
+## Step 4: Set Up Cloudflare Tunnel
 
-1. Push to `master` (or run **Docker Publish** workflow manually).  
-2. Wait for **Docker Publish** to finish green on GitHub Actions.  
-3. Confirm package exists: `ghcr.io/dinu-sri/bookone-web:latest`.  
-4. In Portainer: **Update the stack** (or let GitOps webhook fire).  
-5. Confirm `bookone-web` pulls the new digest and starts.  
+1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/)
+2. **Networks** → **Tunnels** → **Create a tunnel**
+3. Name: `bookone`
+4. Choose **Docker** as environment — copy the token (That's your `CLOUDFLARE_TUNNEL_TOKEN`)
+5. **Public Hostname** tab:
+   - Subdomain: `bookone`
+   - Domain: `clossyan.com`
+   - Type: `HTTP`
+   - URL: `traefik:80`
+6. Save — now `bookone.clossyan.com` tunnels to your VPS
 
-Typical time after the image exists: **a few minutes** (pull + migrate + start), not ~30 minutes.
+**Important:** The `docker-compose.prod.yml` already has the `cloudflared` service configured. You just need to set `CLOUDFLARE_TUNNEL_TOKEN` in the Portainer stack environment.
+
+---
+
+## Step 5: Deploy
+
+1. In Portainer, click **Deploy the stack**
+2. Wait for all services to show **Running** (green)
+3. Check logs if anything fails: Portainer → Stacks → bookone → click a container → Logs
 
 ---
 
 ## Step 6: Verify
 
 ```bash
+# Check if the app responds
 curl -I https://bookone.clossyan.com
-# bookone-web logs should show:
-# === BookOne — Startup Init ===
-# [1/3] ...
-# [3/3] Starting BookOne web...
+# Should return HTTP 200
+
+# Check Traefik dashboard (optional)
+curl http://VPS_IP:8080
 ```
 
 ---
 
-## Database migrations (on container start)
+## Database migrations (automatic on every web start)
 
-`docker/entrypoint.sh` still runs on every web start:
+You do **not** need to SSH and run migrations manually.
 
-1. Wait for Postgres + `drizzle-kit push`  
-2. `scripts/init-db.ts` (SQL migrations + seed)  
-3. `next start` on port 3100  
+When Portainer pulls / rebuilds and the `bookone-web` container starts, `docker/entrypoint.sh` runs automatically:
 
-New migration files ship **inside the GHCR image**. You do not need to rebuild on the VPS; you need a **new image** from Actions that includes those files.
+1. **Wait for Postgres**
+2. **`drizzle-kit push`** — applies Drizzle schema (tables/columns from `packages/db/src/schema`)
+3. **`scripts/init-db.ts`** — applies every `packages/db/migrations/*.sql` (RLS + additive SQL such as `012_sales_tax_invoice.sql`), then seed / demo products
+4. **Start Next.js** on port 3100
 
----
+In Portainer → Containers → `bookone-web` → **Logs**, you should see:
 
-## GitOps: Auto-deploy on push
+```
+=== BookOne — Startup Init ===
+[1/2] Waiting for Postgres & running migrations...
+Migrations ok.
+[2/2] RLS + seed...
+Applied 012_sales_tax_invoice.sql.
+=== Starting BookOne ===
+```
 
-1. Portainer stack → **GitOps updates** → copy webhook URL  
-2. GitHub → Repo → **Settings → Webhooks** → paste URL, `push` events  
-3. Flow becomes: push → Actions builds image → webhook updates stack → pull image  
+Re-applying migrations is safe: SQL uses `IF NOT EXISTS` / policy checks, and seed is idempotent.
 
-**Note:** Race condition: webhook may fire before the image finishes publishing. Prefer either:
-
-- Wait for Actions green, then manual **Pull and redeploy**, or  
-- Add a small delay / second webhook from the workflow (optional later), or  
-- Use a deploy workflow step that calls Portainer’s webhook **after** push succeeds  
-
-Recommended for reliability: **Portainer webhook called at the end of `docker-publish.yml`** (optional secret `PORTAINER_WEBHOOK_URL`).
-
----
-
-## Optional: trigger Portainer after image push
-
-In GitHub repo secrets, add:
-
-- `PORTAINER_WEBHOOK_URL` — stack webhook URL from Portainer  
-
-The publish workflow can POST to it after a successful push (see workflow file if enabled).
+**Requirement:** GitOps must **rebuild** the web image (not only restart an old image). In the stack, keep “Re-pull image” / rebuild from Dockerfile enabled so new migration files are inside the image.
 
 ---
 
-## Troubleshooting
+## GitOps: Auto-Deploy on Push
 
-| Symptom | Fix |
-|---------|-----|
-| Portainer builds for 30 minutes | Stack still using old compose with `build:`. Update compose path / re-pull git. Web must be `image: ghcr.io/...` only. |
-| `pull access denied` for GHCR | Make package public or add GHCR registry credentials in Portainer. |
-| App not updating | Confirm Actions published a new digest; force pull (`pull_policy: always`); clear Cloudflare cache if HTML is stale. |
-| Wrong services only (no web) | Compose path must be `docker/docker-compose.prod.yml`. |
-| Migrate errors | Check `DATABASE_URL` password matches `DB_PASSWORD`. |
+Portainer can auto-update when you push to GitHub:
+
+1. In Portainer, go to your `bookone` stack
+2. Enable **GitOps updates**
+3. Copy the **Webhook URL**
+4. Go to GitHub → Repo → Settings → Webhooks → Add webhook
+5. Paste the webhook URL, content type: `application/json`
+6. Just the `push` event
+7. Now every `git push origin master` triggers Portainer to pull + redeploy!
 
 ---
 
-## Rollback
+## Quick Reference: Generate All Secrets
+
+Run these commands and copy the outputs:
 
 ```bash
-# In Portainer stack env:
-BOOKONE_WEB_IMAGE=ghcr.io/dinu-sri/bookone-web:sha-<old-short-sha>
-# Update stack / recreate web container
-```
+# Auth secret
+openssl rand -base64 32
 
-Find tags under GitHub → Packages → `bookone-web` → Versions.
+# DB password
+openssl rand -base64 32
+
+# MinIO secret key
+openssl rand -base64 32
+
+# Cron secret
+openssl rand -base64 32
+```
 
 ---
 
-## Quick secrets
-
-```bash
-openssl rand -base64 32   # auth / db / cron / minio
-```
-
----
-
-*Last updated: 2026-07-20 — CI builds image; Portainer pulls only.*
+*Last updated: 2026-06-14*

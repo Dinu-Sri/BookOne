@@ -165,6 +165,21 @@ function startPlaywright(run: RunRecord) {
   const password = run.password || '';
   delete run.password;
 
+  // Prefer system Chromium in Docker (set on image); fall back to common Alpine paths.
+  const systemChrome =
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ||
+    (existsSync('/usr/bin/chromium-browser')
+      ? '/usr/bin/chromium-browser'
+      : existsSync('/usr/bin/chromium')
+        ? '/usr/bin/chromium'
+        : '');
+
+  if (systemChrome) {
+    appendLog(run, `Using system Chromium: ${systemChrome}`);
+  } else {
+    appendLog(run, 'Using Playwright bundled Chromium (install with: pnpm exec playwright install chromium)');
+  }
+
   const env = {
     ...process.env,
     E2E_BASE_URL: run.baseUrl,
@@ -175,6 +190,12 @@ function startPlaywright(run: RunRecord) {
     E2E_JUNIT_PATH: join(dir, 'junit.xml'),
     E2E_ARTIFACT_DIR: join(dir, 'artifacts'),
     CI: '1',
+    ...(systemChrome
+      ? {
+          PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: systemChrome,
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
+        }
+      : {}),
   };
 
   const isWin = process.platform === 'win32';

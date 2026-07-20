@@ -23,15 +23,38 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# System Chromium for /e2e Playwright (Alpine does not use Playwright's bundled browser well)
+RUN apk add --no-cache \
+      chromium \
+      nss \
+      freetype \
+      harfbuzz \
+      ca-certificates \
+      ttf-freefont \
+      font-noto-emoji \
+  && mkdir -p /app/ms-playwright /app/apps/e2e-runner/runs \
+  && chmod -R 777 /app/ms-playwright /app/apps/e2e-runner/runs
+
+# Point Playwright at Alpine Chromium; skip downloading Google Chrome binaries
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
+
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
 # Copy built app and pre-installed deps
 COPY --from=builder --chown=nextjs:nodejs /app ./
 
-# Make a writable cache dir for the nextjs user (Next.js, pnpm store, etc.)
-RUN mkdir -p /app/.cache /app/.next /app/.pnpm-store \
- && chown -R nextjs:nodejs /app/.cache /app/.next /app/.pnpm-store
+# Writable dirs for nextjs user (Next.js, pnpm, e2e runs)
+RUN mkdir -p /app/.cache /app/.next /app/.pnpm-store /app/apps/e2e-runner/runs /app/ms-playwright \
+ && chown -R nextjs:nodejs /app/.cache /app/.next /app/.pnpm-store /app/apps/e2e-runner/runs /app/ms-playwright
+
+# Ensure chromium path exists (package may expose "chromium" or "chromium-browser")
+RUN if [ ! -e /usr/bin/chromium-browser ] && [ -e /usr/bin/chromium ]; then \
+      ln -sf /usr/bin/chromium /usr/bin/chromium-browser; \
+    fi \
+ && chromium-browser --version || chromium --version || true
 
 # Copy and make entrypoint executable
 COPY docker/entrypoint.sh /entrypoint.sh

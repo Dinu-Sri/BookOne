@@ -25,17 +25,14 @@ No runner secret.
 
 Playwright uses those credentials to sign in at `/login` and walk core screens.
 
-## One-time setup (server / local)
+## Browsers
 
-The web app spawns tests from `apps/e2e-runner`. Install browsers once on the machine that runs Next:
+| Environment | Browser |
+|-------------|---------|
+| **Docker / Portainer image** | Alpine **system Chromium** is installed in `Dockerfile.web` and wired via `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` |
+| **Local `next dev`** | Run once: `cd apps/e2e-runner && pnpm exec playwright install chromium` |
 
-```bash
-cd apps/e2e-runner
-npm install
-npx playwright install chromium
-```
-
-In Docker, that path is inside the web image (`/app/apps/e2e-runner`). If runs fail with “browser not found”, install Chromium in the image or on the host.
+If a run log says `Executable doesn't exist at .../ms-playwright/...`, the container image is old — **rebuild** the web image after pulling the Chromium Dockerfile change (not only restart).
 
 ## API (no secret)
 

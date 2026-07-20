@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getPeriodOptions, getTenantInfo, listJournalEntries } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button, Card } from '@/components/ui/bookone-ui';
-import { ListChecks } from 'lucide-react';
+import { ClipboardCheck, ListChecks } from 'lucide-react';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;

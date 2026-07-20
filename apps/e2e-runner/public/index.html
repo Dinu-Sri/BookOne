@@ -160,10 +160,6 @@
             <label for="baseUrl">Target app URL</label>
             <input id="baseUrl" placeholder="https://bookone.clossyan.com" />
           </div>
-          <div>
-            <label for="secret">Runner secret (if set)</label>
-            <input id="secret" type="password" placeholder="E2E_RUNNER_SECRET (optional)" autocomplete="off" />
-          </div>
         </div>
         <div class="row">
           <div>
@@ -203,20 +199,12 @@
       let timer = null;
 
       function headers() {
-        const h = { 'Content-Type': 'application/json' };
-        const s = $('secret').value.trim();
-        if (s) h['x-e2e-secret'] = s;
-        return h;
-      }
-
-      function secretQs() {
-        const s = $('secret').value.trim();
-        return s ? `?secret=${encodeURIComponent(s)}` : '';
+        return { 'Content-Type': 'application/json' };
       }
 
       async function loadHealth() {
         try {
-          const r = await fetch('/api/health' + secretQs(), { headers: headers() });
+          const r = await fetch('/api/health', { headers: headers() });
           const j = await r.json();
           if (!$('baseUrl').value) $('baseUrl').value = j.defaultBaseUrl || '';
         } catch (e) {
@@ -232,7 +220,7 @@
 
       async function poll() {
         if (!currentId) return;
-        const r = await fetch('/api/runs/' + currentId + secretQs(), { headers: headers() });
+        const r = await fetch('/api/runs/' + currentId, { headers: headers() });
         if (!r.ok) return;
         const j = await r.json();
         setStatus(j.status);
@@ -288,7 +276,7 @@
 
       function download(path) {
         if (!currentId) return;
-        window.open('/api/runs/' + currentId + path + secretQs(), '_blank');
+        window.open('/api/runs/' + currentId + path, '_blank');
       }
       $('dlMd').onclick = () => download('/report.md');
       $('dlLog').onclick = () => download('/log');

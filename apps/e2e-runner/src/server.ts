@@ -18,7 +18,7 @@ const ROOT = join(__dirname, '..');
 const RUNS_DIR = join(ROOT, 'runs');
 const PORT = Number(process.env.E2E_RUNNER_PORT || 3200);
 const DEFAULT_BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3100';
-const RUNNER_SECRET = process.env.E2E_RUNNER_SECRET || '';
+// No runner secret — prefer main app UI at /e2e. Standalone port 3200 is optional.
 
 type RunStatus = 'queued' | 'running' | 'passed' | 'failed' | 'error';
 
@@ -58,15 +58,6 @@ function appendLog(run: RunRecord, line: string) {
   } catch {
     /* ignore */
   }
-}
-
-function authGate(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (!RUNNER_SECRET) return next();
-  const header = req.header('x-e2e-secret') || '';
-  const query = String(req.query.secret || '');
-  if (header === RUNNER_SECRET || query === RUNNER_SECRET) return next();
-  if (req.path === '/' || req.path.startsWith('/assets')) return next();
-  res.status(401).json({ error: 'Unauthorized — set x-e2e-secret or ?secret=' });
 }
 
 async function startPlaywright(run: RunRecord) {
@@ -202,7 +193,6 @@ function writeMarkdownReport(run: RunRecord) {
 
 const app = express();
 app.use(express.json({ limit: '256kb' }));
-app.use(authGate);
 app.use(express.static(join(ROOT, 'public')));
 
 app.get('/api/health', (_req, res) => {
@@ -211,7 +201,6 @@ app.get('/api/health', (_req, res) => {
     service: 'bookone-e2e-runner',
     defaultBaseUrl: DEFAULT_BASE_URL,
     activeRunId,
-    secretRequired: Boolean(RUNNER_SECRET),
   });
 });
 
@@ -351,5 +340,5 @@ ensureDirs();
 app.listen(PORT, () => {
   console.log(`BookOne E2E runner listening on http://0.0.0.0:${PORT}`);
   console.log(`Default target app: ${DEFAULT_BASE_URL}`);
-  if (RUNNER_SECRET) console.log('E2E_RUNNER_SECRET is set (API protected).');
+  console.log('Prefer main app UI: https://<bookone-host>/e2e');
 });

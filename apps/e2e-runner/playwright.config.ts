@@ -27,7 +27,9 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // Video needs Playwright's ffmpeg binary under PLAYWRIGHT_BROWSERS_PATH.
+    // Docker uses system Chromium only (no ffmpeg install) — keep video off there.
+    video: systemChrome ? 'off' : 'retain-on-failure',
     actionTimeout: 20_000,
     navigationTimeout: 45_000,
     ...(systemChrome

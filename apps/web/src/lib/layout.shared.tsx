@@ -13,13 +13,8 @@ export function baseOptions(): BaseLayoutProps {
     },
     links: [
       {
-        text: 'App',
+        text: 'Open app',
         url: '/',
-        active: 'none',
-      },
-      {
-        text: 'Health Check',
-        url: '/control-room/health-check',
         active: 'none',
       },
     ],

@@ -7,7 +7,6 @@
     "purchase",
     "inventory",
     "accounting",
-    "pos",
-    "health-check"
+    "pos"
   ]
 }

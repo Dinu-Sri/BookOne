@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getPeriodOptions, getTenantInfo, listJournalEntries } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
-import { ClipboardCheck, ListChecks } from 'lucide-react';
+import { Badge, Button, Card } from '@/components/ui/bookone-ui';
+import { ListChecks } from 'lucide-react';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -46,12 +46,6 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
   return (
     <BookOneShell active="Journal" tenant={tenant} period={periodOptions}>
       <div className="workspace">
-        <PageHeading
-          eyebrow="Audit"
-          title="Journal"
-          lead="Audit every accounting entry before trusting reports or reconciliation. Each row expands to show the debit and credit lines behind the final accounts."
-        />
-
         <div className="grid metrics">
           <Card className="metric-card">
             <p className="metric-label">Journal entries</p>

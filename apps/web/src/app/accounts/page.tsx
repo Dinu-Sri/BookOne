@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getTenantInfo, listAccountsWithBalances } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Card, PageHeading } from '@/components/ui/bookone-ui';
-import { Landmark } from 'lucide-react';
+import { Badge, Card } from '@/components/ui/bookone-ui';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -36,12 +35,6 @@ export default async function AccountsPage() {
   return (
     <BookOneShell active="Accounts" tenant={tenant}>
       <div className="workspace">
-        <PageHeading
-          eyebrow="Chart of accounts"
-          title="Accounts"
-          lead="Every account in your chart with its current balance, aggregated from your journal entries."
-        />
-
         {(['asset', 'liability', 'equity', 'revenue', 'expense'] as const).map((type) => {
           const rows = grouped[type] ?? [];
           if (rows.length === 0) return null;

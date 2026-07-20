@@ -140,7 +140,7 @@ function LoginContent() {
           </button>
         </div>
 
-        <form className="auth-card" onSubmit={handleSubmit}>
+        <form className="auth-card" onSubmit={handleSubmit} data-testid="login-form">
           <h1>{mode === 'signin' ? 'Sign In' : 'Sign Up'}</h1>
           <p>{mode === 'signin' ? 'Enter your email below to login to your account' : 'Enter your email below to create an account'}</p>
 
@@ -151,7 +151,16 @@ function LoginContent() {
             </div>
           ) : null}
 
-          <AuthField icon={<Mail size={15} />} label="Email" type="email" value={email} onChange={setEmail} placeholder="m@example.com" required />
+          <AuthField
+            icon={<Mail size={15} />}
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            placeholder="m@example.com"
+            required
+            testId="login-email"
+          />
 
           <div className="auth-row">
             <label>Password</label>
@@ -170,6 +179,7 @@ function LoginContent() {
               placeholder="Password"
               minLength={8}
               required
+              data-testid="login-password"
             />
             <button type="button" aria-label="Show password" onClick={() => setShowPassword((value) => !value)}>
               <Eye size={15} />
@@ -196,7 +206,13 @@ function LoginContent() {
           {error ? <p className="auth-error">{error}</p> : null}
           {message ? <p className="auth-message">{message}</p> : null}
 
-          <Button variant="primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={loading}
+            style={{ width: '100%', justifyContent: 'center' }}
+            data-testid="login-submit"
+          >
             {loading ? 'Please wait...' : mode === 'signin' ? 'Login' : 'Create an account'}
           </Button>
 
@@ -235,6 +251,7 @@ function AuthField({
   type = 'text',
   placeholder,
   required = false,
+  testId,
 }: {
   label: string;
   value: string;
@@ -243,13 +260,21 @@ function AuthField({
   type?: string;
   placeholder?: string;
   required?: boolean;
+  testId?: string;
 }) {
   return (
     <div className="auth-field">
       <label>{label}</label>
       <div className="auth-input">
         {icon}
-        <input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder ?? label} required={required} />
+        <input
+          type={type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder ?? label}
+          required={required}
+          data-testid={testId}
+        />
       </div>
     </div>
   );

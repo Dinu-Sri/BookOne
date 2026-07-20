@@ -4,7 +4,7 @@ import { getReconciliationForPeriod } from '@/app/actions/reconciliation';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { BankReconciliationWizard } from '@/components/reconciliation/bank-reconciliation-wizard';
 import { PeriodCloseControls } from '@/components/reconciliation/period-close-controls';
-import { Badge, Card, PageHeading } from '@/components/ui/bookone-ui';
+import { Badge, Card } from '@/components/ui/bookone-ui';
 import { CircleAlert, ShieldCheck } from 'lucide-react';
 
 interface SearchParams { period?: string }
@@ -35,12 +35,6 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   return (
     <BookOneShell active="Reconciliation" tenant={tenant} period={period}>
       <div className="workspace">
-        <PageHeading
-          eyebrow="Period close"
-          title="Reconciliation"
-          lead="Quick checks before you close a period. Locked periods are read-only — to change them, create a reversing entry."
-        />
-
         <div className="grid two">
           <Card>
             <div className="card-header">

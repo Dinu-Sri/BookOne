@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getPeriodOptions, getReports, getTenantInfo, type ReportRow } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Card, PageHeading } from '@/components/ui/bookone-ui';
+import { Badge, Card } from '@/components/ui/bookone-ui';
 import { BookOpenCheck, Landmark, LineChart, ReceiptText, Scale } from 'lucide-react';
 
 type ReportView = 'pnl' | 'balance' | 'cashflow' | 'ledger' | 'trial';
@@ -55,12 +55,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   return (
     <BookOneShell active="Reports" tenant={tenant} period={periodOptions}>
       <div className="workspace">
-        <PageHeading
-          eyebrow="Insights"
-          title="Reports"
-          lead="Structured accounting reports from posted journals. Use Journal first to audit entries, then use these statements to verify final accounts."
-        />
-
         <div className="report-tabs" role="tablist" aria-label="Report views">
           {reportTabs.map((tab) => (
             <Link className={`report-tab ${activeReport === tab.id ? 'active' : ''}`} href={reportHref(params?.period, tab.id)} key={tab.id}>

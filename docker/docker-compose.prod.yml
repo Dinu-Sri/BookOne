@@ -59,6 +59,23 @@ services:
       redis:
         condition: service_healthy
 
+  # Optional: browser E2E QA console (separate URL/port — do not expose publicly without E2E_RUNNER_SECRET)
+  # e2e-runner:
+  #   build:
+  #     context: ../apps/e2e-runner
+  #     dockerfile: Dockerfile
+  #   container_name: bookone-e2e
+  #   environment:
+  #     - E2E_BASE_URL=http://web:3100
+  #     - E2E_RUNNER_PORT=3200
+  #     - E2E_RUNNER_SECRET=${E2E_RUNNER_SECRET}
+  #   ports:
+  #     - "3200:3200"
+  #   networks:
+  #     - bookone_network
+  #   depends_on:
+  #     - web
+
   # worker:  # Disabled — no background jobs yet. Enable once apps/workers/ has source code.
   #   build:
   #     context: ..

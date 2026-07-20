@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BookOne E2E Runner</title>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --ink: #132238;
+        --muted: #5b6b7f;
+        --line: #dde5ef;
+        --brand: #1677c9;
+        --ok: #15835f;
+        --bad: #c94141;
+        --surface: #fff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 28px 18px 48px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      .lead {
+        color: var(--muted);
+        margin: 0 0 22px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 18px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 2px rgba(19, 34, 56, 0.06);
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      input {
+        width: 100%;
+        min-height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 12px;
+        font: inherit;
+        margin-bottom: 12px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      @media (max-width: 640px) {
+        .row {
+          grid-template-columns: 1fr;
+        }
+      }
+      button {
+        min-height: 40px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        font: inherit;
+        font-weight: 750;
+        padding: 0 16px;
+        cursor: pointer;
+      }
+      .primary {
+        background: var(--brand);
+        color: #fff;
+      }
+      .primary:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .secondary {
+        background: var(--surface);
+        border-color: var(--line);
+        color: var(--ink);
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 750;
+        background: #eef3f8;
+      }
+      .badge.passed {
+        background: #e8f7f0;
+        color: var(--ok);
+      }
+      .badge.failed,
+      .badge.error {
+        background: #fff0f0;
+        color: var(--bad);
+      }
+      .badge.running,
+      .badge.queued {
+        background: #e8f4ff;
+        color: var(--brand);
+      }
+      pre {
+        margin: 0;
+        max-height: 420px;
+        overflow: auto;
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .meta {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>BookOne E2E Runner</h1>
+      <p class="lead">
+        Separate QA console (this URL). Enter credentials for the <strong>target BookOne app</strong>, press
+        <strong>Start</strong>, and Playwright will log in and exercise core screens. Download the report when finished
+        and share it for fixes.
+      </p>
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <label for="baseUrl">Target app URL</label>
+            <input id="baseUrl" placeholder="https://bookone.clossyan.com" />
+          </div>
+          <div>
+            <label for="secret">Runner secret (if set)</label>
+            <input id="secret" type="password" placeholder="E2E_RUNNER_SECRET (optional)" autocomplete="off" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="username" placeholder="admin@example.com" />
+          </div>
+          <div>
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+          </div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="startBtn" type="button">Start E2E run</button>
+          <span class="badge" id="statusBadge">idle</span>
+          <span class="meta" id="runMeta"></span>
+        </div>
+        <p class="hint">
+          Credentials are only used for this run against the target URL. They are not stored in the BookOne ERP database
+          by this tool. Prefer a staging user when possible.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="actions" style="margin-bottom: 10px">
+          <button class="secondary" id="dlMd" type="button" disabled>Download report.md</button>
+          <button class="secondary" id="dlLog" type="button" disabled>Download log</button>
+          <button class="secondary" id="dlBundle" type="button" disabled>Download full bundle</button>
+        </div>
+        <div class="meta" id="pollInfo">No active run.</div>
+        <pre id="log">Ready.</pre>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let currentId = null;
+      let timer = null;
+
+      function headers() {
+        const h = { 'Content-Type': 'application/json' };
+        const s = $('secret').value.trim();
+        if (s) h['x-e2e-secret'] = s;
+        return h;
+      }
+
+      function secretQs() {
+        const s = $('secret').value.trim();
+        return s ? `?secret=${encodeURIComponent(s)}` : '';
+      }
+
+      async function loadHealth() {
+        try {
+          const r = await fetch('/api/health' + secretQs(), { headers: headers() });
+          const j = await r.json();
+          if (!$('baseUrl').value) $('baseUrl').value = j.defaultBaseUrl || '';
+        } catch (e) {
+          $('log').textContent = 'Could not reach runner API: ' + e;
+        }
+      }
+
+      function setStatus(status) {
+        const b = $('statusBadge');
+        b.textContent = status;
+        b.className = 'badge ' + status;
+      }
+
+      async function poll() {
+        if (!currentId) return;
+        const r = await fetch('/api/runs/' + currentId + secretQs(), { headers: headers() });
+        if (!r.ok) return;
+        const j = await r.json();
+        setStatus(j.status);
+        $('runMeta').textContent = `${j.id.slice(0, 8)}… · ${j.baseUrl}`;
+        $('log').textContent = (j.log || []).join('\n') || '(no log yet)';
+        $('log').scrollTop = $('log').scrollHeight;
+        $('pollInfo').textContent = `Run ${j.status} · lines ${j.log?.length ?? 0} · exit ${j.exitCode ?? '—'}`;
+
+        const done = ['passed', 'failed', 'error'].includes(j.status);
+        $('dlMd').disabled = !done;
+        $('dlLog').disabled = !done;
+        $('dlBundle').disabled = !done;
+        $('startBtn').disabled = !done && j.status === 'running';
+
+        if (done && timer) {
+          clearInterval(timer);
+          timer = null;
+          $('startBtn').disabled = false;
+        }
+      }
+
+      $('startBtn').onclick = async () => {
+        $('startBtn').disabled = true;
+        setStatus('queued');
+        $('log').textContent = 'Starting…';
+        try {
+          const r = await fetch('/api/runs', {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify({
+              email: $('email').value.trim(),
+              password: $('password').value,
+              baseUrl: $('baseUrl').value.trim(),
+            }),
+          });
+          const j = await r.json();
+          if (!r.ok) {
+            $('log').textContent = j.error || 'Failed to start';
+            setStatus('error');
+            $('startBtn').disabled = false;
+            return;
+          }
+          currentId = j.id;
+          if (timer) clearInterval(timer);
+          timer = setInterval(poll, 1500);
+          await poll();
+        } catch (e) {
+          $('log').textContent = String(e);
+          setStatus('error');
+          $('startBtn').disabled = false;
+        }
+      };
+
+      function download(path) {
+        if (!currentId) return;
+        window.open('/api/runs/' + currentId + path + secretQs(), '_blank');
+      }
+      $('dlMd').onclick = () => download('/report.md');
+      $('dlLog').onclick = () => download('/log');
+      $('dlBundle').onclick = () => download('/download');
+
+      loadHealth();
+    </script>
+  </body>
+</html>

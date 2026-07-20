@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getDashboardData } from '@/app/actions/workspace';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Card, MetricCard, PageHeading } from '@/components/ui/bookone-ui';
+import { Badge, Card, MetricCard } from '@/components/ui/bookone-ui';
 
 interface SearchParams { period?: string }
 
@@ -21,12 +21,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <BookOneShell active="Dashboard" tenant={tenant} period={period}>
       <div className="workspace">
-        <PageHeading
-          eyebrow="Workspace"
-          title="Dashboard"
-          lead="The current business position for the selected period, calculated from posted journals."
-        />
-
         <div className="grid metrics">
           {data.metrics.map((m) => (
             <MetricCard key={m.label} label={m.label} value={m.value} note={m.note} tone={m.tone} />

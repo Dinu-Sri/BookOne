@@ -4,7 +4,7 @@ import { getPeriodOptions, getTenantInfo, listTransactions } from '@/app/actions
 import { reverseTransactionFromForm } from '@/app/actions/record-entry';
 import { getReceiptDownloadUrl } from '@/app/actions/upload-receipt';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Button, Card, PageHeading } from '@/components/ui/bookone-ui';
+import { Badge, Button, Card } from '@/components/ui/bookone-ui';
 import { Paperclip, RotateCcw, Search } from 'lucide-react';
 
 function formatLKR(value: number) {
@@ -69,12 +69,6 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   return (
     <BookOneShell active="Transactions" tenant={tenant} period={periodOptions}>
       <div className="workspace">
-        <PageHeading
-          eyebrow="Records"
-          title="Transactions"
-          lead="Review posted entries by period, receipt, confidence, reconciliation status, party, and account."
-        />
-
         <Card>
           <div className="card-body" style={{ borderBottom: '1px solid var(--line)' }}>
             <form className="filter-bar">

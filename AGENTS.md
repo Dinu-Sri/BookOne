@@ -85,24 +85,21 @@ When making any schema change, document:
 
 ## Deployment Checklist
 
-For every change pushed to `main`:
+For every change pushed to `master`:
 
-1. [ ] Local test: `pnpm install && pnpm build && pnpm lint && pnpm test`
-2. [ ] Any new env vars? → Added to VPS `.env` AND `.env.example`
-3. [ ] Database migration needed? → `pnpm db:migrate` on VPS
-4. [ ] Container rebuild needed? → `docker compose build` if Dockerfile changed
-5. [ ] Portainer stack redeploy? → Pull latest image + restart
-6. [ ] Cache clear? → `docker compose exec redis redis-cli FLUSHDB` (if schema changed)
-7. [ ] Queue/worker restart? → If BullMQ processors changed
-8. [ ] Cron update? → If new scheduled tasks added
-9. [ ] Cloudflare Tunnel check? → Verify `bookone.clossyan.com` is accessible
+1. [ ] Local test when needed: `pnpm install && pnpm --dir apps/web build`
+2. [ ] Any new env vars? → Added to Portainer stack env AND `.env.example`
+3. [ ] Push to `master` → **Docker Publish** workflow builds & pushes `ghcr.io/dinu-sri/bookone-web`
+4. [ ] Wait for Actions green (do **not** expect Portainer to compile Next.js)
+5. [ ] Portainer: pull image + recreate `bookone-web` (GitOps webhook or manual)
+6. [ ] Migrations run automatically in `docker/entrypoint.sh` on container start
+7. [ ] Cloudflare cache purge if HTML/CSS looks stale
 
 ### Rollback Steps (for risky changes)
 
-1. Revert commit: `git revert <commit-hash>`
-2. Push revert
-3. If migration ran: run `pnpm db:rollback` or apply reverse migration
-4. Restart containers: `docker compose restart`
+1. Pin image in Portainer: `BOOKONE_WEB_IMAGE=ghcr.io/dinu-sri/bookone-web:sha-<old>`
+2. Or revert commit and wait for a new image publish
+3. Recreate `bookone-web` (pull)
 
 ---
 
@@ -122,12 +119,13 @@ Use these checks before changing architecture or rewriting Docker from scratch.
 - Keep `.dockerignore` present to exclude `node_modules`, `.next`, `.turbo`, local env/log files, and large local folders.
 - Missing `.dockerignore` can cause unstable or non-reproducible builds.
 
-4. **Use deterministic install/build flow first**
-- Prefer full repo copy + `pnpm install --frozen-lockfile` + `pnpm --dir apps/web build`.
-- Avoid complex partial-copy workspace install patterns until baseline deployment is stable.
+4. **Web image is built in CI, not on the VPS**
+- Workflow: `.github/workflows/docker-publish.yml` → `ghcr.io/dinu-sri/bookone-web:latest`
+- Compose: `docker/docker-compose.prod.yml` uses `image:` + `pull_policy: always` (no `build:` for web)
+- If deploy takes ~30 minutes, Portainer is still building — fix stack to pull GHCR only
 
 5. **Branch consistency for GitOps**
-- This repo currently deploys from `master` in Portainer.
+- This repo deploys from `master` in Portainer.
 - If docs mention `main`, treat that as outdated unless explicitly migrated.
 
 6. **Middleware MUST live in the app, not in a workspace package** *(2026-06-16)*

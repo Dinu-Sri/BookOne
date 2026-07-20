@@ -23,11 +23,11 @@ services:
       - bookone_network
 
   web:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.web
-      args:
-        BUILD_DATE: "${BUILD_DATE:-0}"
+    # Built by GitHub Actions (.github/workflows/docker-publish.yml) → GHCR.
+    # Portainer only pulls this image (no docker build on the VPS).
+    # Override full ref for rollback, e.g. ghcr.io/dinu-sri/bookone-web:sha-abc1234
+    image: ${BOOKONE_WEB_IMAGE:-ghcr.io/dinu-sri/bookone-web:latest}
+    pull_policy: always
     container_name: bookone-web
     environment:
       - DATABASE_URL=${DATABASE_URL}

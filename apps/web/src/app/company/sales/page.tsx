@@ -6,6 +6,7 @@ import {
   listPosRegisters,
   savePosRegisterFromForm,
 } from '@/app/actions/pos-registers';
+import { getCompanySettingsData } from '@/app/actions/company-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Button } from '@/components/ui/bookone-ui';
@@ -14,12 +15,19 @@ export default async function CompanySalesSettingsPage() {
   let tenant;
   let settings;
   let registers;
+  let locationOptions: { id: string; name: string; code: string | null }[] = [];
   try {
     [tenant, settings, registers] = await Promise.all([
       getTenantInfo(),
       getSalesSettings(),
       listPosRegisters(),
     ]);
+    const company = await getCompanySettingsData().catch(() => null);
+    locationOptions = (company?.locations ?? []).map((l) => ({
+      id: l.id,
+      name: l.name,
+      code: l.code,
+    }));
   } catch {
     redirect('/login');
   }
@@ -130,6 +138,7 @@ export default async function CompanySalesSettingsPage() {
                   <tr>
                     <th>Code</th>
                     <th>Name</th>
+                    <th>Location</th>
                     <th>Print</th>
                     <th>Cash account</th>
                     <th>Active</th>
@@ -143,6 +152,11 @@ export default async function CompanySalesSettingsPage() {
                         <strong>{r.code}</strong>
                       </td>
                       <td>{r.name}</td>
+                      <td style={{ fontSize: 13 }}>
+                        {r.locationId
+                          ? locationOptions.find((l) => l.id === r.locationId)?.name ?? 'Linked'
+                          : '—'}
+                      </td>
                       <td>
                         {r.printMode === 'both'
                           ? 'Browser + thermal'
@@ -196,6 +210,18 @@ export default async function CompanySalesSettingsPage() {
                 <div className="field">
                   <label>Default cash account code</label>
                   <input className="input" name="defaultPaymentAccountCode" defaultValue="1000" />
+                </div>
+                <div className="field">
+                  <label>Location (stock + brand for POS)</label>
+                  <select className="input" name="locationId" defaultValue="">
+                    <option value="">— optional —</option>
+                    {locationOptions.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.code ? `${l.code} — ` : ''}
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="field field-span-2">
                   <label>Receipt footer</label>

@@ -3,12 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
-import { and, asc, db, eq, isNull, posRegisters, withTenantContext } from '@bookone/db';
+import { and, asc, db, eq, isNull, locations, posRegisters, withTenantContext } from '@bookone/db';
 
 export interface PosRegisterRow {
   id: string;
   code: string;
   name: string;
+  locationId: string | null;
   printMode: string;
   thermalDeviceHint: string | null;
   receiptFooter: string | null;
@@ -21,6 +22,7 @@ const registerSchema = z.object({
   id: z.string().uuid().optional(),
   code: z.string().min(1).max(40),
   name: z.string().min(1).max(120),
+  locationId: z.string().uuid().optional().nullable(),
   printMode: z.enum(['browser', 'thermal', 'both']),
   thermalDeviceHint: z.string().max(255).optional(),
   receiptFooter: z.string().max(2000).optional(),
@@ -55,6 +57,7 @@ export async function listPosRegisters(): Promise<PosRegisterRow[]> {
           id: created.id,
           code: created.code,
           name: created.name,
+          locationId: created.locationId ?? null,
           printMode: created.printMode,
           thermalDeviceHint: created.thermalDeviceHint,
           receiptFooter: created.receiptFooter,
@@ -69,6 +72,7 @@ export async function listPosRegisters(): Promise<PosRegisterRow[]> {
       id: r.id,
       code: r.code,
       name: r.name,
+      locationId: r.locationId ?? null,
       printMode: r.printMode,
       thermalDeviceHint: r.thermalDeviceHint,
       receiptFooter: r.receiptFooter,
@@ -80,10 +84,12 @@ export async function listPosRegisters(): Promise<PosRegisterRow[]> {
 }
 
 export async function savePosRegisterFromForm(formData: FormData): Promise<void> {
+  const locationRaw = String(formData.get('locationId') ?? '').trim();
   const parsed = registerSchema.parse({
     id: String(formData.get('id') ?? '') || undefined,
     code: String(formData.get('code') ?? '').trim().toUpperCase(),
     name: String(formData.get('name') ?? '').trim(),
+    locationId: locationRaw || null,
     printMode: String(formData.get('printMode') ?? 'browser'),
     thermalDeviceHint: String(formData.get('thermalDeviceHint') ?? ''),
     receiptFooter: String(formData.get('receiptFooter') ?? ''),
@@ -93,10 +99,26 @@ export async function savePosRegisterFromForm(formData: FormData): Promise<void>
 
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
+    if (parsed.locationId) {
+      const [loc] = await db()
+        .select({ id: locations.id })
+        .from(locations)
+        .where(
+          and(
+            eq(locations.tenantId, user.tenantId),
+            eq(locations.id, parsed.locationId),
+            isNull(locations.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!loc) throw new Error('Selected location was not found.');
+    }
+
     const values = {
       tenantId: user.tenantId,
       code: parsed.code,
       name: parsed.name,
+      locationId: parsed.locationId || null,
       printMode: parsed.printMode,
       thermalDeviceHint: parsed.thermalDeviceHint?.trim() || null,
       receiptFooter: parsed.receiptFooter?.trim() || null,

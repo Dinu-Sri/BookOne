@@ -610,10 +610,16 @@ export async function createCommercialDocument(
       return { ok: false, error: 'This party is inactive. Restore them in Parties before posting.' };
     }
 
-    // Brand + location (required when company has configured either)
+    // Brand + location (required when company has configured either).
+    // POS has no brand UI — auto-fill from register location / single masters.
+    const isPosDoc =
+      parsed.documentType === 'pos_sale' ||
+      (parsed.documentType === 'sales_return' && Boolean(parsed.posMode));
     let dimensions: { brandId: string | null; locationId: string | null };
     try {
-      dimensions = await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId);
+      dimensions = await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId, {
+        auto: isPosDoc,
+      });
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Invalid brand/location.' };
     }

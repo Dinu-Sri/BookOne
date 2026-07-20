@@ -542,14 +542,6 @@ export async function runHealthCheckSuite(input?: {
           if (!a) throw new Error(`Missing account ${code} in chart of accounts`);
         }
 
-        const [loc] = await db()
-          .select({ id: locations.id })
-          .from(locations)
-          .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)))
-          .limit(1);
-        locationId = loc?.id ?? null;
-        if (locationId) created.locationId = locationId;
-
         const [br] = await db()
           .select({ id: brands.id })
           .from(brands)
@@ -557,6 +549,23 @@ export async function runHealthCheckSuite(input?: {
           .limit(1);
         brandId = br?.id ?? null;
         if (brandId) created.brandId = brandId;
+
+        const [loc] = await db()
+          .select({ id: locations.id, brandId: locations.brandId })
+          .from(locations)
+          .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)))
+          .limit(1);
+        locationId = loc?.id ?? null;
+        if (locationId) created.locationId = locationId;
+        // Prefer brand linked to the location when set
+        if (loc?.brandId) brandId = loc.brandId;
+        // Link first location to brand so POS/HC share the same dimension pair
+        if (locationId && brandId && !loc?.brandId) {
+          await db()
+            .update(locations)
+            .set({ brandId, updatedAt: new Date() })
+            .where(eq(locations.id, locationId));
+        }
 
         const [ss] = await db()
           .select()
@@ -635,6 +644,7 @@ export async function runHealthCheckSuite(input?: {
         notes: `health-check ${runId}`,
         supplierInvoiceNumber: `HC-PUR-${seed}`,
         locationId: locationId,
+        brandId: brandId,
         lines: [
           {
             productId: created.productId,
@@ -714,6 +724,7 @@ export async function runHealthCheckSuite(input?: {
         invoiceKind: 'commercial',
         saleChannel: 'local',
         locationId: locationId,
+        brandId: brandId,
         lines: [
           {
             productId: created.productId,
@@ -769,6 +780,7 @@ export async function runHealthCheckSuite(input?: {
           notes: `health-check return ${runId}`,
           sourceDocumentId: created.invoiceId,
           locationId: locationId,
+        brandId: brandId,
           lines: [
             {
               productId: created.productId,
@@ -863,6 +875,7 @@ export async function runHealthCheckSuite(input?: {
           issueDate,
           notes: `health-check PO ${runId}`,
           locationId: locationId,
+        brandId: brandId,
           lines: [
             {
               productId: created.productId,
@@ -889,6 +902,7 @@ export async function runHealthCheckSuite(input?: {
           sourceDocumentId: po.id,
           notes: `health-check GRN ${runId}`,
           locationId: locationId,
+        brandId: brandId,
           lines: [
             {
               productId: created.productId,
@@ -925,6 +939,7 @@ export async function runHealthCheckSuite(input?: {
           notes: `health-check bill-GRN ${runId}`,
           supplierInvoiceNumber: `HC-GRN-${seed}`,
           locationId: locationId,
+        brandId: brandId,
           lines: [
             {
               productId: created.productId,
@@ -996,6 +1011,7 @@ export async function runHealthCheckSuite(input?: {
           invoiceKind: 'tax_invoice',
           saleChannel: 'local',
           locationId: locationId,
+        brandId: brandId,
           lines: [
             {
               productId: created.productId,
@@ -1195,6 +1211,7 @@ export async function runHealthCheckSuite(input?: {
           invoiceKind: 'commercial',
           saleChannel: 'local',
           locationId: locationId,
+        brandId: brandId,
           lines: [
             {
               productId: created.productId,
@@ -1383,6 +1400,7 @@ export async function runHealthCheckSuite(input?: {
           notes: `health-check avg lot1 ${runId}`,
           supplierInvoiceNumber: `HC-AVG1-${seed}`,
           locationId: locationId,
+        brandId: brandId,
           lines: [
             {
               productId: p1.product.id,
@@ -1420,6 +1438,7 @@ export async function runHealthCheckSuite(input?: {
           notes: `health-check avg lot2 ${runId}`,
           supplierInvoiceNumber: `HC-AVG2-${seed}`,
           locationId: locationId,
+        brandId: brandId,
           lines: [
             {
               productId: p1.product.id,

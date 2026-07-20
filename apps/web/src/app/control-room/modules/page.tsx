@@ -1,103 +1,97 @@
 import Link from 'next/link';
-import { BookOpenCheck, Building2, Calculator, CheckCircle2, Package, ShieldCheck, ShoppingCart, Users } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { listModuleMatrix } from '@/app/actions/platform';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Button } from '@/components/ui/bookone-ui';
-
-const moduleRows = [
-  {
-    name: 'Accounting',
-    status: 'Always on',
-    summary: 'Core ledger, simple entry, journal, reports, accounts, and reconciliation.',
-    icon: BookOpenCheck,
-    locked: true,
-  },
-  {
-    name: 'Company',
-    status: 'Always on',
-    summary: 'Company profile, tax details, brands, locations, and domain verification.',
-    icon: Building2,
-    locked: true,
-  },
-  {
-    name: 'Tax',
-    status: 'Available soon',
-    summary: 'Tax dashboard, returns, tax invoices, and compliance workflows.',
-    icon: Calculator,
-    locked: false,
-  },
-  {
-    name: 'Inventory',
-    status: 'Available soon',
-    summary: 'Items, stock ledger, purchases, and warehouse/location stock controls.',
-    icon: Package,
-    locked: false,
-  },
-  {
-    name: 'POS',
-    status: 'Available soon',
-    summary: 'Registers, sales, shifts, devices, and live selling operations.',
-    icon: ShoppingCart,
-    locked: false,
-  },
-  {
-    name: 'HR',
-    status: 'Available soon',
-    summary: 'Employees, payroll, attendance, leave, and staff records.',
-    icon: Users,
-    locked: false,
-  },
-];
+import { MODULE_CATALOG, MODULE_KEYS } from '@/lib/platform-modules';
+import { StatusBadge } from '@/components/module/list-page';
+import { Button, Card } from '@/components/ui/bookone-ui';
 
 export default async function ControlRoomModulesPage() {
-  const tenant = await getTenantInfo();
+  let tenant;
+  let matrix;
+  try {
+    tenant = await getTenantInfo();
+    if (tenant.userRole !== 'super_admin' && tenant.userEmail !== 'dinu.sri.m@gmail.com') {
+      redirect('/');
+    }
+    matrix = await listModuleMatrix();
+  } catch {
+    redirect('/login');
+  }
 
   return (
     <BookOneShell active="Modules" tenant={tenant}>
-      <section className="workspace">
-        <div className="page-heading">
-          <div>
-            <div className="eyebrow">CONTROL ROOM</div>
-            <h1 className="h1">Modules</h1>
-            <p className="lead">Accounting and Company are core modules. Future modules will be enabled here per company after their screens and data boundaries are ready.</p>
+      <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
+        <div className="party-toolbar">
+          <div className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
+            {MODULE_CATALOG.map((m) => (
+              <span key={m.key} className={`badge ${m.alwaysOn ? 'success' : 'neutral'}`}>
+                {m.name}
+                {m.alwaysOn ? ' · core' : ''}
+              </span>
+            ))}
           </div>
-          <span className="badge info">
-            <ShieldCheck size={14} /> Super admin
-          </span>
+          <Link href="/control-room/companies" style={{ marginLeft: 'auto' }}>
+            <Button variant="secondary" type="button">
+              Manage companies
+            </Button>
+          </Link>
         </div>
 
-        <div className="card pad" style={{ marginBottom: 14 }}>
-          <div className="cluster" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <div>
-              <h2 className="card-title">ERP Health Check</h2>
-              <p className="card-subtitle" style={{ marginTop: 4 }}>
-                Run a mini business day on a staging company and see pass/fail for every step in one place.
-              </p>
+        <Card>
+          <div className="card-body" style={{ padding: 0 }}>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    {MODULE_KEYS.map((k) => (
+                      <th key={k} style={{ textTransform: 'capitalize' }}>
+                        {k}
+                      </th>
+                    ))}
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrix.length === 0 ? (
+                    <tr>
+                      <td colSpan={4 + MODULE_KEYS.length} style={{ color: 'var(--ink-muted)' }}>
+                        No companies
+                      </td>
+                    </tr>
+                  ) : (
+                    matrix.map((row) => (
+                      <tr key={row.id}>
+                        <td style={{ fontWeight: 700 }}>{row.name}</td>
+                        <td style={{ textTransform: 'capitalize' }}>{row.plan}</td>
+                        <td>
+                          <StatusBadge status={row.status === 'active' ? 'active' : 'inactive'} />
+                        </td>
+                        {MODULE_KEYS.map((k) => (
+                          <td key={k}>
+                            <StatusBadge status={row.modules[k] ? 'active' : 'inactive'} />
+                          </td>
+                        ))}
+                        <td>
+                          <Link href={`/control-room/companies/${row.id}`}>
+                            <Button variant="ghost" type="button">
+                              Edit
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-            <Link href="/control-room/health-check">
-              <Button variant="primary" type="button">
-                Open health check
-              </Button>
-            </Link>
           </div>
-        </div>
-
-        <div className="grid three">
-          {moduleRows.map((module) => (
-            <article className="card pad" key={module.name}>
-              <div className="cluster" style={{ justifyContent: 'space-between' }}>
-                <span className={module.locked ? 'badge success' : 'badge neutral'}>
-                  {module.locked ? <CheckCircle2 size={14} /> : null}
-                  {module.status}
-                </span>
-                <module.icon size={18} color="var(--brand-strong)" />
-              </div>
-              <h2 className="card-title" style={{ marginTop: 14 }}>{module.name}</h2>
-              <p className="card-subtitle">{module.summary}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+        </Card>
+      </div>
     </BookOneShell>
   );
 }

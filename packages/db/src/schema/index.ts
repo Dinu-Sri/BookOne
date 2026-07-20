@@ -1,5 +1,6 @@
-export { tenants } from './tenants';
+export { tenants, type TenantModulesJson } from './tenants';
 export { users } from './users';
+export { platformAuditEvents } from './platform';
 export { accounts } from './accounts';
 export { parties } from './parties';
 export { transactions } from './transactions';

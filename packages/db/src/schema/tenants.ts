@@ -1,4 +1,13 @@
-import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, jsonb } from 'drizzle-orm/pg-core';
+
+/** Module flags stored on the tenant row (accounting + company are always on). */
+export type TenantModulesJson = {
+  sales?: boolean;
+  purchase?: boolean;
+  inventory?: boolean;
+  pos?: boolean;
+  hr?: boolean;
+};
 
 export const tenants = pgTable('tenants', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -10,6 +19,10 @@ export const tenants = pgTable('tenants', {
    * Health-check suite may only run when environment = staging.
    */
   environment: varchar('environment', { length: 20 }).notNull().default('production'),
+  /** active | suspended */
+  status: varchar('status', { length: 20 }).notNull().default('active'),
+  /** Feature flags for sellable modules */
+  modules: jsonb('modules').$type<TenantModulesJson>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),

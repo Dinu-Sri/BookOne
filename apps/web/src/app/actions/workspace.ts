@@ -28,6 +28,14 @@ export interface TenantInfo {
   plan: string;
   /** production | staging — health checks only on staging */
   environment?: string;
+  status?: string;
+  modules?: {
+    sales: boolean;
+    purchase: boolean;
+    inventory: boolean;
+    pos: boolean;
+    hr: boolean;
+  };
   userEmail?: string;
   userRole?: string;
 }
@@ -82,6 +90,7 @@ export interface PeriodOptions {
 export async function getTenantInfo(): Promise<TenantInfo> {
   const user = await requireTenantContext();
   const { tenants } = await import('@bookone/db');
+  const { normalizeModules } = await import('@/lib/platform-modules');
   const [t] = await db()
     .select({
       id: tenants.id,
@@ -89,6 +98,8 @@ export async function getTenantInfo(): Promise<TenantInfo> {
       slug: tenants.slug,
       plan: tenants.plan,
       environment: tenants.environment,
+      status: tenants.status,
+      modules: tenants.modules,
     })
     .from(tenants)
     .where(eq(tenants.id, user.tenantId))
@@ -97,6 +108,8 @@ export async function getTenantInfo(): Promise<TenantInfo> {
   return {
     ...t,
     environment: t.environment ?? 'production',
+    status: t.status ?? 'active',
+    modules: normalizeModules(t.modules, t.plan),
     userEmail: user.email,
     userRole: user.role,
   };

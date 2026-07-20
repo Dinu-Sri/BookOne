@@ -33,6 +33,12 @@ import { PeriodSelector } from '@/components/layout/period-selector';
 import { CompanyResetButton } from '@/components/layout/company-reset-button';
 import { StatusToast } from '@/components/layout/status-toast';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
+import {
+  isPosNavItem,
+  normalizeModules,
+  suiteModuleKey,
+  type TenantModules,
+} from '@/lib/platform-modules';
 
 export interface NavItem {
   label: string;
@@ -141,10 +147,12 @@ const navSuites: NavSuite[] = [
     icon: SlidersHorizontal,
     superAdminOnly: true,
     items: [
+      { label: 'Overview', icon: LayoutDashboard, href: '/control-room' },
+      { label: 'Companies', icon: Building2, href: '/control-room/companies' },
       { label: 'Modules', icon: SlidersHorizontal, href: '/control-room/modules' },
+      { label: 'Access', icon: ShieldCheck, href: '/control-room/access' },
+      { label: 'Audit', icon: ClipboardList, href: '/control-room/audit' },
       { label: 'ERP Health Check', icon: CheckCircle2, href: '/control-room/health-check' },
-      { label: 'Access Rules', icon: ShieldCheck },
-      { label: 'Audit Controls', icon: ClipboardList },
     ],
   },
 ];
@@ -211,6 +219,8 @@ export interface TenantLite {
   plan: string;
   userEmail?: string;
   userRole?: string;
+  status?: string;
+  modules?: TenantModules;
 }
 
 export interface PeriodLite {
@@ -231,7 +241,29 @@ export function BookOneShell({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const isSuperAdmin = tenant?.userRole === 'super_admin' || tenant?.userEmail === 'dinu.sri.m@gmail.com';
-  const visibleSuites = useMemo(() => navSuites.filter((suite) => !suite.superAdminOnly || isSuperAdmin), [isSuperAdmin]);
+  const modules = useMemo(
+    () => normalizeModules(tenant?.modules, tenant?.plan ?? 'starter'),
+    [tenant?.modules, tenant?.plan],
+  );
+  const visibleSuites = useMemo(() => {
+    return navSuites
+      .filter((suite) => !suite.superAdminOnly || isSuperAdmin)
+      .map((suite) => {
+        const modKey = suiteModuleKey(suite.id);
+        if (modKey && !modules[modKey]) {
+          return null;
+        }
+        // POS nav items require the pos module (sales suite may still show).
+        if (suite.id === 'sales' && !modules.pos) {
+          return {
+            ...suite,
+            items: suite.items.filter((item) => !isPosNavItem(item.label)),
+          };
+        }
+        return suite;
+      })
+      .filter(Boolean) as NavSuite[];
+  }, [isSuperAdmin, modules]);
   const activeSuite = visibleSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
 

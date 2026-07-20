@@ -20,6 +20,8 @@ export default async function NewQuotationPage() {
           products={form.products}
           partyOptions={form.partyOptions}
           discounts={form.discounts}
+          brands={form.brands}
+          locations={form.locations}
         />
       </div>
     </BookOneShell>

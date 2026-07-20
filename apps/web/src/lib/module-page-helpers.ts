@@ -63,10 +63,16 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
     vatRegistered: salesSettings.vatRegistered,
     vatRatePercent: salesSettings.vatRatePercent,
     purchaseSettings,
+    brands: (company?.brands ?? []).map((b) => ({
+      id: b.id,
+      name: b.name,
+      code: b.code,
+    })),
     locations: (company?.locations ?? []).map((l) => ({
       id: l.id,
       name: l.name,
       code: l.code,
+      brandId: l.brandId ?? null,
     })),
   };
 }

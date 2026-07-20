@@ -30,7 +30,8 @@ export default async function NewGoodsReceiptPage({
         partyOptions={form.partyOptions}
         showPurchaseExtras
         sourceDocumentId={sp.from ?? null}
-        locations={form.locations}
+        brands={form.brands}
+          locations={form.locations}
         submitLabel="Save GRN"
         banner={
           form.purchaseSettings.postGrniOnReceipt

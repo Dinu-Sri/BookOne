@@ -14,6 +14,11 @@ import {
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
+import {
+  BrandLocationFields,
+  type BrandOption,
+  type LocationOption,
+} from '@/components/module/brand-location-fields';
 import { Button } from '@/components/ui/bookone-ui';
 
 type PartyOpt = {
@@ -42,6 +47,7 @@ export function SalesDocumentForm({
   paymentAccounts,
   defaultPaymentCode,
   banner,
+  brands,
   locations,
 }: {
   documentType: 'sales_order' | 'sales_invoice' | 'pos_sale' | 'sales_return';
@@ -55,7 +61,8 @@ export function SalesDocumentForm({
   paymentAccounts?: { code: string; name: string }[];
   defaultPaymentCode?: string;
   banner?: string;
-  locations?: { id: string; name: string; code: string | null }[];
+  brands?: BrandOption[];
+  locations?: LocationOption[];
 }) {
   const [headerDiscount, setHeaderDiscount] = useState('0');
   const [discountId, setDiscountId] = useState('');
@@ -203,24 +210,7 @@ export function SalesDocumentForm({
               </select>
             </div>
           ) : null}
-          {locations && locations.length > 0 ? (
-            <div className="field">
-              <label>Location / warehouse</label>
-              <select
-                className="input"
-                name="locationId"
-                defaultValue={locations.length === 1 ? locations[0]!.id : ''}
-              >
-                <option value="">Default (unassigned)</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.code ? `${loc.code} — ` : ''}
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+          <BrandLocationFields brands={brands} locations={locations} />
         </div>
 
         <DocumentLinesEditor

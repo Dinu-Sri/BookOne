@@ -20,6 +20,11 @@ import {
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
 import { formatLKR, StatusBadge, todayString } from '@/components/module/list-page';
+import {
+  BrandLocationFields,
+  type BrandOption,
+  type LocationOption,
+} from '@/components/module/brand-location-fields';
 import { Button, Card } from '@/components/ui/bookone-ui';
 
 /** Parties-style list: toolbar + table (basic — prefer CommercialDocumentList) */
@@ -174,6 +179,7 @@ export function CommercialDocNewForm({
   initialLines,
   defaultPaymentTerms,
   defaultExpenseAccount,
+  brands,
   locations,
 }: {
   backHref: string;
@@ -211,7 +217,8 @@ export function CommercialDocNewForm({
   initialLines?: DocLineState[];
   defaultPaymentTerms?: string;
   defaultExpenseAccount?: string;
-  locations?: { id: string; name: string; code: string | null }[];
+  brands?: BrandOption[];
+  locations?: LocationOption[];
 }) {
   const [lines, setLines] = useState<DocLineState[]>(initialLines ?? []);
   const [catalog, setCatalog] = useState<ProductPick[]>(initialProducts);
@@ -333,24 +340,7 @@ export function CommercialDocNewForm({
               <label>Due date</label>
               <input className="input" name="dueDate" type="date" />
             </div>
-            {locations && locations.length > 0 ? (
-              <div className="field">
-                <label>Location / warehouse</label>
-                <select
-                  className="input"
-                  name="locationId"
-                  defaultValue={locations.length === 1 ? locations[0]!.id : ''}
-                >
-                  <option value="">Default (unassigned)</option>
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.code ? `${loc.code} — ` : ''}
-                      {loc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
+            <BrandLocationFields brands={brands} locations={locations} />
             {showPurchaseExtras ? (
               <>
                 <div className="field">

@@ -10,6 +10,11 @@ import {
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
+import {
+  BrandLocationFields,
+  type BrandOption,
+  type LocationOption,
+} from '@/components/module/brand-location-fields';
 import { Button } from '@/components/ui/bookone-ui';
 
 type PartyOpt = {
@@ -36,11 +41,15 @@ export function QuotationForm({
   products: initialProducts,
   partyOptions,
   discounts,
+  brands,
+  locations,
   backHref = '/sales/quotations',
 }: {
   products: ProductPick[];
   partyOptions: PartyOpt[];
   discounts: DiscountOpt[];
+  brands?: BrandOption[];
+  locations?: LocationOption[];
   backHref?: string;
 }) {
   const today = todayString();
@@ -187,6 +196,7 @@ export function QuotationForm({
               <option value="COD">COD</option>
             </select>
           </div>
+          <BrandLocationFields brands={brands} locations={locations} />
           {discounts.length > 0 ? (
             <div className="field">
               <label>Discount scheme</label>

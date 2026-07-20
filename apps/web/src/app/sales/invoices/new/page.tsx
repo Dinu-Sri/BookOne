@@ -40,6 +40,7 @@ export default async function NewSalesInvoicePage() {
           partyOptions={form.partyOptions}
           settings={settings}
           openOrders={orders}
+          brands={form.brands}
           locations={form.locations}
         />
       </div>

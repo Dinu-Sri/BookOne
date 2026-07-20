@@ -45,6 +45,7 @@ import {
 import { ensureParty } from '@/app/actions/parties';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { getInventorySettings } from '@/app/actions/inventory-settings';
+import { resolveDimensions } from '@/lib/dimensions';
 
 export type CommercialDocType =
   | 'quotation'
@@ -116,6 +117,8 @@ const createSchema = z.object({
   sourcePosSaleId: z.string().uuid().optional().nullable(),
   /** Warehouse / branch for stock movements */
   locationId: z.string().uuid().optional().nullable(),
+  /** Brand dimension for reporting / analysis */
+  brandId: z.string().uuid().optional().nullable(),
   lines: z.array(lineSchema).min(1),
 });
 
@@ -605,6 +608,14 @@ export async function createCommercialDocument(
     }
     if (party.status === 'inactive') {
       return { ok: false, error: 'This party is inactive. Restore them in Parties before posting.' };
+    }
+
+    // Brand + location (required when company has configured either)
+    let dimensions: { brandId: string | null; locationId: string | null };
+    try {
+      dimensions = await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Invalid brand/location.' };
     }
 
     // Purchase P3 controls (defaults if settings row missing)
@@ -1221,6 +1232,8 @@ export async function createCommercialDocument(
               isAlreadySettled:
                 settled || parsed.documentType === 'pos_sale' || postGrni ? '1' : '0',
               notes: parsed.notes ?? null,
+              brandId: dimensions.brandId,
+              locationId: dimensions.locationId,
             })
             .returning({ id: transactions.id });
 
@@ -1236,6 +1249,8 @@ export async function createCommercialDocument(
               memo: `${documentNumber} ${party.name}`,
               entryDate: parsed.issueDate,
               isBalanced: '1',
+              brandId: dimensions.brandId,
+              locationId: dimensions.locationId,
             })
             .returning({ id: journalEntries.id });
 
@@ -1267,7 +1282,8 @@ export async function createCommercialDocument(
           sourceDocumentId: parsed.sourceDocumentId ?? null,
           discountId: parsed.discountId ?? null,
           discountTotal: headerDiscount.toFixed(2),
-          locationId: parsed.locationId ?? null,
+          brandId: dimensions.brandId,
+          locationId: dimensions.locationId,
           subtotal: supplyExVat.toFixed(2),
           taxTotal: docTaxTotal.toFixed(2),
           total: docTotal.toFixed(2),
@@ -1445,7 +1461,7 @@ export async function createCommercialDocument(
               referenceId: document.id,
               transactionId,
               memo: documentNumber,
-              locationId: parsed.locationId ?? null,
+              locationId: dimensions.locationId,
               blockNegative: blockNegative && delta < 0,
             });
 
@@ -1670,6 +1686,7 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     purchaserTin: String(formData.get('purchaserTin') ?? ''),
     purchaserPhone: String(formData.get('purchaserPhone') ?? ''),
     purchaserAddress: String(formData.get('purchaserAddress') ?? ''),
+    brandId: String(formData.get('brandId') ?? '') || null,
     locationId: String(formData.get('locationId') ?? '') || null,
     lines,
   });
@@ -1924,6 +1941,7 @@ export async function convertDocument(
         supplierInvoiceNumber: source.supplierInvoiceNumber ?? undefined,
         paymentMode: source.paymentMode ?? undefined,
         deliveryDate: source.deliveryDate ?? undefined,
+        brandId: source.brandId ?? null,
         locationId: source.locationId ?? null,
         lines: convertLines,
       });
@@ -2079,6 +2097,7 @@ export async function createReturnFromBillAction(formData: FormData): Promise<vo
     sourceDocumentId: sourceId,
     // Cash purchase returns refund cash (not AP)
     paymentAccountCode: detail.documentType === 'cash_purchase' ? '1000' : undefined,
+    brandId: detail.brandId ?? null,
     locationId: detail.locationId ?? null,
     lines,
   });
@@ -2263,6 +2282,7 @@ export interface CommercialDocDetail {
   invoiceKind: string;
   transactionId: string | null;
   sourceDocumentId: string | null;
+  brandId: string | null;
   locationId: string | null;
   lines: {
     id: string;
@@ -2327,6 +2347,7 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       invoiceKind: doc.invoiceKind ?? 'commercial',
       transactionId: doc.transactionId ?? null,
       sourceDocumentId: doc.sourceDocumentId ?? null,
+      brandId: doc.brandId ?? null,
       locationId: doc.locationId ?? null,
       lines: lines.map((l) => ({
         id: l.id,

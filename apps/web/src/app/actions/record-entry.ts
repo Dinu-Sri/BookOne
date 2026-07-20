@@ -11,8 +11,6 @@ import {
   journalLines,
   auditLog,
   accounts,
-  brands,
-  locations,
   periodLocks,
   businessDocuments,
   parties,
@@ -24,6 +22,7 @@ import {
   sql,
 } from '@bookone/db';
 import { entrySchema, type EntryInput } from '@/lib/entry-schema';
+import { resolveDimensions } from '@/lib/dimensions';
 
 export interface RecordEntryResult {
   success: boolean;
@@ -53,29 +52,6 @@ async function resolveAccountId(code: string): Promise<string> {
   }
 
   return account.id;
-}
-
-async function resolveDimensions(tenantId: string, brandId?: string, locationId?: string) {
-  return withTenantContext(tenantId, async () => {
-    const brandRows = await db()
-      .select({ id: brands.id })
-      .from(brands)
-      .where(and(eq(brands.tenantId, tenantId), isNull(brands.voidedAt)));
-    const locationRows = await db()
-      .select({ id: locations.id })
-      .from(locations)
-      .where(and(eq(locations.tenantId, tenantId), isNull(locations.voidedAt)));
-
-    if (brandRows.length > 0 && !brandId) throw new Error('Select a brand for this transaction.');
-    if (locationRows.length > 0 && !locationId) throw new Error('Select a location for this transaction.');
-    if (brandId && !brandRows.some((brand) => brand.id === brandId)) throw new Error('Selected brand does not belong to this company.');
-    if (locationId && !locationRows.some((location) => location.id === locationId)) throw new Error('Selected location does not belong to this company.');
-
-    return {
-      brandId: brandId ?? null,
-      locationId: locationId ?? null,
-    };
-  });
 }
 
 export async function recordEntry(input: EntryInput): Promise<RecordEntryResult> {

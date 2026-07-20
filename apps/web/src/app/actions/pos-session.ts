@@ -9,6 +9,7 @@ import {
   desc,
   eq,
   isNull,
+  locations,
   posRegisters,
   posShifts,
   withTenantContext,
@@ -252,6 +253,25 @@ export async function completePosSale(
         ? `Mixed tender cash=${parsed.cashAmount} card=${parsed.cardAmount} bank=${parsed.bankAmount}`
         : `Tender: ${parsed.tender}`;
 
+    // Infer brand from register location (reporting dimension)
+    let brandId: string | null = null;
+    if (register.locationId) {
+      const [loc] = await withTenantContext(user.tenantId, async () =>
+        db()
+          .select({ brandId: locations.brandId })
+          .from(locations)
+          .where(
+            and(
+              eq(locations.tenantId, user.tenantId),
+              eq(locations.id, register.locationId!),
+              isNull(locations.voidedAt),
+            ),
+          )
+          .limit(1),
+      );
+      brandId = loc?.brandId ?? null;
+    }
+
     const result = await createCommercialDocument({
       documentType: 'pos_sale',
       partyName: parsed.partyName || 'Walk-in',
@@ -273,6 +293,7 @@ export async function completePosSale(
       registerId: parsed.registerId,
       shiftId: parsed.shiftId,
       posMode: 'sale',
+      brandId,
       locationId: register.locationId ?? null,
       lines: parsed.lines.map((l) => ({
         productId: l.productId ?? null,
@@ -599,6 +620,24 @@ export async function completePosReturn(
       `Refund: ${parsed.refundTender}`,
     ].filter(Boolean);
 
+    let brandId: string | null = null;
+    if (register.locationId) {
+      const [loc] = await withTenantContext(user.tenantId, async () =>
+        db()
+          .select({ brandId: locations.brandId })
+          .from(locations)
+          .where(
+            and(
+              eq(locations.tenantId, user.tenantId),
+              eq(locations.id, register.locationId!),
+              isNull(locations.voidedAt),
+            ),
+          )
+          .limit(1),
+      );
+      brandId = loc?.brandId ?? null;
+    }
+
     const result = await createCommercialDocument({
       documentType: 'sales_return',
       partyName: parsed.partyName || 'Walk-in',
@@ -618,6 +657,7 @@ export async function completePosReturn(
       posMode: 'return',
       sourcePosSaleId: parsed.sourcePosSaleId ?? null,
       sourceDocumentId: parsed.sourcePosSaleId ?? null,
+      brandId,
       locationId: register.locationId ?? null,
       lines: parsed.lines.map((l) => ({
         productId: l.productId ?? null,

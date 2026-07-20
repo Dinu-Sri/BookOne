@@ -294,7 +294,7 @@ export function BookOneShell({
                     type="button"
                     title={suite.label}
                     aria-expanded={isOpen}
-                    onClick={() => setOpenSuite(suite.id)}
+                    onClick={() => setOpenSuite((current) => (current === suite.id ? '' : suite.id))}
                   >
                     <suite.icon size={17} />
                     <span>{suite.label}</span>

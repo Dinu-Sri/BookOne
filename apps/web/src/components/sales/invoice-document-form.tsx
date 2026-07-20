@@ -10,6 +10,11 @@ import {
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
+import {
+  BrandLocationFields,
+  type BrandOption,
+  type LocationOption,
+} from '@/components/module/brand-location-fields';
 import { Button } from '@/components/ui/bookone-ui';
 
 type PartyOpt = { id: string; name: string; code: string | null };
@@ -24,6 +29,7 @@ export function InvoiceDocumentForm({
   partyOptions,
   settings,
   openOrders,
+  brands,
   locations,
 }: {
   products: ProductPick[];
@@ -35,7 +41,8 @@ export function InvoiceDocumentForm({
     vatRatePercent: number;
   };
   openOrders: OrderOpt[];
-  locations?: { id: string; name: string; code: string | null }[];
+  brands?: BrandOption[];
+  locations?: LocationOption[];
 }) {
   const [lines, setLines] = useState<DocLineState[]>([]);
   const [catalog, setCatalog] = useState(initialProducts);
@@ -148,24 +155,7 @@ export function InvoiceDocumentForm({
             <label>Due date</label>
             <input className="input" name="dueDate" type="date" />
           </div>
-          {locations && locations.length > 0 ? (
-            <div className="field">
-              <label>Location / warehouse</label>
-              <select
-                className="input"
-                name="locationId"
-                defaultValue={locations.length === 1 ? locations[0]!.id : ''}
-              >
-                <option value="">Default (unassigned)</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.code ? `${loc.code} — ` : ''}
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+          <BrandLocationFields brands={brands} locations={locations} />
           <div className="field">
             <label>Mode of payment</label>
             <select className="input" name="paymentMode" defaultValue="Credit">

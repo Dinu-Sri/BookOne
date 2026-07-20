@@ -184,21 +184,21 @@ When Portainer pulls / rebuilds and the `bookone-web` container starts, `docker/
 
 1. **Wait for Postgres**
 2. **`drizzle-kit push`** — applies Drizzle schema (tables/columns from `packages/db/src/schema`)
-3. **`scripts/init-db.ts`** — applies every `packages/db/migrations/*.sql` (RLS + additive SQL such as `012_sales_tax_invoice.sql`), then seed / demo products
+3. **`scripts/init-db.ts`** — applies every `packages/db/migrations/*.sql` only (RLS + schema SQL). **No demo seed.**
 4. **Start Next.js** on port 3100
 
 In Portainer → Containers → `bookone-web` → **Logs**, you should see:
 
 ```
 === BookOne — Startup Init ===
-[1/2] Waiting for Postgres & running migrations...
-Migrations ok.
-[2/2] RLS + seed...
+[1/3] Waiting for Postgres & pushing Drizzle schema...
+[2/3] SQL migrations — no seed...
 Applied 012_sales_tax_invoice.sql.
-=== Starting BookOne ===
+Migrations complete (no seed data).
+[3/3] Starting BookOne web...
 ```
 
-Re-applying migrations is safe: SQL uses `IF NOT EXISTS` / policy checks, and seed is idempotent.
+Re-applying migrations is safe: SQL uses `IF NOT EXISTS` / policy checks.
 
 **Requirement:** GitOps must **rebuild** the web image (not only restart an old image). In the stack, keep “Re-pull image” / rebuild from Dockerfile enabled so new migration files are inside the image.
 

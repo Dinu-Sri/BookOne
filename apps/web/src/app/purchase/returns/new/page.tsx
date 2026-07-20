@@ -31,7 +31,8 @@ export default async function NewPurchaseReturnPage({
         showExpenseAccount
         showPurchaseExtras
         expenseAccounts={form.expenseAccounts}
-        locations={form.locations}
+        brands={form.brands}
+          locations={form.locations}
         submitLabel="Save purchase return"
         sourceDocumentId={sp.from ?? null}
         banner="Reduces AP / stock for physical items"

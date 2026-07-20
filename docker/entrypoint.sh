@@ -43,9 +43,9 @@ if [ "$MIGRATE_OK" != "1" ]; then
   echo "Continuing to SQL migrations — check logs if tables are missing."
 fi
 
-echo "[2/3] SQL migrations (packages/db/migrations/*.sql) + seed..."
+echo "[2/3] SQL migrations (packages/db/migrations/*.sql) — no seed..."
 if ! pnpm exec tsx scripts/init-db.ts 2>&1; then
-  echo "ERROR: init-db.ts failed. App may start but schema/seed may be incomplete."
+  echo "ERROR: init-db.ts failed. App may start but schema may be incomplete."
   echo "Fix DATABASE_URL / Postgres, then redeploy web so entrypoint re-runs."
 fi
 

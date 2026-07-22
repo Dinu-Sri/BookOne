@@ -5,7 +5,8 @@
 #
 # Hosts via Portainer env (examples):
 #   WEB_HOST=app.bookone.lk          (or bookone.clossyan.com until cutover)
-#   DOCS_HOST=docs.bookone.lk
+#   DOCS_HOST=docs.bookone.lk   (OK when bookone.lk is the zone root)
+# Staging under clossyan.com must use bookone-docs.clossyan.com (not docs.bookone.clossyan.com)
 #   AUTH_URL=https://app.bookone.lk
 
 services:
@@ -83,7 +84,7 @@ services:
     container_name: bookone-docs
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.bookone-docs.rule=Host(`${DOCS_HOST:-docs.bookone.clossyan.com}`)"
+      - "traefik.http.routers.bookone-docs.rule=Host(`${DOCS_HOST:-bookone-docs.clossyan.com}`)"
       - "traefik.http.routers.bookone-docs.entrypoints=web"
       - "traefik.http.services.bookone-docs.loadbalancer.server.port=80"
     networks:

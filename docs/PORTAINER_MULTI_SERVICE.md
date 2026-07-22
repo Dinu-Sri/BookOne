@@ -21,7 +21,24 @@ GitHub Dinu-Sri/BookOne (master)
 | **Staging** | `docker/docker-compose.staging.yml` | web + docs + e2e + postgres + redis + minio + traefik + cloudflared |
 | **Production** | `docker/docker-compose.prod.yml` | web + docs + postgres + redis + minio + traefik + cloudflared (**no e2e**) |
 
-Domains use **dots** (not underscores): `docs.bookone.…`, `e2e.bookone.…`.
+### Cloudflare SSL hostname rules (important)
+
+Cloudflare **Universal SSL** (free) only covers:
+
+- `clossyan.com`
+- `*.clossyan.com` → e.g. `bookone.clossyan.com`
+
+It does **not** cover nested hosts like `docs.bookone.clossyan.com` → browser error:
+
+`ERR_SSL_VERSION_OR_CIPHER_MISMATCH`
+
+| Use on staging (clossyan.com) | Avoid on free SSL |
+|-------------------------------|-------------------|
+| `bookone.clossyan.com` | `docs.bookone.clossyan.com` |
+| `bookone-docs.clossyan.com` | `e2e.bookone.clossyan.com` |
+| `bookone-e2e.clossyan.com` | `app.staging.bookone.…` multi-level |
+
+On a **dedicated zone** `bookone.lk`, first-level names are fine: `docs.bookone.lk`, `app.bookone.lk`.
 
 ---
 
@@ -43,8 +60,8 @@ Add public hostnames → same tunnel → Traefik on the VPS:
 | Hostname | Service |
 |----------|---------|
 | `bookone.clossyan.com` | web `:3100` |
-| `docs.bookone.clossyan.com` | docs `:80` |
-| `e2e.bookone.clossyan.com` | e2e `:3200` |
+| `bookone-docs.clossyan.com` | docs `:80` |
+| `bookone-e2e.clossyan.com` | e2e `:3200` |
 
 ---
 
@@ -55,8 +72,8 @@ Add public hostnames → same tunnel → Traefik on the VPS:
 | Variable | Example staging value | Purpose |
 |----------|----------------------|---------|
 | `WEB_HOST` | `bookone.clossyan.com` | Traefik Host rule for ERP |
-| `DOCS_HOST` | `docs.bookone.clossyan.com` | Traefik Host rule for docs |
-| `E2E_HOST` | `e2e.bookone.clossyan.com` | Traefik Host rule for E2E UI |
+| `DOCS_HOST` | `bookone-docs.clossyan.com` | Traefik Host rule for docs |
+| `E2E_HOST` | `bookone-e2e.clossyan.com` | Traefik Host rule for E2E UI |
 | `AUTH_URL` | `https://bookone.clossyan.com` | Auth callback base (must match browser URL) |
 | `BETTER_AUTH_URL` | `https://bookone.clossyan.com` | Same as AUTH_URL if using Better Auth |
 | `DOCS_APP_URL` | `https://bookone.clossyan.com` | “Open app” link on docs site |
@@ -150,8 +167,8 @@ Until cutover you can keep production compose pointing at `bookone.clossyan.com`
    - **E2E tests only** → rebuild **e2e** (heavy, has browsers).
 4. Open:
    - App: `https://bookone.clossyan.com`
-   - Docs: `https://docs.bookone.clossyan.com`
-   - E2E: `https://e2e.bookone.clossyan.com` → target URL + credentials → Start
+   - Docs: `https://bookone-docs.clossyan.com`
+   - E2E: `https://bookone-e2e.clossyan.com` → target URL + credentials → Start
 
 ---
 
@@ -175,8 +192,8 @@ Main system build time drops because **web no longer installs Chromium**.
    - `bookone.clossyan.com` → `http://bookone-staging-traefik:80` or your Traefik entry  
      (or service URL as you already use)
 3. Add:
-   - `docs.bookone.clossyan.com`
-   - `e2e.bookone.clossyan.com`
+   - `bookone-docs.clossyan.com`
+   - `bookone-e2e.clossyan.com`
 4. DNS CNAME each hostname to the tunnel.
 
 If Traefik is on the Docker network, route tunnel to Traefik HTTP entrypoint; Host headers select the service.
@@ -188,6 +205,7 @@ If Traefik is on the Docker network, route tunnel to Traefik HTTP entrypoint; Ho
 | Symptom | Fix |
 |---------|-----|
 | Wrong host 404 | Check Traefik labels vs `WEB_HOST` / `DOCS_HOST` / `E2E_HOST` |
+| `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` on `docs.bookone.clossyan.com` | Nested subdomain — free Cloudflare SSL does not cover it. Use `bookone-docs.clossyan.com` instead |
 | Auth redirects wrong | `AUTH_URL` / `BETTER_AUTH_URL` must match public HTTPS app URL |
 | E2E can’t reach app | Set `E2E_BASE_URL=https://bookone.clossyan.com` (public), not only `http://web:3100` if browser needs public cookies |
 | Docs “Open app” wrong | Set `DOCS_APP_URL` |

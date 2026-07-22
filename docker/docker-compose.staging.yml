@@ -2,10 +2,13 @@
 # Compose path in Portainer: docker/docker-compose.staging.yml
 # Repo: same monorepo; each service builds only what it needs.
 #
-# Default hosts (override in Portainer env):
+# Default hosts (override in Portainer env).
+# IMPORTANT: use ONE subdomain level under clossyan.com so Cloudflare Universal SSL works.
+#   BAD:  docs.bookone.clossyan.com  (no free SSL — ERR_SSL_VERSION_OR_CIPHER_MISMATCH)
+#   GOOD: bookone-docs.clossyan.com
 #   WEB_HOST=bookone.clossyan.com
-#   DOCS_HOST=docs.bookone.clossyan.com
-#   E2E_HOST=e2e.bookone.clossyan.com
+#   DOCS_HOST=bookone-docs.clossyan.com
+#   E2E_HOST=bookone-e2e.clossyan.com
 
 services:
   traefik:
@@ -83,7 +86,7 @@ services:
     container_name: bookone-staging-docs
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.bookone-docs.rule=Host(`${DOCS_HOST:-docs.bookone.clossyan.com}`)"
+      - "traefik.http.routers.bookone-docs.rule=Host(`${DOCS_HOST:-bookone-docs.clossyan.com}`)"
       - "traefik.http.routers.bookone-docs.entrypoints=web"
       - "traefik.http.services.bookone-docs.loadbalancer.server.port=80"
     networks:
@@ -103,7 +106,7 @@ services:
       - E2E_ADMIN_PASSWORD=${E2E_ADMIN_PASSWORD:-}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.bookone-e2e.rule=Host(`${E2E_HOST:-e2e.bookone.clossyan.com}`)"
+      - "traefik.http.routers.bookone-e2e.rule=Host(`${E2E_HOST:-bookone-e2e.clossyan.com}`)"
       - "traefik.http.routers.bookone-e2e.entrypoints=web"
       - "traefik.http.services.bookone-e2e.loadbalancer.server.port=3200"
     networks:

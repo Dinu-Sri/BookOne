@@ -159,6 +159,19 @@ Use these checks before changing architecture or rewriting Docker from scratch.
 | Architecture change | `AGENTS.md`, `docs/DEPLOYMENT_WORKFLOW.md` |
 | Known error discovered | `docs/KNOWN_ERRORS.md` |
 | Deployment process change | `docs/DEPLOYMENT_WORKFLOW.md`, `AGENTS.md` |
+| **UI / posting / route / settings feature** | **E2E catalog + tests or backlog** — see `docs/E2E_GOVERNANCE.md` |
+
+### E2E keep-in-sync (mandatory on product change)
+
+When shipping user-visible or accounting/stock behavior:
+
+1. Read current level: `pnpm --dir apps/e2e-runner level` (`apps/e2e-runner/src/catalog/level.json`).
+2. Add or update scenarios in `docs/E2E_SCENARIO_CATALOG.md` (next `S-NNNN` after `last_scenario_id`).
+3. Automate in `apps/e2e-runner/tests/` **or** add `apps/e2e-runner/src/catalog/backlog.json` item (`planned`).
+4. `pnpm --dir apps/e2e-runner sync` (export catalog + coverage + level report).
+5. After a maturity milestone: `pnpm --dir apps/e2e-runner level:bump -- X.Y.Z "label"`.
+
+Full process: **`docs/E2E_GOVERNANCE.md`**.
 
 ---
 

@@ -2,10 +2,17 @@
 
 Full **UI** automation: a real browser logs in, clicks, fills forms, creates/deletes data, and asserts results.
 
-Scenario design catalog: [`E2E_SCENARIO_CATALOG.md`](./E2E_SCENARIO_CATALOG.md) (**698** cases).  
-**Coverage board:** [`E2E_COVERAGE.md`](./E2E_COVERAGE.md) (generated from catalog IDs found in code).
+Scenario design catalog: [`E2E_SCENARIO_CATALOG.md`](./E2E_SCENARIO_CATALOG.md).  
+**Coverage board:** [`E2E_COVERAGE.md`](./E2E_COVERAGE.md) (generated).  
+**Governance (current vs next E2E level):** [`E2E_GOVERNANCE.md`](./E2E_GOVERNANCE.md).  
+**Machine level / backlog:** `apps/e2e-runner/src/catalog/level.json`, `backlog.json`.
 
-**Program goal:** full deep coverage of all 698 IDs (mutate/balance asserts for money paths; load-only for pure route smoke). Phased P0 → P1 → P2/P3. See session plan / TASK_LOG.
+```bash
+pnpm --dir apps/e2e-runner level    # where are we / what's next?
+pnpm --dir apps/e2e-runner sync     # export catalog + coverage + level report
+```
+
+When the **product** changes, update catalog + tests (or backlog) so E2E level stays honest — see governance.
 
 ## How to run (any instance)
 

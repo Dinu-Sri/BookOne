@@ -26,7 +26,11 @@
     "test:matrices": "playwright test tests/20-qty-price-matrix.spec.ts tests/21-numeric-edges.spec.ts tests/22-reports-period-matrix.spec.ts tests/23-payment-status-matrix.spec.ts",
     "test:remainder": "playwright test tests/26-domain-remainder.spec.ts",
     "test:stress": "playwright test tests/25-stress.spec.ts",
+    "export-catalog": "node ../../scripts/export-e2e-catalog.mjs",
     "coverage": "node scripts/generate-coverage.mjs",
+    "level": "node scripts/e2e-level.mjs",
+    "level:bump": "node scripts/e2e-level.mjs bump",
+    "sync": "node ../../scripts/export-e2e-catalog.mjs && node scripts/generate-coverage.mjs && node scripts/e2e-level.mjs",
     "postinstall": "playwright install chromium || true"
   },
   "dependencies": {

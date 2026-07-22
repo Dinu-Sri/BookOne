@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "description": "Next-level E2E work: planned scenarios and depth upgrades. Not yet (or not deeply) automated.",
+  "statuses": ["planned", "in_progress", "automated_load", "automated_mutate", "automated_balance", "wont_automate"],
+  "items": [
+    {
+      "id": "BL-0001",
+      "kind": "depth_upgrade",
+      "related_scenarios": ["S-0186", "S-0191", "S-0247", "S-0250"],
+      "title": "Linked document convert chains with detail asserts",
+      "priority": "P0",
+      "status": "planned",
+      "target_depth": "balance",
+      "feature_ref": null,
+      "added_at": "2026-07-22",
+      "notes": "Today convert is best-effort via list Convert button; verify status transitions and AR/stock."
+    },
+    {
+      "id": "BL-0002",
+      "kind": "depth_upgrade",
+      "related_scenarios": ["S-0594", "S-0595", "S-0600"],
+      "title": "Trial balance numeric debit=credit after mixed day",
+      "priority": "P0",
+      "status": "planned",
+      "target_depth": "balance",
+      "feature_ref": null,
+      "added_at": "2026-07-22",
+      "notes": "Add data-testid on TB totals if needed."
+    },
+    {
+      "id": "BL-0003",
+      "kind": "process",
+      "related_scenarios": [],
+      "title": "Feature Definition-of-Done always updates catalog + backlog",
+      "priority": "P0",
+      "status": "automated_mutate",
+      "target_depth": "mutate",
+      "feature_ref": "docs/E2E_GOVERNANCE.md",
+      "added_at": "2026-07-22",
+      "notes": "Process live — agents and humans follow governance checklist."
+    }
+  ]
+}

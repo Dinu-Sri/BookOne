@@ -16,6 +16,14 @@ node_modules
 .env.*
 *.log
 
-# Large/legacy folders not needed for web image build
+# Large/legacy folders not needed for image build
 old-project
 uploads
+apps/docs/dist
+apps/e2e-runner/runs
+apps/e2e-runner/reports
+.codebase-memory
+.cursor
+.zed
+.claude
+sessions

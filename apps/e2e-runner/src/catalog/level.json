@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "e2e_level": "1.0.0",
+  "label": "Full catalog mapped (698 scenarios)",
+  "released_at": "2026-07-22",
+  "git_ref_hint": "master after feat(e2e): full catalog automation",
+  "catalog": {
+    "scenario_count": 698,
+    "last_scenario_id": "S-0698",
+    "source_md": "docs/E2E_SCENARIO_CATALOG.md",
+    "source_json": "apps/e2e-runner/src/catalog/scenarios.json"
+  },
+  "coverage": {
+    "ids_referenced": 698,
+    "ids_missing": 0,
+    "coverage_pct": 100,
+    "note": "ID presence only — not all asserts are deep (mutate/balance)."
+  },
+  "depth_targets": {
+    "load": "Route smoke, list open, no crash",
+    "mutate": "CRUD / form success or blocked with UI feedback",
+    "balance": "Journal/stock/AR/AP/TB impact after money paths"
+  },
+  "run": {
+    "entry": "/e2e",
+    "inputs": ["target URL", "email", "password"],
+    "gates": "none — any instance"
+  },
+  "next_level": {
+    "e2e_level": "1.1.0",
+    "theme": "Deepen P0 money paths + absorb new product features",
+    "focus": [
+      "Convert QT→SO→INV and PO→GRN→Bill with detail asserts",
+      "TB debit=credit numeric equality when UI exposes totals",
+      "Every new route/action lands in catalog + backlog before merge"
+    ]
+  }
+}

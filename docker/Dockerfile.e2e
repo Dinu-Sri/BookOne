@@ -1,0 +1,27 @@
+# BookOne E2E runner — separate service (Playwright + Chromium)
+# Build context: monorepo root
+FROM mcr.microsoft.com/playwright:v1.51.0-jammy
+
+WORKDIR /app/apps/e2e-runner
+
+# Install only e2e-runner deps (not full monorepo)
+COPY apps/e2e-runner/package.json ./
+RUN npm install
+
+COPY apps/e2e-runner/playwright.config.ts ./
+COPY apps/e2e-runner/tsconfig.json ./
+COPY apps/e2e-runner/tests ./tests
+COPY apps/e2e-runner/src ./src
+COPY apps/e2e-runner/public ./public
+COPY apps/e2e-runner/scripts ./scripts
+
+ENV NODE_ENV=production
+ENV E2E_RUNNER_PORT=3200
+# Override in compose: public URL of the ERP under test
+ENV E2E_BASE_URL=http://web:3100
+
+RUN mkdir -p /app/apps/e2e-runner/runs \
+ && chmod -R 777 /app/apps/e2e-runner/runs
+
+EXPOSE 3200
+CMD ["npx", "tsx", "src/server.ts"]

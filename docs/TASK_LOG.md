@@ -39,9 +39,23 @@
 - Final sweep `27-catalog-sweep.spec.ts` (full-suite, coverage-driven stragglers)
 - Helpers: `catalog-run.ts`, `loadScenariosBySectionAndPriorities`, `loadMissingScenariosFromCoverage`
 
+### ✅ E2E governance (current vs next level)
+- `docs/E2E_GOVERNANCE.md` — process for feature → catalog → tests/backlog → level bump
+- `apps/e2e-runner/src/catalog/level.json` — E2E system level **1.0.0**
+- `apps/e2e-runner/src/catalog/backlog.json` — next-level depth upgrades
+- Scripts: `export-catalog`, `coverage`, `level`, `level:bump`, `sync`
+
+### ✅ Multi-service Docker (web / docs / e2e)
+- Slim `Dockerfile.web` (no Chromium)
+- `Dockerfile.docs` + `apps/docs` static site
+- `Dockerfile.e2e` standalone Playwright
+- `docker-compose.staging.yml` (3 app services) + updated `docker-compose.prod.yml` (web+docs)
+- Ops guide: `docs/PORTAINER_MULTI_SERVICE.md`
+
 ### 🔜 Next
-- [ ] Run full suite on staging and deepen weak assert paths (TB debit=credit numerics)
-- [ ] Optional: prune duplicate P0 re-runs if suite runtime too long
+- [ ] Portainer: switch compose path + set WEB_HOST/DOCS_HOST/E2E_HOST + Cloudflare hostnames
+- [ ] Run E2E via `e2e.bookone.clossyan.com`
+- [ ] Work backlog BL-0001/BL-0002 → E2E level 1.1.0
 
 ---
 

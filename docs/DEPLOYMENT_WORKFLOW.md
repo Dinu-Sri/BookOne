@@ -40,10 +40,12 @@ Cloudflare Tunnel → Traefik → Next.js container → bookone.clossyan.com
 1. Stack type: **Repository**
 2. Repository URL: `https://github.com/Dinu-Sri/BookOne.git`
 3. Reference: `refs/heads/master`
-4. Compose path: `docker/docker-compose.prod.yml`
-5. Environment variables: Set in Portainer stack UI (see `docs/PORTAINER_SETUP.md`)
+4. Compose path:
+   - Staging: `docker/docker-compose.staging.yml` (web + docs + e2e)
+   - Production: `docker/docker-compose.prod.yml` (web + docs; no public e2e)
+5. Environment variables: Portainer stack UI — see `docs/PORTAINER_SETUP.md` and **`docs/PORTAINER_MULTI_SERVICE.md`**
 
-See **[PORTAINER_SETUP.md](./PORTAINER_SETUP.md)** for the complete step-by-step guide with all 20+ environment variables.
+Images: slim `Dockerfile.web` (no Chromium), separate `Dockerfile.docs` / `Dockerfile.e2e`.
 
 ---
 

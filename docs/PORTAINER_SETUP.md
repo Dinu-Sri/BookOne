@@ -52,8 +52,12 @@ In Portainer:
 3. Build method: **Repository**
 4. Repository URL: `https://github.com/Dinu-Sri/BookOne.git`
 5. Repository reference: `refs/heads/master`
-6. Compose path: `docker/docker-compose.prod.yml`
+6. Compose path:
+   - **Staging (web + docs + e2e):** `docker/docker-compose.staging.yml`
+   - **Production (web + docs only):** `docker/docker-compose.prod.yml`
 7. Enable **GitOps updates** (auto-pull on webhook)
+
+> **Multi-service hosts & env tables:** see [`PORTAINER_MULTI_SERVICE.md`](./PORTAINER_MULTI_SERVICE.md).
 
 ---
 

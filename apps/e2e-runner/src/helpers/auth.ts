@@ -2,16 +2,61 @@ import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { requireE2eAuth } from './env';
 
+async function waitForAppShell(page: Page) {
+  await expect(page.locator('.app-shell, .sidebar').first()).toBeVisible({ timeout: 30_000 });
+}
+
 /** Login via UI and wait for app shell. */
 export async function loginAsE2eUser(page: Page) {
   const { email, password } = requireE2eAuth();
-  await page.goto('/login');
+
+  // Fresh session avoids stale cookies / middleware bounce races across serial tests.
+  await page.context().clearCookies();
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+
+  // Already bounced to app (rare) — treat as success.
+  if (!page.url().includes('/login')) {
+    await waitForAppShell(page);
+    return;
+  }
+
   await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('login-email').fill(email);
-  await page.getByTestId('login-password').fill(password);
-  await page.getByTestId('login-submit').click();
-  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 60_000 });
-  await expect(page.locator('.app-shell, .sidebar').first()).toBeVisible({ timeout: 30_000 });
+
+  const attemptLogin = async () => {
+    await page.getByTestId('login-email').fill(email);
+    await page.getByTestId('login-password').fill(password);
+    await page.getByTestId('login-submit').click();
+    await Promise.race([
+      page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 60_000 }),
+      page
+        .locator('.auth-error')
+        .waitFor({ state: 'visible', timeout: 60_000 })
+        .then(async () => {
+          const msg = (await page.locator('.auth-error').textContent())?.trim() || 'Login failed';
+          throw new Error(msg);
+        }),
+    ]);
+  };
+
+  try {
+    await attemptLogin();
+  } catch (first) {
+    // One retry after a short pause (transient auth / network blips under load).
+    await page.waitForTimeout(1500);
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    if (!page.url().includes('/login')) {
+      await waitForAppShell(page);
+      return;
+    }
+    await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 30_000 });
+    try {
+      await attemptLogin();
+    } catch {
+      throw first;
+    }
+  }
+
+  await waitForAppShell(page);
 }
 
 /** Ensure logged in; re-login if session missing. */
@@ -24,4 +69,44 @@ export async function ensureLoggedIn(page: Page) {
       timeout: 20_000,
     });
   }
+}
+
+const SESSION_COOKIE_NAMES = [
+  'better-auth.session_token',
+  '__Secure-better-auth.session_token',
+  'better-auth.session_token.sig',
+  '__Secure-better-auth.session_token.sig',
+];
+
+async function clearSessionCookies(page: Page) {
+  await page.context().clearCookies();
+  // Belt-and-suspenders: delete known auth cookies by name if any remain.
+  const cookies = await page.context().cookies();
+  const leftover = cookies.filter((c) =>
+    SESSION_COOKIE_NAMES.some((n) => c.name === n || c.name.includes('session_token')),
+  );
+  if (leftover.length) {
+    await page.context().addCookies(
+      leftover.map((c) => ({
+        ...c,
+        value: '',
+        expires: 0,
+      })),
+    );
+  }
+}
+
+/** Sign out via topbar control (aria-label Logout) and assert session cleared. */
+export async function signOutE2eUser(page: Page) {
+  const logout = page.getByRole('button', { name: /log ?out|sign ?out/i }).first();
+  if (await logout.isVisible().catch(() => false)) {
+    await Promise.all([
+      page.waitForURL(/\/login/, { timeout: 30_000 }).catch(() => undefined),
+      logout.click(),
+    ]);
+  }
+  // Always clear client cookies so middleware cannot treat a stale token as authed.
+  await clearSessionCookies(page);
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
 }

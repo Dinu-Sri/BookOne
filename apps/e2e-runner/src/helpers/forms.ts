@@ -26,8 +26,26 @@ export async function selectByLabel(page: Page, label: string | RegExp, option: 
 
 /** Click primary submit in form footer or first matching button. */
 export async function clickPrimary(page: Page, name: string | RegExp) {
-  const btn = page.getByRole('button', { name }).first();
+  // Prefer document/company form footers so we never hit line-level "Save as product".
+  const footerSubmit = page
+    .locator('.doc-form-footer button[type="submit"], .company-form-footer button[type="submit"]')
+    .filter({ hasText: name })
+    .first();
+  const namedSubmit = page
+    .locator('button.button.primary[type="submit"], button[type="submit"].button.primary')
+    .filter({ hasText: name })
+    .first();
+  const byRole = page.getByRole('button', { name }).first();
+
+  const btn = (await footerSubmit.isVisible().catch(() => false))
+    ? footerSubmit
+    : (await namedSubmit.isVisible().catch(() => false))
+      ? namedSubmit
+      : byRole;
+
   await expect(btn).toBeVisible({ timeout: 15_000 });
+  // Commercial docs keep Save disabled until at least one line exists.
+  await expect(btn).toBeEnabled({ timeout: 25_000 });
   await btn.click();
 }
 
@@ -64,27 +82,48 @@ export async function addManualDocLine(
   unitPrice: string,
   qty = '1',
 ) {
+  // ProductAddSearch placeholder is "Type SKU, name, or free-text…" — not "Search".
   const search = page
-    .locator('input[placeholder*="Search"], input[placeholder*="search"], input[placeholder*="catalog"]')
+    .locator(
+      [
+        'input.product-add-search-input',
+        'input[placeholder*="SKU"]',
+        'input[placeholder*="free-text"]',
+        'input[placeholder*="free text"]',
+        'input[placeholder*="Search"]',
+        'input[placeholder*="search"]',
+        'input[placeholder*="catalog"]',
+        'input[placeholder*="product"]',
+      ].join(', '),
+    )
     .first();
-  if (await search.isVisible().catch(() => false)) {
-    await search.fill(description);
-    await search.press('Enter');
-  } else {
-    // Fallback: any textbox in lines area
-    const tb = page.locator('.doc-lines input, .document-lines input').first();
-    if (await tb.isVisible().catch(() => false)) {
-      await tb.fill(description);
-      await tb.press('Enter');
-    }
+
+  await expect(search).toBeVisible({ timeout: 15_000 });
+  await search.click();
+  await search.fill(description);
+  await search.press('Enter');
+
+  // Wait until a real line row appears (empty-state row has no description input).
+  const lineDesc = page.locator(
+    'input[name^="line_"][name$="_description"], .doc-lines-table tbody tr.doc-line-manual input, .doc-lines-table tbody tr input[name*="description"]',
+  );
+  await expect(lineDesc.last()).toBeVisible({ timeout: 15_000 });
+
+  // Prefer named fields on the last line.
+  const priceInput = page.locator('input[name^="line_"][name$="_unitPrice"]').last();
+  const qtyInput = page.locator('input[name^="line_"][name$="_quantity"]').last();
+  if (await qtyInput.isVisible().catch(() => false)) {
+    await qtyInput.fill(qty);
   }
-  // Fill last row price/qty if visible
-  const rows = page.locator('table tbody tr, .doc-line-row, [class*="line"]');
-  const rowCount = await rows.count();
-  if (rowCount > 0) {
-    const last = rows.nth(rowCount - 1);
-    const price = last.locator('input').filter({ hasNot: page.locator('[type=hidden]') });
-    const inputs = last.locator('input:not([type=hidden])');
+  if (await priceInput.isVisible().catch(() => false)) {
+    await priceInput.fill(unitPrice);
+  } else {
+    // Fallback: last visible non-hidden inputs in the last data row
+    const rows = page.locator('.doc-lines-table tbody tr').filter({
+      has: page.locator('input[name*="description"], input:not([type=hidden])'),
+    });
+    const last = rows.last();
+    const inputs = last.locator('input:not([type=hidden]):not([type=checkbox])');
     const n = await inputs.count();
     if (n >= 2) {
       await inputs.nth(n - 2).fill(qty).catch(() => undefined);
@@ -93,6 +132,9 @@ export async function addManualDocLine(
       await inputs.first().fill(unitPrice).catch(() => undefined);
     }
   }
+
+  // QtyStepper may keep quantity in a controlled input — blur to commit.
+  await page.locator('body').click({ position: { x: 0, y: 0 } }).catch(() => undefined);
 }
 
 export async function waitForNotLogin(page: Page) {

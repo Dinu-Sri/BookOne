@@ -1,8 +1,9 @@
 # BookOne - Comprehensive E2E Scenario Catalog
 
-> **Purpose:** Exhaustive day-to-day and edge-case scenarios for future Playwright automation.
+> **Purpose:** Exhaustive day-to-day and edge-case scenarios for Playwright automation.
 > **Scope:** Tenant ERP + super-admin Control Room + public surfaces.
-> **Status:** Scenario design only - **not yet automated**.
+> **Status:** **698 designed** scenarios. A growing subset is automated under `apps/e2e-runner/tests/` with catalog IDs `S-NNNN`. Track coverage: `docs/E2E_COVERAGE.md` (run `pnpm --dir apps/e2e-runner coverage`).
+> **Depth goal:** Full deep coverage (mutate/balance asserts for money paths; load-only for pure route smoke). Run from `/e2e` against any instance (URL + credentials).
 > **Source:** Routes, server actions, settings, and validations in the BookOne monorepo.
 
 ## How to use

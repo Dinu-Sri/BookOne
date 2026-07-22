@@ -1,7 +1,14 @@
 import { test, expect } from '../src/fixtures';
+import { loadScenariosBySection } from '../src/helpers/catalog';
+import { runCatalogScenario } from '../src/helpers/catalog-run';
 
-test.describe('Public surfaces @docs @public @e2e', () => {
-  test('S-docs home without login', async ({ browser }) => {
+/**
+ * Catalog §2 — Public surfaces (docs & E2E console).
+ */
+const scenarios = loadScenariosBySection('2.');
+
+test.describe('Public surfaces catalog §2 @docs @public @e2e', () => {
+  test('S-0021 docs home without login', async ({ browser }) => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     await page.goto('/docs');
@@ -52,4 +59,11 @@ test.describe('Public surfaces @docs @public @e2e', () => {
     await expect(page.getByRole('button', { name: /Start E2E/i })).toBeVisible();
     await ctx.close();
   });
+
+  // Remaining §2 catalog IDs via executor (public + authed mix handled inside)
+  for (const s of scenarios) {
+    test(`${s.id} ${s.title} @${s.priority.toLowerCase()}`, async ({ page, browser }) => {
+      await runCatalogScenario(page, browser, s);
+    });
+  }
 });

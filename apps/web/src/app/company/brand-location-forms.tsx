@@ -1,7 +1,8 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { Plus, Save } from 'lucide-react';
 import {
   saveBrandForm,
@@ -44,9 +45,25 @@ export function LocationForms({ brands, locations }: { brands: Brand[]; location
   );
 }
 
+function useRefreshOnSuccess(state: CompanyActionState) {
+  const router = useRouter();
+  const prev = useRef<CompanyActionState>(initialState);
+  useEffect(() => {
+    if (!state.ok) {
+      prev.current = state;
+      return;
+    }
+    // Refresh when a new successful action result arrives (including repeated "Brand added.").
+    if (prev.current === state) return;
+    prev.current = state;
+    router.refresh();
+  }, [state, router]);
+}
+
 function BrandForm({ brand }: { brand?: Brand }) {
   const [state, action] = useActionState(saveBrandForm, initialState);
   const isEdit = Boolean(brand);
+  useRefreshOnSuccess(state);
 
   return (
     <form action={action} className={`company-inline-form ${isEdit ? 'is-edit' : 'is-create'}`}>
@@ -76,6 +93,7 @@ function BrandForm({ brand }: { brand?: Brand }) {
 function LocationForm({ brands, location }: { brands: Brand[]; location?: Location }) {
   const [state, action] = useActionState(saveLocationForm, initialState);
   const isEdit = Boolean(location);
+  useRefreshOnSuccess(state);
 
   return (
     <form action={action} className={`company-inline-form ${isEdit ? 'is-edit' : 'is-create'}`}>

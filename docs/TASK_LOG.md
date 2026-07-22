@@ -4,6 +4,47 @@
 
 ---
 
+## 2026-07-22 — E2E full-catalog deep automation (Phase 0 + auth)
+
+### Decisions
+- **Goal:** automate all 698 catalog scenarios with deep asserts (not shell-only), phased P0→P1→P2/P3
+- **Run model:** `/e2e` with target URL + credentials only — **no staging/host gates** (gates removed 2026-07-22)
+
+### ✅ Completed (Phase 0 foundation + Phase 1)
+- Helpers: `catalog.ts`, `staging.ts`, `settings.ts`
+- Coverage generator: `scripts/generate-coverage.mjs` → `docs/E2E_COVERAGE.md`
+- `tests/14-route-smoke-ids.spec.ts` — §18 route smoke IDs (gated)
+- `tests/01-auth.spec.ts` — **S-0001…S-0020**
+- `tests/03-shell-routes.spec.ts` — **S-0034…S-0049**
+- `tests/04-company-masters.spec.ts` — **S-0050…S-0079**
+- `tests/12-settings-save.spec.ts` — **S-0694…S-0698**
+- Docs: catalog status, automation guide; `.env.example` E2E vars
+
+### ✅ Phase 2 (sales / purchase / stock P0)
+- Helpers: `lifecycle.ts` (create/convert/pay/delete), `balances.ts` (stock on-hand, aging, journal)
+- `05-parties-products.spec.ts` — §6 product/stock P0 IDs (S-0107…)
+- `06-sales-journey.spec.ts` — §8 sales P0 (S-0179… payments, returns, convert)
+- `07-purchase-inventory.spec.ts` — §9 purchase P0 (S-0245… GRN/bill/pay)
+
+### ✅ Phase 3 (accounting / POS / validation / day / platform)
+- `simpleEntry` modes in `documents.ts` (money in/out/transfer)
+- `08-accounting` §11 P0 · `09-pos` §10 P0 · `10-edges-security` §15 P0
+- `11-integrity` §19 P0 · `13-validation-catalog` §17 (30 IDs)
+- `15-business-day` §12 P0 journeys · `17-platform` §14+§22 (gated)
+
+### ✅ Phase 4–5 (P1 matrices + P2/P3 + stress)
+- Catalog-driven packs: parties §7, settings matrix §5 (full-suite), mid-op §13
+- Matrices: qty/price §23, numeric §16, reports×period §26, payment §24, status §25
+- Public §2 IDs, UI/UX §20, stress §21 (gated), domain remainder §6/8/9/10/11/12/15/19
+- Final sweep `27-catalog-sweep.spec.ts` (full-suite, coverage-driven stragglers)
+- Helpers: `catalog-run.ts`, `loadScenariosBySectionAndPriorities`, `loadMissingScenariosFromCoverage`
+
+### 🔜 Next
+- [ ] Run full suite on staging and deepen weak assert paths (TB debit=credit numerics)
+- [ ] Optional: prune duplicate P0 re-runs if suite runtime too long
+
+---
+
 ## 2026-06-14 — Project Initialization & Scaffold
 
 ### ✅ Completed

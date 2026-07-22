@@ -11,6 +11,20 @@ export async function ensureBrand(page: Page, name?: string) {
   await createForm.locator('input[name="name"]').fill(brandName);
   await createForm.locator('input[name="code"]').fill(`B${seed().slice(0, 6).toUpperCase()}`);
   await createForm.getByRole('button', { name: /Add brand/i }).click();
+
+  // Success toast/message or list row (server action may refresh list).
+  const success = createForm.locator('.entry-result.success, .form-error');
+  await expect(success.or(page.getByText(brandName).first())).toBeVisible({ timeout: 20_000 });
+  const err = createForm.locator('.form-error');
+  if (await err.isVisible().catch(() => false)) {
+    const msg = (await err.textContent())?.trim() || 'Brand save failed';
+    throw new Error(msg);
+  }
+
+  // List is server-rendered; reload if the new name is not painted yet.
+  if (!(await page.getByText(brandName).first().isVisible().catch(() => false))) {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+  }
   await expect(page.getByText(brandName).first()).toBeVisible({ timeout: 20_000 });
   return brandName;
 }
@@ -35,6 +49,16 @@ export async function ensureLocation(page: Page, name?: string, brandLabel?: str
     }
   }
   await createForm.getByRole('button', { name: /Add location/i }).click();
+  const success = createForm.locator('.entry-result.success, .form-error');
+  await expect(success.or(page.getByText(locName).first())).toBeVisible({ timeout: 20_000 });
+  const err = createForm.locator('.form-error');
+  if (await err.isVisible().catch(() => false)) {
+    const msg = (await err.textContent())?.trim() || 'Location save failed';
+    throw new Error(msg);
+  }
+  if (!(await page.getByText(locName).first().isVisible().catch(() => false))) {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+  }
   await expect(page.getByText(locName).first()).toBeVisible({ timeout: 20_000 });
   return locName;
 }

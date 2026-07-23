@@ -190,25 +190,37 @@ Until cutover you can keep production compose pointing at `bookone.clossyan.com`
 |------|--------|
 | Git pull | Whole monorepo (once per stack update) |
 | `docker build web` | ERP only, **no Chromium** |
-| `docker build docs` | Static HTML from `content/docs` |
+| `docker build docs` | Nginx proxy → web Fumadocs (same UI as `/docs`) |
 | `docker build e2e` | Playwright image + tests only |
 
 Main system build time drops because **web no longer installs Chromium**.
 
 ---
 
-## Cloudflare Tunnel checklist
+## Cloudflare Tunnel checklist (most common E2E 404 cause)
 
-1. Tunnel already routes to Traefik (or to host ports).
-2. Public hostnames:
-   - `bookone.clossyan.com` → `http://bookone-staging-traefik:80` or your Traefik entry  
-     (or service URL as you already use)
-3. Add:
-   - `bookone-docs.clossyan.com`
-   - `bookone-e2e.clossyan.com`
-4. DNS CNAME each hostname to the tunnel.
+If `bookone-e2e.…` shows a **Next.js** 404, the tunnel is sending that host to the **web** container.
 
-If Traefik is on the Docker network, route tunnel to Traefik HTTP entrypoint; Host headers select the service.
+**Recommended — one Public Hostname per service (most reliable):**
+
+| Public hostname | Type | URL |
+|-----------------|------|-----|
+| `bookone.clossyan.com` | HTTP | `http://web:3100` |
+| `bookone-docs.clossyan.com` | HTTP | `http://docs:80` |
+| `bookone-e2e.clossyan.com` | HTTP | **`http://e2e:3200`** |
+
+In Zero Trust → Tunnels → your tunnel → **Public Hostname**:
+
+1. Edit **`bookone-e2e.clossyan.com`**
+2. Service **HTTP** → URL **`http://e2e:3200`**  
+   (if DNS fails, try `http://bookone-staging-e2e:3200`)
+3. Save → hard-refresh the e2e URL
+4. Check `https://bookone-e2e.clossyan.com/api/health`  
+   → JSON with `"service":"bookone-e2e-runner"`
+
+**Wrong:** pointing e2e hostname at `http://web:3100` or `bookone-staging-web`.
+
+cloudflared must share Docker network `bookone_network` with web/docs/e2e (compose already does).
 
 ---
 

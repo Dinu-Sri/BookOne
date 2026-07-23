@@ -1,5 +1,15 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 
+/** Public ERP URL for "Open app" (works when docs are served on bookone-docs.* via proxy). */
+function appHomeUrl(): string {
+  return (
+    process.env.AUTH_URL ||
+    process.env.BETTER_AUTH_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    '/'
+  );
+}
+
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
@@ -14,7 +24,7 @@ export function baseOptions(): BaseLayoutProps {
     links: [
       {
         text: 'Open app',
-        url: '/',
+        url: appHomeUrl(),
         active: 'none',
       },
     ],

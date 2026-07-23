@@ -62,10 +62,14 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - NODE_ENV=production
+      # When set, /e2e on ERP redirects to dedicated E2E host
+      - E2E_PUBLIC_URL=${E2E_PUBLIC_URL:-https://bookone-e2e.clossyan.com}
+      - NEXT_PUBLIC_E2E_URL=${NEXT_PUBLIC_E2E_URL:-https://bookone-e2e.clossyan.com}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone-web.rule=Host(`${WEB_HOST:-bookone.clossyan.com}`)"
       - "traefik.http.routers.bookone-web.entrypoints=web"
+      - "traefik.http.routers.bookone-web.priority=1"
       - "traefik.http.services.bookone-web.loadbalancer.server.port=3100"
     networks:
       - bookone_network
@@ -76,24 +80,25 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Docs (static) ──────────────────────────────────────────────────────
+  # ── Docs: reverse-proxy to web Fumadocs (same design as /docs) ──────────
   docs:
     build:
       context: ..
       dockerfile: docker/Dockerfile.docs
-      args:
-        DOCS_APP_URL: "${DOCS_APP_URL:-https://bookone.clossyan.com}"
     container_name: bookone-staging-docs
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone-docs.rule=Host(`${DOCS_HOST:-bookone-docs.clossyan.com}`)"
       - "traefik.http.routers.bookone-docs.entrypoints=web"
+      - "traefik.http.routers.bookone-docs.priority=100"
       - "traefik.http.services.bookone-docs.loadbalancer.server.port=80"
     networks:
       - bookone_network
+    depends_on:
+      - web
     restart: unless-stopped
 
-  # ── E2E runner (Playwright; rebuild only when e2e code changes) ────────
+  # ── E2E runner UI + Playwright (NOT the Next.js /e2e page) ─────────────
   e2e:
     build:
       context: ..
@@ -108,6 +113,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone-e2e.rule=Host(`${E2E_HOST:-bookone-e2e.clossyan.com}`)"
       - "traefik.http.routers.bookone-e2e.entrypoints=web"
+      - "traefik.http.routers.bookone-e2e.priority=100"
       - "traefik.http.services.bookone-e2e.loadbalancer.server.port=3200"
     networks:
       - bookone_network

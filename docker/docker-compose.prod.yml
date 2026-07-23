@@ -61,10 +61,13 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - NODE_ENV=production
+      - E2E_PUBLIC_URL=${E2E_PUBLIC_URL:-}
+      - NEXT_PUBLIC_E2E_URL=${NEXT_PUBLIC_E2E_URL:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone.rule=Host(`${WEB_HOST:-bookone.clossyan.com}`)"
       - "traefik.http.routers.bookone.entrypoints=web"
+      - "traefik.http.routers.bookone.priority=1"
       - "traefik.http.services.bookone.loadbalancer.server.port=3100"
     networks:
       - bookone_network
@@ -75,20 +78,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Proxies real Fumadocs from web (same design as /docs on the ERP)
   docs:
     build:
       context: ..
       dockerfile: docker/Dockerfile.docs
-      args:
-        DOCS_APP_URL: "${DOCS_APP_URL:-https://bookone.clossyan.com}"
     container_name: bookone-docs
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone-docs.rule=Host(`${DOCS_HOST:-bookone-docs.clossyan.com}`)"
       - "traefik.http.routers.bookone-docs.entrypoints=web"
+      - "traefik.http.routers.bookone-docs.priority=100"
       - "traefik.http.services.bookone-docs.loadbalancer.server.port=80"
     networks:
       - bookone_network
+    depends_on:
+      - web
     restart: unless-stopped
 
   # E2E is staging-only (see docker-compose.staging.yml). Not deployed on production.

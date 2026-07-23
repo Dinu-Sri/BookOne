@@ -34,6 +34,20 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthed = hasSessionCookie(request);
 
+  // Dedicated E2E service host (e.g. bookone-e2e.clossyan.com) — keep /e2e on ERP as shortcut
+  const e2ePublic =
+    process.env.E2E_PUBLIC_URL || process.env.NEXT_PUBLIC_E2E_URL || '';
+  if (
+    e2ePublic &&
+    (pathname === '/e2e' || pathname.startsWith('/e2e/'))
+  ) {
+    // Leave API on this host for backward compat only if path is /api/e2e
+    // Redirect console UI to standalone runner
+    if (pathname === '/e2e' || pathname === '/e2e/') {
+      return NextResponse.redirect(e2ePublic.replace(/\/$/, '') + '/');
+    }
+  }
+
   // Unauthenticated users may only access public routes.
   if (!isAuthed && !isPublicPath(pathname)) {
     const loginUrl = new URL('/login', request.url);

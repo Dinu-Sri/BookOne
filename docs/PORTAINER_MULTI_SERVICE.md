@@ -77,7 +77,19 @@ Add public hostnames → same tunnel → Traefik on the VPS:
 | `AUTH_URL` | `https://bookone.clossyan.com` | Auth callback base (must match browser URL) |
 | `BETTER_AUTH_URL` | `https://bookone.clossyan.com` | Same as AUTH_URL if using Better Auth |
 | `DOCS_APP_URL` | `https://bookone.clossyan.com` | “Open app” link on docs site |
-| `E2E_BASE_URL` | `https://bookone.clossyan.com` | Default target when E2E run starts (user can override in UI) |
+| `E2E_BASE_URL` | `https://bookone.clossyan.com` | Default **app under test** when E2E run starts |
+| `E2E_PUBLIC_URL` | `https://bookone-e2e.clossyan.com` | Standalone E2E console URL; ERP `/e2e` redirects here |
+| `NEXT_PUBLIC_E2E_URL` | same as `E2E_PUBLIC_URL` | Client-side redirect target |
+
+### What each hostname must serve
+
+| Host | Must hit container | You should see |
+|------|--------------------|----------------|
+| `bookone.clossyan.com` | **web** | ERP login / app |
+| `bookone-docs.clossyan.com` | **docs** (nginx → web Fumadocs) | Same BookOne Docs UI as `/docs` on the app |
+| `bookone-e2e.clossyan.com` | **e2e** (Playwright runner) | “BookOne E2E Runner” form (Start E2E) — **not** Next 404 |
+
+If `bookone-e2e…` shows a **Next.js 404**, Cloudflare is still routing that host to **web**. Point the tunnel hostname at **Traefik** (not `web:3100`) so Host-based routing can select the `e2e` service.
 
 ### Database (web only)
 

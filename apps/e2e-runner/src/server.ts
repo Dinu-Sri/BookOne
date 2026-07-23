@@ -193,7 +193,23 @@ function writeMarkdownReport(run: RunRecord) {
 
 const app = express();
 app.use(express.json({ limit: '256kb' }));
-app.use(express.static(join(ROOT, 'public')));
+
+const publicDir = join(ROOT, 'public');
+const indexHtml = join(publicDir, 'index.html');
+
+// Explicit home — must not 404 on bookone-e2e.* host
+app.get('/', (_req, res) => {
+  if (existsSync(indexHtml)) {
+    res.sendFile(indexHtml);
+    return;
+  }
+  res
+    .status(500)
+    .type('text/plain')
+    .send('BookOne E2E runner: public/index.html missing in image.');
+});
+
+app.use(express.static(publicDir));
 
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -201,6 +217,8 @@ app.get('/api/health', (_req, res) => {
     service: 'bookone-e2e-runner',
     defaultBaseUrl: DEFAULT_BASE_URL,
     activeRunId,
+    publicDir,
+    hasIndex: existsSync(indexHtml),
   });
 });
 
@@ -336,9 +354,20 @@ app.get('/api/runs/:id/download', async (req, res) => {
   }
 });
 
+// SPA-style fallback for unknown non-API paths
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
+  if (existsSync(indexHtml)) {
+    res.sendFile(indexHtml);
+    return;
+  }
+  next();
+});
+
 ensureDirs();
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`BookOne E2E runner listening on http://0.0.0.0:${PORT}`);
   console.log(`Default target app: ${DEFAULT_BASE_URL}`);
-  console.log('Prefer main app UI: https://<bookone-host>/e2e');
+  console.log(`UI: open https://bookone-e2e.<your-domain>/ (standalone service)`);
 });
+

@@ -60,6 +60,10 @@ function appendLog(run: RunRecord, line: string) {
   }
 }
 
+function runPlaywrightArgs(extra: string[]): string[] {
+  return ['playwright', 'test', '--config', 'playwright.config.ts', ...extra];
+}
+
 async function startPlaywright(run: RunRecord) {
   const dir = runDir(run.id);
   mkdirSync(dir, { recursive: true });
@@ -73,25 +77,71 @@ async function startPlaywright(run: RunRecord) {
   appendLog(run, `User: ${run.email}`);
   appendLog(run, `Started: ${run.startedAt}`);
 
+  const password = (run as RunRecord & { password?: string }).password || '';
   const env = {
     ...process.env,
     E2E_BASE_URL: run.baseUrl,
     E2E_EMAIL: run.email,
-    E2E_PASSWORD: (run as RunRecord & { password?: string }).password || '',
+    E2E_PASSWORD: password,
     E2E_HTML_DIR: join(dir, 'html'),
     E2E_JSON_PATH: join(dir, 'results.json'),
     E2E_JUNIT_PATH: join(dir, 'junit.xml'),
     E2E_ARTIFACT_DIR: join(dir, 'artifacts'),
-    // Avoid interactive install mid-run
     CI: '1',
   };
 
-  // Strip password from in-memory after spawn setup
-  const password = env.E2E_PASSWORD;
+  // Preflight: one login test — fail fast on bad credentials (avoids 70+ cascade failures)
+  appendLog(run, 'Preflight: verifying email/password against target app…');
+  const preflightOk = await new Promise<boolean>((resolve) => {
+    const pre = spawn(
+      process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      runPlaywrightArgs([
+        'tests/00-smoke.spec.ts',
+        '-g',
+        'login lands on app shell',
+        '--reporter=line',
+      ]),
+      {
+        cwd: ROOT,
+        env: { ...env, E2E_PASSWORD: password },
+        shell: false,
+      },
+    );
+    pre.stdout.on('data', (buf: Buffer) => {
+      for (const line of buf.toString('utf8').split('\n')) appendLog(run, line);
+    });
+    pre.stderr.on('data', (buf: Buffer) => {
+      for (const line of buf.toString('utf8').split('\n')) appendLog(run, `[err] ${line}`);
+    });
+    pre.on('close', (code) => resolve(code === 0));
+    pre.on('error', () => resolve(false));
+  });
+
+  if (!preflightOk) {
+    run.status = 'failed';
+    run.exitCode = 1;
+    run.finishedAt = new Date().toISOString();
+    run.error =
+      'Login preflight failed: Invalid email or password (or app unreachable). ' +
+      'Fix credentials in the form, confirm the user can log in manually at the target URL, then re-run. ' +
+      'Do not start the full suite until login works.';
+    appendLog(run, '');
+    appendLog(run, '═══════════════════════════════════════════════════════════');
+    appendLog(run, 'PREFLIGHT FAILED — full suite aborted');
+    appendLog(run, run.error);
+    appendLog(run, '═══════════════════════════════════════════════════════════');
+    writeFileSync(join(dir, 'summary.json'), JSON.stringify(publicRun(run), null, 2));
+    writeMarkdownReport(run);
+    activeChild = null;
+    activeRunId = null;
+    return;
+  }
+
+  appendLog(run, 'Preflight OK — starting full Playwright suite…');
 
   const child = spawn(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    ['playwright', 'test', '--config', 'playwright.config.ts'],
+    runPlaywrightArgs([]),
     {
       cwd: ROOT,
       env: { ...env, E2E_PASSWORD: password },

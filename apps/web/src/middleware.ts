@@ -33,19 +33,50 @@ function isPublicPath(pathname: string): boolean {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthed = hasSessionCookie(request);
+  const host = (request.headers.get('host') || '').toLowerCase().split(':')[0];
+
+  // If an E2E/docs hostname hits the ERP container, Cloudflare is mis-routed
+  // (tunnel points at web:3100 instead of Traefik or the e2e/docs service).
+  const e2eHost = (process.env.E2E_HOST || 'bookone-e2e.clossyan.com').toLowerCase();
+  const docsHost = (process.env.DOCS_HOST || 'bookone-docs.clossyan.com').toLowerCase();
+  if (host === e2eHost || host.startsWith('bookone-e2e.') || host.includes('-e2e.')) {
+    return new NextResponse(
+      [
+        'BookOne routing error',
+        '',
+        `Host "${host}" reached the ERP (Next.js) container, not the E2E runner.`,
+        'That is why you see a Next.js 404 — the Playwright UI is a separate service.',
+        '',
+        'Fix in Cloudflare Zero Trust → Tunnel → Public hostname:',
+        `  ${e2eHost}`,
+        '  Service type: HTTP',
+        '  URL: http://e2e:3200',
+        '  (or http://bookone-staging-e2e:3200 — use the e2e container/service name)',
+        '',
+        'Do NOT point the e2e hostname at web:3100 / bookone-staging-web.',
+        'Docs can use http://docs:80 ; app uses http://web:3100 or Traefik:80.',
+        '',
+        'After saving the tunnel, hard-refresh the e2e URL.',
+        'Health check: https://' + e2eHost + '/api/health  →  JSON with service bookone-e2e-runner',
+      ].join('\n'),
+      {
+        status: 502,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      },
+    );
+  }
+  if (host === docsHost || host.startsWith('bookone-docs.')) {
+    // Should be rare if docs service is up; helps diagnose tunnel → web mis-route
+    if (pathname === '/' || pathname === '') {
+      return NextResponse.redirect(new URL('/docs', request.url));
+    }
+  }
 
   // Dedicated E2E service host (e.g. bookone-e2e.clossyan.com) — keep /e2e on ERP as shortcut
   const e2ePublic =
     process.env.E2E_PUBLIC_URL || process.env.NEXT_PUBLIC_E2E_URL || '';
-  if (
-    e2ePublic &&
-    (pathname === '/e2e' || pathname.startsWith('/e2e/'))
-  ) {
-    // Leave API on this host for backward compat only if path is /api/e2e
-    // Redirect console UI to standalone runner
-    if (pathname === '/e2e' || pathname === '/e2e/') {
-      return NextResponse.redirect(e2ePublic.replace(/\/$/, '') + '/');
-    }
+  if (e2ePublic && (pathname === '/e2e' || pathname === '/e2e/')) {
+    return NextResponse.redirect(e2ePublic.replace(/\/$/, '') + '/');
   }
 
   // Unauthenticated users may only access public routes.

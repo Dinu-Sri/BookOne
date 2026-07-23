@@ -20,7 +20,10 @@ export async function sendAuthEmail(message: EmailMessage): Promise<void> {
   const from = process.env.EMAIL_FROM ?? 'BookOne <noreply@bookone.clossyan.com>';
 
   if (!resend) {
-    console.warn(`Resend is not configured. Skipped email to ${message.to}: ${message.subject}`);
+    // Staging/dev: no outbound email. Callers must not require delivery.
+    console.warn(
+      `[email] RESEND_API_KEY empty — skipped email to ${message.to}: ${message.subject}`,
+    );
     return;
   }
 

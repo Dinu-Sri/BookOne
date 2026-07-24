@@ -69,30 +69,63 @@ test.describe('Auth catalog §1 @auth @p0', () => {
   test('S-0007 Remember me on', async ({ page }) => {
     const { email, password } = requireE2eAuth();
     await page.context().clearCookies();
-    await page.goto('/login');
-    const remember = page.locator('input[name="remember"], input[type="checkbox"]').first();
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 30_000 });
+    const remember = page
+      .locator('input[name="rememberMe"], input[name="remember"], input[type="checkbox"]')
+      .first();
     if (await remember.isVisible().catch(() => false)) {
       await remember.check().catch(() => undefined);
     }
     await page.getByTestId('login-email').fill(email);
     await page.getByTestId('login-password').fill(password);
     await page.getByTestId('login-submit').click();
-    await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 60_000 });
+    // Race navigate vs auth error (same pattern as loginAsE2eUser) — avoids 60s hang.
+    await Promise.race([
+      page.waitForURL((u) => !u.pathname.includes('/login'), {
+        timeout: 60_000,
+        waitUntil: 'domcontentloaded',
+      }),
+      page
+        .locator('.auth-error')
+        .waitFor({ state: 'visible', timeout: 60_000 })
+        .then(async () => {
+          throw new Error(
+            (await page.locator('.auth-error').textContent())?.trim() || 'Login failed',
+          );
+        }),
+    ]);
     await expectAuthedShell(page);
   });
 
   test('S-0008 Remember me off', async ({ page }) => {
     const { email, password } = requireE2eAuth();
     await page.context().clearCookies();
-    await page.goto('/login');
-    const remember = page.locator('input[name="remember"], input[type="checkbox"]').first();
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 30_000 });
+    const remember = page
+      .locator('input[name="rememberMe"], input[name="remember"], input[type="checkbox"]')
+      .first();
     if (await remember.isVisible().catch(() => false)) {
       await remember.uncheck().catch(() => undefined);
     }
     await page.getByTestId('login-email').fill(email);
     await page.getByTestId('login-password').fill(password);
     await page.getByTestId('login-submit').click();
-    await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 60_000 });
+    await Promise.race([
+      page.waitForURL((u) => !u.pathname.includes('/login'), {
+        timeout: 60_000,
+        waitUntil: 'domcontentloaded',
+      }),
+      page
+        .locator('.auth-error')
+        .waitFor({ state: 'visible', timeout: 60_000 })
+        .then(async () => {
+          throw new Error(
+            (await page.locator('.auth-error').textContent())?.trim() || 'Login failed',
+          );
+        }),
+    ]);
     await expectAuthedShell(page);
   });
 

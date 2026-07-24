@@ -22,7 +22,7 @@ function parseQtyPrice(title: string): { qty: string; price: string } {
 }
 
 test.describe('Qty/price micro-matrix §23 @matrix @sales @p1', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(480_000);
 
   let customer = '';

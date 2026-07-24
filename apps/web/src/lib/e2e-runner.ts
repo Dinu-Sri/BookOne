@@ -18,6 +18,9 @@ import { randomUUID } from 'node:crypto';
 
 export type RunStatus = 'queued' | 'running' | 'passed' | 'failed' | 'error';
 
+/** smoke | p0 | core | full — see apps/e2e-runner/playwright.config.ts */
+export type E2eSuite = 'smoke' | 'p0' | 'core' | 'full';
+
 export interface RunRecord {
   id: string;
   status: RunStatus;
@@ -26,6 +29,7 @@ export interface RunRecord {
   finishedAt?: string;
   baseUrl: string;
   email: string;
+  suite?: E2eSuite;
   exitCode?: number | null;
   log: string[];
   error?: string;
@@ -73,7 +77,8 @@ function appendLog(run: RunRecord, line: string) {
   const text = line.replace(/\r/g, '').trimEnd();
   if (!text) return;
   run.log.push(text);
-  if (run.log.length > 5000) run.log.splice(0, run.log.length - 4000);
+  // Keep a longer tail so multi-hour reports still include late failures.
+  if (run.log.length > 20_000) run.log.splice(0, run.log.length - 15_000);
   try {
     writeFileSync(join(runDir(run.id), 'run.log'), run.log.join('\n') + '\n', 'utf8');
   } catch {
@@ -90,6 +95,7 @@ export function publicRun(run: RunRecord) {
     finishedAt: run.finishedAt,
     baseUrl: run.baseUrl,
     email: run.email,
+    suite: run.suite ?? 'core',
     exitCode: run.exitCode,
     error: run.error,
     logLines: run.log.length,
@@ -180,6 +186,9 @@ function startPlaywright(run: RunRecord) {
     appendLog(run, 'Using Playwright bundled Chromium (install with: pnpm exec playwright install chromium)');
   }
 
+  const suite = run.suite || 'core';
+  appendLog(run, `Suite: ${suite} (E2E_SUITE)`);
+
   const env = {
     ...process.env,
     E2E_BASE_URL: run.baseUrl,
@@ -189,7 +198,11 @@ function startPlaywright(run: RunRecord) {
     E2E_JSON_PATH: join(dir, 'results.json'),
     E2E_JUNIT_PATH: join(dir, 'junit.xml'),
     E2E_ARTIFACT_DIR: join(dir, 'artifacts'),
+    E2E_SUITE: suite,
+    // full tier: no global wall clock; others use config caps
+    ...(suite === 'full' ? { E2E_FULL: '1' } : {}),
     CI: '1',
+    E2E_RETRIES: '1',
     ...(systemChrome
       ? {
           PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: systemChrome,
@@ -246,6 +259,7 @@ export function createRun(input: {
   email: string;
   password: string;
   baseUrl: string;
+  suite?: string;
 }): { ok: true; run: ReturnType<typeof publicRun> } | { ok: false; error: string; status?: number } {
   if (globalStore.__bookoneE2eChild) {
     return {
@@ -258,6 +272,11 @@ export function createRun(input: {
   const email = input.email.trim();
   const password = input.password;
   const baseUrl = input.baseUrl.trim().replace(/\/$/, '');
+  const suiteRaw = (input.suite || 'core').toLowerCase().trim();
+  const suite: E2eSuite =
+    suiteRaw === 'smoke' || suiteRaw === 'p0' || suiteRaw === 'full' || suiteRaw === 'core'
+      ? suiteRaw
+      : 'core';
 
   if (!email || !password) return { ok: false, error: 'email and password are required', status: 400 };
   if (!baseUrl.startsWith('http')) {
@@ -277,6 +296,7 @@ export function createRun(input: {
     createdAt: new Date().toISOString(),
     baseUrl,
     email,
+    suite,
     log: [],
     password,
   };

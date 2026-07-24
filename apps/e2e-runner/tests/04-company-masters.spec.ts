@@ -9,7 +9,7 @@ import { saveAndReloadTextField } from '../src/helpers/settings';
  * Catalog §4 — Company masters (S-0050…S-0079)
  */
 test.describe('Company masters catalog §4 @company @brand @location @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(180_000);
 
   let brandA = '';

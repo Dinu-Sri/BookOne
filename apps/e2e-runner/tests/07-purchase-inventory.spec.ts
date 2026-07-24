@@ -17,7 +17,7 @@ import { fillBrandLocationIfPresent, addManualDocLine, clickPrimary } from '../s
  * Catalog §9 — Purchase lifecycle P0 (S-0245…)
  */
 test.describe('Purchase lifecycle catalog §9 @purchase @inventory @journey @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(420_000);
 
   let vendor = '';

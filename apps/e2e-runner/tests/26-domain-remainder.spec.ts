@@ -11,8 +11,8 @@ function registerRemainder(
   scenarios: ReturnType<typeof loadScenariosBySectionAndPriorities>,
 ) {
   test.describe(`${sectionLabel} remainder @p1 @p2 @p3`, () => {
-    test.describe.configure({ mode: 'serial' });
-    test.setTimeout(600_000);
+    // NOT serial: one failure must not mark the rest "did not run".
+    test.setTimeout(180_000);
 
     for (const s of scenarios) {
       test(`${s.id} ${s.title} @${s.priority.toLowerCase()}`, async ({ page, browser }) => {

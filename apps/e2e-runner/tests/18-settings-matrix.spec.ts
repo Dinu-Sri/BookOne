@@ -9,7 +9,7 @@ import { runCatalogScenario } from '../src/helpers/catalog-run';
 const scenarios = loadScenariosBySection('5.');
 
 test.describe('Settings behavior matrix §5 @settings @matrix @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(420_000);
 
   for (const s of scenarios) {

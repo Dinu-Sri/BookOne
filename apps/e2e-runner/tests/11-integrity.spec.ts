@@ -14,7 +14,7 @@ import {
  * Runs late in serial suite so journeys may have posted data.
  */
 test.describe('Integrity catalog §19 @integrity @reports @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(180_000);
 
   test('S-0594 TB balanced after mixed day', async ({ authedPage: page }) => {

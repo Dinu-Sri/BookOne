@@ -9,7 +9,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let body: { email?: string; password?: string; baseUrl?: string } = {};
+  let body: { email?: string; password?: string; baseUrl?: string; suite?: string } = {};
   try {
     body = await request.json();
   } catch {
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     email: String(body.email ?? ''),
     password: String(body.password ?? ''),
     baseUrl: String(body.baseUrl ?? origin),
+    suite: String(body.suite ?? 'core'),
   });
 
   if (!result.ok) {

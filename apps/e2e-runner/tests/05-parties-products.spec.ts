@@ -15,7 +15,7 @@ import {
  * (S-0107… product/stock money paths)
  */
 test.describe('Parties & products catalog §6 @parties @inventory @product @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(360_000);
 
   let customerName = '';

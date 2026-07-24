@@ -13,7 +13,7 @@ const scenarios = fromCoverage.length
   : loadScenarios().filter(() => false);
 
 test.describe('Catalog coverage sweep @full @p1 @p2 @p3', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.skip(scenarios.length === 0, 'No missing IDs in coverage.generated.json — all covered');
   test.setTimeout(900_000);
 

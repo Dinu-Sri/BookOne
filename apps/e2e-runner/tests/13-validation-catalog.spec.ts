@@ -17,7 +17,7 @@ function errorClass(title: string) {
 }
 
 test.describe('Validation error catalog §17 @edge @validation @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(480_000);
 
   for (const s of validation) {

@@ -8,7 +8,7 @@ import { runCatalogScenario } from '../src/helpers/catalog-run';
 const scenarios = loadScenariosBySection('16.');
 
 test.describe('Numeric & data edges §16 @numeric @edge @p0 @p1', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(360_000);
 
   for (const s of scenarios) {

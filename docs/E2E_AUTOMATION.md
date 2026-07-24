@@ -14,6 +14,25 @@ pnpm --dir apps/e2e-runner sync     # export catalog + coverage + level report
 
 When the **product** changes, update catalog + tests (or backlog) so E2E level stays honest — see governance.
 
+## How we handle failures, skips, and long runs
+
+| Problem | Approach |
+|---------|----------|
+| **~6h runs** | Use **suite tiers**. Default is `core` (~1.5–2.5h), not `full`. |
+| **480 “did not run”** | Was Playwright **serial** cascade: one fail skipped the rest of the describe. Serial mode removed — each test still runs independently (workers stay `1` for shared tenant data). |
+| **31 real fails** | Fix helpers (login retry, POS `.pos-root` shell, remember-me race), then re-run `core`, then deepen remaining catalog edges. |
+| **Login storms** | Session reuse in `loginAsE2eUser` (only `fresh: true` clears cookies). |
+| **Late “Invalid email or password”** | Fewer logins + one retry on CI (`E2E_RETRIES=1`). Prefer staging user. |
+
+### Suite tiers (`E2E_SUITE`)
+
+| Suite | What runs | Typical time |
+|-------|-----------|--------------|
+| `smoke` | `00-smoke` only | ~2 min |
+| `p0` | `00`–`13` critical packs | ~45–90 min |
+| **`core` (default)** | p0 + routes, parties, platform, mid-op, UI | ~1.5–2.5 h |
+| `full` | All specs incl. matrices, remainder, stress | multi-hour |
+
 ## How to run (any instance)
 
 No Portainer stack env gates. Point at any BookOne URL + user credentials.
@@ -23,8 +42,9 @@ No Portainer stack env gates. Point at any BookOne URL + user credentials.
 1. Open `https://YOUR-HOST/e2e` (no app login required for the console).
 2. **Target app URL** — the instance under test (defaults to same site).
 3. **Email / password** — a user on that instance.
-4. **Start E2E run** — Playwright drives that URL with those credentials.
-5. Download report when finished.
+4. **Suite** — pick `core` for daily checks; use `full` only for complete catalog.
+5. **Start E2E run** — Playwright drives that URL with those credentials.
+6. Download report when finished.
 
 Optional CLI/env (only if not using `/e2e` form fields):
 
@@ -32,6 +52,7 @@ Optional CLI/env (only if not using `/e2e` form fields):
 |-----|---------|
 | `E2E_BASE_URL` | App under test (CLI default) |
 | `E2E_EMAIL` / `E2E_PASSWORD` | Tenant login (CLI) |
+| `E2E_SUITE` | `smoke` \| `p0` \| `core` \| `full` (default `core`) |
 | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | Optional super-admin for Control Room packs |
 
 ### From a shell
@@ -41,9 +62,11 @@ export E2E_BASE_URL=https://your-bookone-host
 export E2E_EMAIL=you@example.com
 export E2E_PASSWORD=your-password
 cd apps/e2e-runner
-pnpm test:smoke        # fast smoke only
-pnpm test:auth         # auth catalog
-pnpm test:e2e          # full suite against E2E_BASE_URL
+pnpm test:smoke        # ~2 min
+pnpm test:p0           # critical packs
+pnpm test:core         # default recommended
+pnpm test:e2e          # same as core
+pnpm test:full         # all catalog packs (long)
 pnpm coverage          # regenerate ID coverage board
 ```
 
@@ -97,6 +120,6 @@ Image installs Alpine Chromium; video off when using system Chrome.
 
 ## Notes
 
-- Runs are **serial** (`workers: 1`) so data from earlier files feeds later integrity checks.
+- **workers: 1** (one browser) for tenant data stability; tests are **not** serial-fail-fast (siblings still run after a failure).
 - Some steps soft-skip if a module is disabled or UI variant differs.
 - Prefer a **staging** company; tests create unique `E2E-*` records.

@@ -8,7 +8,7 @@ import { runCatalogScenario } from '../src/helpers/catalog-run';
 const scenarios = loadScenariosBySection('7.');
 
 test.describe('Parties catalog §7 @parties @p0 @p1', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(420_000);
 
   for (const s of scenarios) {

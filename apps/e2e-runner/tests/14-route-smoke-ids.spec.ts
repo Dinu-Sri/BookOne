@@ -10,7 +10,7 @@ import { expectNoAppCrash } from '../src/helpers/assert';
 const routeScenarios = loadScenariosBySection('18.');
 
 test.describe('Catalog route smoke §18 @routes @smoke @load', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(600_000);
 
   for (const s of routeScenarios) {

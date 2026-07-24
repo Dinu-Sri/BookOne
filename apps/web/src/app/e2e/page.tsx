@@ -12,9 +12,11 @@ export default function E2eConsolePage() {
   const [baseUrl, setBaseUrl] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  /** smoke ~2m | p0 ~1h | core ~2h (default) | full multi-hour */
+  const [suite, setSuite] = useState<'smoke' | 'p0' | 'core' | 'full'>('core');
   const [status, setStatus] = useState<RunStatus>('idle');
   const [runId, setRunId] = useState<string | null>(null);
-  const [log, setLog] = useState('Ready. Enter credentials and press Start.');
+  const [log, setLog] = useState('Ready. Enter credentials and press Start. Default suite is core (~1.5–2.5h), not full 6h.');
   const [meta, setMeta] = useState('No active run.');
   const [busy, setBusy] = useState(false);
 
@@ -56,6 +58,7 @@ export default function E2eConsolePage() {
           email: email.trim(),
           password,
           baseUrl: baseUrl.trim() || window.location.origin,
+          suite,
         }),
       });
       const j = await r.json();
@@ -118,6 +121,18 @@ export default function E2eConsolePage() {
               />
             </div>
           </div>
+          <label style={styles.label}>Suite (how much to run)</label>
+          <select
+            style={styles.input}
+            value={suite}
+            onChange={(e) => setSuite(e.target.value as typeof suite)}
+            disabled={busy}
+          >
+            <option value="smoke">smoke — login + core routes (~2 min)</option>
+            <option value="p0">p0 — critical money/auth packs (~45–90 min)</option>
+            <option value="core">core — recommended daily (default, ~1.5–2.5 h)</option>
+            <option value="full">full — all ~700 IDs incl. matrices/stress (multi-hour)</option>
+          </select>
           <div style={styles.actions}>
             <button style={styles.primary} type="button" disabled={busy} onClick={start}>
               {busy ? 'Running…' : 'Start E2E run'}
@@ -126,8 +141,9 @@ export default function E2eConsolePage() {
             <span style={styles.meta}>{meta}</span>
           </div>
           <p style={styles.hint}>
-            No separate secret. Use a staging user when possible. Playwright must be installed once on the
-            server: <code>cd apps/e2e-runner && npm i && npx playwright install chromium</code>
+            Prefer <strong>core</strong> for normal verification. Use <strong>full</strong> only when you need
+            every catalog ID. Staging user recommended. Server needs:{' '}
+            <code>cd apps/e2e-runner && npm i && npx playwright install chromium</code>
           </p>
         </section>
 

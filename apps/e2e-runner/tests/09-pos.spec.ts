@@ -7,7 +7,7 @@ import { expectAuthedShell, expectNoAppCrash } from '../src/helpers/assert';
  * Soft-skips only when register/shift UI is absent (module off).
  */
 test.describe('POS catalog §10 @pos @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(240_000);
 
   async function ensurePosShell(page: import('@playwright/test').Page) {

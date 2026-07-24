@@ -26,7 +26,7 @@ async function loginForPlatform(page: import('@playwright/test').Page) {
 }
 
 test.describe('Control Room catalog §14 @platform @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(300_000);
 
   test('S-0429 Non-admin control room redirect', async ({ authedPage: page }) => {
@@ -44,7 +44,7 @@ test.describe('Control Room catalog §14 @platform @p0', () => {
 });
 
 test.describe('Health-check catalog §22 @platform @health @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(600_000);
 
   for (const s of health) {

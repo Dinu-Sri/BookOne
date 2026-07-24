@@ -8,7 +8,7 @@ import { runCatalogScenario } from '../src/helpers/catalog-run';
 const scenarios = loadScenariosBySection('13.');
 
 test.describe('Mid-op edit/delete edges §13 @edge @p0 @p1', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(420_000);
 
   for (const s of scenarios) {

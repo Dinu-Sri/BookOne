@@ -13,7 +13,7 @@ import { expectJournalPage } from '../src/helpers/balances';
  * Catalog §11 — Accounting, reports, reconciliation P0 (S-0325…)
  */
 test.describe('Accounting catalog §11 @accounting @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(300_000);
 
   test('S-0325 Money in new sale', async ({ authedPage: page }) => {

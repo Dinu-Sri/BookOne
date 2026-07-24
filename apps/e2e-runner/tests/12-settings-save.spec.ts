@@ -9,7 +9,7 @@ import { seed } from '../src/helpers/env';
  * Mutate depth: change → save → reload → persist (or form healthy if field absent).
  */
 test.describe('Company settings save catalog §27 @settings @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(180_000);
 
   test('S-0694 Save company details settings', async ({ authedPage: page }) => {

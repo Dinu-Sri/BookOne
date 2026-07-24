@@ -9,7 +9,7 @@ import { runCatalogScenario } from '../src/helpers/catalog-run';
 const scenarios = loadScenariosBySection('21.');
 
 test.describe('Rare / stress ops §21 @stress @p2 @p3', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(900_000);
 
   for (const s of scenarios) {

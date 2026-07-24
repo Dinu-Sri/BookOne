@@ -5,7 +5,12 @@ import { expectWorkspace } from './forms';
 
 export async function go(page: Page, path: string) {
   await ensureLoggedIn(page);
-  await page.goto(path);
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  // Recover once if session expired mid-suite
+  if (page.url().includes('/login')) {
+    await ensureLoggedIn(page);
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+  }
   await expectWorkspace(page);
 }
 

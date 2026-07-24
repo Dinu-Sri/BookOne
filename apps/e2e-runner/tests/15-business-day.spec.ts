@@ -24,7 +24,7 @@ import {
  * Composes lifecycle helpers into day scripts.
  */
 test.describe('Business-day journeys catalog §12 @journey @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(480_000);
 
   let customer = '';

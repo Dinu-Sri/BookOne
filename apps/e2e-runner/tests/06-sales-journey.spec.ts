@@ -19,7 +19,7 @@ import { fillBrandLocationIfPresent, addManualDocLine, clickPrimary } from '../s
  * Catalog §8 — Sales lifecycle P0 (S-0179… linked money paths)
  */
 test.describe('Sales lifecycle catalog §8 @sales @journey @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(420_000);
 
   let customer = '';

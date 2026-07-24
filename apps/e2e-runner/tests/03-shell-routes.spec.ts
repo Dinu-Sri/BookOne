@@ -7,7 +7,7 @@ import { expectAuthedShell, expectNoAppCrash } from '../src/helpers/assert';
  * plus bulk route load helpers (not 1:1 with §18 — those live in 14-route-smoke-ids).
  */
 test.describe('Shell & navigation catalog §3 @shell @routes @p0', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
 
   test('S-0034 Sidebar suite expands', async ({ authedPage: page }) => {
     await openSuite(page, 'Sales');

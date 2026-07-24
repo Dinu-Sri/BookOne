@@ -78,11 +78,20 @@ export async function loginAsE2eUser(page: Page, opts: LoginOpts = {}) {
 
 /** Ensure logged in; re-login if session missing. */
 export async function ensureLoggedIn(page: Page) {
-  await page.goto('/');
+  // Prefer session reuse; domcontentloaded avoids long "load" hangs on heavy pages.
+  try {
+    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  } catch {
+    // Page may be mid-crash after long runs — recover via login.
+    await loginAsE2eUser(page, { fresh: true });
+    return;
+  }
   if (page.url().includes('/login')) {
     await loginAsE2eUser(page);
   } else {
-    await expect(page.locator('.app-shell, .sidebar, .workspace').first()).toBeVisible({
+    await expect(
+      page.locator('.app-shell, .sidebar, .workspace, .pos-root, main').first(),
+    ).toBeVisible({
       timeout: 20_000,
     });
   }

@@ -9,7 +9,7 @@ const payment = loadScenariosBySection('24.');
 const status = loadScenariosBySection('25.');
 
 test.describe('Payment method matrix §24 @payments @matrix @p1', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(240_000);
 
   for (const s of payment) {
@@ -20,7 +20,7 @@ test.describe('Payment method matrix §24 @payments @matrix @p1', () => {
 });
 
 test.describe('Document status transitions §25 @status @p0 @p1', () => {
-  test.describe.configure({ mode: 'serial' });
+  /* independent: failures no longer skip siblings */
   test.setTimeout(300_000);
 
   for (const s of status) {

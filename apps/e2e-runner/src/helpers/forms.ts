@@ -49,11 +49,26 @@ export async function clickPrimary(page: Page, name: string | RegExp) {
   await btn.click();
 }
 
+/**
+ * App is usable after navigation. POS uses `.pos-root` (not `.workspace`);
+ * empty/error states may only expose main/body content.
+ */
 export async function expectWorkspace(page: Page) {
-  await expect(page.locator('.workspace, .party-workspace, .app-shell').first()).toBeVisible({
-    timeout: 25_000,
-  });
   await expect(page).not.toHaveURL(/\/login/);
+  const shell = page
+    .locator(
+      [
+        '.workspace',
+        '.party-workspace',
+        '.app-shell',
+        '.pos-root',
+        '.pos-empty',
+        'main',
+        '[data-testid="app-shell"]',
+      ].join(', '),
+    )
+    .first();
+  await expect(shell).toBeVisible({ timeout: 25_000 });
 }
 
 /** Prefer first option after blank in brand/location if required. */

@@ -8,7 +8,7 @@ test.describe('Smoke @smoke @p0', () => {
   test.beforeAll(() => requireE2eAuth());
 
   test('login lands on app shell', async ({ page }) => {
-    await loginAsE2eUser(page);
+    await loginAsE2eUser(page, { fresh: true });
     await expect(page.locator('.app-shell, .sidebar').first()).toBeVisible();
   });
 

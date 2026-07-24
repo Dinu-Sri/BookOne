@@ -88,6 +88,8 @@ async function startPlaywright(run: RunRecord) {
     E2E_JUNIT_PATH: join(dir, 'junit.xml'),
     E2E_ARTIFACT_DIR: join(dir, 'artifacts'),
     CI: '1',
+    // Full suite can take hours; disable Playwright global 45m cap
+    E2E_FULL: '1',
   };
 
   // Preflight: one login test — fail fast on bad credentials (avoids 70+ cascade failures)

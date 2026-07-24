@@ -24,7 +24,7 @@ test.describe('Auth catalog §1 @auth @p0', () => {
   });
 
   test('S-0002 Login valid credentials', async ({ page }) => {
-    await loginAsE2eUser(page);
+    await loginAsE2eUser(page, { fresh: true });
     await expectAuthedShell(page);
   });
 
@@ -100,14 +100,14 @@ test.describe('Auth catalog §1 @auth @p0', () => {
     await page.context().clearCookies();
     await page.goto('/sales/invoices');
     await expectOnLogin(page);
-    await loginAsE2eUser(page);
+    await loginAsE2eUser(page, { fresh: true });
     await expect(page).not.toHaveURL(/\/login/);
     // Prefer return to invoices when app supports `from`; otherwise any authed shell
     await expectAuthedShell(page);
   });
 
   test('S-0010 Authed user hits /login', async ({ page }) => {
-    await loginAsE2eUser(page);
+    await loginAsE2eUser(page, { fresh: true });
     await page.goto('/login');
     await page.waitForTimeout(1500);
     await expect(page).not.toHaveURL(/\/login/);
@@ -192,14 +192,14 @@ test.describe('Auth catalog §1 @auth @p0', () => {
   });
 
   test('S-0016 Sign out', async ({ page }) => {
-    await loginAsE2eUser(page);
+    await loginAsE2eUser(page, { fresh: true });
     await signOutE2eUser(page);
     await expectOnLogin(page);
   });
 
   test('S-0017 Legacy password migration login proxy', async ({ page }) => {
     // Product may not expose a separate legacy path; valid login is the proxy.
-    await loginAsE2eUser(page);
+    await loginAsE2eUser(page, { fresh: true });
     await expectAuthedShell(page);
   });
 

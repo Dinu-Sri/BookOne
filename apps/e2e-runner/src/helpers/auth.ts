@@ -6,15 +6,33 @@ async function waitForAppShell(page: Page) {
   await expect(page.locator('.app-shell, .sidebar').first()).toBeVisible({ timeout: 30_000 });
 }
 
+type LoginOpts = {
+  /** Force clear cookies and re-login (auth suite). Default: reuse session if still valid. */
+  fresh?: boolean;
+};
+
 /** Login via UI and wait for app shell. */
-export async function loginAsE2eUser(page: Page) {
+export async function loginAsE2eUser(page: Page, opts: LoginOpts = {}) {
   const { email, password } = requireE2eAuth();
 
-  // Fresh session avoids stale cookies / middleware bounce races across serial tests.
-  await page.context().clearCookies();
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  if (!opts.fresh) {
+    // Reuse existing session — full suite was clearing cookies every test and
+    // hammering login (rate limits / intermittent "Invalid email or password").
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    if (!page.url().includes('/login')) {
+      await waitForAppShell(page);
+      return;
+    }
+  } else {
+    await page.context().clearCookies();
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    if (!page.url().includes('/login')) {
+      await waitForAppShell(page);
+      return;
+    }
+  }
 
-  // Already bounced to app (rare) — treat as success.
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
   if (!page.url().includes('/login')) {
     await waitForAppShell(page);
     return;
@@ -41,8 +59,7 @@ export async function loginAsE2eUser(page: Page) {
   try {
     await attemptLogin();
   } catch (first) {
-    // One retry after a short pause (transient auth / network blips under load).
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
     if (!page.url().includes('/login')) {
       await waitForAppShell(page);
@@ -80,7 +97,6 @@ const SESSION_COOKIE_NAMES = [
 
 async function clearSessionCookies(page: Page) {
   await page.context().clearCookies();
-  // Belt-and-suspenders: delete known auth cookies by name if any remain.
   const cookies = await page.context().cookies();
   const leftover = cookies.filter((c) =>
     SESSION_COOKIE_NAMES.some((n) => c.name === n || c.name.includes('session_token')),
@@ -96,7 +112,7 @@ async function clearSessionCookies(page: Page) {
   }
 }
 
-/** Sign out via topbar control (aria-label Logout) and assert session cleared. */
+/** Sign out via topbar control and assert session cleared. */
 export async function signOutE2eUser(page: Page) {
   const logout = page.getByRole('button', { name: /log ?out|sign ?out/i }).first();
   if (await logout.isVisible().catch(() => false)) {
@@ -105,7 +121,6 @@ export async function signOutE2eUser(page: Page) {
       logout.click(),
     ]);
   }
-  // Always clear client cookies so middleware cannot treat a stale token as authed.
   await clearSessionCookies(page);
   await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });

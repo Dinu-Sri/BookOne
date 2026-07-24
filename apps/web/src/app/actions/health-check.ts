@@ -1139,6 +1139,8 @@ export async function runHealthCheckSuite(input?: {
           if (p) created.limitedPartyId = p.id;
         });
 
+        // Must pass brand/location when masters exist — otherwise resolveDimensions
+        // fails first ("Select a brand…") and we never exercise credit-limit enforcement.
         const res = await createCommercialDocument({
           documentType: 'sales_invoice',
           partyName: `HC Limited Buyer ${seed}`,
@@ -1146,6 +1148,9 @@ export async function runHealthCheckSuite(input?: {
           notes: `health-check credit-limit ${runId}`,
           invoiceKind: 'commercial',
           saleChannel: 'local',
+          locationId: locationId,
+          brandId: brandId,
+          // Credit AR invoice (no payment account) so enforceCreditLimit applies
           lines: [
             {
               productId: created.productId,
@@ -1167,11 +1172,14 @@ export async function runHealthCheckSuite(input?: {
           throw new Error('Credit limit should have blocked this invoice (limit 50, sale 5000)');
         }
         if (!/credit limit/i.test(res.error ?? '')) {
-          throw new Error(`Expected credit limit error, got: ${res.error}`);
+          throw new Error(
+            `Expected credit limit error, got: ${res.error ?? '(no error)'}. ` +
+              'If this mentions brand/location, re-run after rebuild — step must pass brandId/locationId.',
+          );
         }
         return {
           detail: `Blocked correctly: ${res.error}`,
-          meta: {},
+          meta: { brandId: brandId ?? '', locationId: locationId ?? '' },
         };
       });
     }

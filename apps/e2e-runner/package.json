@@ -12,6 +12,8 @@
     "test:p0": "node scripts/run-suite.mjs p0",
     "test:core": "node scripts/run-suite.mjs core",
     "test:full": "node scripts/run-suite.mjs full",
+    "test:bucket": "node scripts/run-suite.mjs",
+    "buckets": "npx tsx scripts/export-buckets-json.mjs",
     "test:auth": "playwright test tests/01-auth.spec.ts",
     "test:shell": "playwright test tests/03-shell-routes.spec.ts",
     "test:masters": "playwright test tests/04-company-masters.spec.ts",

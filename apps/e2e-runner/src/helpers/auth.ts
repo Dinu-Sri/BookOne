@@ -3,7 +3,9 @@ import { expect } from '@playwright/test';
 import { requireE2eAuth } from './env';
 
 async function waitForAppShell(page: Page) {
-  await expect(page.locator('.app-shell, .sidebar').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.app-shell, .sidebar, .pos-root, main').first()).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 type LoginOpts = {
@@ -11,14 +13,22 @@ type LoginOpts = {
   fresh?: boolean;
 };
 
-/** Login via UI and wait for app shell. */
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Login via UI and wait for app shell. Reuses session; backs off on rate-limit style failures. */
 export async function loginAsE2eUser(page: Page, opts: LoginOpts = {}) {
   const { email, password } = requireE2eAuth();
 
   if (!opts.fresh) {
     // Reuse existing session — full suite was clearing cookies every test and
     // hammering login (rate limits / intermittent "Invalid email or password").
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    try {
+      await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
+    } catch {
+      /* continue to login */
+    }
     if (!page.url().includes('/login')) {
       await waitForAppShell(page);
       return;
@@ -45,7 +55,10 @@ export async function loginAsE2eUser(page: Page, opts: LoginOpts = {}) {
     await page.getByTestId('login-password').fill(password);
     await page.getByTestId('login-submit').click();
     await Promise.race([
-      page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 60_000 }),
+      page.waitForURL((url) => !url.pathname.includes('/login'), {
+        timeout: 60_000,
+        waitUntil: 'domcontentloaded',
+      }),
       page
         .locator('.auth-error')
         .waitFor({ state: 'visible', timeout: 60_000 })
@@ -56,33 +69,38 @@ export async function loginAsE2eUser(page: Page, opts: LoginOpts = {}) {
     ]);
   };
 
-  try {
-    await attemptLogin();
-  } catch (first) {
-    await page.waitForTimeout(2000);
-    await page.goto('/login', { waitUntil: 'domcontentloaded' });
-    if (!page.url().includes('/login')) {
-      await waitForAppShell(page);
-      return;
-    }
-    await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 30_000 });
+  let lastErr: unknown;
+  // Backoff: rate-limit / lockout recovery after wrong-password tests in auth pack
+  for (let attempt = 1; attempt <= 4; attempt++) {
     try {
       await attemptLogin();
-    } catch {
-      throw first;
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      const retriable = /invalid email or password|too many|rate|try again/i.test(msg);
+      if (!retriable || attempt === 4) break;
+      const waitMs = attempt * 2500;
+      await sleep(waitMs);
+      await page.goto('/login', { waitUntil: 'domcontentloaded' }).catch(() => undefined);
+      if (!page.url().includes('/login')) {
+        await waitForAppShell(page);
+        return;
+      }
+      await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 30_000 });
     }
   }
+  if (lastErr) throw lastErr;
 
   await waitForAppShell(page);
 }
 
 /** Ensure logged in; re-login if session missing. */
 export async function ensureLoggedIn(page: Page) {
-  // Prefer session reuse; domcontentloaded avoids long "load" hangs on heavy pages.
   try {
     await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
   } catch {
-    // Page may be mid-crash after long runs — recover via login.
     await loginAsE2eUser(page, { fresh: true });
     return;
   }

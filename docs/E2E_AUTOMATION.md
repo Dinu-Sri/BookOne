@@ -24,14 +24,31 @@ When the **product** changes, update catalog + tests (or backlog) so E2E level s
 | **Login storms** | Session reuse in `loginAsE2eUser` (only `fresh: true` clears cookies). |
 | **Late “Invalid email or password”** | Fewer logins + one retry on CI (`E2E_RETRIES=1`). Prefer staging user. |
 
-### Suite tiers (`E2E_SUITE`)
+### Suite tiers & buckets (`E2E_SUITE`)
+
+**Presets**
 
 | Suite | What runs | Typical time |
 |-------|-----------|--------------|
-| `smoke` | `00-smoke` only | ~2 min |
-| `p0` | `00`–`13` critical packs | ~45–90 min |
-| **`core` (default)** | p0 + routes, parties, platform, mid-op, UI | ~1.5–2.5 h |
-| `full` | All specs incl. matrices, remainder, stress | multi-hour |
+| `smoke` | smoke bucket | ~2 min |
+| `p0` | foundation + money P0 packs | ~45–90 min |
+| **`core` (default)** | daily recommended (no matrices/stress) | ~1.5–2.5 h |
+| `full` | all buckets | multi-hour |
+
+**Single buckets** (run one domain at a time from `/e2e` or CLI) — examples:
+
+| Bucket id | Spec | When to use |
+|-----------|------|-------------|
+| `auth` | `01-auth` | Login / session issues |
+| `sales` | `06-sales-journey` | QT/SO/INV |
+| `purchase` | `07-purchase-inventory` | PO/GRN/bills |
+| `pos` | `09-pos` | POS terminal |
+| `settings-matrix` | `18-settings-matrix` | Settings toggles |
+| `remainder` | `26-domain-remainder` | P1–P3 catalog |
+
+Full list: `apps/e2e-runner/src/catalog/buckets.json` and `/api/e2e/buckets`.
+
+After each run, downloads include `report.md`, `failures.md` (agent brief), and `buckets/<id>-failures.md` per failed pack.
 
 ## How to run (any instance)
 

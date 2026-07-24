@@ -37,6 +37,8 @@ test.describe('Auth catalog §1 @auth @p0', () => {
     await page.getByTestId('login-submit').click();
     await expect(page.locator('.auth-error')).toBeVisible({ timeout: 20_000 });
     await expectOnLogin(page);
+    // Cool-down so later valid logins are not rate-limited
+    await page.waitForTimeout(1500);
   });
 
   test('S-0004 Login unknown email', async ({ page }) => {
@@ -46,6 +48,7 @@ test.describe('Auth catalog §1 @auth @p0', () => {
     await page.getByTestId('login-password').fill('password12345');
     await page.getByTestId('login-submit').click();
     await expectErrorOrStay(page, { stayOn: /\/login/ });
+    await page.waitForTimeout(1500);
   });
 
   test('S-0005 Login empty fields', async ({ page }) => {
@@ -64,6 +67,7 @@ test.describe('Auth catalog §1 @auth @p0', () => {
     await page.getByTestId('login-password').fill('short');
     await page.getByTestId('login-submit').click();
     await expectErrorOrStay(page, { stayOn: /\/login/ });
+    await page.waitForTimeout(1500);
   });
 
   test('S-0007 Remember me on', async ({ page }) => {

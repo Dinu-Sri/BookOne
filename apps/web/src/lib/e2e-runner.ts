@@ -15,11 +15,18 @@ import { join } from 'node:path';
 import { createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
+import {
+  writeRichReports,
+  buildPublicSummary,
+  listBucketFailureFiles,
+  loadBucketsCatalog,
+  type PublicSummary,
+} from '@/lib/e2e-report';
 
 export type RunStatus = 'queued' | 'running' | 'passed' | 'failed' | 'error';
 
-/** smoke | p0 | core | full — see apps/e2e-runner/playwright.config.ts */
-export type E2eSuite = 'smoke' | 'p0' | 'core' | 'full';
+/** Preset (smoke|p0|core|full) or bucket id (auth|sales|…) — see apps/e2e-runner/src/buckets.ts */
+export type E2eSuite = string;
 
 export interface RunRecord {
   id: string;
@@ -34,6 +41,7 @@ export interface RunRecord {
   log: string[];
   error?: string;
   password?: string;
+  summary?: PublicSummary;
 }
 
 const globalStore = globalThis as unknown as {
@@ -87,6 +95,20 @@ function appendLog(run: RunRecord, line: string) {
 }
 
 export function publicRun(run: RunRecord) {
+  let bucketFailureFiles: string[] = [];
+  let summary = run.summary ?? null;
+  try {
+    const dir = runDir(run.id);
+    if (existsSync(dir)) {
+      bucketFailureFiles = listBucketFailureFiles(dir);
+      if (!summary && existsSync(join(dir, 'results.json'))) {
+        summary = buildPublicSummary(dir, findE2eRoot());
+        run.summary = summary;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
   return {
     id: run.id,
     status: run.status,
@@ -99,7 +121,17 @@ export function publicRun(run: RunRecord) {
     exitCode: run.exitCode,
     error: run.error,
     logLines: run.log.length,
+    summary,
+    bucketFailureFiles,
   };
+}
+
+export function getBucketsCatalog() {
+  try {
+    return loadBucketsCatalog(findE2eRoot());
+  } catch {
+    return { buckets: [], presets: [] };
+  }
 }
 
 export function getRun(id: string) {
@@ -116,41 +148,39 @@ export function getActiveRunId() {
 
 function writeMarkdownReport(run: RunRecord) {
   const dir = runDir(run.id);
-  let resultsSnippet = '';
+  let e2eRoot = '';
   try {
-    if (existsSync(join(dir, 'results.json'))) {
-      resultsSnippet = readFileSync(join(dir, 'results.json'), 'utf8').slice(0, 50_000);
-    }
+    e2eRoot = findE2eRoot();
   } catch {
-    /* ignore */
+    e2eRoot = join(process.cwd(), 'apps', 'e2e-runner');
   }
-
-  const md = [
-    `# BookOne E2E Report`,
-    ``,
-    `- **Run ID:** ${run.id}`,
-    `- **Status:** ${run.status}`,
-    `- **Target:** ${run.baseUrl}`,
-    `- **User:** ${run.email}`,
-    `- **Started:** ${run.startedAt ?? '—'}`,
-    `- **Finished:** ${run.finishedAt ?? '—'}`,
-    `- **Exit code:** ${run.exitCode ?? '—'}`,
-    ``,
-    `## Log (tail)`,
-    ``,
-    '```',
-    run.log.slice(-200).join('\n'),
-    '```',
-    ``,
-    `## Playwright JSON (excerpt)`,
-    ``,
-    '```json',
-    resultsSnippet || '(no results.json)',
-    '```',
-    ``,
-  ].join('\n');
-
-  writeFileSync(join(dir, 'report.md'), md, 'utf8');
+  try {
+    run.summary = writeRichReports(dir, e2eRoot, {
+      runId: run.id,
+      status: run.status,
+      baseUrl: run.baseUrl,
+      email: run.email,
+      suite: run.suite || 'core',
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      exitCode: run.exitCode,
+      logTail: run.log,
+    });
+  } catch (e) {
+    appendLog(run, `Report write error: ${e instanceof Error ? e.message : String(e)}`);
+    // Minimal fallback
+    writeFileSync(
+      join(dir, 'report.md'),
+      `# BookOne E2E Report\n\n- Status: ${run.status}\n- Suite: ${run.suite}\n\n` +
+        run.log.slice(-100).join('\n'),
+      'utf8',
+    );
+    try {
+      run.summary = buildPublicSummary(dir, e2eRoot);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function startPlaywright(run: RunRecord) {
@@ -272,11 +302,8 @@ export function createRun(input: {
   const email = input.email.trim();
   const password = input.password;
   const baseUrl = input.baseUrl.trim().replace(/\/$/, '');
-  const suiteRaw = (input.suite || 'core').toLowerCase().trim();
-  const suite: E2eSuite =
-    suiteRaw === 'smoke' || suiteRaw === 'p0' || suiteRaw === 'full' || suiteRaw === 'core'
-      ? suiteRaw
-      : 'core';
+  // Any preset (smoke|p0|core|full) or single bucket id (auth|sales|…)
+  const suite: E2eSuite = (input.suite || 'core').toLowerCase().trim() || 'core';
 
   if (!email || !password) return { ok: false, error: 'email and password are required', status: 400 };
   if (!baseUrl.startsWith('http')) {
@@ -325,11 +352,26 @@ export async function buildDownloadBundle(id: string): Promise<{ body: Buffer; c
   if (!existsSync(dir)) return null;
 
   const parts: string[] = [];
-  for (const name of ['report.md', 'run.log', 'summary.json', 'results.json', 'junit.xml']) {
+  for (const name of [
+    'report.md',
+    'failures.md',
+    'run.log',
+    'summary.json',
+    'results.json',
+    'junit.xml',
+  ]) {
     const p = join(dir, name);
     if (existsSync(p)) {
       parts.push(`\n\n===== FILE: ${name} =====\n\n`);
       parts.push(readFileSync(p, 'utf8'));
+    }
+  }
+  const bucketDir = join(dir, 'buckets');
+  if (existsSync(bucketDir)) {
+    for (const f of readdirSync(bucketDir)) {
+      if (!f.endsWith('.md')) continue;
+      parts.push(`\n\n===== FILE: buckets/${f} =====\n\n`);
+      parts.push(readFileSync(join(bucketDir, f), 'utf8'));
     }
   }
   const art = join(dir, 'artifacts');

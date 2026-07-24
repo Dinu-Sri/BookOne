@@ -1,0 +1,382 @@
+{
+  "buckets": [
+    {
+      "id": "smoke",
+      "label": "Smoke",
+      "description": "Login + core accounting routes + public docs",
+      "eta": "~2 min",
+      "files": [
+        "00-smoke.spec.ts"
+      ],
+      "group": "foundation"
+    },
+    {
+      "id": "auth",
+      "label": "Auth & session",
+      "description": "Login, logout, deep link, remember-me (S-0001…)",
+      "eta": "~5–10 min",
+      "files": [
+        "01-auth.spec.ts"
+      ],
+      "group": "foundation"
+    },
+    {
+      "id": "public",
+      "label": "Public surfaces",
+      "description": "Docs, search API, /e2e console",
+      "eta": "~3–5 min",
+      "files": [
+        "02-public.spec.ts"
+      ],
+      "group": "foundation"
+    },
+    {
+      "id": "shell",
+      "label": "Shell & routes",
+      "description": "Sidebar, period, tenant route smoke",
+      "eta": "~10–15 min",
+      "files": [
+        "03-shell-routes.spec.ts"
+      ],
+      "group": "foundation"
+    },
+    {
+      "id": "company",
+      "label": "Company masters",
+      "description": "Brand, location, tax, company details",
+      "eta": "~10–15 min",
+      "files": [
+        "04-company-masters.spec.ts"
+      ],
+      "group": "foundation"
+    },
+    {
+      "id": "products",
+      "label": "Parties & products",
+      "description": "Customers, vendors, product/stock P0",
+      "eta": "~15–25 min",
+      "files": [
+        "05-parties-products.spec.ts"
+      ],
+      "group": "money"
+    },
+    {
+      "id": "sales",
+      "label": "Sales lifecycle",
+      "description": "QT → SO → INV, payments, returns",
+      "eta": "~20–35 min",
+      "files": [
+        "06-sales-journey.spec.ts"
+      ],
+      "group": "money"
+    },
+    {
+      "id": "purchase",
+      "label": "Purchase & inventory",
+      "description": "PO, GRN, bills, stock ops",
+      "eta": "~20–35 min",
+      "files": [
+        "07-purchase-inventory.spec.ts"
+      ],
+      "group": "money"
+    },
+    {
+      "id": "accounting",
+      "label": "Accounting",
+      "description": "Simple Entry, journal, reports, recon",
+      "eta": "~15–25 min",
+      "files": [
+        "08-accounting.spec.ts"
+      ],
+      "group": "money"
+    },
+    {
+      "id": "pos",
+      "label": "POS",
+      "description": "Terminal, shift, cart",
+      "eta": "~10–20 min",
+      "files": [
+        "09-pos.spec.ts"
+      ],
+      "group": "money"
+    },
+    {
+      "id": "security",
+      "label": "Security & edges",
+      "description": "Tenancy, XSS/SQL-ish search, session",
+      "eta": "~10–15 min",
+      "files": [
+        "10-edges-security.spec.ts"
+      ],
+      "group": "platform"
+    },
+    {
+      "id": "integrity",
+      "label": "Integrity",
+      "description": "Journal balance, TB, AR/AP, stock",
+      "eta": "~10–15 min",
+      "files": [
+        "11-integrity.spec.ts"
+      ],
+      "group": "platform"
+    },
+    {
+      "id": "settings-save",
+      "label": "Settings save",
+      "description": "Company settings pages persist",
+      "eta": "~5–10 min",
+      "files": [
+        "12-settings-save.spec.ts"
+      ],
+      "group": "platform"
+    },
+    {
+      "id": "validation",
+      "label": "Validation catalog",
+      "description": "Error classes §17",
+      "eta": "~15–25 min",
+      "files": [
+        "13-validation-catalog.spec.ts"
+      ],
+      "group": "platform"
+    },
+    {
+      "id": "routes",
+      "label": "Route smoke IDs",
+      "description": "Every catalog route load (S-0511…)",
+      "eta": "~15–25 min",
+      "files": [
+        "14-route-smoke-ids.spec.ts"
+      ],
+      "group": "platform"
+    },
+    {
+      "id": "business-day",
+      "label": "Business-day journeys",
+      "description": "Composed day flows §12",
+      "eta": "~20–30 min",
+      "files": [
+        "15-business-day.spec.ts"
+      ],
+      "group": "money"
+    },
+    {
+      "id": "parties",
+      "label": "Parties catalog",
+      "description": "Full parties §7",
+      "eta": "~15–25 min",
+      "files": [
+        "16-parties-catalog.spec.ts"
+      ],
+      "group": "money"
+    },
+    {
+      "id": "platform",
+      "label": "Control Room & health",
+      "description": "Platform console + health-check steps",
+      "eta": "~10–20 min",
+      "files": [
+        "17-platform.spec.ts"
+      ],
+      "group": "platform"
+    },
+    {
+      "id": "settings-matrix",
+      "label": "Settings matrix",
+      "description": "VAT, GRN, credit limit, costing toggles",
+      "eta": "~15–25 min",
+      "files": [
+        "18-settings-matrix.spec.ts"
+      ],
+      "group": "matrix"
+    },
+    {
+      "id": "mid-op",
+      "label": "Mid-op edit/delete",
+      "description": "Edit/delete edges §13",
+      "eta": "~15–25 min",
+      "files": [
+        "19-mid-op-edges.spec.ts"
+      ],
+      "group": "matrix"
+    },
+    {
+      "id": "qty-price",
+      "label": "Qty × price matrix",
+      "description": "Numeric micro-matrix §23",
+      "eta": "~20–40 min",
+      "files": [
+        "20-qty-price-matrix.spec.ts"
+      ],
+      "group": "matrix"
+    },
+    {
+      "id": "numeric",
+      "label": "Numeric edges",
+      "description": "Zero/negative/large amounts §16",
+      "eta": "~20–40 min",
+      "files": [
+        "21-numeric-edges.spec.ts"
+      ],
+      "group": "matrix"
+    },
+    {
+      "id": "reports-period",
+      "label": "Reports × period",
+      "description": "Report tabs × period matrix §26",
+      "eta": "~15–30 min",
+      "files": [
+        "22-reports-period-matrix.spec.ts"
+      ],
+      "group": "matrix"
+    },
+    {
+      "id": "payment-status",
+      "label": "Payment & doc status",
+      "description": "Payment methods + document status §24–25",
+      "eta": "~20–40 min",
+      "files": [
+        "23-payment-status-matrix.spec.ts"
+      ],
+      "group": "matrix"
+    },
+    {
+      "id": "ui",
+      "label": "UI / UX",
+      "description": "Non-functional UI checks §20",
+      "eta": "~10–15 min",
+      "files": [
+        "24-ui-ux.spec.ts"
+      ],
+      "group": "depth"
+    },
+    {
+      "id": "stress",
+      "label": "Stress / rare",
+      "description": "Scale and rare ops §21 (slow)",
+      "eta": "~30–60 min",
+      "files": [
+        "25-stress.spec.ts"
+      ],
+      "group": "depth"
+    },
+    {
+      "id": "remainder",
+      "label": "Domain remainders",
+      "description": "P1–P3 catalog remainders §6/8–12/15/19",
+      "eta": "~1–2 h",
+      "files": [
+        "26-domain-remainder.spec.ts"
+      ],
+      "group": "depth"
+    },
+    {
+      "id": "sweep",
+      "label": "Catalog sweep",
+      "description": "Coverage stragglers",
+      "eta": "~5–15 min",
+      "files": [
+        "27-catalog-sweep.spec.ts"
+      ],
+      "group": "depth"
+    }
+  ],
+  "presets": [
+    {
+      "id": "smoke",
+      "label": "Smoke only",
+      "description": "Fastest green-light",
+      "eta": "~2 min",
+      "buckets": [
+        "smoke"
+      ]
+    },
+    {
+      "id": "p0",
+      "label": "P0 critical",
+      "description": "Auth through validation (money paths)",
+      "eta": "~45–90 min",
+      "buckets": [
+        "smoke",
+        "auth",
+        "public",
+        "shell",
+        "company",
+        "products",
+        "sales",
+        "purchase",
+        "accounting",
+        "pos",
+        "security",
+        "integrity",
+        "settings-save",
+        "validation"
+      ]
+    },
+    {
+      "id": "core",
+      "label": "Core daily",
+      "description": "Recommended daily — no matrices/stress",
+      "eta": "~1.5–2.5 h",
+      "buckets": [
+        "smoke",
+        "auth",
+        "public",
+        "shell",
+        "company",
+        "products",
+        "sales",
+        "purchase",
+        "accounting",
+        "pos",
+        "security",
+        "integrity",
+        "settings-save",
+        "validation",
+        "routes",
+        "business-day",
+        "parties",
+        "platform",
+        "settings-matrix",
+        "mid-op",
+        "ui"
+      ]
+    },
+    {
+      "id": "full",
+      "label": "Full catalog",
+      "description": "All buckets including matrices & remainder",
+      "eta": "multi-hour",
+      "buckets": [
+        "smoke",
+        "auth",
+        "public",
+        "shell",
+        "company",
+        "products",
+        "sales",
+        "purchase",
+        "accounting",
+        "pos",
+        "security",
+        "integrity",
+        "settings-save",
+        "validation",
+        "routes",
+        "business-day",
+        "parties",
+        "platform",
+        "settings-matrix",
+        "mid-op",
+        "qty-price",
+        "numeric",
+        "reports-period",
+        "payment-status",
+        "ui",
+        "stress",
+        "remainder",
+        "sweep"
+      ]
+    }
+  ]
+}

@@ -1,24 +1,32 @@
 /**
- * BookOne E2E QA Runner
- * Separate process/URL from the main ERP app.
- * UI: enter email/password → Start → Playwright runs against E2E_BASE_URL → download report.
+ * BookOne E2E QA Runner — standalone service (bookone-e2e.* :3200)
+ * Not the Next.js ERP. UI lives in public/index.html.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+  createReadStream,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
-import { createReadStream } from 'node:fs';
 import express from 'express';
 import { randomUUID } from 'node:crypto';
+import { listBucketsForApi } from './buckets';
+import { writeRunReports, buildRunSummary } from './report-summary';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const RUNS_DIR = join(ROOT, 'runs');
 const PORT = Number(process.env.E2E_RUNNER_PORT || 3200);
 const DEFAULT_BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3100';
-// No runner secret — prefer main app UI at /e2e. Standalone port 3200 is optional.
 
 type RunStatus = 'queued' | 'running' | 'passed' | 'failed' | 'error';
 
@@ -30,9 +38,12 @@ interface RunRecord {
   finishedAt?: string;
   baseUrl: string;
   email: string;
+  suite: string;
   exitCode?: number | null;
   log: string[];
   error?: string;
+  summary?: ReturnType<typeof buildRunSummary>;
+  password?: string;
 }
 
 const runs = new Map<string, RunRecord>();
@@ -51,8 +62,7 @@ function appendLog(run: RunRecord, line: string) {
   const text = line.replace(/\r/g, '').trimEnd();
   if (!text) return;
   run.log.push(text);
-  // Cap in-memory log
-  if (run.log.length > 5000) run.log.splice(0, run.log.length - 4000);
+  if (run.log.length > 20_000) run.log.splice(0, run.log.length - 15_000);
   try {
     writeFileSync(join(runDir(run.id), 'run.log'), run.log.join('\n') + '\n', 'utf8');
   } catch {
@@ -62,6 +72,64 @@ function appendLog(run: RunRecord, line: string) {
 
 function runPlaywrightArgs(extra: string[]): string[] {
   return ['playwright', 'test', '--config', 'playwright.config.ts', ...extra];
+}
+
+function listBucketFailureFiles(dir: string): string[] {
+  const bucketDir = join(dir, 'buckets');
+  if (!existsSync(bucketDir)) return [];
+  return readdirSync(bucketDir).filter((f) => f.endsWith('.md'));
+}
+
+function publicRun(run: RunRecord) {
+  let bucketFailureFiles: string[] = [];
+  let summary = run.summary ?? null;
+  try {
+    const dir = runDir(run.id);
+    if (existsSync(dir)) {
+      bucketFailureFiles = listBucketFailureFiles(dir);
+      if (!summary && existsSync(join(dir, 'results.json'))) {
+        summary = buildRunSummary(join(dir, 'results.json'));
+        run.summary = summary;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return {
+    id: run.id,
+    status: run.status,
+    createdAt: run.createdAt,
+    startedAt: run.startedAt,
+    finishedAt: run.finishedAt,
+    baseUrl: run.baseUrl,
+    email: run.email,
+    suite: run.suite,
+    exitCode: run.exitCode,
+    error: run.error,
+    logLines: run.log.length,
+    summary,
+    bucketFailureFiles,
+  };
+}
+
+function finalizeReports(run: RunRecord) {
+  const dir = runDir(run.id);
+  try {
+    run.summary = writeRunReports(dir, {
+      runId: run.id,
+      status: run.status,
+      baseUrl: run.baseUrl,
+      email: run.email,
+      suite: run.suite,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      exitCode: run.exitCode,
+      logTail: run.log,
+    });
+  } catch (e) {
+    appendLog(run, `Report write error: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  writeFileSync(join(dir, 'summary.json'), JSON.stringify(publicRun(run), null, 2));
 }
 
 async function startPlaywright(run: RunRecord) {
@@ -75,9 +143,11 @@ async function startPlaywright(run: RunRecord) {
   appendLog(run, `=== BookOne E2E run ${run.id} ===`);
   appendLog(run, `Target: ${run.baseUrl}`);
   appendLog(run, `User: ${run.email}`);
+  appendLog(run, `Suite/bucket: ${run.suite}`);
   appendLog(run, `Started: ${run.startedAt}`);
 
-  const password = (run as RunRecord & { password?: string }).password || '';
+  const password = run.password || '';
+  const suite = run.suite || 'core';
   const env = {
     ...process.env,
     E2E_BASE_URL: run.baseUrl,
@@ -89,59 +159,54 @@ async function startPlaywright(run: RunRecord) {
     E2E_ARTIFACT_DIR: join(dir, 'artifacts'),
     CI: '1',
     E2E_RETRIES: '1',
-    // Default core (not multi-hour full). Override with E2E_SUITE=full when needed.
-    E2E_SUITE: process.env.E2E_SUITE || 'core',
-    ...(process.env.E2E_SUITE === 'full' ? { E2E_FULL: '1' } : {}),
+    E2E_SUITE: suite,
+    ...(suite === 'full' ? { E2E_FULL: '1' } : {}),
   };
 
-  // Preflight: one login test — fail fast on bad credentials (avoids 70+ cascade failures)
-  appendLog(run, 'Preflight: verifying email/password against target app…');
-  const preflightOk = await new Promise<boolean>((resolve) => {
-    const pre = spawn(
-      process.platform === 'win32' ? 'npx.cmd' : 'npx',
-      runPlaywrightArgs([
-        'tests/00-smoke.spec.ts',
-        '-g',
-        'login lands on app shell',
-        '--reporter=line',
-      ]),
-      {
-        cwd: ROOT,
-        env: { ...env, E2E_PASSWORD: password },
-        shell: false,
-      },
-    );
-    pre.stdout.on('data', (buf: Buffer) => {
-      for (const line of buf.toString('utf8').split('\n')) appendLog(run, line);
+  // Preflight login (skip for pure public bucket)
+  if (suite !== 'public') {
+    appendLog(run, 'Preflight: verifying email/password against target app…');
+    const preflightOk = await new Promise<boolean>((resolve) => {
+      const pre = spawn(
+        process.platform === 'win32' ? 'npx.cmd' : 'npx',
+        runPlaywrightArgs([
+          'tests/00-smoke.spec.ts',
+          '-g',
+          'login lands on app shell',
+          '--reporter=line',
+        ]),
+        {
+          cwd: ROOT,
+          env: { ...env, E2E_SUITE: 'smoke', E2E_PASSWORD: password },
+          shell: false,
+        },
+      );
+      pre.stdout.on('data', (buf: Buffer) => {
+        for (const line of buf.toString('utf8').split('\n')) appendLog(run, line);
+      });
+      pre.stderr.on('data', (buf: Buffer) => {
+        for (const line of buf.toString('utf8').split('\n')) appendLog(run, `[err] ${line}`);
+      });
+      pre.on('close', (code) => resolve(code === 0));
+      pre.on('error', () => resolve(false));
     });
-    pre.stderr.on('data', (buf: Buffer) => {
-      for (const line of buf.toString('utf8').split('\n')) appendLog(run, `[err] ${line}`);
-    });
-    pre.on('close', (code) => resolve(code === 0));
-    pre.on('error', () => resolve(false));
-  });
 
-  if (!preflightOk) {
-    run.status = 'failed';
-    run.exitCode = 1;
-    run.finishedAt = new Date().toISOString();
-    run.error =
-      'Login preflight failed: Invalid email or password (or app unreachable). ' +
-      'Fix credentials in the form, confirm the user can log in manually at the target URL, then re-run. ' +
-      'Do not start the full suite until login works.';
-    appendLog(run, '');
-    appendLog(run, '═══════════════════════════════════════════════════════════');
-    appendLog(run, 'PREFLIGHT FAILED — full suite aborted');
-    appendLog(run, run.error);
-    appendLog(run, '═══════════════════════════════════════════════════════════');
-    writeFileSync(join(dir, 'summary.json'), JSON.stringify(publicRun(run), null, 2));
-    writeMarkdownReport(run);
-    activeChild = null;
-    activeRunId = null;
-    return;
+    if (!preflightOk) {
+      run.status = 'failed';
+      run.exitCode = 1;
+      run.finishedAt = new Date().toISOString();
+      run.error =
+        'Login preflight failed: Invalid email or password (or app unreachable). ' +
+        'Confirm the user can log in at the target URL, then re-run.';
+      appendLog(run, 'PREFLIGHT FAILED — suite aborted');
+      appendLog(run, run.error);
+      finalizeReports(run);
+      activeChild = null;
+      activeRunId = null;
+      return;
+    }
+    appendLog(run, `Preflight OK — starting suite/bucket: ${suite}`);
   }
-
-  appendLog(run, 'Preflight OK — starting full Playwright suite…');
 
   const child = spawn(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
@@ -168,9 +233,9 @@ async function startPlaywright(run: RunRecord) {
     run.error = err.message;
     run.finishedAt = new Date().toISOString();
     appendLog(run, `Process error: ${err.message}`);
+    finalizeReports(run);
     activeChild = null;
     activeRunId = null;
-    writeFileSync(join(dir, 'summary.json'), JSON.stringify(publicRun(run), null, 2));
   });
 
   child.on('close', (code) => {
@@ -178,71 +243,10 @@ async function startPlaywright(run: RunRecord) {
     run.finishedAt = new Date().toISOString();
     run.status = code === 0 ? 'passed' : 'failed';
     appendLog(run, `=== Finished exit=${code} status=${run.status} ===`);
-    writeFileSync(join(dir, 'summary.json'), JSON.stringify(publicRun(run), null, 2));
-    // Write a human markdown report
-    writeMarkdownReport(run);
+    finalizeReports(run);
     activeChild = null;
     activeRunId = null;
   });
-}
-
-function publicRun(run: RunRecord) {
-  return {
-    id: run.id,
-    status: run.status,
-    createdAt: run.createdAt,
-    startedAt: run.startedAt,
-    finishedAt: run.finishedAt,
-    baseUrl: run.baseUrl,
-    email: run.email,
-    exitCode: run.exitCode,
-    error: run.error,
-    logLines: run.log.length,
-  };
-}
-
-function writeMarkdownReport(run: RunRecord) {
-  const dir = runDir(run.id);
-  let resultsSnippet = '';
-  try {
-    if (existsSync(join(dir, 'results.json'))) {
-      resultsSnippet = readFileSync(join(dir, 'results.json'), 'utf8').slice(0, 50_000);
-    }
-  } catch {
-    /* ignore */
-  }
-
-  const md = [
-    `# BookOne E2E Report`,
-    ``,
-    `- **Run ID:** ${run.id}`,
-    `- **Status:** ${run.status}`,
-    `- **Target:** ${run.baseUrl}`,
-    `- **User:** ${run.email}`,
-    `- **Started:** ${run.startedAt ?? '—'}`,
-    `- **Finished:** ${run.finishedAt ?? '—'}`,
-    `- **Exit code:** ${run.exitCode ?? '—'}`,
-    ``,
-    `## Log (tail)`,
-    ``,
-    '```',
-    run.log.slice(-200).join('\n'),
-    '```',
-    ``,
-    `## Playwright JSON (excerpt)`,
-    ``,
-    '```json',
-    resultsSnippet || '(no results.json)',
-    '```',
-    ``,
-    `## How to share with engineering`,
-    ``,
-    `1. Download the report zip from the QA runner UI.`,
-    `2. Include \`report.md\`, \`run.log\`, \`results.json\`, and failure screenshots under \`artifacts/\`.`,
-    ``,
-  ].join('\n');
-
-  writeFileSync(join(dir, 'report.md'), md, 'utf8');
 }
 
 const app = express();
@@ -251,16 +255,12 @@ app.use(express.json({ limit: '256kb' }));
 const publicDir = join(ROOT, 'public');
 const indexHtml = join(publicDir, 'index.html');
 
-// Explicit home — must not 404 on bookone-e2e.* host
 app.get('/', (_req, res) => {
   if (existsSync(indexHtml)) {
     res.sendFile(indexHtml);
     return;
   }
-  res
-    .status(500)
-    .type('text/plain')
-    .send('BookOne E2E runner: public/index.html missing in image.');
+  res.status(500).type('text/plain').send('public/index.html missing');
 });
 
 app.use(express.static(publicDir));
@@ -269,11 +269,16 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'bookone-e2e-runner',
+    version: 'buckets-v2',
     defaultBaseUrl: DEFAULT_BASE_URL,
     activeRunId,
     publicDir,
     hasIndex: existsSync(indexHtml),
   });
+});
+
+app.get('/api/buckets', (_req, res) => {
+  res.json(listBucketsForApi());
 });
 
 app.get('/api/runs', (_req, res) => {
@@ -301,6 +306,7 @@ app.post('/api/runs', async (req, res) => {
   const email = String(req.body?.email || '').trim();
   const password = String(req.body?.password || '');
   const baseUrl = String(req.body?.baseUrl || DEFAULT_BASE_URL).trim().replace(/\/$/, '');
+  const suite = String(req.body?.suite || 'core').toLowerCase().trim() || 'core';
 
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' });
@@ -311,26 +317,26 @@ app.post('/api/runs', async (req, res) => {
 
   ensureDirs();
   const id = randomUUID();
-  const run: RunRecord & { password?: string } = {
+  const run: RunRecord = {
     id,
     status: 'queued',
     createdAt: new Date().toISOString(),
     baseUrl,
     email,
+    suite,
     log: [],
     password,
   };
   runs.set(id, run);
   mkdirSync(runDir(id), { recursive: true });
 
-  // Fire and forget
   void startPlaywright(run).catch((e) => {
     run.status = 'error';
     run.error = e instanceof Error ? e.message : String(e);
     appendLog(run, `Failed to start: ${run.error}`);
+    finalizeReports(run);
   });
 
-  // Clear password from memory object after a tick (spawn already got env copy)
   setTimeout(() => {
     delete run.password;
   }, 1000);
@@ -343,6 +349,29 @@ app.get('/api/runs/:id/report.md', (req, res) => {
   if (!existsSync(file)) return res.status(404).json({ error: 'Report not ready' });
   res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="bookone-e2e-${req.params.id}.md"`);
+  res.send(readFileSync(file, 'utf8'));
+});
+
+app.get('/api/runs/:id/failures.md', (req, res) => {
+  const file = join(runDir(req.params.id), 'failures.md');
+  if (!existsSync(file)) return res.status(404).json({ error: 'failures.md not ready' });
+  res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="bookone-e2e-${req.params.id}-failures.md"`);
+  res.send(readFileSync(file, 'utf8'));
+});
+
+app.get('/api/runs/:id/buckets/:bucket', (req, res) => {
+  let name = req.params.bucket;
+  if (!name.endsWith('.md')) {
+    name = name.endsWith('-failures') ? `${name}.md` : `${name}-failures.md`;
+  }
+  const file = join(runDir(req.params.id), 'buckets', name);
+  if (!existsSync(file)) return res.status(404).json({ error: `Not found: ${name}` });
+  res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="bookone-e2e-${req.params.id}-${name}"`,
+  );
   res.send(readFileSync(file, 'utf8'));
 });
 
@@ -363,17 +392,29 @@ app.get('/api/runs/:id/download', async (req, res) => {
   const dir = runDir(req.params.id);
   if (!existsSync(dir)) return res.status(404).json({ error: 'Run not found' });
 
-  // Stream a simple tar-like concatenation as .txt bundle if tar not available —
-  // Prefer packaging key files into one markdown+log bundle for easy sharing.
   const parts: string[] = [];
-  for (const name of ['report.md', 'run.log', 'summary.json', 'results.json', 'junit.xml']) {
+  for (const name of [
+    'report.md',
+    'failures.md',
+    'run.log',
+    'summary.json',
+    'results.json',
+    'junit.xml',
+  ]) {
     const p = join(dir, name);
     if (existsSync(p)) {
       parts.push(`\n\n===== FILE: ${name} =====\n\n`);
       parts.push(readFileSync(p, 'utf8'));
     }
   }
-  // List artifact files
+  const bucketDir = join(dir, 'buckets');
+  if (existsSync(bucketDir)) {
+    for (const f of readdirSync(bucketDir)) {
+      if (!f.endsWith('.md')) continue;
+      parts.push(`\n\n===== FILE: buckets/${f} =====\n\n`);
+      parts.push(readFileSync(join(bucketDir, f), 'utf8'));
+    }
+  }
   const art = join(dir, 'artifacts');
   if (existsSync(art)) {
     parts.push(`\n\n===== ARTIFACTS =====\n`);
@@ -408,7 +449,6 @@ app.get('/api/runs/:id/download', async (req, res) => {
   }
 });
 
-// SPA-style fallback for unknown non-API paths
 app.use((req, res, next) => {
   if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
   if (existsSync(indexHtml)) {
@@ -422,6 +462,5 @@ ensureDirs();
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`BookOne E2E runner listening on http://0.0.0.0:${PORT}`);
   console.log(`Default target app: ${DEFAULT_BASE_URL}`);
-  console.log(`UI: open https://bookone-e2e.<your-domain>/ (standalone service)`);
+  console.log(`UI: open https://bookone-e2e.<your-domain>/ (standalone service — rebuild e2e image)`);
 });
-

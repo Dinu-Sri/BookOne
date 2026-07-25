@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BookOne E2E Runner</title>
+    <title>BookOne E2E Console</title>
     <style>
       :root {
-        --bg: #f6f8fb;
+        --bg: #f0f4f9;
         --ink: #132238;
         --muted: #5b6b7f;
         --line: #dde5ef;
@@ -15,152 +15,133 @@
         --bad: #c94141;
         --surface: #fff;
       }
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: Inter, system-ui, sans-serif;
-        background: var(--bg);
+        background: linear-gradient(180deg, #f0f4f9 0%, #f7f9fc 40%);
         color: var(--ink);
       }
-      .wrap {
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 28px 18px 48px;
-      }
-      h1 {
-        margin: 0 0 6px;
-        font-size: 22px;
-      }
-      .lead {
-        color: var(--muted);
-        margin: 0 0 22px;
-        font-size: 14px;
-        line-height: 1.5;
-      }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 18px 56px; }
+      .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+      .kicker { margin: 0; font-size: 11px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand); }
+      h1 { margin: 4px 0 8px; font-size: 26px; letter-spacing: -0.02em; }
+      h2 { margin: 0 0 12px; font-size: 15px; font-weight: 750; }
+      .lead { color: var(--muted); margin: 0; font-size: 14px; line-height: 1.55; max-width: 720px; }
       .card {
         background: var(--surface);
         border: 1px solid var(--line);
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 18px;
-        margin-bottom: 16px;
-        box-shadow: 0 1px 2px rgba(19, 34, 56, 0.06);
+        margin-bottom: 14px;
+        box-shadow: 0 1px 2px rgba(19, 34, 56, 0.05);
       }
-      label {
-        display: block;
-        font-size: 12px;
-        font-weight: 700;
-        margin-bottom: 6px;
+      label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; color: #3a4a5c; }
+      input, select {
+        width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px;
+        padding: 0 12px; font: inherit; margin-bottom: 12px; background: #fbfdff;
       }
-      input {
-        width: 100%;
-        min-height: 40px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 0 12px;
-        font: inherit;
-        margin-bottom: 12px;
-      }
-      .row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-      }
-      @media (max-width: 640px) {
-        .row {
-          grid-template-columns: 1fr;
-        }
-      }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
       button {
-        min-height: 40px;
-        border-radius: 8px;
-        border: 1px solid transparent;
-        font: inherit;
-        font-weight: 750;
-        padding: 0 16px;
-        cursor: pointer;
+        min-height: 40px; border-radius: 10px; border: 1px solid transparent;
+        font: inherit; font-weight: 750; padding: 0 16px; cursor: pointer;
       }
-      .primary {
-        background: var(--brand);
-        color: #fff;
-      }
-      .primary:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
-      }
+      .primary { background: var(--brand); color: #fff; min-height: 44px; }
+      .primary:disabled { opacity: 0.55; cursor: not-allowed; }
       .secondary {
-        background: var(--surface);
-        border-color: var(--line);
-        color: var(--ink);
+        background: var(--surface); border-color: var(--line); color: var(--ink);
+        font-size: 12px; min-height: 34px; text-decoration: none; display: inline-flex; align-items: center;
       }
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-      }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
       .badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 750;
-        background: #eef3f8;
+        display: inline-block; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 750;
+        background: #eef3f8; flex-shrink: 0;
       }
-      .badge.passed {
-        background: #e8f7f0;
-        color: var(--ok);
+      .badge.passed { background: #e8f7f0; color: var(--ok); }
+      .badge.failed, .badge.error { background: #fff0f0; color: var(--bad); }
+      .badge.running, .badge.queued { background: #e8f4ff; color: var(--brand); }
+      .meta { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+      .hint { font-size: 12px; color: var(--muted); margin: 0 0 4px; line-height: 1.45; }
+      .sub {
+        margin: 0 0 8px; font-size: 12px; font-weight: 750; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 0.04em;
       }
-      .badge.failed,
-      .badge.error {
-        background: #fff0f0;
-        color: var(--bad);
+      .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+      .chip {
+        border: 1px solid var(--line); background: #f8fafc; border-radius: 10px;
+        padding: 10px 12px; cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 2px; min-width: 120px;
       }
-      .badge.running,
-      .badge.queued {
-        background: #e8f4ff;
-        color: var(--brand);
+      .chip.active { border-color: var(--brand); background: #e8f4ff; box-shadow: 0 0 0 1px var(--brand); }
+      .chip-eta { font-size: 11px; color: var(--muted); font-weight: 600; }
+      .group-title { font-size: 13px; font-weight: 750; margin: 14px 0 8px; color: #3a4a5c; }
+      .bucket-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+      .bucket-card {
+        border: 1px solid #e3eaf3; background: #fbfdff; border-radius: 10px; padding: 12px;
+        cursor: pointer; text-align: left;
+      }
+      .bucket-card.active { border-color: var(--brand); background: #f0f7ff; box-shadow: 0 0 0 1px var(--brand); }
+      .bucket-top { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+      .bucket-label { font-weight: 750; font-size: 13px; }
+      .bucket-desc { font-size: 12px; color: var(--muted); line-height: 1.4; margin-bottom: 6px; }
+      .bucket-id { font-size: 10px; background: #eef3f8; padding: 2px 6px; border-radius: 4px; color: #3a4a5c; }
+      .selected-bar {
+        margin-top: 16px; padding-top: 14px; border-top: 1px solid #e8eef5;
+        display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
       }
       pre {
-        margin: 0;
-        max-height: 420px;
-        overflow: auto;
-        background: #0f172a;
-        color: #e2e8f0;
-        border-radius: 8px;
-        padding: 12px;
-        font-size: 12px;
-        line-height: 1.45;
+        margin: 0; max-height: 320px; overflow: auto; background: #0f172a; color: #e2e8f0;
+        border-radius: 10px; padding: 12px; font-size: 11.5px; line-height: 1.45; white-space: pre-wrap;
       }
-      .meta {
-        font-size: 13px;
-        color: var(--muted);
-        margin-bottom: 10px;
+      .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+      .stat {
+        background: #f6f9fc; border-radius: 10px; padding: 12px 10px; text-align: center; border: 1px solid #e8eef5;
       }
-      .hint {
-        font-size: 12px;
-        color: var(--muted);
-        margin-top: 8px;
+      .stat-val { font-size: 22px; font-weight: 800; }
+      .stat-label { font-size: 11px; color: var(--muted); font-weight: 650; margin-top: 2px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e3eaf3; color: var(--muted); font-size: 11px; text-transform: uppercase; }
+      th.num, td.num { text-align: right; }
+      td { padding: 8px 6px; border-bottom: 1px solid #f0f4f8; }
+      .fail-list { display: flex; flex-direction: column; gap: 8px; }
+      .fail-card { border: 1px solid #f0d4d4; border-radius: 10px; background: #fffbfb; overflow: hidden; }
+      .fail-head {
+        width: 100%; border: 0; background: transparent; padding: 12px; cursor: pointer;
+        text-align: left; display: flex; flex-direction: column; gap: 4px; font: inherit;
+      }
+      .fail-badge { font-size: 10px; font-weight: 750; color: var(--bad); text-transform: uppercase; letter-spacing: 0.04em; }
+      .fail-title { font-weight: 700; font-size: 13px; }
+      .fail-err { font-size: 12px; color: #7a3a3a; }
+      .fail-body { padding: 10px 12px 12px; border-top: 1px solid #f5e4e4; font-size: 13px; line-height: 1.45; }
+      .hidden { display: none !important; }
+      .notice {
+        background: #fff8e6; border: 1px solid #f0d78c; border-radius: 10px; padding: 12px 14px;
+        font-size: 13px; line-height: 1.45; margin-bottom: 14px; color: #5c4a12;
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1>BookOne E2E Runner</h1>
-      <p class="lead">
-        Separate QA console (this URL). Enter credentials for the <strong>target BookOne app</strong>, press
-        <strong>Start</strong>, and Playwright will log in and exercise core screens. Download the report when finished
-        and share it for fixes.
-      </p>
-
-      <div class="card">
-        <div class="row">
-          <div>
-            <label for="baseUrl">Target app URL</label>
-            <input id="baseUrl" placeholder="https://bookone.clossyan.com" />
-          </div>
+      <header class="header">
+        <div>
+          <p class="kicker">BookOne QA · standalone runner</p>
+          <h1>E2E Test Console</h1>
+          <p class="lead">
+            This host is the <strong>e2e-runner</strong> service (not ERP Next.js).
+            Run by <strong>bucket</strong> or <strong>preset</strong>. After a run, failures show in plain language with downloadable MD reports.
+          </p>
         </div>
+        <span class="badge" id="statusBadge">idle</span>
+      </header>
+
+      <div class="notice" id="versionNotice">
+        Loading console…
+      </div>
+
+      <section class="card">
+        <h2>1. Target &amp; credentials</h2>
+        <label for="baseUrl">App URL under test</label>
+        <input id="baseUrl" placeholder="https://bookone.clossyan.com" />
         <div class="row">
           <div>
             <label for="email">Email</label>
@@ -171,51 +152,60 @@
             <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
           </div>
         </div>
-        <div class="actions">
-          <button class="primary" id="startBtn" type="button">Start E2E run</button>
-          <span class="badge" id="statusBadge">idle</span>
-          <span class="meta" id="runMeta"></span>
-        </div>
-        <p class="hint">
-          Use a real user that can open
-          <strong>Target app URL → /login</strong> in a normal browser. Most suite failures are
-          <code>Invalid email or password</code> — wrong password or user not on that instance.
-        </p>
-        <p class="hint">
-          Credentials are only used for this run against the target URL. They are not stored in the BookOne ERP database
-          by this tool. Prefer a staging user when possible.
-        </p>
-      </div>
+        <p class="hint">Prefer a staging user. Auth packs intentionally fail login a few times — use single buckets when fixing.</p>
+      </section>
 
-      <div class="card">
-        <div class="actions" style="margin-bottom: 10px">
-          <button class="secondary" id="dlMd" type="button" disabled>Download report.md</button>
-          <button class="secondary" id="dlLog" type="button" disabled>Download log</button>
-          <button class="secondary" id="dlBundle" type="button" disabled>Download full bundle</button>
+      <section class="card">
+        <h2>2. What to run</h2>
+        <p class="sub">Presets (multi-bucket)</p>
+        <div class="chip-row" id="presets"></div>
+        <div id="bucketGroups"></div>
+        <div class="selected-bar">
+          <div>
+            <label>Selected</label>
+            <div style="font-weight: 750; font-size: 15px">
+              <span id="selectedLabel">core</span>
+              <span class="chip-eta" id="selectedEta"></span>
+            </div>
+            <div class="bucket-desc" id="selectedDesc">Recommended daily suite</div>
+          </div>
+          <button class="primary" id="startBtn" type="button">Start run</button>
         </div>
-        <div class="meta" id="pollInfo">No active run.</div>
-        <pre id="log">Ready.</pre>
-      </div>
+        <p class="meta" id="runMeta">No active run.</p>
+      </section>
+
+      <section class="card hidden" id="resultsCard">
+        <h2>3. Results</h2>
+        <div class="stat-row" id="stats"></div>
+        <div id="bucketTableWrap"></div>
+        <div id="failuresWrap"></div>
+        <div class="actions" id="downloads" style="margin-top: 16px"></div>
+      </section>
+
+      <section class="card">
+        <h2>Live log</h2>
+        <pre id="log">Ready. Select a preset or bucket, enter credentials, Start.</pre>
+      </section>
     </div>
 
     <script>
-      const $ = (id) => document.getElementById(id);
+      const GROUP_ORDER = ['foundation', 'money', 'platform', 'matrix', 'depth'];
+      const GROUP_LABEL = {
+        foundation: 'Foundation',
+        money: 'Money paths',
+        platform: 'Platform & integrity',
+        matrix: 'Matrices (slower)',
+        depth: 'Depth / remainder',
+      };
+
+      let suite = 'core';
+      let buckets = [];
+      let presets = [];
       let currentId = null;
       let timer = null;
+      let openFail = null;
 
-      function headers() {
-        return { 'Content-Type': 'application/json' };
-      }
-
-      async function loadHealth() {
-        try {
-          const r = await fetch('/api/health', { headers: headers() });
-          const j = await r.json();
-          if (!$('baseUrl').value) $('baseUrl').value = j.defaultBaseUrl || '';
-        } catch (e) {
-          $('log').textContent = 'Could not reach runner API: ' + e;
-        }
-      }
+      const $ = (id) => document.getElementById(id);
 
       function setStatus(status) {
         const b = $('statusBadge');
@@ -223,23 +213,196 @@
         b.className = 'badge ' + status;
       }
 
+      function renderSelection() {
+        const p = presets.find((x) => x.id === suite);
+        const b = buckets.find((x) => x.id === suite);
+        $('selectedLabel').textContent = p?.label || b?.label || suite;
+        $('selectedEta').textContent = p?.eta || b?.eta || '';
+        $('selectedDesc').textContent = p?.description || b?.description || 'suite=' + suite;
+        document.querySelectorAll('.chip').forEach((el) => {
+          el.classList.toggle('active', el.dataset.id === suite);
+        });
+        document.querySelectorAll('.bucket-card').forEach((el) => {
+          el.classList.toggle('active', el.dataset.id === suite);
+        });
+      }
+
+      function renderCatalog() {
+        const presetEl = $('presets');
+        presetEl.innerHTML = '';
+        presets.forEach((p) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'chip' + (suite === p.id ? ' active' : '');
+          btn.dataset.id = p.id;
+          btn.innerHTML = '<strong>' + escapeHtml(p.label) + '</strong><span class="chip-eta">' + escapeHtml(p.eta) + '</span>';
+          btn.onclick = () => { suite = p.id; renderSelection(); };
+          presetEl.appendChild(btn);
+        });
+
+        const wrap = $('bucketGroups');
+        wrap.innerHTML = '';
+        GROUP_ORDER.forEach((g) => {
+          const list = buckets.filter((b) => b.group === g);
+          if (!list.length) return;
+          const title = document.createElement('div');
+          title.className = 'group-title';
+          title.textContent = GROUP_LABEL[g] || g;
+          wrap.appendChild(title);
+          const grid = document.createElement('div');
+          grid.className = 'bucket-grid';
+          list.forEach((b) => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'bucket-card' + (suite === b.id ? ' active' : '');
+            card.dataset.id = b.id;
+            card.innerHTML =
+              '<div class="bucket-top"><span class="bucket-label">' + escapeHtml(b.label) +
+              '</span><span class="chip-eta">' + escapeHtml(b.eta) + '</span></div>' +
+              '<div class="bucket-desc">' + escapeHtml(b.description) + '</div>' +
+              '<code class="bucket-id">' + escapeHtml(b.id) + '</code>';
+            card.onclick = () => { suite = b.id; renderSelection(); };
+            grid.appendChild(card);
+          });
+          wrap.appendChild(grid);
+        });
+        renderSelection();
+      }
+
+      function escapeHtml(s) {
+        return String(s || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function renderResults(summary, run) {
+        const card = $('resultsCard');
+        card.classList.remove('hidden');
+        if (!summary) {
+          $('stats').innerHTML = '<p class="hint">Summary appears when the run finishes.</p>';
+          return;
+        }
+        const t = summary.totals || {};
+        $('stats').innerHTML =
+          statHtml('Passed', t.passed || 0, 'var(--ok)') +
+          statHtml('Failed', t.failed || 0, 'var(--bad)') +
+          statHtml('Skipped', t.skipped || 0, 'var(--muted)') +
+          statHtml('Timed out', t.timedOut || 0, '#b86e00');
+
+        const by = summary.byBucket || [];
+        if (by.length) {
+          let html = '<p class="sub">By bucket</p><table><thead><tr><th>Bucket</th><th class="num">Pass</th><th class="num">Fail</th><th class="num">Skip</th></tr></thead><tbody>';
+          by.forEach((b) => {
+            html +=
+              '<tr><td>' + escapeHtml(b.label) + ' <code class="bucket-id">' + escapeHtml(b.id) +
+              '</code></td><td class="num">' + b.passed + '</td><td class="num" style="' +
+              (b.failed ? 'color:var(--bad);font-weight:750' : '') + '">' + b.failed +
+              '</td><td class="num">' + b.skipped + '</td></tr>';
+          });
+          html += '</tbody></table>';
+          $('bucketTableWrap').innerHTML = html;
+        } else {
+          $('bucketTableWrap').innerHTML = '';
+        }
+
+        const fails = summary.failures || [];
+        if (fails.length) {
+          let html = '<p class="sub" style="margin-top:16px">Failures (human-readable)</p><div class="fail-list">';
+          fails.forEach((f, i) => {
+            const key = f.bucket + ':' + f.title;
+            const open = openFail === key;
+            html +=
+              '<div class="fail-card">' +
+              '<button type="button" class="fail-head" data-key="' + escapeHtml(key) + '">' +
+              '<span class="fail-badge">' + escapeHtml(f.bucketLabel || f.bucket) + '</span>' +
+              '<span class="fail-title">' + escapeHtml(f.title) + '</span>' +
+              '<span class="fail-err">' + escapeHtml(f.errorShort || '') + '</span></button>' +
+              (open
+                ? '<div class="fail-body"><p><strong>What to do:</strong> ' + escapeHtml(f.humanHint || '') +
+                  '</p><p class="hint">File: <code>' + escapeHtml(f.file || '') +
+                  '</code></p><button type="button" class="secondary rebucket" data-bucket="' +
+                  escapeHtml(f.bucket) + '">Select bucket “' + escapeHtml(f.bucket) + '” to re-run</button></div>'
+                : '') +
+              '</div>';
+          });
+          html += '</div>';
+          $('failuresWrap').innerHTML = html;
+          $('failuresWrap').querySelectorAll('.fail-head').forEach((btn) => {
+            btn.onclick = () => {
+              openFail = openFail === btn.dataset.key ? null : btn.dataset.key;
+              renderResults(summary, run);
+            };
+          });
+          $('failuresWrap').querySelectorAll('.rebucket').forEach((btn) => {
+            btn.onclick = () => {
+              suite = btn.dataset.bucket;
+              renderSelection();
+            };
+          });
+        } else {
+          $('failuresWrap').innerHTML =
+            run && run.status === 'passed'
+              ? '<p style="color:var(--ok);font-weight:650">All tests in this run passed.</p>'
+              : '';
+        }
+
+        const done = ['passed', 'failed', 'error'].includes(run?.status);
+        let dl =
+          '<a class="secondary" href="/api/runs/' + currentId + '/report.md">report.md</a>' +
+          '<a class="secondary" href="/api/runs/' + currentId + '/failures.md">failures.md (agent)</a>' +
+          '<a class="secondary" href="/api/runs/' + currentId + '/log">Full log</a>' +
+          '<a class="secondary" href="/api/runs/' + currentId + '/download">Full bundle</a>';
+        (run?.bucketFailureFiles || []).forEach((f) => {
+          const id = f.replace(/-failures\.md$/, '');
+          dl +=
+            '<a class="secondary" style="border-color:#f0c2c2" href="/api/runs/' +
+            currentId +
+            '/buckets/' +
+            encodeURIComponent(id) +
+            '">' +
+            escapeHtml(f) +
+            '</a>';
+        });
+        $('downloads').innerHTML = dl;
+        $('downloads').querySelectorAll('a').forEach((a) => {
+          if (!done) {
+            a.style.opacity = '0.45';
+            a.style.pointerEvents = 'none';
+          }
+        });
+      }
+
+      function statHtml(label, value, color) {
+        return (
+          '<div class="stat"><div class="stat-val" style="color:' +
+          color +
+          '">' +
+          value +
+          '</div><div class="stat-label">' +
+          label +
+          '</div></div>'
+        );
+      }
+
       async function poll() {
         if (!currentId) return;
-        const r = await fetch('/api/runs/' + currentId, { headers: headers() });
+        const r = await fetch('/api/runs/' + currentId);
         if (!r.ok) return;
         const j = await r.json();
         setStatus(j.status);
-        $('runMeta').textContent = `${j.id.slice(0, 8)}… · ${j.baseUrl}`;
+        $('runMeta').textContent =
+          (j.id || '').slice(0, 8) + '… · ' + (j.suite || '—') + ' · ' + (j.baseUrl || '') + ' · exit ' + (j.exitCode ?? '—');
         $('log').textContent = (j.log || []).join('\n') || '(no log yet)';
         $('log').scrollTop = $('log').scrollHeight;
-        $('pollInfo').textContent = `Run ${j.status} · lines ${j.log?.length ?? 0} · exit ${j.exitCode ?? '—'}`;
-
+        if (j.summary) renderResults(j.summary, j);
+        else if (['passed', 'failed', 'error'].includes(j.status)) {
+          $('resultsCard').classList.remove('hidden');
+          renderResults(null, j);
+        }
         const done = ['passed', 'failed', 'error'].includes(j.status);
-        $('dlMd').disabled = !done;
-        $('dlLog').disabled = !done;
-        $('dlBundle').disabled = !done;
-        $('startBtn').disabled = !done && j.status === 'running';
-
+        $('startBtn').disabled = j.status === 'running' || j.status === 'queued';
         if (done && timer) {
           clearInterval(timer);
           timer = null;
@@ -250,15 +413,17 @@
       $('startBtn').onclick = async () => {
         $('startBtn').disabled = true;
         setStatus('queued');
-        $('log').textContent = 'Starting…';
+        $('log').textContent = 'Starting suite/bucket: ' + suite + '…';
+        $('resultsCard').classList.add('hidden');
         try {
           const r = await fetch('/api/runs', {
             method: 'POST',
-            headers: headers(),
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               email: $('email').value.trim(),
               password: $('password').value,
               baseUrl: $('baseUrl').value.trim(),
+              suite,
             }),
           });
           const j = await r.json();
@@ -279,15 +444,35 @@
         }
       };
 
-      function download(path) {
-        if (!currentId) return;
-        window.open('/api/runs/' + currentId + path, '_blank');
+      async function boot() {
+        try {
+          const h = await fetch('/api/health').then((r) => r.json());
+          if (!$('baseUrl').value) $('baseUrl').value = h.defaultBaseUrl || '';
+          const ver = h.version || 'legacy';
+          if (ver === 'buckets-v2') {
+            $('versionNotice').classList.add('hidden');
+          } else {
+            $('versionNotice').textContent =
+              'This container is still the OLD e2e image (version: ' +
+              ver +
+              '). Rebuild/redeploy the e2e service (Dockerfile.e2e / bookone-staging-e2e), not only web.';
+          }
+          const cat = await fetch('/api/buckets').then((r) => r.json());
+          buckets = cat.buckets || [];
+          presets = cat.presets || [];
+          if (!buckets.length) {
+            $('versionNotice').classList.remove('hidden');
+            $('versionNotice').textContent =
+              'Buckets API empty — old image. Rebuild Portainer stack service e2e from latest master.';
+          }
+          renderCatalog();
+        } catch (e) {
+          $('versionNotice').textContent = 'Could not load runner API: ' + e;
+          $('log').textContent = String(e);
+        }
       }
-      $('dlMd').onclick = () => download('/report.md');
-      $('dlLog').onclick = () => download('/log');
-      $('dlBundle').onclick = () => download('/download');
 
-      loadHealth();
+      boot();
     </script>
   </body>
 </html>

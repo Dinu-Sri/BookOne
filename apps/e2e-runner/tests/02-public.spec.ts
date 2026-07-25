@@ -53,10 +53,15 @@ test.describe('Public surfaces catalog §2 @docs @public @e2e', () => {
   test('S-e2e console public at /e2e', async ({ browser }) => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
+    // ERP /e2e may redirect to dedicated e2e host — both are valid public consoles
     await page.goto('/e2e');
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page.getByRole('heading', { name: /E2E/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Start E2E/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /E2E/i }).or(page.getByText(/E2E Test Console|BookOne E2E/i)),
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.getByRole('button', { name: /Start (E2E )?run|Start E2E/i }),
+    ).toBeVisible({ timeout: 20_000 });
     await ctx.close();
   });
 

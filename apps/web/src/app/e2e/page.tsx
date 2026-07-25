@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 type RunStatus = 'idle' | 'queued' | 'running' | 'passed' | 'failed' | 'error';
 
@@ -71,6 +71,13 @@ export default function E2eConsolePage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [bucketFiles, setBucketFiles] = useState<string[]>([]);
   const [openFail, setOpenFail] = useState<string | null>(null);
+  const [autoProgress, setAutoProgress] = useState('');
+  const autoRef = useRef({
+    active: false,
+    queue: [] as string[],
+    index: 0,
+    results: [] as { bucket: string; status: string; failed: number }[],
+  });
 
   useEffect(() => {
     setBaseUrl(window.location.origin);
@@ -82,6 +89,25 @@ export default function E2eConsolePage() {
       })
       .catch(() => undefined);
   }, []);
+
+  async function downloadFailures(id: string, bucketId: string) {
+    try {
+      const r = await fetch(`/api/e2e/runs/${id}/failures`);
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `bookone-e2e-${bucketId}-failures.md`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 800);
+    } catch {
+      /* ignore */
+    }
+  }
 
   const poll = useCallback(async (id: string) => {
     const r = await fetch(`/api/e2e/runs/${id}`);
@@ -97,49 +123,133 @@ export default function E2eConsolePage() {
     return ['passed', 'failed', 'error'].includes(j.status);
   }, []);
 
+  async function startSuite(suiteId: string) {
+    setSuite(suiteId);
+    setStatus('queued');
+    setSummary(null);
+    setBucketFiles([]);
+    setLog(`Starting suite/bucket: ${suiteId}…`);
+    const r = await fetch('/api/e2e/runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.trim(),
+        password,
+        baseUrl: baseUrl.trim() || window.location.origin,
+        suite: suiteId,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed to start');
+    setRunId(j.id);
+    setStatus(j.status || 'running');
+    return j.id as string;
+  }
+
   useEffect(() => {
     if (!runId || !['queued', 'running'].includes(status)) return;
     const t = setInterval(async () => {
       const done = await poll(runId);
-      if (done) {
-        setBusy(false);
-        clearInterval(t);
-      }
-    }, 1500);
-    return () => clearInterval(t);
-  }, [runId, status, poll]);
+      if (!done) return;
+      clearInterval(t);
 
-  async function start() {
-    setBusy(true);
-    setStatus('queued');
-    setSummary(null);
-    setBucketFiles([]);
-    setLog(`Starting suite/bucket: ${suite}…`);
-    try {
-      const r = await fetch('/api/e2e/runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-          baseUrl: baseUrl.trim() || window.location.origin,
-          suite,
-        }),
-      });
-      const j = await r.json();
-      if (!r.ok) {
-        setStatus('error');
-        setLog(j.error || 'Failed to start');
+      const auto = autoRef.current;
+      if (!auto.active) {
         setBusy(false);
         return;
       }
-      setRunId(j.id);
-      setStatus(j.status || 'running');
-      await poll(j.id);
+
+      // Auto chain: download on fail, then next bucket
+      const r = await fetch(`/api/e2e/runs/${runId}`);
+      const j = r.ok ? await r.json() : null;
+      const bucketId = auto.queue[auto.index] || j?.suite || suite;
+      const failed = j?.status === 'failed' || j?.status === 'error';
+      const failedCount = j?.summary?.totals?.failed ?? (failed ? 1 : 0);
+      auto.results.push({ bucket: bucketId, status: j?.status || 'error', failed: failedCount });
+
+      if (failed && failedCount > 0) {
+        setAutoProgress(
+          `Bucket ${auto.index + 1}/${auto.queue.length} “${bucketId}” FAILED — downloading failures.md…`,
+        );
+        await downloadFailures(runId, bucketId);
+        await new Promise((res) => setTimeout(res, 600));
+      } else {
+        setAutoProgress(
+          `Bucket ${auto.index + 1}/${auto.queue.length} “${bucketId}” passed — next…`,
+        );
+      }
+
+      auto.index += 1;
+      if (auto.index >= auto.queue.length) {
+        auto.active = false;
+        setBusy(false);
+        const fails = auto.results.filter((x) => x.status !== 'passed');
+        setAutoProgress(
+          `Auto-run complete. ${auto.results.length} buckets · ${fails.length} with failures.`,
+        );
+        setLog(
+          (prev) =>
+            prev +
+            '\n\n=== AUTO-RUN SUMMARY ===\n' +
+            auto.results.map((x) => `${x.bucket}: ${x.status}`).join('\n'),
+        );
+        return;
+      }
+
+      await new Promise((res) => setTimeout(res, 2000));
+      try {
+        setAutoProgress(
+          `Running bucket ${auto.index + 1}/${auto.queue.length}: ${auto.queue[auto.index]}`,
+        );
+        await startSuite(auto.queue[auto.index]!);
+      } catch (e) {
+        auto.active = false;
+        setBusy(false);
+        setStatus('error');
+        setAutoProgress(`Auto-run stopped: ${e}`);
+      }
+    }, 1500);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId, status, poll]);
+
+  async function start() {
+    autoRef.current.active = false;
+    setBusy(true);
+    setAutoProgress('');
+    try {
+      await startSuite(suite);
     } catch (e) {
       setStatus('error');
       setLog(String(e));
       setBusy(false);
+    }
+  }
+
+  async function startAutoAll() {
+    if (!email.trim() || !password) {
+      alert('Enter email and password first.');
+      return;
+    }
+    if (!buckets.length) {
+      alert('Buckets not loaded yet.');
+      return;
+    }
+    const auto = autoRef.current;
+    auto.active = true;
+    auto.queue = buckets.map((b) => b.id).filter((id) => id !== 'sweep');
+    auto.index = 0;
+    auto.results = [];
+    setBusy(true);
+    setAutoProgress(`Auto-run starting: ${auto.queue.length} buckets…`);
+    try {
+      await startSuite(auto.queue[0]!);
+    } catch (e) {
+      auto.active = false;
+      setBusy(false);
+      setStatus('error');
+      setLog(String(e));
+      setAutoProgress('');
     }
   }
 
@@ -276,11 +386,27 @@ export default function E2eConsolePage() {
                 {selectedPreset?.description || selectedBucket?.description || `suite=${suite}`}
               </div>
             </div>
-            <button style={styles.primary} type="button" disabled={busy || !email || !password} onClick={start}>
-              {busy ? 'Running…' : 'Start run'}
-            </button>
+            <div style={styles.actions}>
+              <button style={styles.primary} type="button" disabled={busy || !email || !password} onClick={start}>
+                {busy && !autoProgress ? 'Running…' : 'Start run'}
+              </button>
+              <button
+                style={{ ...styles.primary, background: '#0f766e' }}
+                type="button"
+                disabled={busy || !email || !password}
+                onClick={startAutoAll}
+                title="Run every domain bucket one-by-one. On failure, auto-download failures.md then continue."
+              >
+                {busy && autoProgress ? 'Auto-running…' : 'Auto-run all buckets'}
+              </button>
+            </div>
           </div>
+          <p style={styles.hint}>
+            <strong>Auto-run all buckets:</strong> walks every domain pack in order. If a bucket fails, downloads that
+            run’s agent <code>failures.md</code> to your browser Downloads folder, then continues to the next.
+          </p>
           <p style={styles.meta}>{meta}</p>
+          {autoProgress ? <p style={{ ...styles.meta, color: '#0f766e', fontWeight: 650 }}>{autoProgress}</p> : null}
         </section>
 
         {(summary || done) && (

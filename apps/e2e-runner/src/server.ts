@@ -269,7 +269,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'bookone-e2e-runner',
-    version: 'buckets-v2',
+    version: 'buckets-v3-auto',
     defaultBaseUrl: DEFAULT_BASE_URL,
     activeRunId,
     publicDir,

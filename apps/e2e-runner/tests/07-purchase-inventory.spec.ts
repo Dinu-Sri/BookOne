@@ -73,7 +73,11 @@ test.describe('Purchase lifecycle catalog §9 @purchase @inventory @journey @p0'
 
   test('S-0247 PO→full GRN', async ({ authedPage: page }) => {
     const before = physicalSku ? await readStockOnHand(page, physicalSku) : null;
-    const result = await tryConvertFromList(page, '/purchase/orders', /Receive|GRN|Convert/i);
+    const result = await tryConvertFromList(
+      page,
+      '/purchase/orders',
+      /Receive goods|Create GRN|Convert to GRN|^Convert$|GRN/i,
+    );
     if (result === 'no_button') {
       // Direct GRN create fallback
       await createPurchaseDocMarked(page, 'receipt', {
@@ -279,7 +283,11 @@ test.describe('Purchase lifecycle catalog §9 @purchase @inventory @journey @p0'
   });
 
   test('S-0274 PO convert no remaining fails', async ({ authedPage: page }) => {
-    await tryConvertFromList(page, '/purchase/orders', /Receive|GRN|Convert/i);
+    await tryConvertFromList(
+      page,
+      '/purchase/orders',
+      /Receive goods|Create GRN|Convert to GRN|^Convert$|GRN/i,
+    );
     await expectNoAppCrash(page);
   });
 

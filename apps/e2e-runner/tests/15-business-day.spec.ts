@@ -215,7 +215,11 @@ test.describe('Business-day journeys catalog §12 @journey @p0', () => {
       price: '80',
       qty: '2',
     });
-    await tryConvertFromList(page, '/purchase/orders', /Receive|GRN|Convert/i);
+    await tryConvertFromList(
+      page,
+      '/purchase/orders',
+      /Receive goods|Create GRN|Convert to GRN|^Convert$|GRN/i,
+    );
     await createPurchaseDocMarked(page, 'purchase', {
       party: vendor,
       line: physicalName || physicalSku,

@@ -136,13 +136,13 @@ test.describe('Company masters catalog §4 @company @brand @location @p0', () =>
   test('S-0061 Create brand', async ({ authedPage: page }) => {
     brandA = await ensureBrand(page);
     await go(page, '/company/brands');
-    await expect(page.getByText(brandA)).toBeVisible();
+    await expect(page.getByDisplayValue(brandA).first()).toBeVisible();
   });
 
   test('S-0062 Create second brand', async ({ authedPage: page }) => {
     brandB = await ensureBrand(page, `E2E Brand B ${seed()}`);
     await go(page, '/company/brands');
-    await expect(page.getByText(brandB)).toBeVisible();
+    await expect(page.getByDisplayValue(brandB).first()).toBeVisible();
   });
 
   test('S-0063 Edit brand', async ({ authedPage: page }) => {
@@ -163,20 +163,20 @@ test.describe('Company masters catalog §4 @company @brand @location @p0', () =>
   test('S-0064 Create location no brand', async ({ authedPage: page }) => {
     locA = await ensureLocation(page, `E2E Loc A ${seed()}`);
     await go(page, '/company/locations');
-    await expect(page.getByText(locA)).toBeVisible();
+    await expect(page.getByDisplayValue(locA).first()).toBeVisible();
   });
 
   test('S-0065 Create location with brand', async ({ authedPage: page }) => {
     if (!brandA) brandA = await ensureBrand(page);
     locB = await ensureLocation(page, `E2E Loc B ${seed()}`, brandA);
     await go(page, '/company/locations');
-    await expect(page.getByText(locB)).toBeVisible();
+    await expect(page.getByDisplayValue(locB).first()).toBeVisible();
   });
 
   test('S-0066 Create second location', async ({ authedPage: page }) => {
     const locC = await ensureLocation(page, `E2E Loc C ${seed()}`, brandB || brandA || undefined);
     await go(page, '/company/locations');
-    await expect(page.getByText(locC)).toBeVisible();
+    await expect(page.getByDisplayValue(locC).first()).toBeVisible();
   });
 
   test('S-0067 Edit location type/address', async ({ authedPage: page }) => {

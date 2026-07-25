@@ -169,9 +169,19 @@
             </div>
             <div class="bucket-desc" id="selectedDesc">Recommended daily suite</div>
           </div>
-          <button class="primary" id="startBtn" type="button">Start run</button>
+          <div class="actions">
+            <button class="primary" id="startBtn" type="button">Start run</button>
+            <button class="primary" id="autoAllBtn" type="button" style="background:#0f766e" title="Run every domain bucket one-by-one. On failure, auto-download failures.md then continue.">
+              Auto-run all buckets
+            </button>
+          </div>
         </div>
+        <p class="hint" id="autoHint">
+          <strong>Auto-run all buckets:</strong> runs each domain pack in order (smoke → auth → … → remainder).
+          If a bucket fails, downloads that run’s <code>failures.md</code> to your Downloads folder, then continues to the next.
+        </p>
         <p class="meta" id="runMeta">No active run.</p>
+        <p class="meta" id="autoProgress"></p>
       </section>
 
       <section class="card hidden" id="resultsCard">
@@ -204,8 +214,48 @@
       let currentId = null;
       let timer = null;
       let openFail = null;
+      let autoChain = false;
+      let autoQueue = [];
+      let autoIndex = 0;
+      let autoResults = [];
 
       const $ = (id) => document.getElementById(id);
+
+      async function downloadFailuresMd(runId, bucketId) {
+        try {
+          const r = await fetch('/api/runs/' + runId + '/failures.md');
+          if (!r.ok) {
+            // fallback report.md
+            const r2 = await fetch('/api/runs/' + runId + '/report.md');
+            if (!r2.ok) return false;
+            const blob = await r2.blob();
+            triggerDownload(blob, 'bookone-e2e-' + bucketId + '-report.md');
+            return true;
+          }
+          const blob = await r.blob();
+          triggerDownload(blob, 'bookone-e2e-' + bucketId + '-failures.md');
+          return true;
+        } catch (e) {
+          console.warn('auto-download failed', e);
+          return false;
+        }
+      }
+
+      function triggerDownload(blob, filename) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(a.href);
+          a.remove();
+        }, 1000);
+      }
+
+      function setAutoProgress(msg) {
+        $('autoProgress').textContent = msg || '';
+      }
 
       function setStatus(status) {
         const b = $('statusBadge');
@@ -402,45 +452,169 @@
           renderResults(null, j);
         }
         const done = ['passed', 'failed', 'error'].includes(j.status);
-        $('startBtn').disabled = j.status === 'running' || j.status === 'queued';
+        if (!autoChain) {
+          $('startBtn').disabled = j.status === 'running' || j.status === 'queued';
+          $('autoAllBtn').disabled = j.status === 'running' || j.status === 'queued';
+        }
         if (done && timer) {
           clearInterval(timer);
           timer = null;
+          if (autoChain) {
+            await onAutoBucketFinished(j);
+          } else {
+            $('startBtn').disabled = false;
+            $('autoAllBtn').disabled = false;
+          }
+        }
+      }
+
+      async function startOne(suiteId) {
+        suite = suiteId;
+        renderSelection();
+        setStatus('queued');
+        $('log').textContent = 'Starting suite/bucket: ' + suiteId + '…';
+        const r = await fetch('/api/runs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: $('email').value.trim(),
+            password: $('password').value,
+            baseUrl: $('baseUrl').value.trim(),
+            suite: suiteId,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) {
+          throw new Error(j.error || 'Failed to start');
+        }
+        currentId = j.id;
+        if (timer) clearInterval(timer);
+        timer = setInterval(poll, 1500);
+        await poll();
+      }
+
+      async function onAutoBucketFinished(j) {
+        const bucketId = autoQueue[autoIndex] || j.suite;
+        const failed = j.status === 'failed' || j.status === 'error';
+        const failedCount = j.summary?.totals?.failed ?? (failed ? 1 : 0);
+        autoResults.push({
+          bucket: bucketId,
+          status: j.status,
+          failed: failedCount,
+          runId: j.id,
+        });
+
+        if (failed && failedCount > 0) {
+          setAutoProgress(
+            'Bucket ' +
+              (autoIndex + 1) +
+              '/' +
+              autoQueue.length +
+              ' “' +
+              bucketId +
+              '” FAILED — downloading failures.md…',
+          );
+          await downloadFailuresMd(j.id, bucketId);
+          await new Promise((r) => setTimeout(r, 800));
+        } else {
+          setAutoProgress(
+            'Bucket ' +
+              (autoIndex + 1) +
+              '/' +
+              autoQueue.length +
+              ' “' +
+              bucketId +
+              '” ' +
+              (j.status === 'passed' ? 'passed' : j.status) +
+              ' — next…',
+          );
+        }
+
+        autoIndex += 1;
+        if (autoIndex >= autoQueue.length) {
+          autoChain = false;
           $('startBtn').disabled = false;
+          $('autoAllBtn').disabled = false;
+          const fails = autoResults.filter((x) => x.status !== 'passed');
+          setAutoProgress(
+            'Auto-run complete. ' +
+              autoResults.length +
+              ' buckets · ' +
+              fails.length +
+              ' with failures. Downloads: only failed buckets.',
+          );
+          $('log').textContent +=
+            '\n\n=== AUTO-RUN SUMMARY ===\n' +
+            autoResults
+              .map((x) => x.bucket + ': ' + x.status + (x.failed ? ' (failed=' + x.failed + ')' : ''))
+              .join('\n');
+          return;
+        }
+
+        // Brief pause between buckets (login cool-down)
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          setAutoProgress(
+            'Running bucket ' +
+              (autoIndex + 1) +
+              '/' +
+              autoQueue.length +
+              ': ' +
+              autoQueue[autoIndex],
+          );
+          await startOne(autoQueue[autoIndex]);
+        } catch (e) {
+          autoChain = false;
+          $('startBtn').disabled = false;
+          $('autoAllBtn').disabled = false;
+          setAutoProgress('Auto-run stopped: ' + e);
+          setStatus('error');
         }
       }
 
       $('startBtn').onclick = async () => {
+        autoChain = false;
         $('startBtn').disabled = true;
-        setStatus('queued');
-        $('log').textContent = 'Starting suite/bucket: ' + suite + '…';
+        $('autoAllBtn').disabled = true;
         $('resultsCard').classList.add('hidden');
+        setAutoProgress('');
         try {
-          const r = await fetch('/api/runs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: $('email').value.trim(),
-              password: $('password').value,
-              baseUrl: $('baseUrl').value.trim(),
-              suite,
-            }),
-          });
-          const j = await r.json();
-          if (!r.ok) {
-            $('log').textContent = j.error || 'Failed to start';
-            setStatus('error');
-            $('startBtn').disabled = false;
-            return;
-          }
-          currentId = j.id;
-          if (timer) clearInterval(timer);
-          timer = setInterval(poll, 1500);
-          await poll();
+          await startOne(suite);
         } catch (e) {
           $('log').textContent = String(e);
           setStatus('error');
           $('startBtn').disabled = false;
+          $('autoAllBtn').disabled = false;
+        }
+      };
+
+      $('autoAllBtn').onclick = async () => {
+        if (!buckets.length) {
+          alert('Buckets not loaded. Rebuild e2e image if this persists.');
+          return;
+        }
+        if (!$('email').value.trim() || !$('password').value) {
+          alert('Enter email and password first.');
+          return;
+        }
+        // Domain order as defined by API (foundation → money → …). Skip empty sweep if desired still run.
+        autoQueue = buckets.map((b) => b.id).filter((id) => id !== 'sweep');
+        autoIndex = 0;
+        autoResults = [];
+        autoChain = true;
+        $('startBtn').disabled = true;
+        $('autoAllBtn').disabled = true;
+        $('resultsCard').classList.add('hidden');
+        setAutoProgress('Auto-run starting: ' + autoQueue.length + ' buckets…');
+        try {
+          await startOne(autoQueue[0]);
+        } catch (e) {
+          autoChain = false;
+          $('log').textContent = String(e);
+          setStatus('error');
+          $('startBtn').disabled = false;
+          $('autoAllBtn').disabled = false;
+          setAutoProgress('');
         }
       };
 

@@ -129,43 +129,61 @@ export async function createPurchaseDocMarked(
   return marker;
 }
 
-/** Open first list row (or row matching text) and click Convert when available. */
+/**
+ * Open first list row and convert (QT→SO, PO→GRN, etc.).
+ * Scoped to main/workspace so sidebar "Receive Payments" never matches.
+ */
 export async function tryConvertFromList(
   page: Page,
   listPath: string,
   convertName: RegExp = /Convert/i,
 ): Promise<'converted' | 'no_button' | 'error'> {
   await go(page, listPath);
-  // Prefer Actions → Convert form button in first actionable row
-  const convertBtn = page
+  const main = page.locator('main, .workspace, .party-workspace, .content').first();
+
+  // Prefer in-row action forms (document convert)
+  const convertBtn = main
     .locator('form')
     .filter({ has: page.locator('input[name="targetType"], input[name="documentId"]') })
     .getByRole('button', { name: convertName })
     .first();
-  const roleBtn = page.getByRole('button', { name: convertName }).first();
-  const linkBtn = page.getByRole('link', { name: convertName }).first();
-
   let target = convertBtn;
-  if (!(await target.isVisible().catch(() => false))) target = roleBtn;
-  if (!(await target.isVisible().catch(() => false))) target = linkBtn;
+  if (!(await target.isVisible().catch(() => false))) {
+    target = main.getByRole('button', { name: convertName }).first();
+  }
+  // Never use bare getByRole('link') on whole page — hits Sales nav "Receive Payments".
+  if (!(await target.isVisible().catch(() => false))) {
+    target = main
+      .locator('table tbody tr a, .list-row a, a.doc-link')
+      .filter({ hasText: convertName })
+      .first();
+  }
 
   // Open first detail if convert only lives on detail
   if (!(await target.isVisible().catch(() => false))) {
-    const rowLink = page.locator('table tbody tr a').first();
+    const rowLink = main.locator('table tbody tr a, table tbody tr td a').first();
     if (await rowLink.isVisible().catch(() => false)) {
-      await rowLink.click();
-      await page.waitForTimeout(800);
-      target = page.getByRole('button', { name: convertName }).first();
+      await rowLink.click({ force: true });
+      await page.waitForTimeout(900);
+      const detailMain = page.locator('main, .workspace, .party-workspace, .content').first();
+      target = detailMain.getByRole('button', { name: convertName }).first();
       if (!(await target.isVisible().catch(() => false))) {
-        // Purchase GRN path
-        const grn = page.getByRole('button', { name: /Receive goods|GRN|Convert/i }).first();
+        const grn = detailMain
+          .getByRole('button', { name: /Receive goods|Create GRN|Convert to GRN|^Convert$/i })
+          .first();
         if (await grn.isVisible().catch(() => false)) {
-          await grn.click();
+          await grn.click({ force: true });
           await page.waitForTimeout(1000);
           await clickPrimary(page, /Receive|Save|Confirm|Convert|Create/i).catch(() => undefined);
           await page.waitForTimeout(1500);
           await expectNoAppCrash(page);
           return 'converted';
+        }
+        // Direct GRN URL fallback from PO detail
+        if (/purchase\/orders/i.test(listPath) || page.url().includes('/purchase/orders')) {
+          await page.goto('/purchase/receipts/new', { waitUntil: 'domcontentloaded' });
+          await expectNoAppCrash(page);
+          return 'no_button';
         }
         return 'no_button';
       }
@@ -174,9 +192,8 @@ export async function tryConvertFromList(
     }
   }
 
-  await target.click();
+  await target.click({ force: true });
   await page.waitForTimeout(1000);
-  // Confirm panel if present (PO convert quantities)
   await clickPrimary(page, /Receive|Save|Confirm|Convert|Create|Invoice|Order/i).catch(() => undefined);
   await page.waitForTimeout(1500);
   await expectNoAppCrash(page);

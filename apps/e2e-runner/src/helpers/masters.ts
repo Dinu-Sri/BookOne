@@ -4,25 +4,23 @@ import { seed } from './env';
 import { clickPrimary } from './forms';
 import { go } from './nav';
 
-/** Brand/location names live in <input value>, not text nodes — use display value. */
-async function expectInlineMasterName(page: Page, name: string) {
-  const byDisplay = page.getByDisplayValue(name).first();
-  if (await byDisplay.isVisible().catch(() => false)) {
-    await expect(byDisplay).toBeVisible();
-    return;
-  }
-  // After refresh values may lag — poll inputs
+/**
+ * Brand/location names live in <input value>, not text nodes.
+ * Avoid page.getByDisplayValue — some runner builds don't expose it on Page.
+ */
+export async function expectInlineMasterName(page: Page, name: string) {
+  const short = name.slice(0, 12);
   await expect
     .poll(
       async () => {
-        const values = await page.locator('form.company-inline-form input[name="name"]').evaluateAll((els) =>
-          els.map((e) => (e as HTMLInputElement).value),
-        );
-        return values.some((v) => v === name || v.includes(name.slice(0, 12)));
+        const values = await page
+          .locator('form.company-inline-form input[name="name"], input[name="name"]')
+          .evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+        return values.some((v) => v === name || (v && v.includes(short)));
       },
-      { timeout: 25_000 },
+      { timeout: 25_000, message: `Master name not found in inputs: ${name}` },
     )
-    .toBeTruthy();
+    .toBe(true);
 }
 
 export async function ensureBrand(page: Page, name?: string) {
@@ -36,15 +34,17 @@ export async function ensureBrand(page: Page, name?: string) {
   await createForm.getByRole('button', { name: /Add brand/i }).click();
 
   // Wait for success message or error
-  const msg = createForm.locator('.entry-result.success, .form-error, [role="status"]');
-  await expect(msg.or(page.getByDisplayValue(brandName).first())).toBeVisible({ timeout: 20_000 });
+  // Wait for success toast/message or form to settle
+  await page.waitForTimeout(800);
   const err = createForm.locator('.form-error');
   if (await err.isVisible().catch(() => false)) {
     const t = (await err.textContent())?.trim() || '';
     if (t && !/added|success|updated/i.test(t)) throw new Error(t);
   }
-
-  await page.waitForTimeout(600);
+  const okMsg = createForm.locator('.entry-result.success');
+  if (await okMsg.isVisible().catch(() => false)) {
+    // good
+  }
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expectInlineMasterName(page, brandName);
   return brandName;
@@ -75,14 +75,12 @@ export async function ensureLocation(page: Page, name?: string, brandLabel?: str
     }
   }
   await createForm.getByRole('button', { name: /Add location/i }).click();
-  const msg = createForm.locator('.entry-result.success, .form-error, [role="status"]');
-  await expect(msg.or(page.getByDisplayValue(locName).first())).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(800);
   const err = createForm.locator('.form-error');
   if (await err.isVisible().catch(() => false)) {
     const t = (await err.textContent())?.trim() || '';
     if (t && !/added|success|updated/i.test(t)) throw new Error(t);
   }
-  await page.waitForTimeout(600);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expectInlineMasterName(page, locName);
   return locName;

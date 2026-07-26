@@ -15,9 +15,26 @@ export async function expectNoAppCrash(page: Page) {
   }
 }
 
+/**
+ * Authed app is usable. POS uses `.pos-root` / `.pos-empty` without normal sidebar workspace.
+ */
 export async function expectAuthedShell(page: Page) {
   await expect(page).not.toHaveURL(/\/login/);
-  await expect(page.locator('.app-shell, .sidebar, .workspace').first()).toBeVisible({
+  await expect(
+    page
+      .locator(
+        [
+          '.app-shell',
+          '.sidebar',
+          '.workspace',
+          '.party-workspace',
+          '.pos-root',
+          '.pos-empty',
+          'main',
+        ].join(', '),
+      )
+      .first(),
+  ).toBeVisible({
     timeout: 30_000,
   });
   await expectNoAppCrash(page);

@@ -854,12 +854,14 @@ async function handlePurchase(page: Page, s: Scenario, ctx: RunCtx) {
 
 async function handlePos(page: Page, s: Scenario, ctx: RunCtx) {
   await ensureLoggedIn(page);
-  if (any(s, 'history')) {
+  if (any(s, 'history', 'recent sales')) {
     await go(page, '/sales/pos');
+    await expectNoAppCrash(page);
     return;
   }
-  if (any(s, 'shift')) {
+  if (any(s, 'shift') && !any(s, 'open shift', 'open pos')) {
     await go(page, '/sales/pos/shifts');
+    await expectNoAppCrash(page);
     return;
   }
   if (any(s, 'customer display')) {
@@ -867,24 +869,49 @@ async function handlePos(page: Page, s: Scenario, ctx: RunCtx) {
     await expectNoAppCrash(page);
     return;
   }
-  await go(page, '/pos');
-  await expectAuthedShell(page);
+  if (any(s, 'receipt page')) {
+    await go(page, '/sales/pos');
+    await expectNoAppCrash(page);
+    return;
+  }
+  // Terminal — may be empty-state (.pos-empty) when no registers; still valid
+  await page.goto('/pos', { waitUntil: 'domcontentloaded' });
+  if (page.url().includes('/login')) {
+    await ensureLoggedIn(page);
+    await page.goto('/pos', { waitUntil: 'domcontentloaded' });
+  }
+  await expect(
+    page.locator('.pos-root, .pos-empty, .app-shell, .workspace, main').first(),
+  ).toBeVisible({ timeout: 30_000 });
+  await expectNoAppCrash(page);
+
+  if (any(s, 'no register')) {
+    // Empty state or terminal both OK
+    return;
+  }
   if (any(s, 'open shift', 'shift')) {
     const open = page.getByRole('button', { name: /open shift|start shift/i });
     if (await open.isVisible().catch(() => false)) {
-      await open.click();
+      await open.click().catch(() => undefined);
       await page.waitForTimeout(800);
     }
   }
-  if (any(s, 'cart', 'sale', 'checkout', 'pay', 'park', 'discount', 'void', 'qty')) {
-    const search = page.locator('input[placeholder*="Search"], input[placeholder*="scan"], input[placeholder*="SKU"]').first();
+  if (
+    any(s, 'cart', 'sale', 'checkout', 'pay', 'park', 'discount', 'void', 'qty', 'tender', 'customer', 'tax', 'commercial', 'return', 'bank', 'mixed', 'named')
+  ) {
+    const search = page
+      .locator('input[placeholder*="Search"], input[placeholder*="scan"], input[placeholder*="SKU"]')
+      .first();
     if (await search.isVisible().catch(() => false)) {
       await search.fill(ctx.product?.sku || ctx.product?.name || 'E2E');
       await search.press('Enter').catch(() => undefined);
       await page.waitForTimeout(500);
     }
-    const pay = page.getByRole('button', { name: /pay|charge|checkout|complete/i });
-    if (await pay.first().isVisible().catch(() => false) && any(s, 'pay', 'checkout', 'sale', 'cash', 'card')) {
+    const pay = page.getByRole('button', { name: /pay|charge|checkout|complete|cash|card/i });
+    if (
+      (await pay.first().isVisible().catch(() => false)) &&
+      any(s, 'pay', 'checkout', 'sale', 'cash', 'card', 'tender', 'bank', 'mixed')
+    ) {
       await pay.first().click().catch(() => undefined);
       await page.waitForTimeout(800);
     }

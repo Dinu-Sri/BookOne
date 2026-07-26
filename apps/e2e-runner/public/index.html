@@ -118,6 +118,12 @@
         background: #fff8e6; border: 1px solid #f0d78c; border-radius: 10px; padding: 12px 14px;
         font-size: 13px; line-height: 1.45; margin-bottom: 14px; color: #5c4a12;
       }
+      .notice.ok {
+        background: #e8f7f0; border-color: #9fd9bf; color: #15835f;
+      }
+      .notice.err {
+        background: #fff0f0; border-color: #f0c2c2; color: #c94141;
+      }
     </style>
   </head>
   <body>
@@ -619,29 +625,47 @@
       };
 
       async function boot() {
+        const notice = $('versionNotice');
         try {
           const h = await fetch('/api/health').then((r) => r.json());
           if (!$('baseUrl').value) $('baseUrl').value = h.defaultBaseUrl || '';
           const ver = h.version || 'legacy';
-          if (ver === 'buckets-v2') {
-            $('versionNotice').classList.add('hidden');
+          // Any buckets-v* build is current (v2, v3-auto, …). Only warn for legacy/missing.
+          const isCurrent =
+            typeof ver === 'string' &&
+            (ver.startsWith('buckets-v') || ver === 'buckets-v2' || ver === 'buckets-v3-auto');
+
+          if (isCurrent) {
+            notice.className = 'notice ok';
+            notice.textContent =
+              'E2E runner OK · image ' +
+              ver +
+              ' · Auto-run all buckets available. Target defaults to ' +
+              (h.defaultBaseUrl || 'ERP') +
+              '.';
           } else {
-            $('versionNotice').textContent =
-              'This container is still the OLD e2e image (version: ' +
+            notice.className = 'notice err';
+            notice.textContent =
+              'This container looks like an old e2e image (version: ' +
               ver +
               '). Rebuild/redeploy the e2e service (Dockerfile.e2e / bookone-staging-e2e), not only web.';
           }
+
           const cat = await fetch('/api/buckets').then((r) => r.json());
           buckets = cat.buckets || [];
           presets = cat.presets || [];
           if (!buckets.length) {
-            $('versionNotice').classList.remove('hidden');
-            $('versionNotice').textContent =
-              'Buckets API empty — old image. Rebuild Portainer stack service e2e from latest master.';
+            notice.className = 'notice err';
+            notice.classList.remove('hidden');
+            notice.textContent =
+              'Buckets API empty — old or incomplete image. Rebuild Portainer stack service e2e from latest master.';
+          } else if (isCurrent) {
+            // Keep green OK banner; buckets loaded
           }
           renderCatalog();
         } catch (e) {
-          $('versionNotice').textContent = 'Could not load runner API: ' + e;
+          notice.className = 'notice err';
+          notice.textContent = 'Could not load runner API: ' + e;
           $('log').textContent = String(e);
         }
       }

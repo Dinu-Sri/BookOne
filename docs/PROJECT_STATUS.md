@@ -205,6 +205,7 @@ BookOne v2
 │   ├── KNOWN_ERRORS.md
 │   ├── TASK_LOG.md
 │   ├── CLOUDFLARE_R2_SETUP.md      # Receipts setup guide
+│   ├── ENTITY_TIERS_AND_TAX_ARCHITECTURE.md  # Personal / sole prop / pvt ltd strategy
 │   └── PROJECT_STATUS.md           # ← THIS FILE
 ├── ai/                             # AI context (auto-generated)
 ├── .github/
@@ -516,10 +517,18 @@ Additional BookOne-specific conventions:
 
 ## 13. What's next (open work)
 
+### Strategic: entity tiers (Personal · Sole prop · Pvt Ltd)
+
+**Canonical design:** [`ENTITY_TIERS_AND_TAX_ARCHITECTURE.md`](./ENTITY_TIERS_AND_TAX_ARCHITECTURE.md)
+
+Registration buckets: **personal**, **sole_prop** (lite → full ERP + personal), **company** (full ERP, no personal). One multi-tenant core; `entity_kind` + `book_domain` + existing modules; phased delivery starting with schema then personal UX.
+
+
 In rough priority order, picking up from where we are today:
 
 | Priority | Item | Effort | Impact |
 |----------|------|--------|--------|
+| 🔴 High | **Entity tiers Phase 1** — `entity_kind` + `book_domain` schema (see ENTITY_TIERS doc) | multi-day | Unlocks personal / sole prop market |
 | 🔴 High | Bank reconciliation CSV upload | 1 day | Closes the period-close loop |
 | 🟡 Med | Onboarding tour (Onborda) | 1 day | First-time UX |
 | 🟡 Med | Sentry + PostHog wiring | 0.5 day | Observability |

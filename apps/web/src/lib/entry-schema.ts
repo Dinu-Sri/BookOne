@@ -14,6 +14,8 @@ export const baseEntrySchema = z.object({
   paymentAccount: accountRefSchema,
   brandId: z.string().uuid().optional(),
   locationId: z.string().uuid().optional(),
+  /** personal | business — sole prop / personal workspaces */
+  bookDomain: z.enum(['personal', 'business']).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format'),
   receiptRef: z.string().max(500).optional(),
   /** Bypass possible double-post warning vs commercial documents */

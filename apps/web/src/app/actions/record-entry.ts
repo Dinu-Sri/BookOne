@@ -23,6 +23,7 @@ import {
 } from '@bookone/db';
 import { entrySchema, type EntryInput } from '@/lib/entry-schema';
 import { resolveDimensions } from '@/lib/dimensions';
+import { parseEntityKind, resolveBookDomain } from '@/lib/entity-kind';
 
 export interface RecordEntryResult {
   success: boolean;
@@ -59,7 +60,24 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
     const parsed = entrySchema.parse(input);
     const user = await requireTenantContext();
     const entryPeriod = parsed.date.slice(0, 7);
-    const dimensions = await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId);
+    // Personal / lite: skip brand-location hard requirements
+    const { tenants } = await import('@bookone/db');
+    const tenantRow = await withTenantContext(user.tenantId, async () => {
+      const [row] = await db()
+        .select({ entityKind: tenants.entityKind })
+        .from(tenants)
+        .where(eq(tenants.id, user.tenantId))
+        .limit(1);
+      return row;
+    });
+    const entityKind = parseEntityKind(tenantRow?.entityKind);
+    const bookDomain = resolveBookDomain(entityKind, parsed.bookDomain ?? null);
+    const dimensions =
+      entityKind === 'personal' || entityKind === 'pending'
+        ? { brandId: null as string | null, locationId: null as string | null }
+        : await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId, {
+            auto: true,
+          }).catch(() => ({ brandId: null as string | null, locationId: null as string | null }));
 
     const [lock] = await withTenantContext(user.tenantId, async () => {
       return db()
@@ -156,6 +174,7 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
             paymentAccountId,
             brandId: dimensions.brandId,
             locationId: dimensions.locationId,
+            bookDomain,
             transferSourceAccountId,
             date: transaction.date,
             receiptRef: transaction.receiptRef ?? null,
@@ -177,6 +196,7 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
             transactionId: insertedTransaction.id,
             brandId: dimensions.brandId,
             locationId: dimensions.locationId,
+            bookDomain,
             memo: journal.memo,
             entryDate: transaction.date,
             isBalanced: '1',

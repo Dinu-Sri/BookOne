@@ -31,6 +31,8 @@ export const businessDocuments = pgTable('business_documents', {
   discountTotal: numeric('discount_total', { precision: 18, scale: 2 }).notNull().default('0'),
   brandId: uuid('brand_id').references(() => brands.id),
   locationId: uuid('location_id').references(() => locations.id),
+  /** personal | business */
+  bookDomain: varchar('book_domain', { length: 20 }),
   subtotal: numeric('subtotal', { precision: 18, scale: 2 }).notNull(),
   taxTotal: numeric('tax_total', { precision: 18, scale: 2 }).notNull().default('0'),
   total: numeric('total', { precision: 18, scale: 2 }).notNull(),

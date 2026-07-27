@@ -9,6 +9,12 @@ export type TenantModulesJson = {
   hr?: boolean;
 };
 
+/** Registration / legal shape of the workspace. */
+export type EntityKind = 'personal' | 'sole_prop' | 'company' | 'pending';
+
+/** Sole prop product depth (or derive from modules). */
+export type CapabilityTier = 'lite' | 'full';
+
 export const tenants = pgTable('tenants', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
@@ -23,6 +29,13 @@ export const tenants = pgTable('tenants', {
   status: varchar('status', { length: 20 }).notNull().default('active'),
   /** Feature flags for sellable modules */
   modules: jsonb('modules').$type<TenantModulesJson>().notNull().default({}),
+  /**
+   * personal | sole_prop | company | pending (awaiting onboarding tiles)
+   * Existing tenants default company.
+   */
+  entityKind: varchar('entity_kind', { length: 20 }).notNull().default('company'),
+  /** lite | full — mainly sole_prop; optional */
+  capabilityTier: varchar('capability_tier', { length: 20 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),

@@ -1,4 +1,5 @@
-﻿export * from './chart-of-accounts';
+export * from './chart-of-accounts';
+export * from './coa-packs';
 export * from './account-lookup';
 export * from './inference/types';
 export { inferCategory, listKnownAccounts, CATEGORY_RULES } from './inference/category-inferrer';

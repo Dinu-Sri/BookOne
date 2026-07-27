@@ -359,6 +359,7 @@ export async function createPlatformCompanyFromForm(formData: FormData): Promise
         environment,
         status: 'active',
         modules,
+        entityKind: 'company',
       })
       .returning({ id: tenants.id });
 

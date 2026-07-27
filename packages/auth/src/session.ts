@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { headers } from 'next/headers';
-import { DEFAULT_CHART_OF_ACCOUNTS } from '@bookone/accounting';
+import { chartOfAccountsForEntity } from '@bookone/accounting';
 import {
   accounts,
   db,
@@ -65,13 +65,27 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
     return existing;
   }
 
-  const tenantName = `${displayName}'s Company`;
+  // New workspaces start as pending until entity-tile onboarding.
+  const tenantName = `${displayName}'s workspace`;
   const slug = await uniqueTenantSlug(tenantName);
+  const coa = chartOfAccountsForEntity('personal'); // lean seed; sole/company packs applied on onboarding
 
   return db().transaction(async (tx) => {
     const [tenant] = await tx
       .insert(tenants)
-      .values({ name: tenantName, slug, plan: 'starter' })
+      .values({
+        name: tenantName,
+        slug,
+        plan: 'starter',
+        entityKind: 'pending',
+        modules: {
+          sales: false,
+          purchase: false,
+          inventory: false,
+          pos: false,
+          hr: false,
+        },
+      })
       .returning({ id: tenants.id });
 
     if (!tenant) throw new Error('Could not create tenant.');
@@ -103,7 +117,7 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
     });
 
     await tx.insert(accounts).values(
-      DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
+      coa.map((account) => ({
         tenantId: tenant.id,
         code: account.code,
         name: account.name,

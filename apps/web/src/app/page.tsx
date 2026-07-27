@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ArrowDownLeft,
   ArrowRightLeft,
@@ -84,6 +85,7 @@ interface DimensionOption {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [direction, setDirection] = useState<Direction>('money_out');
   const [party, setParty] = useState('');
   const [amountStr, setAmountStr] = useState('');
@@ -170,13 +172,22 @@ export default function Home() {
     let cancelled = false;
     getTenantInfo()
       .then((data) => {
-        if (!cancelled) setTenant(data);
+        if (cancelled) return;
+        setTenant(data);
+        const kind = (data.entityKind || 'company').toLowerCase();
+        if (kind === 'pending') {
+          router.replace('/onboarding');
+          return;
+        }
+        if (kind === 'personal' || kind === 'sole_prop') {
+          router.replace('/cashbook');
+        }
       })
       .catch((err) => console.error('Failed to load tenant info:', err));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     let cancelled = false;

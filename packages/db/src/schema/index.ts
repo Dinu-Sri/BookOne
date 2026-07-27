@@ -1,4 +1,4 @@
-export { tenants, type TenantModulesJson } from './tenants';
+export { tenants, type TenantModulesJson, type EntityKind, type CapabilityTier } from './tenants';
 export { users } from './users';
 export { platformAuditEvents } from './platform';
 export { accounts } from './accounts';

@@ -18,6 +18,8 @@ export const transactions = pgTable('transactions', {
   paymentAccountId: uuid('payment_account_id').notNull().references(() => accounts.id),
   brandId: uuid('brand_id').references(() => brands.id),
   locationId: uuid('location_id').references(() => locations.id),
+  /** personal | business — sole prop / personal workspaces */
+  bookDomain: varchar('book_domain', { length: 20 }),
   transferSourceAccountId: uuid('transfer_source_account_id').references(() => accounts.id),
   reversesTransactionId: uuid('reverses_transaction_id').references((): AnyPgColumn => transactions.id),
   reversedByTransactionId: uuid('reversed_by_transaction_id').references((): AnyPgColumn => transactions.id),

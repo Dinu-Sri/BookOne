@@ -11,6 +11,8 @@ export const journalEntries = pgTable('journal_entries', {
   transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
   brandId: uuid('brand_id').references(() => brands.id),
   locationId: uuid('location_id').references(() => locations.id),
+  /** personal | business */
+  bookDomain: varchar('book_domain', { length: 20 }),
   memo: varchar('memo', { length: 1000 }).notNull(),
   entryDate: varchar('entry_date', { length: 10 }).notNull(),
   isBalanced: varchar('is_balanced', { length: 1 }).notNull().default('1'),

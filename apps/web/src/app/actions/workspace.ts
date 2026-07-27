@@ -29,6 +29,9 @@ export interface TenantInfo {
   /** production | staging — health checks only on staging */
   environment?: string;
   status?: string;
+  /** personal | sole_prop | company | pending */
+  entityKind?: string;
+  capabilityTier?: string | null;
   modules?: {
     sales: boolean;
     purchase: boolean;
@@ -100,6 +103,8 @@ export async function getTenantInfo(): Promise<TenantInfo> {
       environment: tenants.environment,
       status: tenants.status,
       modules: tenants.modules,
+      entityKind: tenants.entityKind,
+      capabilityTier: tenants.capabilityTier,
     })
     .from(tenants)
     .where(eq(tenants.id, user.tenantId))
@@ -109,6 +114,8 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     ...t,
     environment: t.environment ?? 'production',
     status: t.status ?? 'active',
+    entityKind: t.entityKind ?? 'company',
+    capabilityTier: t.capabilityTier ?? null,
     modules: normalizeModules(t.modules, t.plan),
     userEmail: user.email,
     userRole: user.role,

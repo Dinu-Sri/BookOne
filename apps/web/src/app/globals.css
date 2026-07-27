@@ -4614,6 +4614,11 @@ textarea.input {
   z-index: 10;
 }
 .cashbook-top-left { display: flex; align-items: center; gap: 10px; }
+.cashbook-top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .cashbook-title { font-weight: 750; font-size: 15px; }
 .cashbook-si-toggle {
   border: 1px solid #dde5ef;
@@ -4624,6 +4629,16 @@ textarea.input {
   font-weight: 750;
   font-size: 12px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cashbook-logout-label {
+  font-size: 12px;
+  font-weight: 750;
+}
+@media (max-width: 480px) {
+  .cashbook-logout-label { display: none; }
 }
 .cashbook-main {
   flex: 1;

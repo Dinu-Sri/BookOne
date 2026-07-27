@@ -1,25 +1,17 @@
-import { redirect } from 'next/navigation';
-import { getTenantInfo } from '@/app/actions/workspace';
 import { listCashbookRows } from '@/app/actions/cashbook';
 import { CashbookHomeClient } from '@/components/cashbook/cashbook-home';
-import { needsOnboarding, parseEntityKind, usesPersonalShell } from '@/lib/entity-kind';
 import type { BookDomain } from '@/lib/entity-kind';
+import { requireEntityTenant } from '@/lib/require-entity-shell';
 
 export default async function CashbookPage({
   searchParams,
 }: {
   searchParams?: { domain?: string; period?: string };
 }) {
-  let tenant;
-  try {
-    tenant = await getTenantInfo();
-  } catch {
-    redirect('/login?from=/cashbook');
-  }
-
-  const entityKind = parseEntityKind(tenant.entityKind);
-  if (needsOnboarding(entityKind)) redirect('/onboarding');
-  if (!usesPersonalShell(entityKind)) redirect('/');
+  const tenant = await requireEntityTenant({
+    requirePersonalShell: true,
+    loginFrom: '/cashbook',
+  });
 
   const domainParam = searchParams?.domain;
   const bookDomain: BookDomain | null =
@@ -30,7 +22,7 @@ export default async function CashbookPage({
 
   return (
     <CashbookHomeClient
-      entityKind={entityKind}
+      entityKind={tenant.entityKind}
       tenantName={tenant.name}
       initialRows={data.rows}
       moneyIn={data.moneyIn}

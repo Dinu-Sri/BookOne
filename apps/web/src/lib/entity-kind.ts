@@ -63,6 +63,33 @@ export function needsOnboarding(entityKind: EntityKind): boolean {
   return entityKind === 'pending';
 }
 
+/**
+ * Full ERP chrome (sidebar suites, advanced company tools).
+ * Personal never; sole_prop only when capability is full; company always.
+ */
+export function canAccessFullErp(
+  entityKind: EntityKind,
+  capabilityTier?: string | null,
+): boolean {
+  if (entityKind === 'company') return true;
+  if (entityKind === 'sole_prop') {
+    return String(capabilityTier ?? 'lite').toLowerCase() === 'full';
+  }
+  return false;
+}
+
+/** Default post-login / post-onboarding home path. */
+export function homePathForEntity(
+  entityKind: EntityKind,
+  capabilityTier?: string | null,
+): string {
+  if (entityKind === 'pending') return '/onboarding';
+  // Personal + sole lite → cashbook. Sole full defaults to cashbook too
+  // (domain switcher); full ERP remains available via advanced link → `/`.
+  if (usesPersonalShell(entityKind)) return '/cashbook';
+  return '/';
+}
+
 export function displayNameForEntity(
   entityKind: EntityKind,
   personName: string,

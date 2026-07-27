@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { LogOut } from 'lucide-react';
 import { BrandLockup } from '@/components/ui/bookone-ui';
+import { signOutCurrentUser } from '@/app/actions/auth-session';
 
 export function CashbookShell({
   children,
@@ -30,7 +32,20 @@ export function CashbookShell({
           <BrandLockup compact />
           <span className="cashbook-title">{title}</span>
         </div>
-        <div className="cashbook-top-right">{right}</div>
+        <div className="cashbook-top-right">
+          {right}
+          <form action={signOutCurrentUser}>
+            <button
+              type="submit"
+              className="cashbook-si-toggle"
+              aria-label={si ? 'Log out (ඉවත් වන්න)' : 'Log out'}
+              title={si ? 'Log out (ඉවත් වන්න)' : 'Log out'}
+            >
+              <LogOut size={16} aria-hidden />
+              <span className="cashbook-logout-label">{si ? 'Log out' : 'Log out'}</span>
+            </button>
+          </form>
+        </div>
       </header>
       <main className="cashbook-main">{children}</main>
       <nav className="cashbook-nav" aria-label="Cashbook">

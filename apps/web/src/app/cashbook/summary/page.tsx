@@ -1,24 +1,17 @@
-import { redirect } from 'next/navigation';
-import { getTenantInfo } from '@/app/actions/workspace';
 import { listCashbookRows } from '@/app/actions/cashbook';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
-import { parseEntityKind, usesPersonalShell, needsOnboarding } from '@/lib/entity-kind';
+import { requireEntityTenant } from '@/lib/require-entity-shell';
 
 export default async function CashbookSummaryPage() {
-  let tenant;
-  try {
-    tenant = await getTenantInfo();
-  } catch {
-    redirect('/login?from=/cashbook/summary');
-  }
-  const entityKind = parseEntityKind(tenant.entityKind);
-  if (needsOnboarding(entityKind)) redirect('/onboarding');
-  if (!usesPersonalShell(entityKind)) redirect('/reports');
+  const tenant = await requireEntityTenant({
+    requirePersonalShell: true,
+    loginFrom: '/cashbook/summary',
+  });
 
   const period = new Date().toISOString().slice(0, 7);
   const personal = await listCashbookRows({ bookDomain: 'personal', period });
   const business =
-    entityKind === 'sole_prop'
+    tenant.entityKind === 'sole_prop'
       ? await listCashbookRows({ bookDomain: 'business', period })
       : null;
 

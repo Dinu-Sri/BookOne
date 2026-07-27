@@ -318,6 +318,20 @@ Building UX without Phase 1 data model is limited; **UX contracts should land be
 
 ---
 
+## 15. Phase 2 polish (routing & shell) — implemented
+
+| Fix | Behaviour |
+|-----|-----------|
+| No company UI flash | `/` is a **server** page: `pending` → `/onboarding`, personal + sole **lite** → `/cashbook`, company / sole **full** → Simple Entry |
+| Logout | Cashbook header + Settings both call `signOutCurrentUser` |
+| Full ERP lock | “Open full BookOne” only when `canAccessFullErp` (company, sole full). Personal / sole lite see upgrade copy only |
+| Onboarding gate | Already-onboarded users hitting `/onboarding` redirect to their shell home |
+| ERP chrome guard | `BookOneShell` redirects personal / sole lite away if they open full-ERP URLs with tenant context |
+
+Helpers: `apps/web/src/lib/entity-kind.ts` (`canAccessFullErp`, `homePathForEntity`), `require-entity-shell.ts`.
+
+---
+
 ## 15. Document history
 
 | Date | Change |

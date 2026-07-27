@@ -27,7 +27,8 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Suspense, type ReactNode, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Suspense, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { BrandLockup, Button, SelectLike } from '@/components/ui/bookone-ui';
 import { PeriodSelector } from '@/components/layout/period-selector';
 import { CompanyResetButton } from '@/components/layout/company-reset-button';
@@ -39,6 +40,12 @@ import {
   suiteModuleKey,
   type TenantModules,
 } from '@/lib/platform-modules';
+import {
+  canAccessFullErp,
+  homePathForEntity,
+  needsOnboarding,
+  parseEntityKind,
+} from '@/lib/entity-kind';
 
 export interface NavItem {
   label: string;
@@ -221,6 +228,9 @@ export interface TenantLite {
   userRole?: string;
   status?: string;
   modules?: TenantModules;
+  /** personal | sole_prop | company | pending */
+  entityKind?: string;
+  capabilityTier?: string | null;
 }
 
 export interface PeriodLite {
@@ -239,8 +249,23 @@ export function BookOneShell({
   tenant?: TenantLite;
   period?: PeriodLite;
 }) {
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const isSuperAdmin = tenant?.userRole === 'super_admin' || tenant?.userEmail === 'dinu.sri.m@gmail.com';
+
+  // Personal / sole lite must not stay on full ERP chrome (typed URLs, bookmarks).
+  useEffect(() => {
+    if (!tenant?.entityKind) return;
+    const kind = parseEntityKind(tenant.entityKind);
+    if (needsOnboarding(kind)) {
+      router.replace('/onboarding');
+      return;
+    }
+    if (!canAccessFullErp(kind, tenant.capabilityTier)) {
+      router.replace(homePathForEntity(kind, tenant.capabilityTier));
+    }
+  }, [tenant?.entityKind, tenant?.capabilityTier, router]);
+
   const modules = useMemo(
     () => normalizeModules(tenant?.modules, tenant?.plan ?? 'starter'),
     [tenant?.modules, tenant?.plan],

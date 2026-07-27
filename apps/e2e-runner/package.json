@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "ui-audit:cashbook": "node scripts/ui-audit-cashbook.mjs",
     "test:e2e": "node scripts/run-suite.mjs core",
     "test:smoke": "node scripts/run-suite.mjs smoke",
     "test:p0": "node scripts/run-suite.mjs p0",

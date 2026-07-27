@@ -13,6 +13,7 @@ import {
   upgradeSoleLiteToFull,
 } from '@/app/actions/entity-lifecycle';
 import { gloss, readSiGlossPreference, writeSiGlossPreference } from '@/lib/si-gloss';
+import { SiToggle } from '@/components/ui/si-toggle';
 import type { CapabilityTier, EntityKind } from '@/lib/entity-kind';
 
 export function CashbookSettingsClient({
@@ -72,7 +73,21 @@ export function CashbookSettingsClient({
         : entityKind;
 
   return (
-    <CashbookShell title="Settings" active="settings" si={si}>
+    <CashbookShell
+      title={gloss('settings', si)}
+      active="settings"
+      si={si}
+      showFullErpLink={showFullErpLink}
+      right={
+        <SiToggle
+          on={si}
+          onChange={(n) => {
+            setSi(n);
+            writeSiGlossPreference(n);
+          }}
+        />
+      }
+    >
       <div className="cashbook-entry-card">
         <p className="onboard-lead" style={{ margin: 0 }}>
           <strong>{tenantName}</strong>
@@ -80,28 +95,37 @@ export function CashbookSettingsClient({
           <span style={{ opacity: 0.8 }}>{tierLabel}</span>
         </p>
 
-        <label style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <input
-            type="checkbox"
-            checked={si}
-            onChange={(e) => {
-              setSi(e.target.checked);
-              writeSiGlossPreference(e.target.checked);
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 650 }}>
+            {si ? (
+              <span className="si-text" lang="si">
+                භාෂාව
+              </span>
+            ) : (
+              'Language'
+            )}
+          </span>
+          <SiToggle
+            on={si}
+            onChange={(n) => {
+              setSi(n);
+              writeSiGlossPreference(n);
             }}
           />
-          Show Sinhala hints on important words
-        </label>
-        <p className="onboard-lead" style={{ margin: 0 }}>
-          Example: {gloss('money_out', true)}
+        </div>
+        <p className="onboard-lead" style={{ margin: 0, fontSize: 13 }}>
+          {si ? (
+            <>
+              උදා: <span className="si-text">වියදම</span>
+            </>
+          ) : (
+            <>Example label: Money Out</>
+          )}
         </p>
-
-        <Link href="/cashbook" className="linkish">
-          ← Back to {gloss('home', si)}
-        </Link>
 
         {showFullErpLink ? (
           <Link href="/" className="linkish">
-            Open full BookOne (advanced)
+            {si ? 'සම්පූර්ණ BookOne' : 'Open full BookOne (advanced)'}
           </Link>
         ) : null}
       </div>

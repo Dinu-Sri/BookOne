@@ -34,8 +34,11 @@ export function CashbookShell({
       <header className="cashbook-top">
         <div className="cashbook-top-left">
           <BrandLockup compact />
-          <WorkspaceSwitcher compact />
-          <span className={`cashbook-title${si ? ' si-text' : ''}`}>{title}</span>
+          <WorkspaceSwitcher compact currentName={undefined} />
+          {/* Page title hidden on phone via CSS; keep for tablet+ */}
+          <span className={`cashbook-title${si ? ' si-text' : ''}`} title={title}>
+            {title}
+          </span>
         </div>
         <div className="cashbook-top-right">
           {showFullErpLink ? (

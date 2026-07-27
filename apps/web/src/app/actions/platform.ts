@@ -666,6 +666,113 @@ export async function listModuleMatrix(): Promise<
   }));
 }
 
+/**
+ * Admin: set entity kind + capability (personal / sole lite|full / company).
+ * Downgrade sole full → lite keeps inventory/pos visible as read-only history.
+ */
+export async function adminSetTenantEntityTierFromForm(formData: FormData): Promise<void> {
+  const actor = await requirePlatformAdmin();
+  const id = String(formData.get('id') ?? '').trim();
+  if (!id) throw new Error('Workspace id is required.');
+
+  const kindRaw = String(formData.get('entityKind') ?? 'company').trim().toLowerCase();
+  const entityKind =
+    kindRaw === 'personal' || kindRaw === 'sole_prop' || kindRaw === 'company' || kindRaw === 'pending'
+      ? kindRaw
+      : 'company';
+  const tierRaw = String(formData.get('capabilityTier') ?? 'lite').trim().toLowerCase();
+  const capabilityTier =
+    entityKind === 'sole_prop' ? (tierRaw === 'full' ? 'full' : 'lite') : entityKind === 'company' ? null : null;
+
+  const [before] = await db()
+    .select({
+      name: tenants.name,
+      entityKind: tenants.entityKind,
+      capabilityTier: tenants.capabilityTier,
+      modules: tenants.modules,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, id))
+    .limit(1);
+  if (!before) throw new Error('Workspace not found.');
+
+  const { modulesForEntityKind, parseEntityKind } = await import('@/lib/entity-kind');
+  const { chartOfAccountsForEntity } = await import('@bookone/accounting');
+  const { accounts } = await import('@bookone/db');
+
+  const prevKind = parseEntityKind(before.entityKind);
+  const prevTier = String(before.capabilityTier ?? 'lite').toLowerCase() === 'full' ? 'full' : 'lite';
+  const nextTier = capabilityTier === 'full' ? 'full' : 'lite';
+
+  // Downgrade sole full → lite: preserve advanced module flags for read-only view
+  const preserveAdvancedView =
+    entityKind === 'sole_prop' &&
+    nextTier === 'lite' &&
+    (prevKind === 'sole_prop' && prevTier === 'full'
+      ? true
+      : Boolean((before.modules as { inventory?: boolean; pos?: boolean } | null)?.inventory) ||
+        Boolean((before.modules as { inventory?: boolean; pos?: boolean } | null)?.pos));
+
+  const modules =
+    entityKind === 'sole_prop'
+      ? modulesForEntityKind('sole_prop', nextTier, { preserveAdvancedView })
+      : modulesForEntityKind(entityKind as 'personal' | 'sole_prop' | 'company' | 'pending', 'full');
+
+  await db()
+    .update(tenants)
+    .set({
+      entityKind,
+      capabilityTier: entityKind === 'sole_prop' ? nextTier : null,
+      modules,
+      updatedAt: sql`NOW()`,
+    })
+    .where(eq(tenants.id, id));
+
+  // Merge CoA for target pack (never delete accounts)
+  if (entityKind !== 'pending') {
+    const pack = chartOfAccountsForEntity(entityKind);
+    const existing = await db()
+      .select({ code: accounts.code })
+      .from(accounts)
+      .where(eq(accounts.tenantId, id));
+    const have = new Set(existing.map((a) => a.code));
+    const missing = pack.filter((a) => !have.has(a.code));
+    if (missing.length) {
+      await db().insert(accounts).values(
+        missing.map((account) => ({
+          tenantId: id,
+          code: account.code,
+          name: account.name,
+          type: account.type,
+          normalSide: account.normalSide,
+        })),
+      );
+    }
+  }
+
+  await writeAudit({
+    actorUserId: actor.id,
+    targetTenantId: id,
+    action: 'tenant.entity_tier',
+    summary: `Set ${before.name} → ${entityKind}${entityKind === 'sole_prop' ? `/${nextTier}` : ''}`,
+    meta: {
+      before: {
+        entityKind: before.entityKind,
+        capabilityTier: before.capabilityTier,
+        modules: before.modules,
+      },
+      after: { entityKind, capabilityTier: entityKind === 'sole_prop' ? nextTier : null, modules },
+      preserveAdvancedView,
+    },
+  });
+
+  revalidatePath('/control-room');
+  revalidatePath('/control-room/companies');
+  revalidatePath(`/control-room/companies/${id}`);
+  revalidatePath('/');
+  revalidatePath('/cashbook');
+}
+
 /** Apply plan defaults to a company modules (optional helper). */
 export async function applyPlanModulesFromForm(formData: FormData): Promise<void> {
   const actor = await requirePlatformAdmin();

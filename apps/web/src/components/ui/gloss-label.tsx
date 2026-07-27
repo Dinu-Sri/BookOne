@@ -1,10 +1,10 @@
 'use client';
 
-import { glossEn, glossSi } from '@/lib/si-gloss';
+import { gloss } from '@/lib/si-gloss';
 
 /**
- * Label with optional Sinhala gloss in Noto Serif Sinhala.
- * Prefer this over plain gloss() when rendering in JSX for correct font.
+ * Label in English or Sinhala (full replace — not English + brackets).
+ * Sinhala uses Noto Serif via .si-text.
  */
 export function GlossLabel({
   k,
@@ -15,17 +15,13 @@ export function GlossLabel({
   si: boolean;
   className?: string;
 }) {
-  const en = glossEn(k);
-  const siWord = glossSi(k);
-  if (!si || !siWord) {
-    return <span className={className}>{en}</span>;
-  }
-  return (
-    <span className={className}>
-      {en}{' '}
-      <span className="si-text" lang="si">
-        ({siWord})
+  const text = gloss(k, si);
+  if (si) {
+    return (
+      <span className={`si-text ${className ?? ''}`.trim()} lang="si">
+        {text}
       </span>
-    </span>
-  );
+    );
+  }
+  return <span className={className}>{text}</span>;
 }

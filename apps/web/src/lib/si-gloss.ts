@@ -1,5 +1,6 @@
 /**
- * English + optional Sinhala gloss for important labels only.
+ * English / Sinhala labels for cashbook & onboarding.
+ * When Sinhala mode is ON, replace English with Sinhala (no brackets).
  * @see docs/ENTITY_UX_FLOWS.md
  */
 
@@ -31,6 +32,19 @@ export const SI_GLOSS: Record<string, string> = {
   sole_prop: 'තනි හිමිකම',
   continue: 'ඉදිරියට',
   summary: 'සාරාංශය',
+  full_erp: 'සම්පූර්ණ පද්ධතිය',
+  log_out: 'ඉවත් වන්න',
+  net: 'ශුද්ධ',
+  type: 'වර්ගය',
+  who: 'කවුද',
+  from: 'සිට',
+  to: 'දක්වා',
+  customer: 'පාරිභෝගික',
+  vendor: 'සැපයුම්කරු',
+  category: 'ප්‍රවර්ගය',
+  due_date: 'ගෙවිය යුතු දිනය',
+  close: 'වසන්න',
+  note_optional: 'සටහන (විකල්ප)',
 };
 
 export const EN_LABEL: Record<string, string> = {
@@ -61,6 +75,19 @@ export const EN_LABEL: Record<string, string> = {
   sole_prop: 'Sole prop',
   continue: 'Continue',
   summary: 'Summary',
+  full_erp: 'Full ERP',
+  log_out: 'Log out',
+  net: 'Net',
+  type: 'Type',
+  who: 'Who',
+  from: 'From',
+  to: 'To',
+  customer: 'Customer',
+  vendor: 'Vendor',
+  category: 'Category',
+  due_date: 'Due date',
+  close: 'Close',
+  note_optional: 'Note (optional)',
 };
 
 const STORAGE_KEY = 'bookone.siGloss';
@@ -83,20 +110,20 @@ export function writeSiGlossPreference(on: boolean) {
   }
 }
 
-/** English or English (සිංහල) for a glossary key (plain string). */
+/**
+ * UI label: English when off; Sinhala word when on (no brackets / dual text).
+ */
 export function gloss(key: string, si: boolean): string {
-  const en = EN_LABEL[key] ?? key;
-  if (!si) return en;
-  const s = SI_GLOSS[key];
-  return s ? `${en} (${s})` : en;
+  if (si) {
+    return SI_GLOSS[key] ?? EN_LABEL[key] ?? key;
+  }
+  return EN_LABEL[key] ?? key;
 }
 
-/** Sinhala word only for a key (empty if unknown). Use with .si-text for Noto Serif. */
 export function glossSi(key: string): string {
   return SI_GLOSS[key] ?? '';
 }
 
-/** English label only. */
 export function glossEn(key: string): string {
   return EN_LABEL[key] ?? key;
 }

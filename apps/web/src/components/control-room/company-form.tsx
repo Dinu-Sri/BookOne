@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { useMemo, useState, useTransition } from 'react';
 import {
+  adminSetTenantEntityTierFromForm,
   applyPlanModulesFromForm,
   createPlatformCompanyFromForm,
   setPlatformCompanyStatusFromForm,
   updatePlatformCompanyFromForm,
   type PlatformCompanyDetail,
 } from '@/app/actions/platform';
+import { entityKindLabel } from '@/lib/entity-labels';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { MODULE_CATALOG, MODULE_KEYS, modulesForPlan, type ModuleKey } from '@/lib/platform-modules';
 import { StatusBadge } from '@/components/module/list-page';
@@ -23,6 +25,7 @@ const CREATE_TABS = [
 
 const EDIT_TABS = [
   { id: 'profile', label: 'Profile' },
+  { id: 'entity', label: 'Entity tier' },
   { id: 'modules', label: 'Plan & modules' },
   { id: 'users', label: 'Users' },
   { id: 'status', label: 'Status' },
@@ -243,6 +246,10 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
   const [tab, setTab] = useState<EditTab>('profile');
   const [plan, setPlan] = useState(company.plan);
   const [modules, setModules] = useState(company.modules);
+  const [entityKind, setEntityKind] = useState(company.entityKind || 'company');
+  const [capabilityTier, setCapabilityTier] = useState(
+    company.capabilityTier === 'full' ? 'full' : 'lite',
+  );
   const [pending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState<null | 'suspend' | 'restore'>(null);
 
@@ -335,6 +342,78 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
       >
         <input type="hidden" name="id" value={company.id} />
         <input type="hidden" name="module_touch" value="1" />
+
+        <div className="party-tab-panel" hidden={tab !== 'entity'}>
+          <div className="party-tab-grid">
+            <div className="field field-full">
+              <label>Current</label>
+              <div className="input" style={{ color: 'var(--ink-muted)' }}>
+                {entityKindLabel(company.entityKind, company.capabilityTier)} · status{' '}
+                {company.status}
+              </div>
+              <small style={{ color: 'var(--ink-soft)' }}>
+                Downgrade sole full → lite keeps Inventory/POS visible as <strong>read-only</strong>.
+                Upgrade re-enables create/edit. Journals are never deleted.
+              </small>
+            </div>
+            <div className="field">
+              <label htmlFor="entityKindAdmin">Entity type</label>
+              <select
+                className="input"
+                id="entityKindAdmin"
+                value={entityKind}
+                onChange={(e) => setEntityKind(e.target.value)}
+              >
+                <option value="personal">Personal</option>
+                <option value="sole_prop">Sole prop</option>
+                <option value="company">Company (Pvt Ltd)</option>
+                <option value="pending">Pending onboarding</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="capabilityTierAdmin">Sole capability</label>
+              <select
+                className="input"
+                id="capabilityTierAdmin"
+                value={capabilityTier}
+                disabled={entityKind !== 'sole_prop'}
+                onChange={(e) => setCapabilityTier(e.target.value)}
+              >
+                <option value="lite">Lite (cashbook + view-only advanced if was full)</option>
+                <option value="full">Full (write ERP modules)</option>
+              </select>
+            </div>
+            <div className="field field-full" style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <Button
+                variant="primary"
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const fd = new FormData();
+                  fd.set('id', company.id);
+                  fd.set('entityKind', entityKind);
+                  fd.set('capabilityTier', capabilityTier);
+                  startTransition(async () => {
+                    try {
+                      await adminSetTenantEntityTierFromForm(fd);
+                      pushStatusToast({
+                        kind: 'success',
+                        message: `Entity tier updated → ${entityKindLabel(entityKind, capabilityTier)}`,
+                      });
+                    } catch (e) {
+                      pushStatusToast({
+                        kind: 'error',
+                        message: e instanceof Error ? e.message : 'Entity update failed',
+                      });
+                    }
+                  });
+                }}
+              >
+                {pending ? 'Applying…' : 'Apply entity tier'}
+              </Button>
+            </div>
+          </div>
+        </div>
 
         <div className="party-tab-panel" hidden={tab !== 'profile'}>
           <div className="party-tab-grid">

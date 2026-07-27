@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * Sinhala gloss toggle — label uses Sinhala script for recognition.
- * Active = hints on; inactive = English-only labels.
+ * Language toggle for cashbook / onboarding.
+ * Off → English UI; button invites Sinhala.
+ * On  → Sinhala UI; button offers English switch-back.
  */
 export function SiToggle({
   on,
@@ -19,13 +20,16 @@ export function SiToggle({
       className={`${className} si-toggle ${on ? 'is-on' : ''}`}
       onClick={() => onChange(!on)}
       aria-pressed={on}
-      title={on ? 'Sinhala hints on — click to turn off' : 'Show Sinhala hints on labels'}
-      aria-label={on ? 'Turn off Sinhala hints' : 'Turn on Sinhala hints'}
+      title={on ? 'Switch to English' : 'සිංහලට මාරු වන්න / Switch to Sinhala'}
+      aria-label={on ? 'Switch to English' : 'Switch to Sinhala'}
     >
-      <span className="si-toggle-label si-text" lang="si">
-        සිංහල
-      </span>
-      {on ? <span className="si-toggle-check" aria-hidden>✓</span> : null}
+      {on ? (
+        <span className="si-toggle-label">English</span>
+      ) : (
+        <span className="si-toggle-label si-text" lang="si">
+          සිංහල
+        </span>
+      )}
     </button>
   );
 }

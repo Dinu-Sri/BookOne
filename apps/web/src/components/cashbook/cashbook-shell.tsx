@@ -24,9 +24,9 @@ export function CashbookShell({
   showFullErpLink?: boolean;
 }) {
   const nav = [
-    { id: 'home' as const, href: '/cashbook', en: 'Home', si: 'මුල් පිටුව' },
-    { id: 'summary' as const, href: '/cashbook/summary', en: 'Summary', si: 'සාරාංශය' },
-    { id: 'settings' as const, href: '/cashbook/settings', en: 'Settings', si: 'සැකසුම්' },
+    { id: 'home' as const, href: '/cashbook', key: 'home' as const },
+    { id: 'summary' as const, href: '/cashbook/summary', key: 'summary' as const },
+    { id: 'settings' as const, href: '/cashbook/settings', key: 'settings' as const },
   ];
 
   return (
@@ -35,12 +35,12 @@ export function CashbookShell({
         <div className="cashbook-top-left">
           <BrandLockup compact />
           <WorkspaceSwitcher compact />
-          <span className="cashbook-title">{title}</span>
+          <span className={`cashbook-title${si ? ' si-text' : ''}`}>{title}</span>
         </div>
         <div className="cashbook-top-right">
           {showFullErpLink ? (
             <Link href="/" className="cashbook-si-toggle" title="Full BookOne">
-              Full ERP
+              <span className={si ? 'si-text' : undefined}>{si ? 'සම්පූර්ණ පද්ධතිය' : 'Full ERP'}</span>
             </Link>
           ) : null}
           {right}
@@ -48,27 +48,44 @@ export function CashbookShell({
             <button
               type="submit"
               className="cashbook-si-toggle"
-              aria-label={si ? 'Log out (ඉවත් වන්න)' : 'Log out'}
-              title={si ? 'Log out (ඉවත් වන්න)' : 'Log out'}
+              aria-label={si ? 'ඉවත් වන්න' : 'Log out'}
+              title={si ? 'ඉවත් වන්න' : 'Log out'}
             >
               <LogOut size={16} aria-hidden />
-              <span className="cashbook-logout-label">Log out</span>
+              <span className={`cashbook-logout-label${si ? ' si-text' : ''}`}>
+                {si ? 'ඉවත් වන්න' : 'Log out'}
+              </span>
             </button>
           </form>
         </div>
       </header>
       <main className="cashbook-main">{children}</main>
       <nav className="cashbook-nav" aria-label="Cashbook">
-        {nav.map((item) => (
-          <Link
-            key={item.id}
-            href={item.href}
-            className={`cashbook-nav-item ${active === item.id ? 'active' : ''}`}
-          >
-            <span>{item.en}</span>
-            {si ? <small>({item.si})</small> : null}
-          </Link>
-        ))}
+        {nav.map((item) => {
+          const label =
+            item.key === 'home'
+              ? si
+                ? 'මුල් පිටුව'
+                : 'Home'
+              : item.key === 'summary'
+                ? si
+                  ? 'සාරාංශය'
+                  : 'Summary'
+                : si
+                  ? 'සැකසුම්'
+                  : 'Settings';
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={`cashbook-nav-item ${active === item.id ? 'active' : ''}`}
+            >
+              <span className={si ? 'si-text' : undefined} lang={si ? 'si' : undefined}>
+                {label}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
     </div>
   );

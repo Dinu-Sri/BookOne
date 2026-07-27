@@ -33,6 +33,7 @@ import {
   locations,
   withTenantContext,
 } from '@bookone/db';
+import { assertModuleWrite } from '@/lib/module-access';
 
 const productTypeSchema = z.enum(['physical', 'digital', 'service', 'stocked']);
 
@@ -628,6 +629,7 @@ export async function createQuickProduct(input: {
 }
 
 export async function createProductFromForm(formData: FormData): Promise<void> {
+  await assertModuleWrite('inventory');
   const parsed = productInputSchema.parse(formToProductInput(formData));
   const type = normalizeType(parsed.productType);
   const user = await requireTenantContext();
@@ -789,6 +791,7 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
 }
 
 export async function updateProductFromForm(formData: FormData): Promise<void> {
+  await assertModuleWrite('inventory');
   const id = String(formData.get('id') ?? '');
   if (!id) throw new Error('Missing product id.');
   const parsed = productInputSchema.parse(formToProductInput(formData));
@@ -1055,6 +1058,7 @@ export async function listStockDocs(docType: 'transfer' | 'adjustment'): Promise
 }
 
 export async function createStockDocFromForm(formData: FormData): Promise<void> {
+  await assertModuleWrite('inventory');
   const docType = String(formData.get('docType') ?? 'adjustment') as 'transfer' | 'adjustment';
   const docDate = String(formData.get('docDate') ?? new Date().toISOString().slice(0, 10));
   const reason = String(formData.get('reason') ?? '');

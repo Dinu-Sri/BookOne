@@ -24,6 +24,13 @@ export function parseEntityKind(raw: unknown): EntityKind {
 export function modulesForEntityKind(
   entityKind: EntityKind,
   capability: CapabilityTier = 'lite',
+  opts?: {
+    /**
+     * After downgrade from full: keep inventory/pos module flags true so history
+     * stays visible (read-only). Writes still require capability full.
+     */
+    preserveAdvancedView?: boolean;
+  },
 ): TenantModulesShape {
   if (entityKind === 'personal' || entityKind === 'pending') {
     return { sales: false, purchase: false, inventory: false, pos: false, hr: false };
@@ -32,11 +39,59 @@ export function modulesForEntityKind(
     if (capability === 'full') {
       return { sales: true, purchase: true, inventory: true, pos: true, hr: false };
     }
-    // lite: basic sales/purchase language; inventory/pos off
-    return { sales: true, purchase: true, inventory: false, pos: false, hr: false };
+    // lite: sales/purchase on; inventory/pos only if preserving view after downgrade
+    return {
+      sales: true,
+      purchase: true,
+      inventory: !!opts?.preserveAdvancedView,
+      pos: !!opts?.preserveAdvancedView,
+      hr: false,
+    };
   }
   // company — starter-like defaults
   return { sales: true, purchase: true, inventory: false, pos: false, hr: false };
+}
+
+export type ModuleWriteKey = 'sales' | 'purchase' | 'inventory' | 'pos' | 'hr';
+
+/**
+ * May open the module in the nav (including read-only after downgrade).
+ */
+export function canViewModule(
+  entityKind: EntityKind,
+  modules: Partial<Record<ModuleWriteKey, boolean>> | null | undefined,
+  module: ModuleWriteKey,
+): boolean {
+  if (entityKind === 'personal' || entityKind === 'pending') return false;
+  return Boolean(modules?.[module]);
+}
+
+/**
+ * May create/edit in the module. Sole lite cannot write inventory/POS even if
+ * those flags remain true for viewing historical data.
+ */
+export function canWriteModule(
+  entityKind: EntityKind,
+  capabilityTier: string | null | undefined,
+  modules: Partial<Record<ModuleWriteKey, boolean>> | null | undefined,
+  module: ModuleWriteKey,
+): boolean {
+  if (!canViewModule(entityKind, modules, module)) return false;
+  if (entityKind === 'sole_prop' && (module === 'inventory' || module === 'pos')) {
+    return canAccessFullErp(entityKind, capabilityTier);
+  }
+  return true;
+}
+
+/** Sole was full (or still has advanced flags) but is now lite → view-only advanced. */
+export function hasReadOnlyAdvancedModules(
+  entityKind: EntityKind,
+  capabilityTier: string | null | undefined,
+  modules: Partial<Record<ModuleWriteKey, boolean>> | null | undefined,
+): boolean {
+  if (entityKind !== 'sole_prop') return false;
+  if (canAccessFullErp(entityKind, capabilityTier)) return false;
+  return Boolean(modules?.inventory || modules?.pos);
 }
 
 export function defaultBookDomain(entityKind: EntityKind): BookDomain {

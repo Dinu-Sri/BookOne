@@ -42,10 +42,13 @@ import {
 } from '@/lib/platform-modules';
 import {
   canAccessFullErp,
+  canWriteModule,
+  hasReadOnlyAdvancedModules,
   homePathForEntity,
   needsOnboarding,
   parseEntityKind,
   usesPersonalShell,
+  type ModuleWriteKey,
 } from '@/lib/entity-kind';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 
@@ -256,8 +259,8 @@ export function BookOneShell({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const isSuperAdmin = tenant?.userRole === 'super_admin' || tenant?.userEmail === 'dinu.sri.m@gmail.com';
 
-  // Personal / sole lite must not stay on full ERP chrome (typed URLs, bookmarks).
-  // Super admin may stay on ERP (Control Room) even if home workspace is personal/lite.
+  // Personal-only workspaces stay in cashbook (unless super admin / Control Room).
+  // Sole lite may enter ERP to view history after a downgrade (read-only advanced modules).
   useEffect(() => {
     if (!tenant?.entityKind) return;
     if (isSuperAdmin) return;
@@ -266,7 +269,7 @@ export function BookOneShell({
       router.replace('/onboarding');
       return;
     }
-    if (!canAccessFullErp(kind, tenant.capabilityTier)) {
+    if (kind === 'personal') {
       router.replace(homePathForEntity(kind, tenant.capabilityTier));
     }
   }, [tenant?.entityKind, tenant?.capabilityTier, router, isSuperAdmin]);
@@ -276,15 +279,16 @@ export function BookOneShell({
     [tenant?.modules, tenant?.plan],
   );
   const entityKind = tenant?.entityKind ? parseEntityKind(tenant.entityKind) : null;
-  // Sole prop (lite or full) still needs personal + business cashbook — not only ERP.
-  const soleNeedsCashbook =
-    entityKind != null && usesPersonalShell(entityKind) && canAccessFullErp(entityKind, tenant?.capabilityTier);
+  const soleNeedsCashbook = entityKind != null && usesPersonalShell(entityKind);
+  const readOnlyAdvanced =
+    entityKind != null &&
+    hasReadOnlyAdvancedModules(entityKind, tenant?.capabilityTier, modules);
 
   const visibleSuites = useMemo(() => {
     return navSuites
       .filter((suite) => !suite.superAdminOnly || isSuperAdmin)
       .map((suite) => {
-        const modKey = suiteModuleKey(suite.id);
+        const modKey = suiteModuleKey(suite.id) as ModuleWriteKey | null;
         if (modKey && !modules[modKey]) {
           return null;
         }
@@ -293,7 +297,7 @@ export function BookOneShell({
         if (suite.id === 'sales' && !modules.pos) {
           items = items.filter((item) => !isPosNavItem(item.label));
         }
-        // Sole full: keep Personal|Business cashbook reachable from full ERP chrome
+        // Sole: always link Cashbook (Personal | Business domains) from ERP
         if (suite.id === 'accounting' && soleNeedsCashbook) {
           items = [
             items[0]!,
@@ -301,10 +305,23 @@ export function BookOneShell({
             ...items.slice(1),
           ];
         }
+        // Mark inventory/POS as view-only in nav when sole lite after downgrade
+        if (
+          entityKind &&
+          modKey &&
+          (modKey === 'inventory' || modKey === 'pos') &&
+          !canWriteModule(entityKind, tenant?.capabilityTier, modules, modKey)
+        ) {
+          return {
+            ...suite,
+            label: `${suite.label} (view)`,
+            items,
+          };
+        }
         return { ...suite, items };
       })
       .filter(Boolean) as NavSuite[];
-  }, [isSuperAdmin, modules, soleNeedsCashbook]);
+  }, [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier]);
   const activeSuite = visibleSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
 
@@ -322,6 +339,11 @@ export function BookOneShell({
             {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
           </Button>
         </div>
+        {readOnlyAdvanced ? (
+          <div className="sidebar-readonly-banner" title="Inventory/POS are view-only until you upgrade to sole full">
+            View-only advanced modules
+          </div>
+        ) : null}
 
         <div className="sidebar-section suite-nav">
           <nav aria-label="Suite navigation">

@@ -240,7 +240,8 @@ export async function upgradeSoleLiteToFull(): Promise<LifecycleResult> {
 }
 
 /**
- * sole full → lite. Hide advanced modules; never delete journals.
+ * sole full → lite. capability write-locked; inventory/POS stay visible as read-only.
+ * Journals and stock history are never deleted.
  */
 export async function downgradeSoleFullToLite(): Promise<LifecycleResult> {
   try {
@@ -261,7 +262,8 @@ export async function downgradeSoleFullToLite(): Promise<LifecycleResult> {
       return { ok: false, error: 'Only sole prop full can downgrade to lite.' };
     }
 
-    const modules = modulesForEntityKind('sole_prop', 'lite');
+    // Keep inventory/pos flags so history remains navigable (read-only via capability).
+    const modules = modulesForEntityKind('sole_prop', 'lite', { preserveAdvancedView: true });
 
     await withTenantContext(user.tenantId, async () => {
       await db()
@@ -278,8 +280,8 @@ export async function downgradeSoleFullToLite(): Promise<LifecycleResult> {
         user.id,
         'DOWNGRADE',
         user.tenantId,
-        { from: 'full', to: 'lite', modules },
-        'Lifecycle: sole_prop full → lite (modules hidden; history kept)',
+        { from: 'full', to: 'lite', modules, advancedViewOnly: true },
+        'Lifecycle: sole_prop full → lite (writes off; history viewable)',
       );
     });
 
@@ -289,7 +291,8 @@ export async function downgradeSoleFullToLite(): Promise<LifecycleResult> {
     return {
       ok: true,
       homePath: '/cashbook',
-      message: 'Back to sole lite. Existing journals and stock docs remain; advanced suites are hidden.',
+      message:
+        'Back to sole lite. Inventory/POS stay visible as read-only. Upgrade again to create or edit.',
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Downgrade failed' };

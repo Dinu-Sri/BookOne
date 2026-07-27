@@ -182,7 +182,10 @@ export function CashbookSettingsClient({
           <div className="lifecycle-card">
             <div>
               <strong>← Back to sole lite</strong>
-              <p>Hide stock/POS suites. Existing advanced documents stay (read-only via history).</p>
+              <p>
+                Turns off create/edit for stock &amp; POS. You can still <strong>view</strong> past
+                products, stock and POS history.
+              </p>
             </div>
             {confirm === 'lite' ? (
               <div className="lifecycle-confirm">

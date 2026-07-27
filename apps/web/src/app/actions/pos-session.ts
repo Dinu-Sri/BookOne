@@ -20,6 +20,7 @@ import { listActiveDiscounts } from '@/app/actions/commercial-docs';
 import { getSalesSettings } from '@/app/actions/sales-settings';
 import { listPartyOptions } from '@/app/actions/parties';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { assertModuleWrite } from '@/lib/module-access';
 
 export interface PosProductLite {
   id: string;
@@ -126,6 +127,7 @@ export async function openPosShift(input: {
   openingFloat?: number;
 }): Promise<{ ok: boolean; error?: string; shiftId?: string }> {
   try {
+    await assertModuleWrite('pos');
     const user = await requireTenantContext();
     const float = Math.max(0, Number(input.openingFloat ?? 0) || 0);
 
@@ -213,6 +215,7 @@ export async function completePosSale(
   input: z.input<typeof completeSaleSchema>,
 ): Promise<{ ok: boolean; error?: string; id?: string; documentNumber?: string }> {
   try {
+    await assertModuleWrite('pos');
     const parsed = completeSaleSchema.parse(input);
     const user = await requireTenantContext();
 

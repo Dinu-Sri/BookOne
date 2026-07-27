@@ -30,7 +30,7 @@ export function CashbookShell({
   ];
 
   return (
-    <div className="cashbook-app">
+    <div className={`cashbook-app${si ? ' si-gloss-on' : ''}`}>
       <header className="cashbook-top">
         <div className="cashbook-top-left">
           <BrandLockup compact />

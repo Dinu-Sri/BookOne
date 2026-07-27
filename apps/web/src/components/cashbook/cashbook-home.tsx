@@ -16,6 +16,7 @@ import { recordEntry } from '@/app/actions/record-entry';
 import type { CashbookRow } from '@/app/actions/cashbook';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { gloss, readSiGlossPreference, writeSiGlossPreference } from '@/lib/si-gloss';
+import { SiToggle } from '@/components/ui/si-toggle';
 import { readBookDomainPref, writeBookDomainPref, type BookDomainPref } from '@/lib/book-domain';
 import { canAccessFullErp, type EntityKind } from '@/lib/entity-kind';
 
@@ -181,12 +182,6 @@ export function CashbookHomeClient({
   }, [sole, domain]);
 
   const expenseCats = domain === 'business' ? BUSINESS_EXPENSE_CATS : PERSONAL_EXPENSE_CATS;
-
-  function toggleSi() {
-    const next = !si;
-    setSi(next);
-    writeSiGlossPreference(next);
-  }
 
   function navigate(nextDomain: BookDomainPref, nextPeriod: string) {
     const q = new URLSearchParams();
@@ -429,11 +424,7 @@ export function CashbookHomeClient({
       active="home"
       si={si}
       showFullErpLink={fullErp}
-      right={
-        <button type="button" className="cashbook-si-toggle" onClick={toggleSi}>
-          {si ? 'SI ✓' : 'SI'}
-        </button>
-      }
+      right={<SiToggle on={si} onChange={(n) => { setSi(n); writeSiGlossPreference(n); }} />}
     >
       {sole ? (
         <div className="cashbook-domain">

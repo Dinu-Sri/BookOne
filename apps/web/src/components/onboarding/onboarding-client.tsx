@@ -3,6 +3,8 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { BrandLockup } from '@/components/ui/bookone-ui';
+import { GlossLabel } from '@/components/ui/gloss-label';
+import { SiToggle } from '@/components/ui/si-toggle';
 import { completeEntityOnboarding } from '@/app/actions/entity-onboarding';
 import { gloss, readSiGlossPreference, writeSiGlossPreference } from '@/lib/si-gloss';
 import type { CapabilityTier } from '@/lib/entity-kind';
@@ -46,25 +48,21 @@ export function OnboardingClient() {
   }
 
   return (
-    <div className="onboard-page">
+    <div className={`onboard-page ${si ? 'si-gloss-on' : ''}`}>
       <div className="onboard-wrap">
         <BrandLockup />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <h1>What are you using BookOne for?</h1>
-          <button
-            type="button"
-            className="cashbook-si-toggle"
-            onClick={() => {
-              const n = !si;
+          <SiToggle
+            on={si}
+            onChange={(n) => {
               setSi(n);
               writeSiGlossPreference(n);
             }}
-          >
-            {si ? 'SI Γ£ô' : 'SI'}
-          </button>
+          />
         </div>
         <p className="onboard-lead">
-          Pick one. You can grow later (e.g. personal ΓåÆ business). This takes a few seconds.
+          Pick one. You can grow later (e.g. personal → business). This takes a few seconds.
         </p>
 
         <div className="onboard-grid">
@@ -73,20 +71,20 @@ export function OnboardingClient() {
             className={`onboard-tile ${bucket === 'personal' ? 'active' : ''}`}
             onClick={() => pick('personal')}
           >
-            <span className="emoji">≡ƒæñ</span>
+            <span className="emoji">👤</span>
             <strong>
-              {gloss('personal', si)}
+              <GlossLabel k="personal" si={si} />
             </strong>
-            <span>My money & tax ΓÇö income, expenses, loans. Simple like Excel.</span>
+            <span>My money & tax — income, expenses, loans. Simple like Excel.</span>
           </button>
           <button
             type="button"
             className={`onboard-tile ${bucket === 'sole_prop' ? 'active' : ''}`}
             onClick={() => pick('sole_prop')}
           >
-            <span className="emoji">≡ƒÅ¬</span>
+            <span className="emoji">🏪</span>
             <strong>
-              {gloss('business', si)} ┬╖ {gloss('sole_prop', si)}
+              <GlossLabel k="business" si={si} /> · <GlossLabel k="sole_prop" si={si} />
             </strong>
             <span>Me + my shop. Personal and business books together for tax.</span>
           </button>
@@ -95,11 +93,11 @@ export function OnboardingClient() {
             className={`onboard-tile ${bucket === 'company' ? 'active' : ''}`}
             onClick={() => pick('company')}
           >
-            <span className="emoji">≡ƒÅó</span>
+            <span className="emoji">🏢</span>
             <strong>
-              {gloss('company', si)} (Pvt Ltd)
+              <GlossLabel k="company" si={si} /> (Pvt Ltd)
             </strong>
-            <span>Full company ERP ΓÇö sales, purchase, stock, POS.</span>
+            <span>Full company ERP — sales, purchase, stock, POS.</span>
           </button>
         </div>
 
@@ -128,7 +126,7 @@ export function OnboardingClient() {
 
         <div className="onboard-actions">
           <button type="button" className="onboard-continue" disabled={pending || !bucket} onClick={submit}>
-            {pending ? 'SavingΓÇª' : gloss('continue', si)}
+            {pending ? 'Saving…' : gloss('continue', si)}
           </button>
         </div>
       </div>

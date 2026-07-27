@@ -83,10 +83,20 @@ export function writeSiGlossPreference(on: boolean) {
   }
 }
 
-/** English or English (සිංහල) for a glossary key. */
+/** English or English (සිංහල) for a glossary key (plain string). */
 export function gloss(key: string, si: boolean): string {
   const en = EN_LABEL[key] ?? key;
   if (!si) return en;
   const s = SI_GLOSS[key];
   return s ? `${en} (${s})` : en;
+}
+
+/** Sinhala word only for a key (empty if unknown). Use with .si-text for Noto Serif. */
+export function glossSi(key: string): string {
+  return SI_GLOSS[key] ?? '';
+}
+
+/** English label only. */
+export function glossEn(key: string): string {
+  return EN_LABEL[key] ?? key;
 }

@@ -1,11 +1,22 @@
-# BookOne — Staging stack (one Portainer stack, three app services)
+# BookOne — Staging stack (one Portainer stack, selective app services)
 # Compose path in Portainer: docker/docker-compose.staging.yml
-# Repo: same monorepo; each service builds only what it needs.
 #
-# Default hosts (override in Portainer env).
-# IMPORTANT: use ONE subdomain level under clossyan.com so Cloudflare Universal SSL works.
-#   BAD:  docs.bookone.clossyan.com  (no free SSL — ERR_SSL_VERSION_OR_CIPHER_MISMATCH)
-#   GOOD: bookone-docs.clossyan.com
+# ── Selective builds (turn services on/off) ─────────────────────────────
+# Always on: traefik, web, postgres, redis, minio, cloudflared
+# Optional (Compose profiles):
+#   docs  — set COMPOSE_PROFILES=docs   or  COMPOSE_PROFILES=docs,e2e
+#   e2e   — set COMPOSE_PROFILES=e2e    (Playwright image — SLOW to rebuild)
+# Daily ERP work: leave COMPOSE_PROFILES empty or only "docs"
+# Full staging:   COMPOSE_PROFILES=docs,e2e
+#
+# Portainer: Stack → Editor → Environment variables:
+#   COMPOSE_PROFILES=e2e          # only when you need e2e host
+# Or SSH: docker compose -f docker/docker-compose.staging.yml --profile e2e up -d --build e2e
+#
+# Rebuild ONLY web (SSH on VPS, in stack directory):
+#   docker compose build web && docker compose up -d web
+#
+# Hosts (one subdomain level under clossyan.com for free SSL):
 #   WEB_HOST=bookone.clossyan.com
 #   DOCS_HOST=bookone-docs.clossyan.com
 #   E2E_HOST=bookone-e2e.clossyan.com
@@ -80,8 +91,10 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Docs: reverse-proxy to web Fumadocs (same design as /docs) ──────────
+  # ── Docs: reverse-proxy to web Fumadocs (cheap nginx — optional profile) ─
+  # Enable with COMPOSE_PROFILES=docs  (or docs,e2e). Fast to rebuild.
   docs:
+    profiles: ["docs", "full"]
     build:
       context: ..
       dockerfile: docker/Dockerfile.docs
@@ -98,8 +111,10 @@ services:
       - web
     restart: unless-stopped
 
-  # ── E2E runner UI + Playwright (NOT the Next.js /e2e page) ─────────────
+  # ── E2E runner (Playwright) — SLOW; only enable when testing E2E ────────
+  # Enable with COMPOSE_PROFILES=e2e  or  COMPOSE_PROFILES=docs,e2e  or full
   e2e:
+    profiles: ["e2e", "full"]
     build:
       context: ..
       dockerfile: docker/Dockerfile.e2e

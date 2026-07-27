@@ -1,20 +1,45 @@
 # BookOne v2 — Production web (ERP only — no Chromium / E2E)
+# Layered for cache: deps install only re-runs when lockfiles change.
 FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat
 RUN npm install -g pnpm@9
+
+FROM base AS deps
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Copy only dependency manifests first (best cache hit rate)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/accounting/package.json ./packages/accounting/
+COPY packages/auth/package.json ./packages/auth/
+COPY packages/db/package.json ./packages/db/
+COPY packages/modules/package.json ./packages/modules/
+COPY packages/ui/package.json ./packages/ui/
+
+# Optional packages if present in lockfile workspace
+COPY packages/db/drizzle.config.ts ./packages/db/drizzle.config.ts
+
+RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY . .
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages ./packages
+COPY --from=deps /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/turbo.json /app/tsconfig.base.json ./
 
-RUN pnpm install --frozen-lockfile
+# App sources (invalidates cache only when code changes)
+COPY apps/web ./apps/web
+COPY packages ./packages
+COPY scripts ./scripts
+COPY docker/entrypoint.sh ./docker/entrypoint.sh
 
 ARG BUILD_DATE=0
 RUN echo "Build: $BUILD_DATE" && rm -rf apps/web/.next apps/web/.turbo
 
-# Build Next.js ERP app only
 RUN pnpm --dir apps/web build
 
 FROM base AS runner
@@ -26,7 +51,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
-# Full monorepo build output (entrypoint runs migrations + next start)
 COPY --from=builder --chown=nextjs:nodejs /app ./
 
 RUN mkdir -p /app/.cache /app/.next /app/.pnpm-store \

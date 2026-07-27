@@ -1,6 +1,8 @@
 # Portainer multi-service deploy (web + docs + e2e)
 
-**One GitHub monorepo · one Portainer stack · three app images (staging).**
+**One GitHub monorepo · one Portainer stack · selective app images (staging).**
+
+> **Selective rebuilds / profiles / when not to build e2e:** see [`DEPLOY_SELECTIVE_BUILDS.md`](./DEPLOY_SELECTIVE_BUILDS.md).
 
 ---
 

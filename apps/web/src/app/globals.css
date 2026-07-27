@@ -4824,6 +4824,57 @@ textarea.input {
   color: #5b6b7f;
   padding: 28px 12px;
 }
+.cashbook-period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-weight: 750;
+  font-size: 14px;
+}
+.cashbook-section-title {
+  font-size: 15px;
+  font-weight: 750;
+  margin: 8px 0 10px;
+}
+.cashbook-dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+@media (max-width: 640px) {
+  .cashbook-dual { grid-template-columns: 1fr; }
+}
+.cashbook-card {
+  background: #fff;
+  border: 1px solid #dde5ef;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cashbook-card-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5b6b7f;
+  font-weight: 750;
+}
+.cashbook-card-combined {
+  border-color: #b8d4f0;
+  background: #f3f8fd;
+  margin-bottom: 14px;
+}
+.cashbook-card .cashbook-save {
+  align-self: flex-start;
+  min-height: 38px;
+  font-size: 12px;
+  padding: 0 12px;
+  gap: 6px;
+}
 .linkish {
   border: 0;
   background: none;

@@ -248,6 +248,8 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
     });
 
     revalidatePath('/');
+    revalidatePath('/cashbook');
+    revalidatePath('/cashbook/summary');
     return { success: true, ...result };
   } catch (error) {
     if (error instanceof z.ZodError) {

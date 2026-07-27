@@ -224,6 +224,53 @@ describe('inferTransaction + generateJournal', () => {
     assertBalanced(journal.lines);
   });
 
+  it('Lite invoice: customer invoice maps to SaleCredit (AR)', () => {
+    const entry: SimpleEntry = {
+      tenantId: tenant,
+      userId: user,
+      direction: 'invoice_bill',
+      invoiceType: 'customer_invoice',
+      party: 'Acme Retail',
+      description: 'Consulting July',
+      amount: 50000,
+      paymentMethod: 'Credit',
+      paymentAccount: { kind: 'code', value: '1100' },
+      date: '2026-07-01',
+    };
+
+    const { transaction, journal } = inferTransaction(entry);
+
+    expect(transaction.accountingType).toBe('SaleCredit');
+    expect(transaction.isAlreadySettled).toBe(false);
+    expectLine(journal.lines, '1300', 'debit', 50000);
+    expectLine(journal.lines, '4000', 'credit', 50000);
+    assertBalanced(journal.lines);
+  });
+
+  it('Lite bill: vendor bill maps to PurchaseCredit (AP)', () => {
+    const entry: SimpleEntry = {
+      tenantId: tenant,
+      userId: user,
+      direction: 'invoice_bill',
+      invoiceType: 'vendor_bill',
+      party: 'Office Mart',
+      description: 'Stationery order',
+      amount: 8000,
+      paymentMethod: 'Credit',
+      paymentAccount: { kind: 'code', value: '1100' },
+      date: '2026-07-02',
+      categoryOverride: '6500',
+    };
+
+    const { transaction, journal } = inferTransaction(entry);
+
+    expect(transaction.accountingType).toBe('PurchaseCredit');
+    expect(transaction.isAlreadySettled).toBe(false);
+    expectLine(journal.lines, '6500', 'debit', 8000);
+    expectLine(journal.lines, '2100', 'credit', 8000);
+    assertBalanced(journal.lines);
+  });
+
   it('Money In: personal salary override credits 4200', () => {
     const entry: SimpleEntry = {
       tenantId: tenant,

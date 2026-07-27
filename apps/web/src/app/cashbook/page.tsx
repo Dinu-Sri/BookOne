@@ -29,6 +29,8 @@ export default async function CashbookPage({
       moneyOut={data.moneyOut}
       net={data.net}
       period={period}
+      receivables={data.receivables}
+      payables={data.payables}
     />
   );
 }

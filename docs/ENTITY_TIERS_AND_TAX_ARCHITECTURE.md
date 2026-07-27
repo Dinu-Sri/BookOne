@@ -322,27 +322,30 @@ Rules change yearly → **versioned packs**, not hardcoded UI.
 | Control Room create/list entity filters | **Not done** |
 | Upgrade wizards (personal→sole) | Phase 5 |
 
-### Phase 3 — Personal surface — **IN PROGRESS**
+### Phase 3 — Personal surface — **DONE (core)**
 
-Architecture intent: Excel-level personal books on real double-entry.
+| Item | Status |
+|------|--------|
+| Cashbook home / summary / settings | Done |
+| Money in/out with correct income/expense accounts | Done |
+| Loan took/paid → 2500 liability journals | Done |
+| Move money from/to tiles | Done |
+| Category tiles + CSV tax pack v0 | Done |
+| E2E smoke personal | **Not done** |
 
-| Item | Status (before Phase 3 pass) |
-|------|------------------------------|
-| Routes `/cashbook`, summary, settings | Thin MVP |
-| Money in/out sheet + tiles | MVP (bugs: money_in always owner equity) |
-| Loan took/paid correct liability journals | **Broken / missing** |
-| Move money from/to tiles | Half (hardcoded cash→bank) |
-| Month period + summary | Basic |
-| Export pack v0 (CSV) | **Missing** |
-| Personal category tiles / income accounts | **Missing** |
-| E2E smoke personal | **Missing** |
+### Phase 4 — Sole prop lite — **DONE (core)**
 
-### Phase 4 — Sole prop lite
-
-- Domain switcher — **MVP exists** on cashbook  
-- Lite invoice/bill — **tiles only, not real invoice path**  
-- Combined year view — **summary stub**  
-- E2E sole lite — **Missing**  
+| Item | Status |
+|------|--------|
+| Domain switcher Personal \| Business | Done |
+| Business tiles: Money In/Out, Invoice, Bill, Move | Done |
+| Lite invoice → SaleCredit (Dr 1300 / Cr 4000), `book_domain=business` | Done |
+| Lite bill → PurchaseCredit (Dr expense / Cr 2100) | Done |
+| Month period prev/next | Done |
+| Combined year overview (personal + business + net) | Done |
+| AR/AP open amounts on business summary | Done |
+| E2E sole lite | **Not done** |
+| Excel import | Still later |
 
 ### Phase 5 — Sole prop full + lifecycle
 

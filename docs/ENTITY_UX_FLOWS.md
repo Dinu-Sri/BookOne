@@ -348,7 +348,22 @@ Helpers: `apps/web/src/lib/entity-kind.ts` (`canAccessFullErp`, `homePathForEnti
 
 Engine: `LoanReceive` / `LoanPay`; Sale revenue from category (4200/4300/4000); personal codes on default CoA map.
 
-**Still later:** Excel import, period picker UI, E2E personal smoke, lite commercial invoice.
+**Still later:** Excel import, E2E personal smoke.
+
+---
+
+## 17. Phase 4 — Sole prop lite (implementation)
+
+| Area | Behaviour |
+|------|-----------|
+| Domain tiles | Always on sole home; 1 tap reloads sheet + strip |
+| Business tiles | Money In/Out, **Invoice**, **Bill**, Move (no Loan on business) |
+| Lite Invoice | Who + amount + description + date → `invoice_bill` / SaleCredit (AR) |
+| Lite Bill | + category tiles → PurchaseCredit (AP) |
+| Sheet | Type column shows Invoice / Bill |
+| Period | ← month → on home |
+| Summary | Month dual cards + **year combined** personal \| business \| total net |
+| Collect/pay later | Money In / Money Out (full receive/pay path can deepen later) |
 
 ---
 

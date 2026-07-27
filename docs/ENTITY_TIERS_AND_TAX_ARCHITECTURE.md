@@ -230,6 +230,9 @@ All transitions: platform audit event + idempotent jobs.
 
 ## 8. UX surfaces
 
+> **Detailed flows, Sinhala gloss, click budgets, wireframes:**  
+> [`ENTITY_UX_FLOWS.md`](./ENTITY_UX_FLOWS.md)
+
 ### 8.1 Personal shell (Excel-level)
 
 - Verbs: Money in, Money out, Loan, Transfer  
@@ -237,12 +240,13 @@ All transitions: platform audit event + idempotent jobs.
 - Categories with SL-friendly defaults  
 - Year-end: “Tax pack” export for accountant  
 - CSV/Excel import  
+- **Tile + sheet (Excel) UI**; optional Sinhala in brackets on key labels  
 
 **Implementation reuse:** Simple Entry + category inference + bank accounts.
 
 ### 8.2 Sole prop shell
 
-- Topbar: **Personal | Business** domain switcher  
+- Topbar: **Personal | Business** domain switcher (tiles)  
 - Lite: simple invoice + expenses + cash  
 - Full: current ERP suites when modules on; switcher remains  
 

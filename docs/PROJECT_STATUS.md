@@ -519,9 +519,10 @@ Additional BookOne-specific conventions:
 
 ### Strategic: entity tiers (Personal · Sole prop · Pvt Ltd)
 
-**Canonical design:** [`ENTITY_TIERS_AND_TAX_ARCHITECTURE.md`](./ENTITY_TIERS_AND_TAX_ARCHITECTURE.md)
+**Canonical design:** [`ENTITY_TIERS_AND_TAX_ARCHITECTURE.md`](./ENTITY_TIERS_AND_TAX_ARCHITECTURE.md)  
+**UX flows (personal / sole lite):** [`ENTITY_UX_FLOWS.md`](./ENTITY_UX_FLOWS.md)
 
-Registration buckets: **personal**, **sole_prop** (lite → full ERP + personal), **company** (full ERP, no personal). One multi-tenant core; `entity_kind` + `book_domain` + existing modules; phased delivery starting with schema then personal UX.
+Registration buckets: **personal**, **sole_prop** (lite → full ERP + personal), **company** (full ERP, no personal). One multi-tenant core; `entity_kind` + `book_domain` + existing modules; UX = tiles + Excel-like sheet + optional Sinhala gloss; phased delivery starting with schema then personal UX.
 
 
 In rough priority order, picking up from where we are today:

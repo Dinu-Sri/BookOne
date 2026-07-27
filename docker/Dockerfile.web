@@ -20,7 +20,11 @@ COPY packages/ui/package.json ./packages/ui/
 # Optional packages if present in lockfile workspace
 COPY packages/db/drizzle.config.ts ./packages/db/drizzle.config.ts
 
-RUN pnpm install --frozen-lockfile
+# Ignore scripts here: apps/web postinstall runs `fumadocs-mdx` which needs
+# source.config.ts and content — not present until the builder stage. Without
+# --ignore-scripts, Portainer/docker build fails with:
+#   process "/bin/sh -c pnpm install --frozen-lockfile" did not complete successfully
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 FROM base AS builder
 WORKDIR /app
@@ -39,6 +43,9 @@ COPY docker/entrypoint.sh ./docker/entrypoint.sh
 
 ARG BUILD_DATE=0
 RUN echo "Build: $BUILD_DATE" && rm -rf apps/web/.next apps/web/.turbo
+
+# Run the deferred postinstall now that source.config.ts / MDX content exist
+RUN pnpm --dir apps/web exec fumadocs-mdx
 
 RUN pnpm --dir apps/web build
 

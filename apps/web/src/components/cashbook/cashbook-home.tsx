@@ -17,7 +17,7 @@ import type { CashbookRow } from '@/app/actions/cashbook';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { gloss, readSiGlossPreference, writeSiGlossPreference } from '@/lib/si-gloss';
 import { readBookDomainPref, writeBookDomainPref, type BookDomainPref } from '@/lib/book-domain';
-import type { EntityKind } from '@/lib/entity-kind';
+import { canAccessFullErp, type EntityKind } from '@/lib/entity-kind';
 
 type Mode =
   | 'money_in'
@@ -103,6 +103,7 @@ function rowKindLabel(r: CashbookRow): string {
 
 export function CashbookHomeClient({
   entityKind,
+  capabilityTier,
   tenantName,
   initialRows,
   moneyIn,
@@ -113,6 +114,7 @@ export function CashbookHomeClient({
   payables = 0,
 }: {
   entityKind: EntityKind;
+  capabilityTier?: string | null;
   tenantName: string;
   initialRows: CashbookRow[];
   moneyIn: number;
@@ -123,6 +125,7 @@ export function CashbookHomeClient({
   payables?: number;
 }) {
   const sole = entityKind === 'sole_prop';
+  const fullErp = canAccessFullErp(entityKind, capabilityTier);
   const [si, setSi] = useState(() => readSiGlossPreference());
   const [domain, setDomain] = useState<BookDomainPref>(() =>
     sole ? readBookDomainPref('business') : 'personal',
@@ -425,6 +428,7 @@ export function CashbookHomeClient({
       title={title}
       active="home"
       si={si}
+      showFullErpLink={fullErp}
       right={
         <button type="button" className="cashbook-si-toggle" onClick={toggleSi}>
           {si ? 'SI ✓' : 'SI'}

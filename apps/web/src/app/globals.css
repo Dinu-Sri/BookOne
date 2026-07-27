@@ -4960,3 +4960,61 @@ textarea.input {
 @media (max-width: 640px) {
   .cashbook-summary { grid-template-columns: 1fr 1fr; }
 }
+
+/* Workspace switcher (topbar + cashbook) */
+.workspace-switcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line, #dde5ef);
+  background: var(--surface, #fff);
+  border-radius: 10px;
+  min-height: 36px;
+  padding: 0 12px;
+  font-weight: 650;
+  font-size: 13px;
+  cursor: pointer;
+  max-width: min(280px, 50vw);
+}
+.workspace-switcher-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-switcher-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 260px;
+  max-width: 340px;
+  background: #fff;
+  border: 1px solid #dde5ef;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(20, 40, 70, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.workspace-switcher-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  width: 100%;
+  font: inherit;
+}
+.workspace-switcher-item:hover { background: #f3f8fd; }
+.workspace-switcher-item.current { background: #e8f2fc; }
+.workspace-switcher-item.muted { color: #5b6b7f; cursor: default; font-size: 13px; }
+.workspace-switcher-item.error { color: #c94141; font-size: 12px; cursor: default; }
+.workspace-switcher-item-name { font-weight: 700; font-size: 13px; }
+.workspace-switcher-item-meta { font-size: 11px; color: #5b6b7f; }
+.workspace-archived { font-style: italic; font-weight: 500; color: #8a6d3b; }

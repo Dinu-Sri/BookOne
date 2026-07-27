@@ -5,6 +5,7 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { StatusBadge } from '@/components/module/list-page';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { entityKindLabel } from '@/lib/entity-labels';
 
 export default async function ControlRoomOverviewPage() {
   let tenant;
@@ -88,7 +89,8 @@ export default async function ControlRoomOverviewPage() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Company</th>
+                      <th>Workspace</th>
+                      <th>Type</th>
                       <th>Plan</th>
                       <th>Status</th>
                       <th />
@@ -97,8 +99,8 @@ export default async function ControlRoomOverviewPage() {
                   <tbody>
                     {data.recent.length === 0 ? (
                       <tr>
-                        <td colSpan={4} style={{ color: 'var(--ink-muted)' }}>
-                          No companies yet
+                        <td colSpan={5} style={{ color: 'var(--ink-muted)' }}>
+                          No workspaces yet
                         </td>
                       </tr>
                     ) : (
@@ -108,9 +110,20 @@ export default async function ControlRoomOverviewPage() {
                             <div style={{ fontWeight: 700 }}>{row.name}</div>
                             <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{row.slug}</div>
                           </td>
+                          <td style={{ fontSize: 13, fontWeight: 650 }}>
+                            {entityKindLabel(row.entityKind, row.capabilityTier)}
+                          </td>
                           <td style={{ textTransform: 'capitalize' }}>{row.plan}</td>
                           <td>
-                            <StatusBadge status={row.status === 'active' ? 'active' : 'inactive'} />
+                            <StatusBadge
+                              status={
+                                row.status === 'active'
+                                  ? 'active'
+                                  : row.status === 'archived'
+                                    ? 'draft'
+                                    : 'inactive'
+                              }
+                            />
                           </td>
                           <td>
                             <Link href={`/control-room/companies/${row.id}`}>

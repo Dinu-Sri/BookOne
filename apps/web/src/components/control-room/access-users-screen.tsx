@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { listPlatformUsers, type PlatformUserRow } from '@/app/actions/platform';
 import { StatusBadge } from '@/components/module/list-page';
 import { Card } from '@/components/ui/bookone-ui';
+import { entityKindLabel } from '@/lib/entity-labels';
 
 export function AccessUsersScreen({ initialRows }: { initialRows: PlatformUserRow[] }) {
   const router = useRouter();
@@ -55,14 +56,15 @@ export function AccessUsersScreen({ initialRows }: { initialRows: PlatformUserRo
                   <th>User</th>
                   <th>Email</th>
                   <th>Role</th>
-                  <th>Home company</th>
+                  <th>Home workspace</th>
+                  <th>Type</th>
                   <th>Joined</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ color: 'var(--ink-muted)' }}>
+                    <td colSpan={6} style={{ color: 'var(--ink-muted)' }}>
                       No users found
                     </td>
                   </tr>
@@ -81,7 +83,13 @@ export function AccessUsersScreen({ initialRows }: { initialRows: PlatformUserRo
                       </td>
                       <td>
                         <div>{u.tenantName}</div>
-                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{u.tenantSlug}</div>
+                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                          {u.tenantSlug}
+                          {u.tenantStatus === 'archived' ? ' · archived' : ''}
+                        </div>
+                      </td>
+                      <td style={{ fontWeight: 650, fontSize: 13 }}>
+                        {entityKindLabel(u.entityKind, u.capabilityTier)}
                       </td>
                       <td style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
                         {new Date(u.createdAt).toLocaleDateString()}

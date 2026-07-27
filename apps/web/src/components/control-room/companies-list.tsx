@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { PlatformCompanyRow } from '@/app/actions/platform';
 import { StatusBadge } from '@/components/module/list-page';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { entityKindLabel } from '@/lib/entity-labels';
 
 const PAGE_SIZE = 10;
 
@@ -17,6 +18,7 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
   const [status, setStatus] = useState(searchParams.get('status') ?? 'all');
   const [plan, setPlan] = useState(searchParams.get('plan') ?? 'all');
   const [environment, setEnvironment] = useState(searchParams.get('environment') ?? 'all');
+  const [entityKind, setEntityKind] = useState(searchParams.get('entityKind') ?? 'all');
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page') ?? '1') || 1));
   const [rows, setRows] = useState(initialRows);
   const [, startTransition] = useTransition();
@@ -34,6 +36,7 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
       sync('status', status);
       sync('plan', plan);
       sync('environment', environment);
+      sync('entityKind', entityKind);
       params.delete('page');
       const next = params.toString();
       const cur = searchParams.toString();
@@ -44,7 +47,7 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
       setPage(1);
     }, 250);
     return () => window.clearTimeout(handle);
-  }, [query, status, plan, environment, pathname, router, searchParams]);
+  }, [query, status, plan, environment, entityKind, pathname, router, searchParams]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -52,10 +55,11 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
       if (status !== 'all' && r.status !== status) return false;
       if (plan !== 'all' && r.plan !== plan) return false;
       if (environment !== 'all' && r.environment !== environment) return false;
+      if (entityKind !== 'all' && r.entityKind !== entityKind) return false;
       if (!q) return true;
-      return `${r.name} ${r.slug}`.toLowerCase().includes(q);
+      return `${r.name} ${r.slug} ${r.entityKind}`.toLowerCase().includes(q);
     });
-  }, [rows, query, status, plan, environment]);
+  }, [rows, query, status, plan, environment, entityKind]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -94,6 +98,20 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
           <option value="all">All status</option>
           <option value="active">Active</option>
           <option value="suspended">Suspended</option>
+          <option value="archived">Archived</option>
+        </select>
+        <select
+          className="input"
+          style={{ width: 'auto', minWidth: 140 }}
+          value={entityKind}
+          onChange={(e) => setEntityKind(e.target.value)}
+          aria-label="Entity type"
+        >
+          <option value="all">All types</option>
+          <option value="personal">Personal</option>
+          <option value="sole_prop">Sole prop</option>
+          <option value="company">Company</option>
+          <option value="pending">Pending</option>
         </select>
         <select
           className="input"
@@ -137,7 +155,8 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Company</th>
+                    <th>Workspace</th>
+                    <th>Type</th>
                     <th>Plan</th>
                     <th>Env</th>
                     <th>Status</th>
@@ -153,6 +172,11 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
                         <div style={{ fontWeight: 750 }}>{row.name}</div>
                         <div style={{ color: 'var(--ink-soft)', fontSize: 12 }}>{row.slug}</div>
                       </td>
+                      <td>
+                        <span style={{ fontWeight: 650, fontSize: 13 }}>
+                          {entityKindLabel(row.entityKind, row.capabilityTier)}
+                        </span>
+                      </td>
                       <td style={{ textTransform: 'capitalize' }}>{row.plan}</td>
                       <td>
                         <StatusBadge status={row.environment === 'staging' ? 'draft' : 'posted'} />
@@ -161,7 +185,18 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
                         </span>
                       </td>
                       <td>
-                        <StatusBadge status={row.status === 'active' ? 'active' : 'inactive'} />
+                        <StatusBadge
+                          status={
+                            row.status === 'active'
+                              ? 'active'
+                              : row.status === 'archived'
+                                ? 'draft'
+                                : 'inactive'
+                          }
+                        />
+                        <span style={{ marginLeft: 6, fontSize: 12, textTransform: 'capitalize' }}>
+                          {row.status}
+                        </span>
                       </td>
                       <td>{row.userCount}</td>
                       <td style={{ whiteSpace: 'nowrap', fontSize: 13 }}>

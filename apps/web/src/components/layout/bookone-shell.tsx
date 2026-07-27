@@ -29,7 +29,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Suspense, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { BrandLockup, Button, SelectLike } from '@/components/ui/bookone-ui';
+import { BrandLockup, Button } from '@/components/ui/bookone-ui';
 import { PeriodSelector } from '@/components/layout/period-selector';
 import { CompanyResetButton } from '@/components/layout/company-reset-button';
 import { StatusToast } from '@/components/layout/status-toast';
@@ -45,7 +45,9 @@ import {
   homePathForEntity,
   needsOnboarding,
   parseEntityKind,
+  usesPersonalShell,
 } from '@/lib/entity-kind';
+import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 
 export interface NavItem {
   label: string;
@@ -70,6 +72,7 @@ const navSuites: NavSuite[] = [
     icon: Landmark,
     items: [
       { label: 'Simple Entry', icon: ReceiptText, href: '/' },
+      // Injected at runtime for sole prop: Cashbook (personal + business domains)
       { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       { label: 'Transactions', icon: ClipboardList, href: '/transactions' },
       { label: 'Journal', icon: BookOpenCheck, href: '/journal' },
@@ -254,8 +257,10 @@ export function BookOneShell({
   const isSuperAdmin = tenant?.userRole === 'super_admin' || tenant?.userEmail === 'dinu.sri.m@gmail.com';
 
   // Personal / sole lite must not stay on full ERP chrome (typed URLs, bookmarks).
+  // Super admin may stay on ERP (Control Room) even if home workspace is personal/lite.
   useEffect(() => {
     if (!tenant?.entityKind) return;
+    if (isSuperAdmin) return;
     const kind = parseEntityKind(tenant.entityKind);
     if (needsOnboarding(kind)) {
       router.replace('/onboarding');
@@ -264,12 +269,17 @@ export function BookOneShell({
     if (!canAccessFullErp(kind, tenant.capabilityTier)) {
       router.replace(homePathForEntity(kind, tenant.capabilityTier));
     }
-  }, [tenant?.entityKind, tenant?.capabilityTier, router]);
+  }, [tenant?.entityKind, tenant?.capabilityTier, router, isSuperAdmin]);
 
   const modules = useMemo(
     () => normalizeModules(tenant?.modules, tenant?.plan ?? 'starter'),
     [tenant?.modules, tenant?.plan],
   );
+  const entityKind = tenant?.entityKind ? parseEntityKind(tenant.entityKind) : null;
+  // Sole prop (lite or full) still needs personal + business cashbook — not only ERP.
+  const soleNeedsCashbook =
+    entityKind != null && usesPersonalShell(entityKind) && canAccessFullErp(entityKind, tenant?.capabilityTier);
+
   const visibleSuites = useMemo(() => {
     return navSuites
       .filter((suite) => !suite.superAdminOnly || isSuperAdmin)
@@ -278,17 +288,23 @@ export function BookOneShell({
         if (modKey && !modules[modKey]) {
           return null;
         }
+        let items = suite.items;
         // POS nav items require the pos module (sales suite may still show).
         if (suite.id === 'sales' && !modules.pos) {
-          return {
-            ...suite,
-            items: suite.items.filter((item) => !isPosNavItem(item.label)),
-          };
+          items = items.filter((item) => !isPosNavItem(item.label));
         }
-        return suite;
+        // Sole full: keep Personal|Business cashbook reachable from full ERP chrome
+        if (suite.id === 'accounting' && soleNeedsCashbook) {
+          items = [
+            items[0]!,
+            { label: 'Cashbook', subtitle: 'Personal · Business', icon: BookOpen, href: '/cashbook' },
+            ...items.slice(1),
+          ];
+        }
+        return { ...suite, items };
       })
       .filter(Boolean) as NavSuite[];
-  }, [isSuperAdmin, modules]);
+  }, [isSuperAdmin, modules, soleNeedsCashbook]);
   const activeSuite = visibleSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
 
@@ -381,11 +397,7 @@ export function BookOneShell({
       <main className="main">
         <header className="topbar">
           <div className="cluster">
-            <SelectLike>
-              <span className="cluster">
-                <Building2 size={16} /> {tenant?.name ?? 'Workspace'}
-              </span>
-            </SelectLike>
+            <WorkspaceSwitcher currentName={tenant?.name} />
           </div>
           <div className="topbar-actions">
             <CompanyResetButton />

@@ -357,13 +357,16 @@ Rules change yearly → **versioned packs**, not hardcoded UI.
 | sole → company incorporate (**new** tenant + archive sole) | Done — Settings |
 | Opening balances from business-domain journals | Done (matching CoA codes + equity plug) |
 | Audit events UPGRADE / DOWNGRADE / INCORPORATE / ARCHIVE | Done |
-| Multi-tenant switcher back to archived sole | **Later** (membership kept) |
+| Multi-tenant switcher (incl. archived sole) | **Done** — topbar + cashbook |
+| Sole full keeps Cashbook (Personal \| Business) | **Done** — ERP nav + Full ERP link |
+| Control Room Type column (entity + tier) | **Done** |
 | E2E lifecycle | **Not done** |
 
-### Phase 6 — Tax depth
+### Phase 6 — Tax depth — **NEXT**
 
 - Versioned IIT packs, schedules, deeper IRD alignment  
-- Does not block Phases 1–5  
+- See `docs/ROADMAP_REMAINING.md`  
+- Does not block ops polish (AR settle, import, admin metrics)  
 
 ---
 

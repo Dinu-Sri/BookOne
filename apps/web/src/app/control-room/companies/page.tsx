@@ -8,7 +8,13 @@ import { BookOneShell } from '@/components/layout/bookone-shell';
 export default async function CompaniesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; plan?: string; environment?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    plan?: string;
+    environment?: string;
+    entityKind?: string;
+  }>;
 }) {
   const params = await searchParams;
   let tenant;
@@ -23,6 +29,7 @@ export default async function CompaniesPage({
       status: params.status,
       plan: params.plan,
       environment: params.environment,
+      entityKind: params.entityKind,
     });
   } catch {
     redirect('/login');

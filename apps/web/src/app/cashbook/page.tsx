@@ -23,6 +23,7 @@ export default async function CashbookPage({
   return (
     <CashbookHomeClient
       entityKind={tenant.entityKind}
+      capabilityTier={tenant.capabilityTier}
       tenantName={tenant.name}
       initialRows={data.rows}
       moneyIn={data.moneyIn}

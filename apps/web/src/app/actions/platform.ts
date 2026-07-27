@@ -37,6 +37,10 @@ export type PlatformCompanyRow = {
   plan: string;
   environment: string;
   status: string;
+  /** personal | sole_prop | company | pending */
+  entityKind: string;
+  /** lite | full | null */
+  capabilityTier: string | null;
   modules: TenantModules;
   createdAt: string;
   userCount: number;
@@ -90,6 +94,10 @@ export type PlatformUserRow = {
   tenantId: string;
   tenantName: string;
   tenantSlug: string;
+  /** Workspace entity kind of home tenant */
+  entityKind: string;
+  capabilityTier: string | null;
+  tenantStatus: string;
   createdAt: string;
 };
 
@@ -151,6 +159,7 @@ async function loadCompanyRows(filter?: {
   status?: string;
   plan?: string;
   environment?: string;
+  entityKind?: string;
 }): Promise<PlatformCompanyRow[]> {
   const conditions = [];
   if (filter?.status && filter.status !== 'all') {
@@ -161,6 +170,9 @@ async function loadCompanyRows(filter?: {
   }
   if (filter?.environment && filter.environment !== 'all') {
     conditions.push(eq(tenants.environment, filter.environment));
+  }
+  if (filter?.entityKind && filter.entityKind !== 'all') {
+    conditions.push(eq(tenants.entityKind, filter.entityKind));
   }
   if (filter?.q?.trim()) {
     const q = `%${filter.q.trim()}%`;
@@ -175,6 +187,8 @@ async function loadCompanyRows(filter?: {
       plan: tenants.plan,
       environment: tenants.environment,
       status: tenants.status,
+      entityKind: tenants.entityKind,
+      capabilityTier: tenants.capabilityTier,
       modules: tenants.modules,
       createdAt: tenants.createdAt,
       userCount: sql<number>`(
@@ -194,6 +208,8 @@ async function loadCompanyRows(filter?: {
     plan: r.plan,
     environment: r.environment ?? 'production',
     status: r.status ?? 'active',
+    entityKind: r.entityKind ?? 'company',
+    capabilityTier: r.capabilityTier ?? null,
     modules: mapModules(r.modules, r.plan),
     createdAt: r.createdAt?.toISOString?.() ?? String(r.createdAt),
     userCount: Number(r.userCount ?? 0),
@@ -240,6 +256,7 @@ export async function listPlatformCompanies(filter?: {
   status?: string;
   plan?: string;
   environment?: string;
+  entityKind?: string;
 }): Promise<PlatformCompanyRow[]> {
   await requirePlatformAdmin();
   return loadCompanyRows(filter);
@@ -256,6 +273,8 @@ export async function getPlatformCompany(id: string): Promise<PlatformCompanyDet
       plan: tenants.plan,
       environment: tenants.environment,
       status: tenants.status,
+      entityKind: tenants.entityKind,
+      capabilityTier: tenants.capabilityTier,
       modules: tenants.modules,
       createdAt: tenants.createdAt,
     })
@@ -297,6 +316,8 @@ export async function getPlatformCompany(id: string): Promise<PlatformCompanyDet
     plan: row.plan,
     environment: row.environment ?? 'production',
     status: row.status ?? 'active',
+    entityKind: row.entityKind ?? 'company',
+    capabilityTier: row.capabilityTier ?? null,
     modules: mapModules(row.modules, row.plan),
     createdAt: row.createdAt?.toISOString?.() ?? String(row.createdAt),
     userCount: members.length,
@@ -594,6 +615,9 @@ export async function listPlatformUsers(q?: string): Promise<PlatformUserRow[]> 
       tenantId: users.tenantId,
       tenantName: tenants.name,
       tenantSlug: tenants.slug,
+      entityKind: tenants.entityKind,
+      capabilityTier: tenants.capabilityTier,
+      tenantStatus: tenants.status,
       createdAt: users.createdAt,
     })
     .from(users)
@@ -610,6 +634,9 @@ export async function listPlatformUsers(q?: string): Promise<PlatformUserRow[]> 
     tenantId: r.tenantId,
     tenantName: r.tenantName,
     tenantSlug: r.tenantSlug,
+    entityKind: r.entityKind ?? 'company',
+    capabilityTier: r.capabilityTier ?? null,
+    tenantStatus: r.tenantStatus ?? 'active',
     createdAt: r.createdAt?.toISOString?.() ?? String(r.createdAt),
   }));
 }

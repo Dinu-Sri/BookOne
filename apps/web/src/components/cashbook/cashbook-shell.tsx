@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { LogOut } from 'lucide-react';
 import { BrandLockup } from '@/components/ui/bookone-ui';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
+import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 
 export function CashbookShell({
   children,
@@ -12,12 +13,15 @@ export function CashbookShell({
   active = 'home',
   si = false,
   right,
+  showFullErpLink = false,
 }: {
   children: ReactNode;
   title: string;
   active?: 'home' | 'summary' | 'settings';
   si?: boolean;
   right?: ReactNode;
+  /** Sole full — jump back to full ERP suites */
+  showFullErpLink?: boolean;
 }) {
   const nav = [
     { id: 'home' as const, href: '/cashbook', en: 'Home', si: 'මුල් පිටුව' },
@@ -30,9 +34,15 @@ export function CashbookShell({
       <header className="cashbook-top">
         <div className="cashbook-top-left">
           <BrandLockup compact />
+          <WorkspaceSwitcher compact />
           <span className="cashbook-title">{title}</span>
         </div>
         <div className="cashbook-top-right">
+          {showFullErpLink ? (
+            <Link href="/" className="cashbook-si-toggle" title="Full BookOne">
+              Full ERP
+            </Link>
+          ) : null}
           {right}
           <form action={signOutCurrentUser}>
             <button
@@ -42,7 +52,7 @@ export function CashbookShell({
               title={si ? 'Log out (ඉවත් වන්න)' : 'Log out'}
             >
               <LogOut size={16} aria-hidden />
-              <span className="cashbook-logout-label">{si ? 'Log out' : 'Log out'}</span>
+              <span className="cashbook-logout-label">Log out</span>
             </button>
           </form>
         </div>

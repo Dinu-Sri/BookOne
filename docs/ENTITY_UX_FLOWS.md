@@ -367,6 +367,21 @@ Engine: `LoanReceive` / `LoanPay`; Sale revenue from category (4200/4300/4000); 
 
 ---
 
+## 18. Phase 5 — Lifecycle (Settings)
+
+Path: **Cashbook → Settings → Grow your workspace**
+
+| Action | From | To | Data |
+|--------|------|-----|------|
+| Upgrade to sole lite | personal | sole_prop lite | Same tenant; personal history + business domain |
+| Expand to full modules | sole lite | sole full | Modules on; full ERP link |
+| Downgrade to lite | sole full | sole lite | Modules off; journals kept |
+| Incorporate to company | sole_* | **new** company | Opening JE from business domain; sole `status=archived` |
+
+Confirm steps on every destructive-feeling action. Incorporate asks for legal company name.
+
+---
+
 ## 15. Document history
 
 | Date | Change |

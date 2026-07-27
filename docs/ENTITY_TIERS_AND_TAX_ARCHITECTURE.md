@@ -347,29 +347,34 @@ Rules change yearly → **versioned packs**, not hardcoded UI.
 | E2E sole lite | **Not done** |
 | Excel import | Still later |
 
-### Phase 5 — Sole prop full + lifecycle
+### Phase 5 — Sole prop full + lifecycle — **DONE (core)**
 
-- Module expansion using existing ERP  
-- Upgrade wizards  
-- Incorporate path (new company + balances)  
-- Downgrade policy  
+| Item | Status |
+|------|--------|
+| personal → sole lite (same tenant, CoA merge, modules) | Done — Settings |
+| sole lite → sole full (modules + capability_tier) | Done — Settings |
+| sole full → lite downgrade (hide modules; keep journals) | Done — Settings |
+| sole → company incorporate (**new** tenant + archive sole) | Done — Settings |
+| Opening balances from business-domain journals | Done (matching CoA codes + equity plug) |
+| Audit events UPGRADE / DOWNGRADE / INCORPORATE / ARCHIVE | Done |
+| Multi-tenant switcher back to archived sole | **Later** (membership kept) |
+| E2E lifecycle | **Not done** |
 
 ### Phase 6 — Tax depth
 
 - Versioned IIT packs, schedules, deeper IRD alignment  
-- Does not block Phases 1–3  
+- Does not block Phases 1–5  
 
 ---
 
-## 11.1 Known issues (audit 2026-07-27)
+## 11.1 Known residual gaps
 
-1. **Personal money in** posted as `owner_contribution` → always equity 3000, not salary/other income.  
-2. **Loan tile** guesses direction from description text; does not post to **2500 Loans Payable**.  
-3. **Personal CoA** has 4200/4300/2500 but journal engine `ACCOUNTS_BY_CODE` was company-default only (missing personal codes).  
-4. **Invoice/Bill** tiles on sole business open same cash entry (no commercial doc).  
-5. **Import Excel** disabled placeholder.  
-6. **No personal E2E**.  
-7. Phase numbers in chat (“Phase 2 polish”) = routing polish; architecture Phase 2 = registration (both largely done).
+1. Excel import still placeholder  
+2. Linked collect/pay against lite invoice/bill (AR/AP settlement UX)  
+3. E2E personal / sole / lifecycle  
+4. Control Room entity filters  
+5. Switcher UI for archived sole after incorporate (membership exists)  
+6. Phase 3/4 audit notes about money-in/loan bugs — **fixed** in later commits  
 
 ---
 

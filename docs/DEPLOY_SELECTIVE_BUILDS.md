@@ -17,6 +17,54 @@ Postgres / Redis / Minio / Traefik use public images — they are **not** rebuil
 
 ---
 
+## Automatic: “when I pull, only build what changed”
+
+Portainer **cannot** decide this by itself — a full stack “Pull and redeploy” rebuilds every service that has a `build:` block.
+
+Use **`scripts/smart-deploy.sh`** on the VPS instead:
+
+```bash
+ssh you@vps
+cd /path/to/BookOne          # git clone of the repo
+git pull origin master
+chmod +x scripts/smart-deploy.sh
+./scripts/smart-deploy.sh
+```
+
+What it does:
+
+1. `git pull`
+2. Compares files changed since **last successful deploy** (file `.deploy-last-sha`)
+3. Builds only:
+   - **web** if `apps/web/**`, `packages/**`, `Dockerfile.web`, lockfiles, …
+   - **e2e** if `apps/e2e-runner/**` or `Dockerfile.e2e`
+   - **docs** if docs nginx Dockerfile only
+4. Saves new commit SHA so the next pull is incremental
+
+| Flag | Effect |
+|------|--------|
+| `./scripts/smart-deploy.sh` | Auto from git diff |
+| `--force-web` | Always rebuild web |
+| `--force-e2e` | Always rebuild e2e |
+| `--force-all` | Everything |
+
+**Current development focus (entity tiers / cashbook):** almost every commit only touches `apps/web` + `packages` → script rebuilds **web only**.
+
+### Optional: cron or alias after push
+
+```bash
+# On VPS crontab every 5 min (or after you push):
+*/5 * * * * cd /home/you/BookOne && git pull -q && ./scripts/smart-deploy.sh >> /var/log/bookone-deploy.log 2>&1
+```
+
+Or after each laptop push, SSH one line:
+
+```bash
+ssh vps 'cd ~/BookOne && git pull && ./scripts/smart-deploy.sh'
+```
+
+---
+
 ## Approach A — Profiles (turn services on/off)
 
 Staging compose uses **Compose profiles**:

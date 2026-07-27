@@ -5222,7 +5222,6 @@ textarea.input {
 }
 .cb-life-icon-info { background: var(--brand-soft); color: var(--brand-strong); }
 .cb-life-icon-success { background: #e5f7ef; color: #15835f; }
-.cb-life-icon-warning { background: #fff6e5; color: #a dig; }
 .cb-life-icon-warning { background: #fff6e5; color: #b7791f; }
 .cb-life-icon-danger { background: #fdecec; color: #c94141; }
 .cb-life-copy strong {

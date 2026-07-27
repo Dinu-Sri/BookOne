@@ -2,7 +2,12 @@ import type { Account } from '../chart-of-accounts';
 
 export type EntryDirection = 'money_in' | 'money_out' | 'move_money' | 'invoice_bill';
 
-export type MoneyInType = 'customer_payment' | 'new_sale' | 'owner_contribution';
+export type MoneyInType =
+  | 'customer_payment'
+  | 'new_sale'
+  | 'owner_contribution'
+  /** Personal / sole: cash received when taking a loan (Cr 2500) */
+  | 'loan_received';
 
 export type InvoiceType = 'customer_invoice' | 'vendor_bill';
 
@@ -18,6 +23,8 @@ export interface AccountRef {
 export interface MoneyInExtras {
   moneyInType: MoneyInType;
   invoiceRef?: string;
+  /** Revenue / income account code (e.g. 4200 salary, 4300 other) */
+  categoryOverride?: string;
 }
 
 export interface MoneyOutExtras {
@@ -65,7 +72,11 @@ export type AccountingType =
   | 'Receive'
   | 'Pay'
   | 'Transfer'
-  | 'Owner';
+  | 'Owner'
+  /** Took a loan: Dr cash/bank, Cr loans payable */
+  | 'LoanReceive'
+  /** Paid loan principal: Dr loans payable, Cr cash/bank */
+  | 'LoanPay';
 
 export interface CategoryInference {
   categoryId: string;

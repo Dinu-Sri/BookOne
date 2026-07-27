@@ -4733,6 +4733,15 @@ textarea.input {
   box-shadow: 0 0 0 1px #1677c9;
 }
 .cashbook-tile.pay { min-height: 44px; flex-direction: row; }
+.cashbook-tile.pay small { font-size: 10px; opacity: 0.85; font-weight: 600; }
+.cashbook-pay-tiles.wrap { flex-wrap: wrap; }
+.cashbook-field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 6px 0 4px;
+  color: #3d4f63;
+}
 .cashbook-tile.muted { opacity: 0.55; cursor: not-allowed; }
 .cashbook-entry-card {
   background: #fff;

@@ -294,35 +294,55 @@ Rules change yearly → **versioned packs**, not hardcoded UI.
 ### Phase 0 — Documentation (this file)
 
 - [x] Architecture approved and written  
+- [x] UX companion: `ENTITY_UX_FLOWS.md`  
 - [ ] Link from `PROJECT_STATUS.md`  
 
-### Phase 1 — Data model foundation
+### Phase 1 — Data model foundation — **DONE (engine MVP)**
 
-- Migration: `entity_kind` on tenants; backfill `company`  
-- Migration: `book_domain` on transactions, business_documents, journal_entries  
-- Posting guards by entity_kind  
-- CoA pack selection at create  
-- Explicit modules for personal create  
+| Item | Status |
+|------|--------|
+| Migration `021_entity_tiers.sql` (`entity_kind`, `capability_tier`, `book_domain`) | Done |
+| Schema + indexes on tenants / transactions / journals / docs | Done |
+| CoA packs (`PERSONAL`, sole merge, company default) | Done |
+| New workspace `entity_kind=pending` until onboarding | Done |
+| Posting writes `book_domain`; personal skips brand/location hard req | Done |
+| Modules derived from entity + sole lite/full | Done |
+| Control Room entity filters | **Not done** (nice-to-have) |
+| Hard posting *guards* rejecting illegal domains | **Partial** (resolve + write only) |
 
-### Phase 2 — Registration wizard
+### Phase 2 — Registration wizard + shell routing — **DONE (core)**
 
-- Sign-up / Control Room: choose Personal | Sole prop | Pvt Ltd  
-- Defaults for name, modules, CoA, entity_kind  
-- Control Room list filters  
+| Item | Status |
+|------|--------|
+| Onboarding tiles: Personal \| Sole \| Company (+ sole lite/full) | Done |
+| Apply modules + CoA merge + display name | Done |
+| Server `/` routing (no company UI flash) | Done |
+| Cashbook shell routes + logout + full-ERP lock | Done |
+| Onboarding gate if already onboarded | Done |
+| Control Room create/list entity filters | **Not done** |
+| Upgrade wizards (personal→sole) | Phase 5 |
 
-### Phase 3 — Personal surface
+### Phase 3 — Personal surface — **IN PROGRESS**
 
-- Personal shell routes  
-- Money in/out/loans/summary  
-- Export pack v0  
-- E2E smoke for personal  
+Architecture intent: Excel-level personal books on real double-entry.
+
+| Item | Status (before Phase 3 pass) |
+|------|------------------------------|
+| Routes `/cashbook`, summary, settings | Thin MVP |
+| Money in/out sheet + tiles | MVP (bugs: money_in always owner equity) |
+| Loan took/paid correct liability journals | **Broken / missing** |
+| Move money from/to tiles | Half (hardcoded cash→bank) |
+| Month period + summary | Basic |
+| Export pack v0 (CSV) | **Missing** |
+| Personal category tiles / income accounts | **Missing** |
+| E2E smoke personal | **Missing** |
 
 ### Phase 4 — Sole prop lite
 
-- Domain switcher  
-- Lite invoice/expense  
-- Combined year view (two columns)  
-- E2E sole lite  
+- Domain switcher — **MVP exists** on cashbook  
+- Lite invoice/bill — **tiles only, not real invoice path**  
+- Combined year view — **summary stub**  
+- E2E sole lite — **Missing**  
 
 ### Phase 5 — Sole prop full + lifecycle
 
@@ -335,6 +355,18 @@ Rules change yearly → **versioned packs**, not hardcoded UI.
 
 - Versioned IIT packs, schedules, deeper IRD alignment  
 - Does not block Phases 1–3  
+
+---
+
+## 11.1 Known issues (audit 2026-07-27)
+
+1. **Personal money in** posted as `owner_contribution` → always equity 3000, not salary/other income.  
+2. **Loan tile** guesses direction from description text; does not post to **2500 Loans Payable**.  
+3. **Personal CoA** has 4200/4300/2500 but journal engine `ACCOUNTS_BY_CODE` was company-default only (missing personal codes).  
+4. **Invoice/Bill** tiles on sole business open same cash entry (no commercial doc).  
+5. **Import Excel** disabled placeholder.  
+6. **No personal E2E**.  
+7. Phase numbers in chat (“Phase 2 polish”) = routing polish; architecture Phase 2 = registration (both largely done).
 
 ---
 

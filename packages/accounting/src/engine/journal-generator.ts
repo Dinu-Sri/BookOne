@@ -36,8 +36,31 @@ export function generateJournal(transaction: InferredTransaction): JournalDraft 
   }
 
   if (accountingType === 'Sale') {
+    // Category may be personal income (4200/4300) or sales (4000)
+    const revenue = category?.account ?? requireAccount('4000');
     lines.push({ account: paymentAccount, side: 'debit', amount: money(amount), memo: 'Cash/Bank received' });
-    lines.push({ account: requireAccount('4000'), side: 'credit', amount: money(amount), memo: 'Sales revenue' });
+    lines.push({
+      account: revenue,
+      side: 'credit',
+      amount: money(amount),
+      memo: category?.categoryName ?? 'Sales revenue',
+    });
+  } else if (accountingType === 'LoanReceive') {
+    lines.push({ account: paymentAccount, side: 'debit', amount: money(amount), memo: 'Loan proceeds' });
+    lines.push({
+      account: requireAccount('2500'),
+      side: 'credit',
+      amount: money(amount),
+      memo: 'Loans payable',
+    });
+  } else if (accountingType === 'LoanPay') {
+    lines.push({
+      account: requireAccount('2500'),
+      side: 'debit',
+      amount: money(amount),
+      memo: 'Loan principal repayment',
+    });
+    lines.push({ account: paymentAccount, side: 'credit', amount: money(amount), memo: 'Payment' });
   } else if (accountingType === 'SaleCredit') {
     lines.push({ account: requireAccount('1300'), side: 'debit', amount: money(amount), memo: 'Customer invoice' });
     lines.push({ account: requireAccount('4000'), side: 'credit', amount: money(amount), memo: 'Sales revenue' });

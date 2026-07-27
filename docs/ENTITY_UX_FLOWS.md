@@ -332,6 +332,26 @@ Helpers: `apps/web/src/lib/entity-kind.ts` (`canAccessFullErp`, `homePathForEnti
 
 ---
 
+## 16. Phase 3 — Personal surface (implementation)
+
+**Goal:** Personal cashbook posts correct double-entry; Excel feel; export pack v0.
+
+| Area | Behaviour |
+|------|-----------|
+| Money In | Salary / Other income / Own money (equity); not always owner equity |
+| Money Out | Category tiles (Food, Rent, …) → expense CoA |
+| Loan | Sub-tiles Took / Paid → Cr/Dr **2500 Loans Payable** |
+| Move Money | From/To Cash\|Bank tiles |
+| Date | Editable on every entry |
+| Summary | Month strip + **CSV export** (tax pack v0) |
+| Invoice/Bill (sole) | Explicit “next phase” message (no fake post) |
+
+Engine: `LoanReceive` / `LoanPay`; Sale revenue from category (4200/4300/4000); personal codes on default CoA map.
+
+**Still later:** Excel import, period picker UI, E2E personal smoke, lite commercial invoice.
+
+---
+
 ## 15. Document history
 
 | Date | Change |

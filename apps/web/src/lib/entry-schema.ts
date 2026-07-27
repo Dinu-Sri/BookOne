@@ -24,7 +24,7 @@ export const baseEntrySchema = z.object({
 
 export const moneyInSchema = baseEntrySchema.extend({
   direction: z.literal('money_in'),
-  moneyInType: z.enum(['customer_payment', 'new_sale', 'owner_contribution']),
+  moneyInType: z.enum(['customer_payment', 'new_sale', 'owner_contribution', 'loan_received']),
   invoiceRef: z.string().max(100).optional(),
   categoryOverride: z.string().max(20).optional(),
 });

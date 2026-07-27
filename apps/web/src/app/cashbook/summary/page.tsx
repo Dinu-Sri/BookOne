@@ -1,5 +1,6 @@
 import { listCashbookRows } from '@/app/actions/cashbook';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
+import { CashbookExportButton } from '@/components/cashbook/cashbook-export-button';
 import { requireEntityTenant } from '@/lib/require-entity-shell';
 
 export default async function CashbookSummaryPage() {
@@ -24,6 +25,11 @@ export default async function CashbookSummaryPage() {
             In {personal.moneyIn.toFixed(2)} · Out {personal.moneyOut.toFixed(2)} · Net{' '}
             <strong>{personal.net.toFixed(2)}</strong>
           </p>
+          <CashbookExportButton
+            bookDomain="personal"
+            period={period}
+            label="Download personal CSV"
+          />
         </div>
         {business ? (
           <div>
@@ -32,11 +38,17 @@ export default async function CashbookSummaryPage() {
               In {business.moneyIn.toFixed(2)} · Out {business.moneyOut.toFixed(2)} · Net{' '}
               <strong>{business.net.toFixed(2)}</strong>
             </p>
+            <CashbookExportButton
+              bookDomain="business"
+              period={period}
+              label="Download business CSV"
+            />
           </div>
         ) : null}
       </div>
       <p className="onboard-lead">
-        Year tax pack and combined IIT view will expand here. For now this is your month snapshot.
+        Tax pack v0 is a CSV of this month&apos;s entries for your accountant. Year packs and IIT
+        schedules come later — your books stay double-entry underneath.
       </p>
     </CashbookShell>
   );

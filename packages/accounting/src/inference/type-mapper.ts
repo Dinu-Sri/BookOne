@@ -4,12 +4,15 @@ import { inferCategory } from './category-inferrer';
 export function mapToAccountingType(entry: SimpleEntry): AccountingType {
   if (entry.direction === 'money_in') {
     if (entry.moneyInType === 'customer_payment') return 'Receive';
+    if (entry.moneyInType === 'loan_received') return 'LoanReceive';
     if (entry.moneyInType === 'new_sale') return 'Sale';
     return 'Owner';
   }
   if (entry.direction === 'money_out') {
     const category = inferCategory(entry.description, entry.party, 'money_out', entry.categoryOverride);
     if (category.accountCode === '3100') return 'Owner';
+    // Principal repayment of personal/business loans payable
+    if (category.accountCode === '2500') return 'LoanPay';
     return 'Expense';
   }
   if (entry.direction === 'move_money') {
@@ -23,7 +26,15 @@ export function mapToAccountingType(entry: SimpleEntry): AccountingType {
 
 export function isSettledOnPosting(accountingType: AccountingType, paymentMethod: PaymentMethod): boolean {
   if (accountingType === 'Transfer') return true;
-  if (accountingType === 'Sale' || accountingType === 'Expense' || accountingType === 'Receive' || accountingType === 'Pay' || accountingType === 'Owner') {
+  if (
+    accountingType === 'Sale' ||
+    accountingType === 'Expense' ||
+    accountingType === 'Receive' ||
+    accountingType === 'Pay' ||
+    accountingType === 'Owner' ||
+    accountingType === 'LoanReceive' ||
+    accountingType === 'LoanPay'
+  ) {
     return paymentMethod !== 'Credit';
   }
   return false;

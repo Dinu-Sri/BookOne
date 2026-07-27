@@ -69,13 +69,34 @@ export const CATEGORY_RULES: CategoryRule[] = [
     defaultTypes: ['money_in'],
   },
   {
+    accountCode: '4200',
+    patterns: [/\bsalary\b/i, /\bwages?\b/i, /\bpayroll\b/i, /\bemployment\b/i, /\bpaycheck\b/i],
+    defaultTypes: ['money_in'],
+  },
+  {
+    accountCode: '4300',
+    patterns: [/\bgift\b/i, /\binheritance\b/i, /\brefund\b/i, /\bcashback\b/i, /\bother\s*income\b/i],
+    defaultTypes: ['money_in'],
+  },
+  {
     accountCode: '4000',
     patterns: [/\bsale\b/i, /\bsold\b/i, /service\s*fee/i, /\bconsulting\b/i, /product\s*sale/i],
     defaultTypes: ['money_in'],
   },
+  {
+    accountCode: '2500',
+    patterns: [/\bloan\s*pay/i, /\brepay\b/i, /\bprincipal\b/i],
+    defaultTypes: ['money_out'],
+  },
+  {
+    accountCode: '6900',
+    patterns: [/\binterest\b/i, /\bloan\s*interest\b/i],
+    defaultTypes: ['money_out'],
+  },
 ];
 
-const UNCATEGORIZED_ACCOUNT_CODE = '6800';
+const UNCATEGORIZED_MONEY_OUT = '6800';
+const UNCATEGORIZED_MONEY_IN = '4300';
 
 export function inferCategory(
   description: string,
@@ -118,7 +139,8 @@ export function inferCategory(
     }
   }
 
-  const fallback = ACCOUNTS_BY_CODE[UNCATEGORIZED_ACCOUNT_CODE];
+  const fallbackCode = direction === 'money_in' ? UNCATEGORIZED_MONEY_IN : UNCATEGORIZED_MONEY_OUT;
+  const fallback = ACCOUNTS_BY_CODE[fallbackCode];
   if (!fallback) {
     throw new Error('Default chart of accounts is missing the uncategorized fallback account.');
   }

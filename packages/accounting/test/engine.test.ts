@@ -180,6 +180,73 @@ describe('inferTransaction + generateJournal', () => {
     assertBalanced(journal.lines);
   });
 
+  it('Money In: loan received credits Loans Payable 2500', () => {
+    const entry: SimpleEntry = {
+      tenantId: tenant,
+      userId: user,
+      direction: 'money_in',
+      moneyInType: 'loan_received',
+      party: 'Bank of Ceylon',
+      description: 'Personal loan disbursement',
+      amount: 100000,
+      paymentMethod: 'Bank',
+      paymentAccount: { kind: 'code', value: '1100' },
+      date: '2026-06-16',
+    };
+
+    const { transaction, journal } = inferTransaction(entry);
+
+    expect(transaction.accountingType).toBe('LoanReceive');
+    expectLine(journal.lines, '1100', 'debit', 100000);
+    expectLine(journal.lines, '2500', 'credit', 100000);
+    assertBalanced(journal.lines);
+  });
+
+  it('Money Out: loan principal repayment debits 2500', () => {
+    const entry: SimpleEntry = {
+      tenantId: tenant,
+      userId: user,
+      direction: 'money_out',
+      party: 'Bank of Ceylon',
+      description: 'Loan installment principal',
+      amount: 15000,
+      paymentMethod: 'Bank',
+      paymentAccount: { kind: 'code', value: '1100' },
+      date: '2026-06-17',
+      categoryOverride: '2500',
+    };
+
+    const { transaction, journal } = inferTransaction(entry);
+
+    expect(transaction.accountingType).toBe('LoanPay');
+    expectLine(journal.lines, '2500', 'debit', 15000);
+    expectLine(journal.lines, '1100', 'credit', 15000);
+    assertBalanced(journal.lines);
+  });
+
+  it('Money In: personal salary override credits 4200', () => {
+    const entry: SimpleEntry = {
+      tenantId: tenant,
+      userId: user,
+      direction: 'money_in',
+      moneyInType: 'new_sale',
+      party: 'Employer Ltd',
+      description: 'June salary',
+      amount: 120000,
+      paymentMethod: 'Bank',
+      paymentAccount: { kind: 'code', value: '1100' },
+      date: '2026-06-25',
+      categoryOverride: '4200',
+    };
+
+    const { transaction, journal } = inferTransaction(entry);
+
+    expect(transaction.accountingType).toBe('Sale');
+    expectLine(journal.lines, '1100', 'debit', 120000);
+    expectLine(journal.lines, '4200', 'credit', 120000);
+    assertBalanced(journal.lines);
+  });
+
   it('Move Money: Cash to Bank 1000 maps to Transfer with no tax/expense', () => {
     const entry: SimpleEntry = {
       tenantId: tenant,

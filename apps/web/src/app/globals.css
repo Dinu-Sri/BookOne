@@ -5134,3 +5134,284 @@ textarea.input {
 .workspace-switcher-item-name { font-weight: 700; font-size: 13px; }
 .workspace-switcher-item-meta { font-size: 11px; color: #5b6b7f; }
 .workspace-archived { font-style: italic; font-weight: 500; color: #8a6d3b; }
+
+/* —— Cashbook settings / summary (design-system aligned) —— */
+.cb-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cb-settings-card .card-header {
+  padding-bottom: 4px;
+}
+.cb-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cb-settings-row,
+.cb-settings-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  text-decoration: none;
+  color: inherit;
+}
+.cb-settings-row:first-child,
+.cb-settings-link-row:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+.cb-settings-link-row:hover {
+  background: var(--brand-soft);
+  margin: 0 -10px;
+  padding-left: 10px;
+  padding-right: 10px;
+  border-radius: var(--radius-md);
+}
+.cb-settings-row-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+.cb-settings-row-label strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 750;
+}
+.cb-settings-row-label span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+.cb-chevron {
+  color: var(--brand);
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.cb-life-stack {
+  gap: 12px !important;
+}
+.cb-life-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: var(--surface-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cb-life-item-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.cb-life-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.cb-life-icon-info { background: var(--brand-soft); color: var(--brand-strong); }
+.cb-life-icon-success { background: #e5f7ef; color: #15835f; }
+.cb-life-icon-warning { background: #fff6e5; color: #a dig; }
+.cb-life-icon-warning { background: #fff6e5; color: #b7791f; }
+.cb-life-icon-danger { background: #fdecec; color: #c94141; }
+.cb-life-copy strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.cb-life-copy p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+.cb-life-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.cb-life-confirm {
+  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cb-life-confirm-q {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.cb-life-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.cb-life-field .input,
+.cb-life-field input {
+  min-height: 44px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.cb-life-success {
+  margin: 0;
+  font-size: 13px;
+  color: #15835f;
+  font-weight: 650;
+}
+.cb-btn-danger-outline {
+  border-color: #f0c2c2 !important;
+  color: #c94141 !important;
+}
+.cb-btn-danger {
+  background: #c94141 !important;
+  border-color: #c94141 !important;
+  color: #fff !important;
+}
+.cb-btn-logout {
+  width: 100%;
+  justify-content: center;
+  min-height: 44px;
+  gap: 8px;
+  border-color: #f0c2c2 !important;
+  color: #c94141 !important;
+}
+.cb-settings-danger-zone .card-body {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+/* Summary */
+.cb-summary-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cb-summary-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cb-summary-title {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.cb-sum-grid {
+  display: grid;
+  gap: 12px;
+}
+.cb-sum-grid.two { grid-template-columns: 1fr 1fr; }
+.cb-sum-grid.one { grid-template-columns: 1fr; }
+.cb-sum-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cb-sum-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cb-sum-card-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.cb-sum-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+.cb-sum-metrics span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+.cb-sum-metrics strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.cb-sum-metrics .in { color: #15835f; }
+.cb-sum-metrics .out { color: #c94141; }
+.cb-sum-net {
+  grid-column: 1 / -1;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.cb-sum-net strong { font-size: 18px; }
+.cb-sum-arap {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.cb-sum-combined {
+  background: linear-gradient(135deg, #f3f8fd 0%, #fff 60%);
+  border-color: #b8d4f0;
+}
+.cb-sum-combined-net {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.cb-sum-note,
+.cb-sum-foot {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+.cb-export-btn {
+  width: 100%;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+}
+@media (max-width: 640px) {
+  .cb-sum-grid.two { grid-template-columns: 1fr; }
+  .cb-settings-row,
+  .cb-settings-link-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* Workspace switcher — match select-like chips */
+.cashbook-app .workspace-switcher-trigger {
+  border-radius: 999px;
+  border-color: var(--line);
+  background: var(--surface-muted);
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.cashbook-app .workspace-switcher-menu {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  border-color: var(--line);
+}

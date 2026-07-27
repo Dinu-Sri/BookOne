@@ -3,12 +3,13 @@
 import { useState, useTransition } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { exportCashbookCsv } from '@/app/actions/cashbook-export';
+import { Button } from '@/components/ui/bookone-ui';
 import type { BookDomain } from '@/lib/entity-kind';
 
 export function CashbookExportButton({
   bookDomain,
   period,
-  label = 'Download CSV (tax pack v0)',
+  label = 'Download CSV',
 }: {
   bookDomain?: BookDomain | null;
   period?: string | null;
@@ -36,11 +37,11 @@ export function CashbookExportButton({
   }
 
   return (
-    <div>
-      <button type="button" className="cashbook-save" disabled={pending} onClick={run}>
-        {pending ? <Loader2 className="spin" size={18} /> : <Download size={18} />}
+    <div className="cb-export">
+      <Button variant="secondary" type="button" disabled={pending} onClick={run} className="cb-export-btn">
+        {pending ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
         {label}
-      </button>
+      </Button>
       {error ? <p className="cashbook-error">{error}</p> : null}
     </div>
   );

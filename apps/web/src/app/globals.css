@@ -5824,6 +5824,15 @@ textarea.input {
   color: var(--ink, #0f172a);
   background: #fff;
 }
+.stmt-map-field.stmt-map-wide { grid-column: 1 / -1; }
+.stmt-map-help {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--ink-muted, #64748b);
+  line-height: 1.35;
+}
 .stmt-preview-block h3 {
   margin: 0 0 6px;
   font-size: 13px;

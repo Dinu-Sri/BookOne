@@ -103,6 +103,8 @@ type MapDraft = {
   periodFrom: string | null;
   periodTo: string | null;
   warnings: string[];
+  presetId: string;
+  presets: { id: string; label: string; description: string; group: string }[];
 };
 
 const MAP_FIELDS: { key: keyof ColumnMap; label: string }[] = [
@@ -187,8 +189,10 @@ export function StatementImportWizard({
     const list = files.filter((f) => f.size > 0);
     if (list.length === 0) return;
 
+    const bankName = bankOnly.find((b) => b.id === bankId)?.shortName ?? 'Bank';
     const fd = new FormData();
     fd.set('file', list[0]!);
+    fd.set('bankName', bankName);
 
     startTransition(() => {
       previewStatementMapping(fd).then((res) => {
@@ -196,52 +200,90 @@ export function StatementImportWizard({
           setError(res.error);
           return;
         }
-        const bankName = bankOnly.find((b) => b.id === bankId)?.shortName ?? 'Bank';
-        const profile: ParseProfile = {
-          ...res.preview.suggested,
-          name: res.preview.suggested.name || `${bankName} layout`,
-          bankHint: bankName,
-          sheetName: res.preview.sheetName,
-          skipRows: res.preview.headerRowIndex,
+        const startPreset = res.suggestedPresetId || 'auto';
+        // Re-run with suggested named bank preset when we recognised the bank
+        const applyPreset = (presetId: string) => {
+          const fd2 = new FormData();
+          fd2.set('file', list[0]!);
+          fd2.set('bankName', bankName);
+          fd2.set('presetId', presetId);
+          return previewStatementMapping(fd2);
         };
-        setMapDraft({
-          files: list.map((f) => ({ file: f, name: f.name })),
-          profile,
-          headerRow: res.preview.headerRowIndex,
-          sheetName: res.preview.sheetName,
-          sheetNames: res.preview.sheetNames,
-          rows: res.preview.rows,
-          maxColumns: res.preview.maxColumns,
-          sampleLines: res.sampleLines,
-          lineCount: res.lineCount,
-          periodFrom: res.periodFrom,
-          periodTo: res.periodTo,
-          warnings: res.warnings,
-        });
-        setInfo(
-          si
-            ? 'තීරු සිතියම තහවුරු කරන්න — නිවැරදි මුදල් පෙන්වන තෙක්.'
-            : 'Confirm column mapping. Check sample amounts before import.',
-        );
+
+        const finish = (r: typeof res, presetId: string) => {
+          if (!r.ok) {
+            setError(r.error);
+            return;
+          }
+          const profile: ParseProfile = {
+            ...r.preview.suggested,
+            name: r.preview.suggested.name || `${bankName} layout`,
+            bankHint: bankName,
+            sheetName: r.preview.sheetName,
+            skipRows: r.preview.headerRowIndex,
+          };
+          setMapDraft({
+            files: list.map((f) => ({ file: f, name: f.name })),
+            profile,
+            headerRow: r.preview.headerRowIndex,
+            sheetName: r.preview.sheetName,
+            sheetNames: r.preview.sheetNames,
+            rows: r.preview.rows,
+            maxColumns: r.preview.maxColumns,
+            sampleLines: r.sampleLines,
+            lineCount: r.lineCount,
+            periodFrom: r.periodFrom,
+            periodTo: r.periodTo,
+            warnings: r.warnings,
+            presetId,
+            presets: r.presets,
+          });
+          setInfo(
+            si
+              ? 'බැංකු 30+ · සිතියම තහවුරු කරන්න. නියැදි මුදල් නිවැරදිද බලන්න.'
+              : '30+ SL banks differ — confirm mapping. Sample amounts must look right.',
+          );
+        };
+
+        if (startPreset !== 'auto') {
+          applyPreset(startPreset).then((r2) => finish(r2.ok ? r2 : res, startPreset));
+        } else {
+          finish(res, 'auto');
+        }
       });
     });
   }
 
-  function refreshPreview(next: Partial<MapDraft> & { profile?: ParseProfile; headerRow?: number }) {
+  function refreshPreview(
+    next: Partial<MapDraft> & {
+      profile?: ParseProfile;
+      headerRow?: number;
+      presetId?: string;
+      useProfileJson?: boolean;
+    },
+  ) {
     if (!mapDraft) return;
     const profile = next.profile ?? mapDraft.profile;
     const headerRow = next.headerRow ?? mapDraft.headerRow;
     const sheetName = next.sheetName ?? mapDraft.sheetName;
+    const presetId = next.presetId ?? mapDraft.presetId;
+    const useProfileJson = next.useProfileJson !== false;
     const merged: ParseProfile = {
       ...profile,
       skipRows: headerRow,
       sheetName,
     };
+    const bankName = bankOnly.find((b) => b.id === bankId)?.shortName ?? 'Bank';
     const fd = new FormData();
     fd.set('file', mapDraft.files[0]!.file);
-    fd.set('profileJson', JSON.stringify(merged));
+    fd.set('bankName', bankName);
+    fd.set('presetId', presetId);
     fd.set('headerRow', String(headerRow));
     if (sheetName) fd.set('sheetName', sheetName);
+    // When user edits columns, send full profile; when switching preset, let server apply preset
+    if (useProfileJson) {
+      fd.set('profileJson', JSON.stringify(merged));
+    }
 
     startTransition(() => {
       previewStatementMapping(fd).then((res) => {
@@ -249,11 +291,18 @@ export function StatementImportWizard({
           setError(res.error);
           return;
         }
+        const nextProfile = useProfileJson
+          ? merged
+          : {
+              ...res.preview.suggested,
+              skipRows: res.preview.headerRowIndex,
+              sheetName: res.preview.sheetName || sheetName,
+            };
         setMapDraft({
           ...mapDraft,
           ...next,
-          profile: merged,
-          headerRow,
+          profile: nextProfile,
+          headerRow: nextProfile.skipRows ?? headerRow,
           sheetName: res.preview.sheetName || sheetName,
           sheetNames: res.preview.sheetNames,
           rows: res.preview.rows,
@@ -263,9 +312,15 @@ export function StatementImportWizard({
           periodFrom: res.periodFrom,
           periodTo: res.periodTo,
           warnings: res.warnings,
+          presetId,
+          presets: res.presets.length ? res.presets : mapDraft.presets,
         });
       });
     });
+  }
+
+  function changePreset(presetId: string) {
+    refreshPreview({ presetId, useProfileJson: false });
   }
 
   function setMapField(key: keyof ColumnMap, col: number | '') {
@@ -599,6 +654,49 @@ export function StatementImportWizard({
           </p>
 
           <div className="stmt-map-grid">
+            <label className="stmt-map-field stmt-map-wide">
+              <span>{si ? 'බැංකු / ගොනු විලාසය' : 'Bank / file style (30+ SL banks)'}</span>
+              <select
+                value={mapDraft.presetId}
+                disabled={pending}
+                onChange={(e) => changePreset(e.target.value)}
+              >
+                <optgroup label={si ? 'ඉක්මන්' : 'Quick'}>
+                  {mapDraft.presets
+                    .filter((p) => p.group === 'quick')
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label={si ? 'නම් කළ බැංකු' : 'Named SL banks'}>
+                  {mapDraft.presets
+                    .filter((p) => p.group === 'named')
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label={si ? 'පොදු රටා' : 'Generic patterns (any bank)'}>
+                  {mapDraft.presets
+                    .filter((p) => p.group === 'generic')
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                </optgroup>
+              </select>
+              <small className="stmt-map-help">
+                {mapDraft.presets.find((p) => p.id === mapDraft.presetId)?.description ||
+                  (si
+                    ? 'නිවැරදි නැතිනම් Manual හෝ තීරු වෙනස් කරන්න.'
+                    : 'If wrong, pick Manual or edit columns below. Saved after you import once.')}
+              </small>
+            </label>
+
             <label className="stmt-map-field">
               <span>{si ? 'ශීර්ෂ පේළිය' : 'Header row #'}</span>
               <select

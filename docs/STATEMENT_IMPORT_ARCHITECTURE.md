@@ -197,46 +197,65 @@ Re-upload same file → return existing import (or clone review state), do not i
 
 ---
 
-## 6. Mapping engine (multi-bank Excel)
+## 6. Mapping engine (30+ Sri Lanka banks)
+
+Sri Lanka has **many banks and finance houses**; each online banking portal can export a
+**different** Excel/CSV layout (and the same bank may change layout over years).  
+BookOne therefore **does not assume one national format**.
+
+### 6.0 Navigation model (product rule)
+
+| Path | Who | Behaviour |
+|------|-----|-----------|
+| **A. Auto-detect** | Default for unknown file | Scan headers → guess columns + convention → **user still confirms** sample amounts |
+| **B. Half-auto preset** | User picks “Sampath / HNB / BOC / … / Any Debit+Credit” | Starter map from `sl-bank-presets` + still editable |
+| **C. Full manual** | Odd / new bank | User sets header row + every column; live sample must look right |
+| **D. Learned template** | 2nd+ import on same bank account | Saved `bank_statement_profiles` for that tenant bank wins |
+
+**Golden rule:** nothing posts until mapping is confirmed and sample In/Out figures look sane.
 
 ### 6.1 Why banks differ
 
 | Variation | Example | Handling |
 |-----------|---------|----------|
-| Debit/Credit columns | Most SL banks | `sign_convention=debit_credit` → amount = credit − debit |
-| Single Amount + type | Some exports | signed_amount or type column (v1.1) |
-| Header not row 1 | Logos, account block | Scan first 25 rows for header score |
+| Debit/Credit columns | HNB, BOC, Commercial, most SL | `debit_credit` → amount = credit − debit |
+| Amount + DR/CR flag | Sampath Vishwa | `amount_with_type` (never treat DR/CR as debit amount) |
+| Single signed amount | Some CSV tools | `signed_amount` |
+| Header not row 1 | Logos, account block | Scan first ~40 rows; user can pick header row |
 | Sinhala headers | දිනය, විස්තර, මුදල | Key lists include Sinhala |
-| DD/MM vs ambiguous | 03/04/2026 | Prefer DD/MM; conf=0.7 if ambiguous |
+| DD/MM vs ambiguous | 03/04/2026 | Prefer DD/MM (SL); low confidence → review |
 | Excel serial dates | 45800 | Convert 1899-12-30 epoch |
-| Multi-sheet | Summary + Detail | Prefer first sheet with best header score; user can pick sheet |
-| Yearly file | 12 months | Allowed; flag “multi-month”; period_from/to span; UI groups by month |
-| Running balance | Optional | Stored for continuity checks, not required |
+| Multi-sheet | Summary + Detail | Sheet list + best header score |
+| Yearly file | 12 months | Allowed + multi-month grouping |
+| Empty amount as `-` | HNB-style | Parse as zero |
+| Bank→bank transfers | CEFT / SVR pairs | Appear on both statements; match per bank, don’t invent cross-bank auto-post |
 
 ### 6.2 Profile model
 
 ```ts
 type ParseProfile = {
   name: string;
-  bankHint?: string;          // "HNB", "BOC", ...
+  bankHint?: string;          // "HNB", "BOC", "Sampath", ...
   columnMap: {
-    date?, description?, amount?, debit?, credit?, balance?, ref?
+    date?, description?, amount?, type?, debit?, credit?, balance?, ref?
   };
-  signConvention: 'signed_amount' | 'debit_credit' | 'credit_debit';
+  signConvention: 'signed_amount' | 'debit_credit' | 'credit_debit' | 'amount_with_type';
   dateFormatHint?: string;
-  skipRows?: number;
+  skipRows?: number;          // header row index
   sheetName?: string;
 };
 ```
 
 **Resolution order:**
 
-1. User-forced profile (mapping UI)  
-2. Tenant profile with highest `success_count` matching bank_hint / headers  
-3. Built-in system profiles (optional curated SL banks over time)  
-4. Auto header detect (`detectHeaderAndMap`)
+1. User-forced profile from confirm-mapping UI (`profileJson`)  
+2. Named SL preset (`sl-bank-presets.ts`) chosen by user or suggested from bank account name  
+3. Tenant-learned profile (`bank_statement_profiles.success_count`) for that bank  
+4. Pure auto header detect (`detectHeaderAndMap`)  
 
-**Learning:** After successful complete import, upsert tenant profile and `success_count++`.
+**Learning:** After confirm links/creates, upsert tenant profile and `success_count++`.
+
+**Adding a new bank later:** either user maps once (learns), or we add a preset entry in `SL_BANK_PRESETS` — no engine rewrite required.
 
 ### 6.3 Monthly vs yearly guidance
 

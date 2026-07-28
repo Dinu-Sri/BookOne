@@ -8,12 +8,17 @@ import {
   matchAll,
   parseStatementFile,
   previewStatementSheet,
+  applyPresetToHeaders,
+  getPreset,
+  listPresetsForUi,
+  suggestPresetFromBankName,
   type BookCandidate,
   type MatchResult,
   type ParseProfile,
   type ProposedAction,
   type SheetPreview,
   type SignConvention,
+  type SlBankPresetId,
 } from '@bookone/statement-import';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -703,7 +708,7 @@ function parseProfileFromForm(raw: FormDataEntryValue | null): ParseProfile | nu
 
 /**
  * SI-4.1: Preview raw sheet + suggested mapping without writing to DB.
- * Client uses this so the user can confirm columns before import.
+ * Supports: auto-detect, SL bank preset, or fully user-forced profileJson.
  */
 export async function previewStatementMapping(formData: FormData): Promise<
   | {
@@ -719,6 +724,8 @@ export async function previewStatementMapping(formData: FormData): Promise<
       lineCount: number;
       periodFrom: string | null;
       periodTo: string | null;
+      suggestedPresetId: SlBankPresetId;
+      presets: ReturnType<typeof listPresetsForUi>;
     }
   | { ok: false; error: string }
 > {
@@ -737,11 +744,51 @@ export async function previewStatementMapping(formData: FormData): Promise<
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const sheetName = String(formData.get('sheetName') || '') || undefined;
+    const bankName = String(formData.get('bankName') || '');
+    const presetIdRaw = String(formData.get('presetId') || 'auto') as SlBankPresetId;
     const forced = parseProfileFromForm(formData.get('profileJson'));
     const preview = previewStatementSheet(bytes, file.name, { sheetName, maxRows: 40 });
-    const profile = forced ?? preview.suggested;
-    if (forced && sheetName) profile.sheetName = sheetName;
-    if (forced && formData.get('headerRow') != null) {
+    const suggestedPresetId = suggestPresetFromBankName(bankName || file.name);
+
+    let profile: ParseProfile = preview.suggested;
+
+    if (forced) {
+      profile = forced;
+    } else if (presetIdRaw && presetIdRaw !== 'auto') {
+      const preset = getPreset(presetIdRaw);
+      if (preset && presetIdRaw !== 'manual') {
+        const headerRow = preview.headerRowIndex;
+        const headerCells = preview.rows[headerRow] ?? [];
+        const applied = applyPresetToHeaders(preset, headerCells);
+        profile = {
+          ...applied,
+          skipRows: headerRow,
+          sheetName: preview.sheetName,
+          name: applied.name || preset.label,
+        };
+        // Fall back field-by-field to auto if preset miss
+        const auto = preview.suggested.columnMap;
+        profile.columnMap = {
+          date: profile.columnMap.date ?? auto.date,
+          description: profile.columnMap.description ?? auto.description,
+          amount: profile.columnMap.amount ?? auto.amount,
+          type: profile.columnMap.type ?? auto.type,
+          debit: profile.columnMap.debit ?? auto.debit,
+          credit: profile.columnMap.credit ?? auto.credit,
+          balance: profile.columnMap.balance ?? auto.balance,
+          ref: profile.columnMap.ref ?? auto.ref,
+        };
+      } else if (presetIdRaw === 'manual') {
+        // Keep auto suggestion as starting point; UI labels as manual
+        profile = {
+          ...preview.suggested,
+          name: 'Manual map',
+        };
+      }
+    }
+
+    if (sheetName) profile.sheetName = sheetName;
+    if (formData.get('headerRow') != null && formData.get('headerRow') !== '') {
       const hr = Number(formData.get('headerRow'));
       if (Number.isFinite(hr) && hr >= 0) profile.skipRows = hr;
     }
@@ -752,6 +799,13 @@ export async function previewStatementMapping(formData: FormData): Promise<
       profile,
       sheetName: profile.sheetName ?? sheetName,
     });
+
+    const warnings = parsed.warnings.filter((w) => !w.startsWith('Sample:'));
+    if (parsed.lines.length === 0) {
+      warnings.unshift(
+        'No lines yet — try another bank style (preset), change header row, or map columns manually.',
+      );
+    }
 
     return {
       ok: true,
@@ -766,10 +820,12 @@ export async function previewStatementMapping(formData: FormData): Promise<
         amountSigned: l.amountSigned,
         direction: l.direction,
       })),
-      warnings: parsed.warnings.filter((w) => !w.startsWith('Sample:')),
+      warnings,
       lineCount: parsed.lines.length,
       periodFrom: parsed.periodFrom,
       periodTo: parsed.periodTo,
+      suggestedPresetId,
+      presets: listPresetsForUi(),
     };
   } catch (e) {
     return {

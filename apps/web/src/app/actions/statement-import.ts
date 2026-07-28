@@ -3,11 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
+  annotateBalanceContinuity,
   fileSha256,
   matchAll,
   parseStatementFile,
   type BookCandidate,
   type MatchResult,
+  type ParseProfile,
   type ProposedAction,
 } from '@bookone/statement-import';
 import { requireTenantContext } from '@bookone/auth';
@@ -18,6 +20,7 @@ import {
   bankStatementImportEvents,
   bankStatementImports,
   bankStatementLines,
+  bankStatementProfiles,
   db,
   eq,
   gte,
@@ -29,11 +32,14 @@ import {
   transactions,
   withTenantContext,
   desc,
+  sql,
 } from '@bookone/db';
 import { recordEntry, reverseTransactionById } from '@/app/actions/record-entry';
+import { randomUUID } from 'node:crypto';
 
 const MAX_BYTES = 12 * 1024 * 1024;
 const MAX_ROWS = 5000;
+const MAX_BATCH_FILES = 24;
 const ALLOWED_EXT = /\.(xlsx|xls|csv|txt)$/i;
 
 const sourceSchema = z.enum(['cashbook', 'erp_recon']);
@@ -55,6 +61,9 @@ export type StatementLineView = {
   fingerprint: string | null;
   externalRef: string | null;
   candidates: { id: string; score: number }[];
+  /** SI-4 flags e.g. BALANCE_BREAK */
+  flags: string[];
+  month: string;
 };
 
 export type StatementImportView = {
@@ -75,6 +84,10 @@ export type StatementImportView = {
   unmatchedCount: number;
   warnings: string[];
   multiMonth: boolean;
+  batchId: string | null;
+  profileName: string | null;
+  profileLearned: boolean;
+  months: string[];
   lines: StatementLineView[];
   counts: {
     link: number;
@@ -85,7 +98,25 @@ export type StatementImportView = {
     linked: number;
     created: number;
     skipped: number;
+    balanceBreaks: number;
   };
+};
+
+export type StatementBatchItem = {
+  importId: string;
+  fileName: string;
+  reused: boolean;
+  error?: string;
+  rowCount?: number;
+  periodFrom?: string | null;
+  periodTo?: string | null;
+};
+
+export type StatementBatchView = {
+  batchId: string;
+  bankAccountId: string;
+  items: StatementBatchItem[];
+  imports: StatementImportView[];
 };
 
 function mapActionToStatus(action: ProposedAction, hasMatch: boolean): string {
@@ -202,7 +233,9 @@ async function existingFingerprints(
   return found;
 }
 
-function countBy(lines: { proposedAction: string | null; status: string }[]) {
+function countBy(
+  lines: { proposedAction: string | null; status: string; flags?: string[] }[],
+) {
   const c = {
     link: 0,
     create: 0,
@@ -212,9 +245,11 @@ function countBy(lines: { proposedAction: string | null; status: string }[]) {
     linked: 0,
     created: 0,
     skipped: 0,
+    balanceBreaks: 0,
   };
   for (const l of lines) {
     const pa = l.proposedAction ?? 'review';
+    if (l.flags?.includes('BALANCE_BREAK')) c.balanceBreaks += 1;
     if (l.status === 'reconciled' || l.status === 'matched') c.linked += 1;
     else if (l.status === 'created') c.created += 1;
     else if (l.status === 'skipped' || l.status === 'duplicate') c.skipped += 1;
@@ -225,6 +260,19 @@ function countBy(lines: { proposedAction: string | null; status: string }[]) {
     else c.review += 1;
   }
   return c;
+}
+
+function extractFlags(raw: unknown, notes: string | null | undefined): string[] {
+  const flags: string[] = [];
+  if (raw && typeof raw === 'object' && Array.isArray((raw as { _flags?: unknown })._flags)) {
+    for (const f of (raw as { _flags: unknown[] })._flags) {
+      if (typeof f === 'string') flags.push(f);
+    }
+  }
+  if (notes?.includes('BALANCE_BREAK') && !flags.includes('BALANCE_BREAK')) {
+    flags.push('BALANCE_BREAK');
+  }
+  return flags;
 }
 
 function toLineView(row: {
@@ -244,10 +292,13 @@ function toLineView(row: {
   fingerprint: string | null;
   externalRef: string | null;
   matchCandidates: unknown;
+  raw?: unknown;
+  notes?: string | null;
 }): StatementLineView {
   const candidates = Array.isArray(row.matchCandidates)
     ? (row.matchCandidates as { id: string; score: number }[])
     : [];
+  const flags = extractFlags(row.raw, row.notes);
   return {
     id: row.id,
     rowNumber: Number(row.rowNumber),
@@ -265,7 +316,193 @@ function toLineView(row: {
     fingerprint: row.fingerprint,
     externalRef: row.externalRef,
     candidates,
+    flags,
+    month: row.transactionDate.slice(0, 7),
   };
+}
+
+async function loadBestProfile(
+  tenantId: string,
+  bankName: string,
+): Promise<{ id: string; profile: ParseProfile } | null> {
+  const hint = bankName.trim().toLowerCase();
+  const rows = await db()
+    .select({
+      id: bankStatementProfiles.id,
+      name: bankStatementProfiles.name,
+      bankHint: bankStatementProfiles.bankHint,
+      columnMap: bankStatementProfiles.columnMap,
+      signConvention: bankStatementProfiles.signConvention,
+      dateFormatHint: bankStatementProfiles.dateFormatHint,
+      skipRows: bankStatementProfiles.skipRows,
+      sheetName: bankStatementProfiles.sheetName,
+      successCount: bankStatementProfiles.successCount,
+    })
+    .from(bankStatementProfiles)
+    .where(
+      and(
+        or(eq(bankStatementProfiles.tenantId, tenantId), isNull(bankStatementProfiles.tenantId)),
+        isNull(bankStatementProfiles.voidedAt),
+      ),
+    )
+    .orderBy(desc(bankStatementProfiles.successCount));
+
+  if (rows.length === 0) return null;
+
+  const scored = rows
+    .map((r) => {
+      const rh = (r.bankHint ?? r.name ?? '').toLowerCase();
+      let score = r.successCount ?? 0;
+      if (hint && rh && (hint.includes(rh) || rh.includes(hint))) score += 1000;
+      return { r, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored[0]?.r;
+  if (!best || (best.successCount ?? 0) <= 0 && !best.bankHint) {
+    // still allow if bank_hint matches even with 0 success
+    const byHint = scored.find(
+      (s) => s.score >= 1000 && Object.keys(s.r.columnMap ?? {}).length > 0,
+    );
+    if (!byHint) return null;
+    const p = byHint.r;
+    return {
+      id: p.id,
+      profile: {
+        name: p.name,
+        bankHint: p.bankHint ?? undefined,
+        columnMap: (p.columnMap ?? {}) as ParseProfile['columnMap'],
+        signConvention: (p.signConvention as ParseProfile['signConvention']) || 'debit_credit',
+        dateFormatHint: p.dateFormatHint ?? undefined,
+        skipRows: p.skipRows ?? 0,
+        sheetName: p.sheetName ?? undefined,
+      },
+    };
+  }
+
+  if (Object.keys(best.columnMap ?? {}).length === 0) return null;
+
+  return {
+    id: best.id,
+    profile: {
+      name: best.name,
+      bankHint: best.bankHint ?? undefined,
+      columnMap: (best.columnMap ?? {}) as ParseProfile['columnMap'],
+      signConvention: (best.signConvention as ParseProfile['signConvention']) || 'debit_credit',
+      dateFormatHint: best.dateFormatHint ?? undefined,
+      skipRows: best.skipRows ?? 0,
+      sheetName: best.sheetName ?? undefined,
+    },
+  };
+}
+
+/** Persist / bump learned layout after a successful import pass. */
+async function learnProfileFromImport(
+  tenantId: string,
+  importId: string,
+): Promise<void> {
+  const [imp] = await db()
+    .select({
+      id: bankStatementImports.id,
+      bankAccountId: bankStatementImports.bankAccountId,
+      parserProfileId: bankStatementImports.parserProfileId,
+      metadata: bankStatementImports.metadata,
+    })
+    .from(bankStatementImports)
+    .where(
+      and(
+        eq(bankStatementImports.id, importId),
+        eq(bankStatementImports.tenantId, tenantId),
+        isNull(bankStatementImports.voidedAt),
+      ),
+    )
+    .limit(1);
+  if (!imp) return;
+
+  const meta = (imp.metadata ?? {}) as {
+    profileName?: string;
+    profileAuto?: boolean;
+    bankName?: string;
+    columnMap?: Record<string, string | number>;
+    signConvention?: string;
+    skipRows?: number;
+    sheetName?: string;
+  };
+
+  if (imp.parserProfileId) {
+    await db()
+      .update(bankStatementProfiles)
+      .set({
+        successCount: sql`${bankStatementProfiles.successCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(bankStatementProfiles.id, imp.parserProfileId),
+          or(eq(bankStatementProfiles.tenantId, tenantId), isNull(bankStatementProfiles.tenantId)),
+        ),
+      );
+    return;
+  }
+
+  const columnMap = meta.columnMap;
+  if (!columnMap || Object.keys(columnMap).length === 0) return;
+
+  const bankName = meta.bankName ?? 'Bank';
+  const name = `${bankName} layout`.slice(0, 120);
+
+  const [existing] = await db()
+    .select({ id: bankStatementProfiles.id, successCount: bankStatementProfiles.successCount })
+    .from(bankStatementProfiles)
+    .where(
+      and(
+        eq(bankStatementProfiles.tenantId, tenantId),
+        eq(bankStatementProfiles.name, name),
+        isNull(bankStatementProfiles.voidedAt),
+      ),
+    )
+    .limit(1);
+
+  if (existing) {
+    await db()
+      .update(bankStatementProfiles)
+      .set({
+        columnMap,
+        signConvention: meta.signConvention ?? 'debit_credit',
+        skipRows: meta.skipRows ?? 0,
+        sheetName: meta.sheetName ?? null,
+        bankHint: bankName.slice(0, 120),
+        successCount: (existing.successCount ?? 0) + 1,
+        updatedAt: new Date(),
+      })
+      .where(eq(bankStatementProfiles.id, existing.id));
+    await db()
+      .update(bankStatementImports)
+      .set({ parserProfileId: existing.id, updatedAt: new Date() })
+      .where(eq(bankStatementImports.id, importId));
+    return;
+  }
+
+  const [created] = await db()
+    .insert(bankStatementProfiles)
+    .values({
+      tenantId,
+      name,
+      bankHint: bankName.slice(0, 120),
+      columnMap,
+      signConvention: meta.signConvention ?? 'debit_credit',
+      skipRows: meta.skipRows ?? 0,
+      sheetName: meta.sheetName ?? null,
+      successCount: 1,
+    })
+    .returning({ id: bankStatementProfiles.id });
+
+  if (created) {
+    await db()
+      .update(bankStatementImports)
+      .set({ parserProfileId: created.id, updatedAt: new Date() })
+      .where(eq(bankStatementImports.id, importId));
+  }
 }
 
 async function loadImportView(
@@ -288,6 +525,7 @@ async function loadImportView(
       matchedCount: bankStatementImports.matchedCount,
       unmatchedCount: bankStatementImports.unmatchedCount,
       metadata: bankStatementImports.metadata,
+      parserProfileId: bankStatementImports.parserProfileId,
     })
     .from(bankStatementImports)
     .where(
@@ -330,6 +568,8 @@ async function loadImportView(
       fingerprint: bankStatementLines.fingerprint,
       externalRef: bankStatementLines.externalRef,
       matchCandidates: bankStatementLines.matchCandidates,
+      raw: bankStatementLines.raw,
+      notes: bankStatementLines.notes,
     })
     .from(bankStatementLines)
     .where(
@@ -342,12 +582,19 @@ async function loadImportView(
     .orderBy(bankStatementLines.rowNumber);
 
   const lines = lineRows.map(toLineView);
-  const meta = (imp.metadata ?? {}) as { warnings?: string[]; multiMonth?: boolean };
+  const meta = (imp.metadata ?? {}) as {
+    warnings?: string[];
+    multiMonth?: boolean;
+    batchId?: string;
+    profileName?: string;
+    profileLearned?: boolean;
+  };
   const periodFrom = imp.periodFrom;
   const periodTo = imp.periodTo;
   const multiMonth =
     meta.multiMonth ??
     Boolean(periodFrom && periodTo && periodFrom.slice(0, 7) !== periodTo.slice(0, 7));
+  const months = [...new Set(lines.map((l) => l.month))].sort();
 
   return {
     id: imp.id,
@@ -367,11 +614,16 @@ async function loadImportView(
     unmatchedCount: Number(imp.unmatchedCount),
     warnings: meta.warnings ?? [],
     multiMonth,
+    batchId: meta.batchId ?? null,
+    profileName: meta.profileName ?? null,
+    profileLearned: Boolean(meta.profileLearned || imp.parserProfileId),
+    months,
     lines,
     counts: countBy(
-      lineRows.map((l) => ({
+      lines.map((l) => ({
         proposedAction: l.proposedAction,
         status: l.status,
+        flags: l.flags,
       })),
     ),
   };
@@ -413,6 +665,283 @@ async function refreshImportCounts(importId: string, tenantId: string) {
     .where(and(eq(bankStatementImports.id, importId), eq(bankStatementImports.tenantId, tenantId)));
 }
 
+type CommitOneResult =
+  | { ok: true; importId: string; reused: boolean; fileName: string; rowCount: number; periodFrom: string | null; periodTo: string | null }
+  | { ok: false; error: string; fileName: string };
+
+async function commitOneFileBuffer(opts: {
+  tenantId: string;
+  userId: string;
+  bankAccountId: string;
+  bookDomain: string | null;
+  source: 'cashbook' | 'erp_recon';
+  fileName: string;
+  bytes: Uint8Array;
+  batchId?: string | null;
+  batchIndex?: number;
+  batchSize?: number;
+}): Promise<CommitOneResult> {
+  const { tenantId, userId, bankAccountId, bookDomain, source, fileName, bytes } = opts;
+  if (!ALLOWED_EXT.test(fileName)) {
+    return { ok: false, error: 'Use .xlsx, .xls, or .csv from your bank download.', fileName };
+  }
+  if (bytes.byteLength <= 0) return { ok: false, error: 'File is empty.', fileName };
+  if (bytes.byteLength > MAX_BYTES) {
+    return { ok: false, error: 'File is too large (max 12 MB). Prefer monthly exports.', fileName };
+  }
+
+  const sha = fileSha256(Buffer.from(bytes));
+
+  return withTenantContext(tenantId, async () => {
+    const [bank] = await db()
+      .select({ id: accounts.id, code: accounts.code, name: accounts.name })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.tenantId, tenantId),
+          eq(accounts.id, bankAccountId),
+          isNull(accounts.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (!bank) return { ok: false as const, error: 'Bank account not found.', fileName };
+
+    const [existing] = await db()
+      .select({ id: bankStatementImports.id, rowCount: bankStatementImports.rowCount, periodFrom: bankStatementImports.periodFrom, periodTo: bankStatementImports.periodTo })
+      .from(bankStatementImports)
+      .where(
+        and(
+          eq(bankStatementImports.tenantId, tenantId),
+          eq(bankStatementImports.bankAccountId, bankAccountId),
+          eq(bankStatementImports.fileSha256, sha),
+          isNull(bankStatementImports.voidedAt),
+        ),
+      )
+      .orderBy(desc(bankStatementImports.createdAt))
+      .limit(1);
+    if (existing) {
+      return {
+        ok: true as const,
+        importId: existing.id,
+        reused: true,
+        fileName,
+        rowCount: Number(existing.rowCount),
+        periodFrom: existing.periodFrom,
+        periodTo: existing.periodTo,
+      };
+    }
+
+    const learned = await loadBestProfile(tenantId, bank.name);
+    const parsed = parseStatementFile(Buffer.from(bytes), fileName, {
+      tenantId,
+      bankAccountId,
+      profile: learned?.profile ?? null,
+    });
+
+    if (parsed.lines.length === 0) {
+      return {
+        ok: false as const,
+        error:
+          parsed.warnings[0] ??
+          'No transaction rows found. Check the file has date, description, and amount columns.',
+        fileName,
+      };
+    }
+    if (parsed.lines.length > MAX_ROWS) {
+      return {
+        ok: false as const,
+        error: `Too many rows (${parsed.lines.length}). Split into monthly files (max ${MAX_ROWS}).`,
+        fileName,
+      };
+    }
+
+    const balanceFlags = annotateBalanceContinuity(parsed.lines);
+    const fps = parsed.lines.map((l) => l.fingerprint);
+    const knownFp = await existingFingerprints(tenantId, fps);
+    const books = await loadBookCandidates(
+      tenantId,
+      bankAccountId,
+      parsed.periodFrom,
+      parsed.periodTo,
+      bookDomain,
+    );
+    const matches = matchAll(parsed.lines, books);
+
+    const periodFrom = parsed.periodFrom;
+    const periodTo = parsed.periodTo;
+    const multiMonth = Boolean(
+      periodFrom && periodTo && periodFrom.slice(0, 7) !== periodTo.slice(0, 7),
+    );
+    const period = (periodTo ?? periodFrom ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
+
+    const warnings = [...parsed.warnings];
+    if (learned) {
+      warnings.unshift(`Using saved layout “${learned.profile.name}” for ${bank.name}.`);
+    }
+    if (multiMonth) {
+      warnings.push(
+        'This file spans more than one month. Prefer monthly exports when possible. Review carefully.',
+      );
+    }
+
+    const breakCount = [...balanceFlags.values()].filter((f) => f === 'BALANCE_BREAK').length;
+    if (breakCount > 0) {
+      warnings.push(
+        `${breakCount} line(s) have a running-balance mismatch — check those rows (amber flag).`,
+      );
+    }
+
+    const fresh = matches.filter((m) => !knownFp.has(m.line.fingerprint));
+    const skippedDup = matches.length - fresh.length;
+    if (skippedDup > 0) {
+      warnings.push(
+        `${skippedDup} line(s) already imported before for this bank — skipped to avoid duplicates.`,
+      );
+    }
+
+    const enriched: Array<MatchResult & { finalAction: ProposedAction }> = fresh.map((m) => {
+      let action = m.proposedAction;
+      const bal = balanceFlags.get(m.line.rowNumber);
+      // Balance break forces human review even if score was high
+      if (bal === 'BALANCE_BREAK' && action === 'link') {
+        action = 'review';
+      }
+      return { ...m, proposedAction: action, finalAction: action };
+    });
+
+    if (enriched.length === 0) {
+      return {
+        ok: false as const,
+        error:
+          skippedDup > 0
+            ? 'All rows in this file were already imported. Nothing new to review.'
+            : 'No new rows to import.',
+        fileName,
+      };
+    }
+
+    const matchedCount = enriched.filter((m) => m.finalAction === 'link').length;
+
+    const importId = await db().transaction(async (tx) => {
+      const [created] = await tx
+        .insert(bankStatementImports)
+        .values({
+          tenantId,
+          userId,
+          period,
+          fileName: fileName.slice(0, 255),
+          status: 'ready',
+          rowCount: enriched.length.toString(),
+          matchedCount: matchedCount.toString(),
+          unmatchedCount: (enriched.length - matchedCount).toString(),
+          bankAccountId,
+          bookDomain,
+          fileSha256: sha,
+          periodFrom,
+          periodTo,
+          source,
+          parserProfileId: learned?.id ?? null,
+          metadata: {
+            warnings,
+            multiMonth,
+            profileName: parsed.profile.name,
+            profileAuto: parsed.profileAuto,
+            profileLearned: Boolean(learned),
+            columnMap: parsed.profile.columnMap,
+            signConvention: parsed.profile.signConvention,
+            skipRows: parsed.profile.skipRows ?? parsed.headerRowIndex,
+            sheetName: parsed.profile.sheetName,
+            bankCode: bank.code,
+            bankName: bank.name,
+            batchId: opts.batchId ?? null,
+            batchIndex: opts.batchIndex ?? 0,
+            batchSize: opts.batchSize ?? 1,
+            balanceBreaks: breakCount,
+          },
+        })
+        .returning({ id: bankStatementImports.id });
+
+      for (const m of enriched) {
+        const action = m.finalAction;
+        let status = mapActionToStatus(action, Boolean(m.matchedTransactionId));
+        const bal = balanceFlags.get(m.line.rowNumber);
+        const flags: string[] = [];
+        if (bal === 'BALANCE_BREAK') {
+          flags.push('BALANCE_BREAK');
+          if (status === 'matched') status = 'review';
+        }
+        const raw = { ...m.line.raw, _flags: flags };
+        await tx.insert(bankStatementLines).values({
+          tenantId,
+          importId: created.id,
+          matchedTransactionId: action === 'link' ? m.matchedTransactionId : null,
+          rowNumber: m.line.rowNumber.toString(),
+          transactionDate: m.line.date,
+          description: m.line.description.slice(0, 1000),
+          amount: m.line.amountSigned.toFixed(2),
+          status,
+          raw,
+          notes: flags.includes('BALANCE_BREAK') ? 'BALANCE_BREAK' : null,
+          fingerprint: m.line.fingerprint,
+          direction: m.line.direction,
+          balanceAfter:
+            m.line.balanceAfter != null ? m.line.balanceAfter.toFixed(2) : null,
+          externalRef: m.line.externalRef?.slice(0, 100) ?? null,
+          matchScore: m.matchScore.toFixed(4),
+          matchMethod: m.matchMethod,
+          matchCandidates: m.candidates,
+          proposedAction: action,
+          confidence: m.confidence.toFixed(4),
+        });
+      }
+
+      await tx.insert(bankStatementImportEvents).values({
+        tenantId,
+        importId: created.id,
+        userId,
+        action: 'import_committed',
+        detail: {
+          fileName,
+          rowCount: enriched.length,
+          profile: parsed.profile.name,
+          multiMonth,
+          batchId: opts.batchId ?? null,
+          balanceBreaks: breakCount,
+        },
+      });
+
+      await tx.insert(auditLog).values({
+        tenantId,
+        userId,
+        action: 'IMPORT',
+        tableName: 'bank_statement_imports',
+        recordId: created.id,
+        newValues: {
+          fileName,
+          bankAccountId,
+          rowCount: enriched.length,
+          period,
+          source,
+          batchId: opts.batchId ?? null,
+        },
+        notes: 'Statement import staged (no GL writes).',
+      });
+
+      return created.id;
+    });
+
+    return {
+      ok: true as const,
+      importId,
+      reused: false,
+      fileName,
+      rowCount: enriched.length,
+      periodFrom,
+      periodTo,
+    };
+  });
+}
+
 /**
  * Upload Excel/CSV, parse, match, persist staging lines. No GL writes.
  */
@@ -424,9 +953,7 @@ export async function commitStatementImport(formData: FormData): Promise<
     const bankAccountId = String(formData.get('bankAccountId') ?? '');
     const bookDomainRaw = formData.get('bookDomain');
     const bookDomain =
-      bookDomainRaw === 'personal' || bookDomainRaw === 'business'
-        ? bookDomainRaw
-        : null;
+      bookDomainRaw === 'personal' || bookDomainRaw === 'business' ? bookDomainRaw : null;
     const source = sourceSchema.parse(String(formData.get('source') ?? 'cashbook'));
     const file = formData.get('file');
 
@@ -436,203 +963,19 @@ export async function commitStatementImport(formData: FormData): Promise<
     if (!(file instanceof File)) {
       return { ok: false, error: 'Choose an Excel or CSV file from your bank.' };
     }
-    if (!ALLOWED_EXT.test(file.name)) {
-      return { ok: false, error: 'Use .xlsx, .xls, or .csv from your bank download.' };
-    }
-    if (file.size <= 0) return { ok: false, error: 'File is empty.' };
-    if (file.size > MAX_BYTES) {
-      return { ok: false, error: 'File is too large (max 12 MB). Prefer monthly exports.' };
-    }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const sha = fileSha256(Buffer.from(bytes));
-
-    const result = await withTenantContext(user.tenantId, async () => {
-      const [bank] = await db()
-        .select({ id: accounts.id, code: accounts.code, name: accounts.name })
-        .from(accounts)
-        .where(
-          and(
-            eq(accounts.tenantId, user.tenantId),
-            eq(accounts.id, bankAccountId),
-            isNull(accounts.voidedAt),
-          ),
-        )
-        .limit(1);
-      if (!bank) throw new Error('Bank account not found.');
-
-      // Idempotent re-upload
-      const [existing] = await db()
-        .select({ id: bankStatementImports.id })
-        .from(bankStatementImports)
-        .where(
-          and(
-            eq(bankStatementImports.tenantId, user.tenantId),
-            eq(bankStatementImports.bankAccountId, bankAccountId),
-            eq(bankStatementImports.fileSha256, sha),
-            isNull(bankStatementImports.voidedAt),
-          ),
-        )
-        .orderBy(desc(bankStatementImports.createdAt))
-        .limit(1);
-      if (existing) {
-        return { importId: existing.id, reused: true as const };
-      }
-
-      const parsed = parseStatementFile(Buffer.from(bytes), file.name, {
-        tenantId: user.tenantId,
-        bankAccountId,
-      });
-      if (parsed.lines.length === 0) {
-        throw new Error(
-          parsed.warnings[0] ??
-            'No transaction rows found. Check the file has date, description, and amount columns.',
-        );
-      }
-      if (parsed.lines.length > MAX_ROWS) {
-        throw new Error(`Too many rows (${parsed.lines.length}). Split into monthly files (max ${MAX_ROWS}).`);
-      }
-
-      const fps = parsed.lines.map((l) => l.fingerprint);
-      const knownFp = await existingFingerprints(user.tenantId, fps);
-      const books = await loadBookCandidates(
-        user.tenantId,
-        bankAccountId,
-        parsed.periodFrom,
-        parsed.periodTo,
-        bookDomain,
-      );
-      const matches = matchAll(parsed.lines, books);
-
-      const periodFrom = parsed.periodFrom;
-      const periodTo = parsed.periodTo;
-      const multiMonth = Boolean(
-        periodFrom && periodTo && periodFrom.slice(0, 7) !== periodTo.slice(0, 7),
-      );
-      // Dominant month = period_to's month (or from)
-      const period = (periodTo ?? periodFrom ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
-
-      const warnings = [...parsed.warnings];
-      if (multiMonth) {
-        warnings.push(
-          'This file spans more than one month. Prefer monthly exports when possible. Review carefully.',
-        );
-      }
-
-      // Known fingerprints cannot be re-inserted (unique index). Surface as warning only.
-      const fresh = matches.filter((m) => !knownFp.has(m.line.fingerprint));
-      const skippedDup = matches.length - fresh.length;
-      if (skippedDup > 0) {
-        warnings.push(
-          `${skippedDup} line(s) already imported before for this bank — skipped to avoid duplicates.`,
-        );
-      }
-
-      const enriched: Array<MatchResult & { finalAction: ProposedAction }> = fresh.map((m) => ({
-        ...m,
-        finalAction: m.proposedAction,
-      }));
-
-      if (enriched.length === 0) {
-        throw new Error(
-          skippedDup > 0
-            ? 'All rows in this file were already imported. Nothing new to review.'
-            : 'No new rows to import.',
-        );
-      }
-
-      const matchedCount = enriched.filter((m) => m.finalAction === 'link').length;
-
-      const importId = await db().transaction(async (tx) => {
-        const [created] = await tx
-          .insert(bankStatementImports)
-          .values({
-            tenantId: user.tenantId,
-            userId: user.id,
-            period,
-            fileName: file.name.slice(0, 255),
-            status: 'ready',
-            rowCount: enriched.length.toString(),
-            matchedCount: matchedCount.toString(),
-            unmatchedCount: (enriched.length - matchedCount).toString(),
-            bankAccountId,
-            bookDomain,
-            fileSha256: sha,
-            periodFrom,
-            periodTo,
-            source,
-            metadata: {
-              warnings,
-              multiMonth,
-              profileName: parsed.profile.name,
-              profileAuto: parsed.profileAuto,
-              bankCode: bank.code,
-              bankName: bank.name,
-            },
-          })
-          .returning({ id: bankStatementImports.id });
-
-        for (const m of enriched) {
-          const action = m.finalAction;
-          const status = mapActionToStatus(action, Boolean(m.matchedTransactionId));
-          await tx.insert(bankStatementLines).values({
-            tenantId: user.tenantId,
-            importId: created.id,
-            matchedTransactionId:
-              action === 'link' ? m.matchedTransactionId : null,
-            rowNumber: m.line.rowNumber.toString(),
-            transactionDate: m.line.date,
-            description: m.line.description.slice(0, 1000),
-            amount: m.line.amountSigned.toFixed(2),
-            status,
-            raw: m.line.raw,
-            fingerprint: m.line.fingerprint,
-            direction: m.line.direction,
-            balanceAfter:
-              m.line.balanceAfter != null ? m.line.balanceAfter.toFixed(2) : null,
-            externalRef: m.line.externalRef?.slice(0, 100) ?? null,
-            matchScore: m.matchScore.toFixed(4),
-            matchMethod: m.matchMethod,
-            matchCandidates: m.candidates,
-            proposedAction: action,
-            confidence: m.confidence.toFixed(4),
-          });
-        }
-
-        await tx.insert(bankStatementImportEvents).values({
-          tenantId: user.tenantId,
-          importId: created.id,
-          userId: user.id,
-          action: 'import_committed',
-          detail: {
-            fileName: file.name,
-            rowCount: enriched.length,
-            profile: parsed.profile.name,
-            multiMonth,
-          },
-        });
-
-        await tx.insert(auditLog).values({
-          tenantId: user.tenantId,
-          userId: user.id,
-          action: 'IMPORT',
-          tableName: 'bank_statement_imports',
-          recordId: created.id,
-          newValues: {
-            fileName: file.name,
-            bankAccountId,
-            rowCount: enriched.length,
-            period,
-            source,
-          },
-          notes: 'Statement import staged (no GL writes).',
-        });
-
-        return created.id;
-      });
-
-      return { importId, reused: false as const };
+    const result = await commitOneFileBuffer({
+      tenantId: user.tenantId,
+      userId: user.id,
+      bankAccountId,
+      bookDomain,
+      source,
+      fileName: file.name,
+      bytes,
     });
+
+    if (!result.ok) return { ok: false, error: result.error };
 
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
@@ -645,6 +988,120 @@ export async function commitStatementImport(formData: FormData): Promise<
       error: e instanceof Error ? e.message : 'Could not import statement.',
     };
   }
+}
+
+/**
+ * SI-4: Upload multiple Excel/CSV files for the same bank in one batch.
+ */
+export async function commitStatementBatch(formData: FormData): Promise<
+  | { ok: true; batchId: string; items: StatementBatchItem[]; firstImportId: string | null }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await requireTenantContext();
+    const bankAccountId = String(formData.get('bankAccountId') ?? '');
+    const bookDomainRaw = formData.get('bookDomain');
+    const bookDomain =
+      bookDomainRaw === 'personal' || bookDomainRaw === 'business' ? bookDomainRaw : null;
+    const source = sourceSchema.parse(String(formData.get('source') ?? 'cashbook'));
+
+    if (!z.string().uuid().safeParse(bankAccountId).success) {
+      return { ok: false, error: 'Select a bank account first.' };
+    }
+
+    const collected: File[] = [];
+    const multi = formData.getAll('files');
+    for (const f of multi) {
+      if (f instanceof File && f.size > 0) collected.push(f);
+    }
+    const single = formData.get('file');
+    if (single instanceof File && single.size > 0) collected.push(single);
+
+    if (collected.length === 0) {
+      return { ok: false, error: 'Choose one or more Excel/CSV files from your bank.' };
+    }
+    if (collected.length > MAX_BATCH_FILES) {
+      return {
+        ok: false,
+        error: `Too many files (max ${MAX_BATCH_FILES}). Upload in smaller batches.`,
+      };
+    }
+
+    const batchId = randomUUID();
+    const items: StatementBatchItem[] = [];
+
+    for (let i = 0; i < collected.length; i++) {
+      const file = collected[i]!;
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const result = await commitOneFileBuffer({
+        tenantId: user.tenantId,
+        userId: user.id,
+        bankAccountId,
+        bookDomain,
+        source,
+        fileName: file.name,
+        bytes,
+        batchId,
+        batchIndex: i,
+        batchSize: collected.length,
+      });
+      if (result.ok) {
+        items.push({
+          importId: result.importId,
+          fileName: result.fileName,
+          reused: result.reused,
+          rowCount: result.rowCount,
+          periodFrom: result.periodFrom,
+          periodTo: result.periodTo,
+        });
+      } else {
+        items.push({
+          importId: '',
+          fileName: result.fileName,
+          reused: false,
+          error: result.error,
+        });
+      }
+    }
+
+    const okItems = items.filter((i) => i.importId);
+    if (okItems.length === 0) {
+      return {
+        ok: false,
+        error: items.map((i) => `${i.fileName}: ${i.error}`).join(' · ') || 'No files imported.',
+      };
+    }
+
+    revalidatePath('/cashbook');
+    revalidatePath('/cashbook/import');
+    revalidatePath('/reconciliation');
+    revalidatePath('/transactions');
+    return {
+      ok: true,
+      batchId,
+      items,
+      firstImportId: okItems[0]?.importId ?? null,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Could not import batch.',
+    };
+  }
+}
+
+export async function getStatementBatch(importIds: string[]): Promise<StatementImportView[]> {
+  const user = await requireTenantContext();
+  const ids = importIds.filter((id) => z.string().uuid().safeParse(id).success);
+  if (ids.length === 0) return [];
+  return withTenantContext(user.tenantId, async () => {
+    const views: StatementImportView[] = [];
+    for (const id of ids) {
+      const v = await loadImportView(user.tenantId, id);
+      if (v) views.push(v);
+    }
+    return views;
+  });
 }
 
 export async function getStatementImport(
@@ -782,6 +1239,7 @@ export async function confirmStatementLinks(input: {
       }
 
       await refreshImportCounts(importId, user.tenantId);
+      await learnProfileFromImport(user.tenantId, importId);
       return n;
     });
 
@@ -1069,7 +1527,10 @@ export async function confirmStatementCreates(input: {
       created += 1;
     }
 
-    await withTenantContext(user.tenantId, () => refreshImportCounts(importId, user.tenantId));
+    await withTenantContext(user.tenantId, async () => {
+      await refreshImportCounts(importId, user.tenantId);
+      await learnProfileFromImport(user.tenantId, importId);
+    });
 
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');

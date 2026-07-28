@@ -1,6 +1,6 @@
 # Smart Bank Statement Import — Architecture & Risk Design
 
-> **Status:** Deep plan (canonical) — **SI-1…SI-3 implemented** (staging, match/link, create+undo)  
+> **Status:** Deep plan (canonical) — **SI-1…SI-4 implemented** (batch multi-file, learned profiles, multi-month + balance flags)  
 > **Last updated:** 2026-07-28  
 > **Surfaces:** Cashbook **Import bank** + ERP **`/reconciliation`**  
 > **Primary audience:** Personal, sole prop (lite/full), small multi-bank owners  
@@ -576,9 +576,10 @@ saveStatementProfile
 
 ### SI-4 exit criteria
 
-- Multi-file batch  
-- Profile learning  
-- Balance continuity flag optional  
+- [x] Multi-file batch (`commitStatementBatch`, batch tabs in wizard)  
+- [x] Profile learning (`bank_statement_profiles` success_count + reuse on parse)  
+- [x] Multi-month grouping in review UI  
+- [x] Balance continuity flag (`BALANCE_BREAK` → force review)  
 
 ---
 

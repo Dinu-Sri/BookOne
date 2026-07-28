@@ -14,3 +14,4 @@ export { parseStatementDate, parseAmountCell, signedFromDebitCredit, directionFr
 export { lineFingerprint, fileSha256, normalizeDescription } from './fingerprint';
 export { matchLine, matchAll } from './match';
 export { detectHeaderAndMap, GENERIC_PROFILES } from './templates';
+export { annotateBalanceContinuity, type ContinuityFlag } from './balance';

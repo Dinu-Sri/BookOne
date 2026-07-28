@@ -80,3 +80,35 @@ describe('matchLine', () => {
     expect(r.matchedTransactionId).toBe('tx1');
   });
 });
+
+import { annotateBalanceContinuity } from '../src/balance';
+
+describe('annotateBalanceContinuity', () => {
+  it('flags broken running balance', () => {
+    const flags = annotateBalanceContinuity([
+      {
+        rowNumber: 1,
+        date: '2026-07-01',
+        description: 'a',
+        amountSigned: 100,
+        direction: 'in',
+        balanceAfter: 1000,
+        fingerprint: '1',
+        dateConfidence: 1,
+        raw: {},
+      },
+      {
+        rowNumber: 2,
+        date: '2026-07-02',
+        description: 'b',
+        amountSigned: -50,
+        direction: 'out',
+        balanceAfter: 900, // should be 950
+        fingerprint: '2',
+        dateConfidence: 1,
+        raw: {},
+      },
+    ]);
+    expect(flags.get(2)).toBe('BALANCE_BREAK');
+  });
+});

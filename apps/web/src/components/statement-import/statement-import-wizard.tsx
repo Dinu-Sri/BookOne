@@ -15,12 +15,15 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
+  commitStatementBatch,
   commitStatementImport,
   confirmStatementCreates,
   confirmStatementLinks,
+  getStatementBatch,
   skipStatementLines,
   undoStatementCreates,
   voidStatementImport,
+  type StatementBatchItem,
   type StatementImportView,
   type StatementLineView,
 } from '@/app/actions/statement-import';
@@ -32,6 +35,12 @@ function formatRs(n: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function formatMonth(ym: string) {
+  const [y, m] = ym.split('-').map(Number);
+  if (!y || !m) return ym;
+  return new Date(y, m - 1, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
 }
 
 function groupLines(lines: StatementLineView[]) {
@@ -57,6 +66,18 @@ function groupLines(lines: StatementLineView[]) {
     }
   }
   return { pendingLink, pendingCreate, review, done, duplicate };
+}
+
+function byMonth(lines: StatementLineView[]): { month: string; lines: StatementLineView[] }[] {
+  const map = new Map<string, StatementLineView[]>();
+  for (const l of lines) {
+    const m = l.month || l.date.slice(0, 7);
+    if (!map.has(m)) map.set(m, []);
+    map.get(m)!.push(l);
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, ls]) => ({ month, lines: ls }));
 }
 
 export function StatementImportWizard({
@@ -85,6 +106,11 @@ export function StatementImportWizard({
 
   const [bankId, setBankId] = useState(initialImport?.bankAccountId ?? defaultBank);
   const [importView, setImportView] = useState<StatementImportView | null>(initialImport);
+  const [batchItems, setBatchItems] = useState<StatementBatchItem[]>([]);
+  const [batchId, setBatchId] = useState<string | null>(initialImport?.batchId ?? null);
+  const [batchViews, setBatchViews] = useState<StatementImportView[]>(
+    initialImport ? [initialImport] : [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -96,42 +122,83 @@ export function StatementImportWizard({
     [importView],
   );
 
-  const reloadFromServer = useCallback(
-    async (importId: string) => {
-      const { getStatementImport } = await import('@/app/actions/statement-import');
-      const view = await getStatementImport(importId);
-      if (view) setImportView(view);
-    },
-    [],
-  );
+  const multiMonthGroups = useMemo(() => {
+    if (!importView || !importView.multiMonth) return null;
+    return byMonth(importView.lines);
+  }, [importView]);
 
-  function uploadFile(file: File) {
+  const reloadFromServer = useCallback(async (importId: string) => {
+    const { getStatementImport } = await import('@/app/actions/statement-import');
+    const view = await getStatementImport(importId);
+    if (view) {
+      setImportView(view);
+      setBatchViews((prev) => {
+        const next = prev.filter((v) => v.id !== view.id);
+        next.push(view);
+        return next.sort((a, b) => a.fileName.localeCompare(b.fileName));
+      });
+    }
+  }, []);
+
+  function uploadFiles(fileList: FileList | File[]) {
     setError(null);
     setInfo(null);
     if (!bankId) {
       setError(si ? 'පළමුව බැංකුව තෝරන්න.' : 'Select a bank account first.');
       return;
     }
+    const files = Array.from(fileList).filter((f) => f.size > 0);
+    if (files.length === 0) return;
+
     const fd = new FormData();
-    fd.set('file', file);
     fd.set('bankAccountId', bankId);
     fd.set('source', source);
     if (bookDomain) fd.set('bookDomain', bookDomain);
 
     startTransition(() => {
-      commitStatementImport(fd).then(async (res) => {
+      if (files.length === 1) {
+        fd.set('file', files[0]!);
+        commitStatementImport(fd).then(async (res) => {
+          if (!res.ok) {
+            setError(res.error);
+            return;
+          }
+          if (res.reused) {
+            setInfo(
+              si
+                ? 'මෙම ගොනුව කලින් උඩුගත කර ඇත — එම සමාලෝචනය පෙන්වයි.'
+                : 'This file was uploaded before — showing that review.',
+            );
+          }
+          setBatchId(null);
+          setBatchItems([]);
+          await reloadFromServer(res.importId);
+        });
+        return;
+      }
+
+      for (const f of files) fd.append('files', f);
+      commitStatementBatch(fd).then(async (res) => {
         if (!res.ok) {
           setError(res.error);
           return;
         }
-        if (res.reused) {
-          setInfo(
-            si
-              ? 'මෙම ගොනුව කලින් උඩුගත කර ඇත — එම සමාලෝචනය පෙන්වයි.'
-              : 'This file was uploaded before — showing that review.',
-          );
-        }
-        await reloadFromServer(res.importId);
+        setBatchId(res.batchId);
+        setBatchItems(res.items);
+        const okIds = res.items.filter((i) => i.importId).map((i) => i.importId);
+        const views = await getStatementBatch(okIds);
+        setBatchViews(views);
+        const first = views[0] ?? null;
+        setImportView(first);
+        const failed = res.items.filter((i) => i.error).length;
+        const reused = res.items.filter((i) => i.reused).length;
+        setInfo(
+          si
+            ? `${okIds.length} ගොනු · ${failed ? `${failed} අසාර්ථක · ` : ''}${reused ? `${reused} කලින්` : ''}`
+            : `Imported ${okIds.length} file(s)${failed ? ` · ${failed} failed` : ''}${
+                reused ? ` · ${reused} already known` : ''
+              }.`,
+        );
       });
     });
   }
@@ -139,8 +206,13 @@ export function StatementImportWizard({
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) uploadFile(file);
+    if (e.dataTransfer.files?.length) uploadFiles(e.dataTransfer.files);
+  }
+
+  function selectBatchFile(importId: string) {
+    const view = batchViews.find((v) => v.id === importId);
+    if (view) setImportView(view);
+    else void reloadFromServer(importId);
   }
 
   function confirmLinks() {
@@ -155,7 +227,7 @@ export function StatementImportWizard({
         setInfo(
           si
             ? `${res.linked} ගැලපීම් තහවුරු කළා.`
-            : `Confirmed ${res.linked} match${res.linked === 1 ? '' : 'es'}.`,
+            : `Confirmed ${res.linked} match${res.linked === 1 ? '' : 'es'}. Layout remembered for next time.`,
         );
         await reloadFromServer(importView.id);
         onComplete?.();
@@ -182,7 +254,9 @@ export function StatementImportWizard({
           return;
         }
         const extra =
-          res.errors.length > 0 ? ` (${res.errors.length} issue${res.errors.length > 1 ? 's' : ''})` : '';
+          res.errors.length > 0
+            ? ` (${res.errors.length} issue${res.errors.length > 1 ? 's' : ''})`
+            : '';
         setInfo(
           si
             ? `${res.created} නව ඇතුළත් කිරීම්${extra}`
@@ -192,6 +266,34 @@ export function StatementImportWizard({
         await reloadFromServer(importView.id);
         onComplete?.();
       });
+    });
+  }
+
+  function confirmAllBatchLinks() {
+    if (batchViews.length === 0) return;
+    setError(null);
+    startTransition(() => {
+      (async () => {
+        let total = 0;
+        for (const v of batchViews) {
+          const res = await confirmStatementLinks({ importId: v.id });
+          if (res.ok) total += res.linked;
+          else {
+            setError(`${v.fileName}: ${res.error}`);
+            break;
+          }
+        }
+        setInfo(
+          si
+            ? `සියලු ගොනු · ${total} ගැලපීම්`
+            : `Confirmed ${total} matches across ${batchViews.length} file(s).`,
+        );
+        if (importView) await reloadFromServer(importView.id);
+        const ids = batchViews.map((v) => v.id);
+        const views = await getStatementBatch(ids);
+        setBatchViews(views);
+        onComplete?.();
+      })();
     });
   }
 
@@ -246,9 +348,7 @@ export function StatementImportWizard({
   function discardImport() {
     if (!importView) return;
     if (
-      !window.confirm(
-        si ? 'මෙම උඩුගත කිරීම ඉවත් කරන්නද?' : 'Discard this import review?',
-      )
+      !window.confirm(si ? 'මෙම උඩුගත කිරීම ඉවත් කරන්නද?' : 'Discard this import review?')
     ) {
       return;
     }
@@ -258,17 +358,27 @@ export function StatementImportWizard({
           setError(res.error);
           return;
         }
+        setBatchViews((prev) => prev.filter((v) => v.id !== importView.id));
         setImportView(null);
         setInfo(si ? 'ඉවත් කළා' : 'Import discarded.');
       });
     });
   }
 
+  function resetUpload() {
+    setImportView(null);
+    setBatchItems([]);
+    setBatchViews([]);
+    setBatchId(null);
+    setError(null);
+    setInfo(null);
+  }
+
   const shellClass = variant === 'cashbook' ? 'stmt-wizard cashbook-stmt' : 'stmt-wizard erp-stmt';
+  const hasBatch = batchViews.length > 1 || batchItems.length > 1;
 
   return (
     <div className={shellClass}>
-      {/* Step 1: bank */}
       <section className="stmt-section">
         <h2 className="stmt-h2">
           <Landmark size={20} />
@@ -276,8 +386,8 @@ export function StatementImportWizard({
         </h2>
         <p className="stmt-hint">
           {si
-            ? 'එක් වරකට එක් ගිණුමක්. මාසික Excel ලේසිමයි.'
-            : 'One account per upload. Monthly Excel is easiest.'}
+            ? 'එක් වරකට එක් ගිණුමක්. මාසික Excel කිහිපයක් එකවර දැමිය හැක.'
+            : 'One account per upload. You can drop several monthly Excel files at once.'}
         </p>
         <div className="stmt-bank-tiles">
           {bankOnly.length === 0 ? (
@@ -303,69 +413,118 @@ export function StatementImportWizard({
         </div>
       </section>
 
-      {/* Step 2: upload */}
       <section className="stmt-section">
         <h2 className="stmt-h2">
           <Upload size={20} />
           {si ? '2. Excel / CSV උඩුගත කරන්න' : '2. Upload Excel / CSV'}
         </h2>
-        <div
-          className={`stmt-drop ${dragOver ? 'over' : ''} ${pending ? 'busy' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          onClick={() => !pending && !importView && fileRef.current?.click()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click();
-          }}
-        >
-          {pending ? (
-            <Loader2 className="spin" size={28} />
-          ) : (
-            <FileSpreadsheet size={28} />
-          )}
-          <div>
-            <strong>
-              {importView
-                ? importView.fileName
-                : si
-                  ? 'ගෙනැවිත් දමන්න හෝ තෝරන්න'
-                  : 'Drag & drop or click to choose'}
-            </strong>
-            <small>
-              {si
-                ? 'බැංකුවෙන් බාගත කළ .xlsx හෝ .csv (මාසයකට එකක් හොඳයි)'
-                : 'Bank export .xlsx / .csv — one month per file is best'}
-            </small>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.xls,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
-            hidden
-            disabled={pending || Boolean(importView)}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) uploadFile(f);
-              e.target.value = '';
+        {!importView ? (
+          <div
+            className={`stmt-drop ${dragOver ? 'over' : ''} ${pending ? 'busy' : ''}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
             }}
-          />
-        </div>
-        {importView ? (
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            onClick={() => !pending && fileRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click();
+            }}
+          >
+            {pending ? <Loader2 className="spin" size={28} /> : <FileSpreadsheet size={28} />}
+            <div>
+              <strong>
+                {si ? 'ගෙනැවිත් දමන්න — එකක් හෝ කිහිපයක්' : 'Drag & drop one or many files'}
+              </strong>
+              <small>
+                {si
+                  ? 'බැංකු .xlsx / .csv — මාසයකට එකක් හොඳයි (වාර්ෂිකත් හරි)'
+                  : 'Bank .xlsx / .csv — monthly is easiest (yearly OK with review)'}
+              </small>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+              hidden
+              multiple
+              disabled={pending}
+              onChange={(e) => {
+                if (e.target.files?.length) uploadFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </div>
+        ) : (
+          <div className="stmt-file-bar">
+            <div>
+              <strong>{importView.fileName}</strong>
+              <p className="stmt-meta">
+                {importView.bankAccountName ?? 'Bank'} · {importView.periodFrom ?? '—'} →{' '}
+                {importView.periodTo ?? '—'} · {importView.rowCount} lines
+                {importView.profileName ? (
+                  <span className="stmt-flag info">
+                    {' '}
+                    · Layout: {importView.profileName}
+                    {importView.profileLearned ? ' (saved)' : ''}
+                  </span>
+                ) : null}
+                {importView.multiMonth ? (
+                  <span className="stmt-flag warn">
+                    {' '}
+                    {si ? '· බහු මාස' : '· Multi-month file'}
+                  </span>
+                ) : null}
+                {importView.counts.balanceBreaks > 0 ? (
+                  <span className="stmt-flag warn">
+                    {' '}
+                    · {importView.counts.balanceBreaks} balance flag
+                    {importView.counts.balanceBreaks > 1 ? 's' : ''}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            <button type="button" className="stmt-btn secondary" disabled={pending} onClick={resetUpload}>
+              {si ? 'නව උඩුගත' : 'Upload more'}
+            </button>
+          </div>
+        )}
+
+        {hasBatch ? (
+          <div className="stmt-batch-tabs" role="tablist">
+            {batchViews.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="tab"
+                className={`stmt-batch-tab ${importView?.id === v.id ? 'active' : ''}`}
+                onClick={() => selectBatchFile(v.id)}
+              >
+                <span className="stmt-batch-name">{v.fileName}</span>
+                <small>
+                  {v.counts.link + v.counts.create + v.counts.review > 0
+                    ? `${v.counts.link}m · ${v.counts.create}n · ${v.counts.review}c`
+                    : v.status}
+                </small>
+              </button>
+            ))}
+            {batchItems
+              .filter((i) => i.error)
+              .map((i) => (
+                <div key={i.fileName} className="stmt-batch-tab error" title={i.error}>
+                  <span className="stmt-batch-name">{i.fileName}</span>
+                  <small>Failed</small>
+                </div>
+              ))}
+          </div>
+        ) : null}
+        {batchId ? (
           <p className="stmt-meta">
-            {importView.bankAccountName ?? 'Bank'} · {importView.periodFrom ?? '—'} →{' '}
-            {importView.periodTo ?? '—'} · {importView.rowCount} lines
-            {importView.multiMonth ? (
-              <span className="stmt-flag warn">
-                {' '}
-                {si ? '· බහු මාස' : '· Multi-month file'}
-              </span>
-            ) : null}
+            Batch {batchId.slice(0, 8)}… · {batchViews.length} file
+            {batchViews.length === 1 ? '' : 's'}
           </p>
         ) : null}
       </section>
@@ -373,7 +532,6 @@ export function StatementImportWizard({
       {error ? <p className="form-error stmt-msg">{error}</p> : null}
       {info ? <p className="stmt-info stmt-msg">{info}</p> : null}
 
-      {/* Step 3: review */}
       {importView && groups ? (
         <section className="stmt-section">
           <h2 className="stmt-h2">
@@ -382,14 +540,14 @@ export function StatementImportWizard({
           </h2>
           <p className="stmt-hint">
             {si
-              ? 'කිසිවක් පොතට නොයයි තහවුරු කරන තුරු.'
-              : 'Nothing is written to your books until you confirm.'}
+              ? 'කිසිවක් පොතට නොයයි තහවුරු කරන තුරු. සාර්ථක ආකෘතිය මතක තබයි.'
+              : 'Nothing posts until you confirm. Successful layouts are remembered for this bank.'}
           </p>
 
           <div className="stmt-summary">
             <div className="stmt-sum green">
               <strong>{groups.pendingLink.length}</strong>
-              <span>{si ? 'ගැලපේ' : 'Match books'}</span>
+              <span>{si ? 'ගැලපේ' : 'Match'}</span>
             </div>
             <div className="stmt-sum blue">
               <strong>{groups.pendingCreate.length}</strong>
@@ -401,7 +559,7 @@ export function StatementImportWizard({
             </div>
             <div className="stmt-sum grey">
               <strong>{groups.duplicate.length}</strong>
-              <span>{si ? 'දෙවරක්' : 'Already in'}</span>
+              <span>{si ? 'දෙවරක්' : 'Dup'}</span>
             </div>
             <div className="stmt-sum muted">
               <strong>{groups.done.length}</strong>
@@ -428,9 +586,20 @@ export function StatementImportWizard({
             >
               {pending ? <Loader2 size={16} className="spin" /> : <Link2 size={16} />}
               {si
-                ? `ගැලපීම් තහවුරු (${groups.pendingLink.length})`
+                ? `ගැලපීම් (${groups.pendingLink.length})`
                 : `Confirm matches (${groups.pendingLink.length})`}
             </button>
+            {hasBatch ? (
+              <button
+                type="button"
+                className="stmt-btn primary"
+                disabled={pending}
+                onClick={confirmAllBatchLinks}
+              >
+                <Link2 size={16} />
+                {si ? 'සියලු ගොනු ගැලපීම්' : 'Confirm matches (all files)'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="stmt-btn accent"
@@ -439,8 +608,8 @@ export function StatementImportWizard({
             >
               {pending ? <Loader2 size={16} className="spin" /> : <PlusCircle size={16} />}
               {si
-                ? `නව එකතු කරන්න (${groups.pendingCreate.length})`
-                : `Add new entries (${groups.pendingCreate.length})`}
+                ? `නව එකතු (${groups.pendingCreate.length})`
+                : `Add new (${groups.pendingCreate.length})`}
             </button>
             <button
               type="button"
@@ -449,7 +618,7 @@ export function StatementImportWizard({
               onClick={skipReviews}
             >
               <SkipForward size={16} />
-              {si ? 'පරීක්ෂා මඟ හරින්න' : 'Skip checks'}
+              {si ? 'මඟ හරින්න' : 'Skip checks'}
             </button>
             <button
               type="button"
@@ -460,46 +629,57 @@ export function StatementImportWizard({
               <Undo2 size={16} />
               {si ? 'නව අහෝසි' : 'Undo creates'}
             </button>
-            <button
-              type="button"
-              className="stmt-btn danger"
-              disabled={pending}
-              onClick={discardImport}
-            >
+            <button type="button" className="stmt-btn danger" disabled={pending} onClick={discardImport}>
               <Trash2 size={16} />
-              {si ? 'ඉවත් කරන්න' : 'Discard'}
+              {si ? 'ඉවත්' : 'Discard'}
             </button>
           </div>
 
+          {multiMonthGroups && multiMonthGroups.length > 1 ? (
+            <div className="stmt-month-nav">
+              <span className="stmt-month-label">{si ? 'මාස අනුව' : 'By month'}</span>
+              {multiMonthGroups.map((g) => (
+                <span key={g.month} className="stmt-month-chip">
+                  {formatMonth(g.month)} · {g.lines.length}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <LineGroup
-            title={si ? 'නිල් — පොතේ නැත (නව)' : 'New — not in your books yet'}
+            title={si ? 'නිල් — පොතේ නැත' : 'New — not in books yet'}
             tone="blue"
             lines={groups.pendingCreate}
             empty={si ? 'නව නැත' : 'No new lines'}
+            showMonths={Boolean(multiMonthGroups && multiMonthGroups.length > 1)}
           />
           <LineGroup
-            title={si ? 'කොළ — පොතේ තිබේ' : 'Matches — already in your books'}
+            title={si ? 'කොළ — පොතේ තිබේ' : 'Matches — already in books'}
             tone="green"
             lines={groups.pendingLink}
             empty={si ? 'ගැලපීම් නැත' : 'No matches to confirm'}
+            showMonths={Boolean(multiMonthGroups && multiMonthGroups.length > 1)}
           />
           <LineGroup
-            title={si ? 'කහ — ඔබේ ඇස් අවශ්‍යයි' : 'Check — needs your eyes'}
+            title={si ? 'කහ — ඔබේ ඇස්' : 'Check — needs your eyes'}
             tone="amber"
             lines={groups.review}
             empty={si ? 'හොඳයි' : 'Nothing ambiguous'}
+            showMonths={Boolean(multiMonthGroups && multiMonthGroups.length > 1)}
           />
           <LineGroup
             title={si ? 'දැනටමත් ආයාත' : 'Already imported before'}
             tone="grey"
             lines={groups.duplicate}
             empty=""
+            showMonths={false}
           />
           <LineGroup
             title={si ? 'අවසන්' : 'Finished'}
             tone="muted"
             lines={groups.done}
             empty=""
+            showMonths={false}
           />
         </section>
       ) : null}
@@ -512,13 +692,18 @@ function LineGroup({
   tone,
   lines,
   empty,
+  showMonths,
 }: {
   title: string;
   tone: string;
   lines: StatementLineView[];
   empty: string;
+  showMonths: boolean;
 }) {
   if (lines.length === 0 && !empty) return null;
+
+  const chunks = showMonths ? byMonth(lines) : [{ month: '', lines }];
+
   return (
     <div className={`stmt-group tone-${tone}`}>
       <h3>
@@ -527,41 +712,55 @@ function LineGroup({
       {lines.length === 0 ? (
         empty ? <p className="stmt-empty">{empty}</p> : null
       ) : (
-        <div className="stmt-table-wrap">
-          <table className="stmt-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Status</th>
-                <th className="num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.slice(0, 80).map((l) => (
-                <tr key={l.id}>
-                  <td>{l.date}</td>
-                  <td className="desc" title={l.description}>
-                    {l.description}
-                  </td>
-                  <td>
-                    <span className={`stmt-chip ${l.status}`}>{labelStatus(l)}</span>
-                  </td>
-                  <td className={`num ${l.amount < 0 ? 'neg' : 'pos'}`}>{formatRs(l.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {lines.length > 80 ? (
-            <p className="stmt-empty">Showing first 80 of {lines.length}</p>
-          ) : null}
-        </div>
+        chunks.map((chunk) => (
+          <div key={chunk.month || 'all'} className="stmt-month-block">
+            {chunk.month ? (
+              <h4 className="stmt-month-heading">{formatMonth(chunk.month)}</h4>
+            ) : null}
+            <div className="stmt-table-wrap">
+              <table className="stmt-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th className="num">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chunk.lines.slice(0, 80).map((l) => (
+                    <tr key={l.id} className={l.flags.includes('BALANCE_BREAK') ? 'flag-break' : ''}>
+                      <td>{l.date}</td>
+                      <td className="desc" title={l.description}>
+                        {l.description}
+                        {l.flags.includes('BALANCE_BREAK') ? (
+                          <span className="stmt-inline-flag" title="Running balance does not follow">
+                            {' '}
+                            ⚠ bal
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
+                        <span className={`stmt-chip ${l.status}`}>{labelStatus(l)}</span>
+                      </td>
+                      <td className={`num ${l.amount < 0 ? 'neg' : 'pos'}`}>{formatRs(l.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {chunk.lines.length > 80 ? (
+                <p className="stmt-empty">Showing first 80 of {chunk.lines.length}</p>
+              ) : null}
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
 }
 
 function labelStatus(l: StatementLineView): string {
+  if (l.flags.includes('BALANCE_BREAK') && l.status === 'review') return 'Bal. check';
   if (l.status === 'reconciled') return 'Linked';
   if (l.status === 'created') return 'Added';
   if (l.status === 'skipped') return 'Skipped';

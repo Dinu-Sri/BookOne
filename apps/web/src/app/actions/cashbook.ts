@@ -54,6 +54,9 @@ async function queryDomain(
     const conditions = [
       eq(transactions.tenantId, tenantId),
       isNull(transactions.voidedAt),
+      // Hide reversed originals and reversal posts from cashbook ledger
+      isNull(transactions.reversedByTransactionId),
+      isNull(transactions.reversesTransactionId),
       gte(transactions.date, fromDate),
       lte(transactions.date, toDate),
     ];

@@ -5414,3 +5414,352 @@ textarea.input {
   box-shadow: var(--shadow-md);
   border-color: var(--line);
 }
+
+/* —— UX redesign guide: ledger, tier tiles, bottom sheet —— */
+.cashbook-menu-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line, #dde5ef);
+  border-radius: 12px;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--ink, #132238);
+}
+.cashbook-menu-btn:hover { background: #f3f8fd; }
+.cashbook-top-right { position: relative; }
+.cashbook-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid var(--line, #dde5ef);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(20,40,70,0.14);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cashbook-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 12px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 650;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+}
+.cashbook-menu-item:hover { background: #f3f8fd; }
+.cashbook-menu-item.danger { color: #c94141; }
+.cashbook-menu form { margin: 0; }
+
+.cashbook-period-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #dde5ef;
+  border-radius: 12px;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.cashbook-period-label {
+  font-size: 17px;
+  font-weight: 800;
+  min-width: 7rem;
+  text-align: center;
+}
+.cashbook-summary-3 {
+  grid-template-columns: repeat(3, 1fr) !important;
+}
+.cb-arap-line {
+  margin: -6px 0 10px;
+  font-size: 13px;
+  color: #5b6b7f;
+  font-weight: 650;
+}
+
+/* Tier 1 — big green / red */
+.cb-tier1 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.cb-primary-tile {
+  min-height: 88px;
+  border-radius: 16px;
+  border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 14px 10px;
+}
+.cb-primary-tile.in {
+  background: #e8f7ef;
+  border-color: #9ed4b5;
+  color: #0f6b45;
+}
+.cb-primary-tile.out {
+  background: #fdecec;
+  border-color: #f0b4b4;
+  color: #a82f2f;
+}
+.cb-primary-tile:active { transform: scale(0.98); }
+
+/* Tier 2 — quiet strip */
+.cb-tier2-wrap {
+  margin-bottom: 14px;
+}
+.cb-tier2-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8492a6;
+  margin-bottom: 6px;
+}
+.cb-tier2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cb-secondary-tile {
+  flex: 1 1 calc(33% - 8px);
+  min-width: 88px;
+  min-height: 52px;
+  border: 1px solid #e3eaf3;
+  background: #f8fafc;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #3d4f63;
+  cursor: pointer;
+  padding: 8px 10px;
+}
+.cb-secondary-tile:hover { background: #eef3f8; }
+
+/* Ledger */
+.cashbook-ledger {
+  font-size: 14px;
+}
+.cashbook-ledger th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.cashbook-ledger td.num,
+.cashbook-ledger th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cashbook-ledger tr.zebra td {
+  background: #f6f9fc;
+}
+.cashbook-ledger .cb-date {
+  white-space: nowrap;
+  font-size: 13px;
+}
+.cb-dir-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.cb-dir-dot.in { background: #15835f; }
+.cb-dir-dot.out { background: #c94141; }
+.cb-dir-dot.neu { background: #8492a6; }
+.cb-ledger-foot td {
+  font-weight: 800;
+  border-top: 2px solid #c7d3e2;
+  background: #f0f4f9;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.cashbook-sheet .empty {
+  font-size: 15px;
+  line-height: 1.45;
+  padding: 28px 16px !important;
+}
+
+/* Bottom sheet */
+.cb-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.cb-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(19, 34, 56, 0.45);
+  cursor: pointer;
+}
+.cb-sheet {
+  position: relative;
+  z-index: 1;
+  max-height: min(92dvh, 720px);
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 40px rgba(20, 40, 70, 0.18);
+  display: flex;
+  flex-direction: column;
+  animation: cbSheetUp 0.22s ease-out;
+}
+@keyframes cbSheetUp {
+  from { transform: translateY(24px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.cb-sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 99px;
+  background: #dde5ef;
+  margin: 10px auto 0;
+}
+.cb-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid #eef2f7;
+}
+.cb-sheet-head strong {
+  font-size: 18px;
+  font-weight: 800;
+}
+.cb-sheet-close {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #dde5ef;
+  border-radius: 12px;
+  background: #f8fafc;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.cb-sheet-body {
+  overflow: auto;
+  padding: 14px 16px calc(20px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cb-sheet-hint {
+  margin: 0;
+  font-size: 14px;
+  color: #5b6b7f;
+  line-height: 1.4;
+}
+.cb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #3a4a5c;
+}
+.cb-field input {
+  min-height: 48px;
+  border: 1px solid #dde5ef;
+  border-radius: 12px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  color: #132238;
+}
+.cb-amount-field span { font-size: 14px; }
+.cb-amount-input {
+  min-height: 56px !important;
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.cb-required { color: #c94141; font-style: normal; font-weight: 650; }
+.cb-details-toggle {
+  border: 0;
+  background: none;
+  color: #1677c9;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.cb-date-hint {
+  font-size: 13px;
+  font-weight: 650;
+  color: #5b6b7f;
+}
+.cb-sheet-save {
+  min-height: 52px !important;
+  font-size: 17px !important;
+  border-radius: 14px !important;
+  margin-top: 4px;
+}
+.cb-saved-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #e8f7ef;
+  border: 1px solid #9ed4b5;
+  color: #0f6b45;
+  font-weight: 750;
+  font-size: 15px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+@media (min-width: 720px) {
+  .cb-sheet-root {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .cb-sheet {
+    width: min(440px, 100%);
+    max-height: min(90vh, 680px);
+    border-radius: 20px;
+  }
+  .cb-sheet-handle { display: none; }
+}
+@media (max-width: 400px) {
+  .cashbook-ledger th:nth-child(3),
+  .cashbook-ledger td:nth-child(3) {
+    /* keep description but allow slightly tighter */
+    max-width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

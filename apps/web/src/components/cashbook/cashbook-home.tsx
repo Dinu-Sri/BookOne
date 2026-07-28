@@ -1,24 +1,43 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+/**
+ * Cashbook home — implements BookOne UX Redesign Guide (Downloads/bookone-ux-redesign-guide.md)
+ *
+ * P0: bottom-sheet form, no Import Excel, no silent category default, unambiguous dates
+ * P1: green/red Money In/Out, two-tier tiles, running balance ledger
+ * P2: plain-language categories, last-used defaults, chrome in ⋮ menu
+ * P3 (not built): inline spreadsheet row entry — prototype later
+ */
+
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import {
   ArrowDownLeft,
   ArrowRightLeft,
   ArrowUpRight,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   FileText,
   Landmark,
   Loader2,
-  Upload,
+  X,
 } from 'lucide-react';
 import { recordEntry } from '@/app/actions/record-entry';
 import type { CashbookRow } from '@/app/actions/cashbook';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { gloss, readSiGlossPreference, writeSiGlossPreference } from '@/lib/si-gloss';
-import { SiToggle } from '@/components/ui/si-toggle';
 import { readBookDomainPref, writeBookDomainPref, type BookDomainPref } from '@/lib/book-domain';
 import { canAccessFullErp, type EntityKind } from '@/lib/entity-kind';
+import {
+  formatAmountInput,
+  formatDisplayDate,
+  formatPeriodLabel,
+  parseAmountInput,
+  readLastCategory,
+  readLastPayMethod,
+  writeLastCategory,
+  writeLastPayMethod,
+} from '@/lib/cashbook-prefs';
 
 type Mode =
   | 'money_in'
@@ -42,6 +61,7 @@ const PERSONAL_EXPENSE_CATS: { code: string; en: string; si: string }[] = [
   { code: '6800', en: 'Other', si: 'වෙනත්' },
 ];
 
+/** Plain language — guide: rename COGS */
 const BUSINESS_EXPENSE_CATS: { code: string; en: string; si: string }[] = [
   { code: '6000', en: 'Marketing', si: 'අලෙවි' },
   { code: '6100', en: 'Rent', si: 'කුලී' },
@@ -49,7 +69,7 @@ const BUSINESS_EXPENSE_CATS: { code: string; en: string; si: string }[] = [
   { code: '6400', en: 'Travel', si: 'ගමන්' },
   { code: '6500', en: 'Supplies', si: 'සැපයුම්' },
   { code: '6600', en: 'Bank fees', si: 'බැංකු' },
-  { code: '5000', en: 'COGS / materials', si: 'පිරිවැය' },
+  { code: '5000', en: 'Goods for resale', si: 'විකුණුම් භාණ්ඩ' },
   { code: '6800', en: 'Other', si: 'වෙනත්' },
 ];
 
@@ -59,8 +79,16 @@ const PERSONAL_INCOME_CATS: { code: string; en: string; si: string }[] = [
   { code: '3000', en: 'Own money in', si: 'තමාගේ මුදල්' },
 ];
 
-function formatLkr(n: number) {
-  return `LKR ${n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** Business money-in sources (guide §4.3 deliberate decision) */
+const BUSINESS_INCOME_CATS: { code: string; en: string; si: string }[] = [
+  { code: '4000', en: 'Sales', si: 'විකුණුම්' },
+  { code: '4300', en: 'Other income', si: 'වෙනත් ආදායම' },
+  { code: '3000', en: 'Own money in', si: 'තමාගේ මුදල්' },
+];
+
+function formatRs(n: number) {
+  // Guide §5.6: Rs. is more familiar colloquially; keep formal enough with Rs.
+  return `Rs. ${n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function todayString(): string {
@@ -74,32 +102,27 @@ function payCode(m: PayMethod): string {
 function shiftPeriod(period: string, delta: number): string {
   const [y, m] = period.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
-  const yy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${yy}-${mm}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function sheetInAmount(r: CashbookRow): string {
-  if (r.direction === 'money_in') return r.amount.toFixed(2);
-  if (r.direction === 'invoice_bill' && r.accountingType === 'SaleCredit') {
-    return r.amount.toFixed(2);
-  }
-  return '';
+function rowSignedDelta(r: CashbookRow): number {
+  if (r.direction === 'money_in') return r.amount;
+  if (r.direction === 'money_out') return -r.amount;
+  if (r.direction === 'invoice_bill' && r.accountingType === 'SaleCredit') return r.amount;
+  if (r.direction === 'invoice_bill' && r.accountingType === 'PurchaseCredit') return -r.amount;
+  return 0;
 }
 
-function sheetOutAmount(r: CashbookRow): string {
-  if (r.direction === 'money_out') return r.amount.toFixed(2);
-  if (r.direction === 'invoice_bill' && r.accountingType === 'PurchaseCredit') {
-    return r.amount.toFixed(2);
-  }
-  return '';
+function sheetInAmount(r: CashbookRow): number | null {
+  if (r.direction === 'money_in') return r.amount;
+  if (r.direction === 'invoice_bill' && r.accountingType === 'SaleCredit') return r.amount;
+  return null;
 }
 
-function rowKindLabel(r: CashbookRow): string {
-  if (r.direction === 'invoice_bill' && r.accountingType === 'SaleCredit') return 'Invoice';
-  if (r.direction === 'invoice_bill' && r.accountingType === 'PurchaseCredit') return 'Bill';
-  if (r.direction === 'move_money') return 'Move';
-  return '';
+function sheetOutAmount(r: CashbookRow): number | null {
+  if (r.direction === 'money_out') return r.amount;
+  if (r.direction === 'invoice_bill' && r.accountingType === 'PurchaseCredit') return r.amount;
+  return null;
 }
 
 export function CashbookHomeClient({
@@ -141,16 +164,19 @@ export function CashbookHomeClient({
   const [mode, setMode] = useState<Mode>(null);
   const [loanKind, setLoanKind] = useState<LoanKind>('loan_took');
   const [party, setParty] = useState('');
-  const [amount, setAmount] = useState('');
+  const [amountDisplay, setAmountDisplay] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(todayString());
   const [dueDate, setDueDate] = useState('');
   const [payMethod, setPayMethod] = useState<PayMethod>('Cash');
   const [fromPay, setFromPay] = useState<PayMethod>('Cash');
   const [toPay, setToPay] = useState<PayMethod>('Bank');
-  const [categoryCode, setCategoryCode] = useState('6800');
-  const [incomeCode, setIncomeCode] = useState('4300');
+  /** Empty string = must choose (guide: no silent Marketing/Other default) */
+  const [categoryCode, setCategoryCode] = useState('');
+  const [incomeCode, setIncomeCode] = useState('');
+  const [showDetails, setShowDetails] = useState(false);
   const [error, setError] = useState('');
+  const [savedFlash, setSavedFlash] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const title = useMemo(() => {
@@ -162,26 +188,40 @@ export function CashbookHomeClient({
     return `${tenantName} · ${gloss('personal', si)}`;
   }, [entityKind, domain, tenantName, si]);
 
-  /** Phase 4 tile sets: personal vs business domains differ. */
-  const tiles = useMemo(() => {
+  /** Tier 2 only — Invoice/Bill on business; Loan on personal (guide §5.1) */
+  const tier2 = useMemo(() => {
     if (sole && domain === 'business') {
       return [
-        { id: 'money_in' as const, icon: ArrowDownLeft, key: 'money_in' },
-        { id: 'money_out' as const, icon: ArrowUpRight, key: 'money_out' },
         { id: 'invoice' as const, icon: FileText, key: 'invoice' },
         { id: 'bill' as const, icon: FileText, key: 'bill' },
         { id: 'move_money' as const, icon: ArrowRightLeft, key: 'move_money' },
       ];
     }
     return [
-      { id: 'money_in' as const, icon: ArrowDownLeft, key: 'money_in' },
-      { id: 'money_out' as const, icon: ArrowUpRight, key: 'money_out' },
       { id: 'move_money' as const, icon: ArrowRightLeft, key: 'move_money' },
       { id: 'loan' as const, icon: Landmark, key: 'loan' },
     ];
   }, [sole, domain]);
 
   const expenseCats = domain === 'business' ? BUSINESS_EXPENSE_CATS : PERSONAL_EXPENSE_CATS;
+  const incomeCats = domain === 'business' ? BUSINESS_INCOME_CATS : PERSONAL_INCOME_CATS;
+
+  /** Running balance: list is newest-first; balances run oldest→newest then reverse for display */
+  const rowsWithBalance = useMemo(() => {
+    const chronological = [...rows].reverse();
+    let bal = 0;
+    const withBal = chronological.map((r) => {
+      bal += rowSignedDelta(r);
+      return { ...r, balance: bal };
+    });
+    return withBal.reverse();
+  }, [rows]);
+
+  useEffect(() => {
+    if (!savedFlash) return;
+    const t = setTimeout(() => setSavedFlash(false), 2200);
+    return () => clearTimeout(t);
+  }, [savedFlash]);
 
   function navigate(nextDomain: BookDomainPref, nextPeriod: string) {
     const q = new URLSearchParams();
@@ -206,34 +246,59 @@ export function CashbookHomeClient({
     setMode(m);
     setError('');
     setParty('');
-    setAmount('');
+    setAmountDisplay('');
     setDescription('');
     setDate(todayString());
     setDueDate('');
     setLoanKind('loan_took');
-    setCategoryCode(domain === 'business' ? '6000' : '6800');
-    setIncomeCode(domain === 'business' ? '4000' : '4300');
+    setShowDetails(false);
+    // Smart last-used category (or force explicit choice if none)
+    if (m === 'money_out' || m === 'bill') {
+      const last = readLastCategory(domain, m);
+      const valid = expenseCats.some((c) => c.code === last);
+      setCategoryCode(valid && last ? last : '');
+    } else {
+      setCategoryCode('');
+    }
+    if (m === 'money_in') {
+      const last = readLastCategory(domain, 'money_in');
+      const valid = incomeCats.some((c) => c.code === last);
+      setIncomeCode(valid && last ? last : '');
+    } else {
+      setIncomeCode('');
+    }
+    const lastPay = readLastPayMethod();
+    setPayMethod(lastPay || 'Cash');
     setFromPay('Cash');
     setToPay('Bank');
-    setPayMethod('Cash');
+  }
+
+  function closeSheet() {
+    setMode(null);
+    setError('');
   }
 
   function submit() {
-    const amt = Number(amount);
+    const amt = parseAmountInput(amountDisplay);
     if (!Number.isFinite(amt) || amt <= 0) {
-      setError('Enter a valid amount.');
+      setError(si ? 'වලංගු මුදලක් ඇතුළත් කරන්න.' : 'Enter a valid amount.');
       return;
     }
-    if (mode !== 'move_money' && !party.trim()) {
-      setError('Please fill who / customer / vendor.');
+    // Quick path: amount required; who optional for pure cash expense with description
+    if (mode !== 'move_money' && !party.trim() && !description.trim()) {
+      setError(si ? 'කවුද / විස්තරය එකක්වත් දෙන්න.' : 'Add who or a short description.');
       return;
     }
-    if (mode !== 'move_money' && !description.trim()) {
-      setError('Please add a short description.');
+    if ((mode === 'money_out' || mode === 'bill') && !categoryCode) {
+      setError(si ? 'ප්‍රවර්ගයක් තෝරන්න.' : 'Choose a category.');
+      return;
+    }
+    if (mode === 'money_in' && !incomeCode) {
+      setError(si ? 'ආදායම් වර්ගය තෝරන්න.' : 'Choose where this money came from.');
       return;
     }
     if (mode === 'move_money' && fromPay === toPay) {
-      setError('From and To accounts must be different.');
+      setError(si ? 'සිට සහ දක්වා වෙනස් විය යුතුය.' : 'From and To must be different.');
       return;
     }
 
@@ -242,20 +307,28 @@ export function CashbookHomeClient({
       const paymentAccount = { kind: 'code' as const, value: payCode(payMethod) };
       const baseDate = date || todayString();
       const bookDomain = domain;
+      const desc =
+        description.trim() ||
+        (mode === 'loan'
+          ? gloss(loanKind, false)
+          : mode === 'money_out' || mode === 'bill'
+            ? expenseCats.find((c) => c.code === categoryCode)?.en || 'Expense'
+            : mode === 'money_in'
+              ? incomeCats.find((c) => c.code === incomeCode)?.en || 'Income'
+              : 'Entry');
 
       let result;
       let sheetDirection = mode || 'money_out';
       let accountingType: string | null = null;
 
       if (mode === 'invoice') {
-        // Lite customer invoice → AR (SaleCredit), book_domain=business
         sheetDirection = 'invoice_bill';
         accountingType = 'SaleCredit';
         result = await recordEntry({
           direction: 'invoice_bill',
           invoiceType: 'customer_invoice',
-          party: party.trim(),
-          description: description.trim(),
+          party: party.trim() || 'Customer',
+          description: desc,
           amount: amt,
           currency: 'LKR',
           paymentMethod: 'Credit',
@@ -270,8 +343,8 @@ export function CashbookHomeClient({
         result = await recordEntry({
           direction: 'invoice_bill',
           invoiceType: 'vendor_bill',
-          party: party.trim(),
-          description: description.trim(),
+          party: party.trim() || 'Vendor',
+          description: desc,
           amount: amt,
           currency: 'LKR',
           paymentMethod: 'Credit',
@@ -287,8 +360,8 @@ export function CashbookHomeClient({
           result = await recordEntry({
             direction: 'money_in',
             moneyInType: 'loan_received',
-            party: party.trim(),
-            description: description.trim() || 'Took a loan',
+            party: party.trim() || 'Lender',
+            description: desc,
             amount: amt,
             currency: 'LKR',
             paymentMethod: payMethod,
@@ -300,8 +373,8 @@ export function CashbookHomeClient({
           sheetDirection = 'money_out';
           result = await recordEntry({
             direction: 'money_out',
-            party: party.trim(),
-            description: description.trim() || 'Paid loan',
+            party: party.trim() || 'Lender',
+            description: desc,
             amount: amt,
             currency: 'LKR',
             paymentMethod: payMethod,
@@ -313,12 +386,12 @@ export function CashbookHomeClient({
         }
       } else if (mode === 'money_in') {
         sheetDirection = 'money_in';
-        if (domain === 'personal' && incomeCode === '3000') {
+        if (incomeCode === '3000') {
           result = await recordEntry({
             direction: 'money_in',
             moneyInType: 'owner_contribution',
-            party: party.trim(),
-            description: description.trim(),
+            party: party.trim() || 'Owner',
+            description: desc,
             amount: amt,
             currency: 'LKR',
             paymentMethod: payMethod,
@@ -330,28 +403,23 @@ export function CashbookHomeClient({
           result = await recordEntry({
             direction: 'money_in',
             moneyInType: 'new_sale',
-            party: party.trim(),
-            description: description.trim(),
+            party: party.trim() || 'Customer',
+            description: desc,
             amount: amt,
             currency: 'LKR',
             paymentMethod: payMethod,
             paymentAccount,
             date: baseDate,
             bookDomain,
-            categoryOverride:
-              domain === 'personal'
-                ? incomeCode
-                : domain === 'business'
-                  ? '4000'
-                  : undefined,
+            categoryOverride: incomeCode,
           });
         }
       } else if (mode === 'money_out') {
         sheetDirection = 'money_out';
         result = await recordEntry({
           direction: 'money_out',
-          party: party.trim(),
-          description: description.trim(),
+          party: party.trim() || 'Payee',
+          description: desc,
           amount: amt,
           currency: 'LKR',
           paymentMethod: payMethod,
@@ -365,7 +433,7 @@ export function CashbookHomeClient({
         result = await recordEntry({
           direction: 'move_money',
           party: party.trim() || 'Transfer',
-          description: description.trim() || `${fromPay} → ${toPay}`,
+          description: desc || `${fromPay} → ${toPay}`,
           amount: amt,
           currency: 'LKR',
           paymentMethod: toPay,
@@ -384,13 +452,18 @@ export function CashbookHomeClient({
         return;
       }
 
+      // Persist smart defaults
+      if (mode === 'money_out' || mode === 'bill') {
+        writeLastCategory(domain, mode, categoryCode);
+      }
+      if (mode === 'money_in') writeLastCategory(domain, 'money_in', incomeCode);
+      if (mode !== 'invoice' && mode !== 'bill') writeLastPayMethod(payMethod);
+
       const row: CashbookRow = {
         id: result.transactionId || String(Date.now()),
         date: baseDate,
-        party: party.trim() || 'Transfer',
-        description:
-          description.trim() ||
-          (mode === 'loan' ? gloss(loanKind, si) : mode === 'invoice' || mode === 'bill' ? gloss(mode, si) : ''),
+        party: party.trim() || '—',
+        description: desc,
         direction: sheetDirection,
         amount: amt,
         currency: 'LKR',
@@ -407,16 +480,23 @@ export function CashbookHomeClient({
         setSumNet((v) => v - amt);
         if (accountingType === 'PurchaseCredit') setAp((v) => v + amt);
       }
+      // Peak-end: auto-dismiss + success flash
       setMode(null);
+      setSavedFlash(true);
     });
   }
 
   const formTitle =
-    mode === 'loan'
-      ? gloss(loanKind, si)
-      : mode
-        ? gloss(mode, si)
-        : '';
+    mode === 'loan' ? gloss(loanKind, si) : mode ? gloss(mode, si) : '';
+
+  const emptyHint =
+    domain === 'business'
+      ? si
+        ? 'ආදායම හෝ වියදම තට්ටුව තට්ටු කරන්න.'
+        : 'Tap Money In or Money Out to record your first entry.'
+      : si
+        ? 'වියදම තට්ටුව තට්ටු කර පළමු ඇතුළත් කිරීම සුරකින්න.'
+        : 'Tap Money Out to record your first entry.';
 
   return (
     <CashbookShell
@@ -424,8 +504,15 @@ export function CashbookHomeClient({
       active="home"
       si={si}
       showFullErpLink={fullErp}
-      right={<SiToggle on={si} onChange={(n) => { setSi(n); writeSiGlossPreference(n); }} />}
+      onSiChange={setSi}
     >
+      {savedFlash ? (
+        <div className="cb-saved-toast" role="status">
+          <CheckCircle2 size={18} />
+          <span>{si ? 'සුරකින ලදී' : 'Saved'}</span>
+        </div>
+      ) : null}
+
       {sole ? (
         <div className="cashbook-domain">
           <button
@@ -433,196 +520,264 @@ export function CashbookHomeClient({
             className={`cashbook-tile domain ${domain === 'personal' ? 'active' : ''}`}
             onClick={() => switchDomain('personal')}
           >
-            {gloss('personal', si)}
+            <span className={si ? 'si-text' : undefined}>{gloss('personal', si)}</span>
           </button>
           <button
             type="button"
             className={`cashbook-tile domain ${domain === 'business' ? 'active' : ''}`}
             onClick={() => switchDomain('business')}
           >
-            {gloss('business', si)}
+            <span className={si ? 'si-text' : undefined}>{gloss('business', si)}</span>
           </button>
         </div>
       ) : null}
 
       <div className="cashbook-period-nav">
-        <button type="button" className="cashbook-si-toggle" onClick={() => changePeriod(-1)} aria-label="Previous month">
-          <ChevronLeft size={16} />
+        <button
+          type="button"
+          className="cashbook-period-btn"
+          onClick={() => changePeriod(-1)}
+          aria-label="Previous month"
+        >
+          <ChevronLeft size={20} />
         </button>
-        <span>{period}</span>
-        <button type="button" className="cashbook-si-toggle" onClick={() => changePeriod(1)} aria-label="Next month">
-          <ChevronRight size={16} />
+        <span className="cashbook-period-label">{formatPeriodLabel(period)}</span>
+        <button
+          type="button"
+          className="cashbook-period-btn"
+          onClick={() => changePeriod(1)}
+          aria-label="Next month"
+        >
+          <ChevronRight size={20} />
         </button>
       </div>
 
-      <div className="cashbook-summary">
+      {/* Summary — no duplicate month (guide §5.5) */}
+      <div className="cashbook-summary cashbook-summary-3">
         <div>
           <span>{gloss('money_in', si)}</span>
-          <strong className="in">{formatLkr(sumIn)}</strong>
+          <strong className="in">{formatRs(sumIn)}</strong>
         </div>
         <div>
           <span>{gloss('money_out', si)}</span>
-          <strong className="out">{formatLkr(sumOut)}</strong>
+          <strong className="out">{formatRs(sumOut)}</strong>
         </div>
         <div>
-          <span>Net</span>
-          <strong>{formatLkr(sumNet)}</strong>
+          <span>{gloss('net', si)}</span>
+          <strong className={sumNet >= 0 ? 'in' : 'out'}>{formatRs(sumNet)}</strong>
         </div>
-        {sole && domain === 'business' && (ar > 0 || ap > 0) ? (
-          <div className="muted">
-            AR {formatLkr(ar)} · AP {formatLkr(ap)}
-          </div>
-        ) : (
-          <div className="muted">{period}</div>
-        )}
       </div>
+      {sole && domain === 'business' && (ar > 0 || ap > 0) ? (
+        <p className="cb-arap-line">
+          AR {formatRs(ar)} · AP {formatRs(ap)}
+        </p>
+      ) : null}
 
-      <div className="cashbook-tiles">
-        {tiles.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`cashbook-tile action ${mode === t.id ? 'active' : ''} ${
-              t.id === 'money_in' || t.id === 'invoice' ? 'in' : t.id === 'money_out' || t.id === 'bill' ? 'out' : ''
-            }`}
-            onClick={() => openMode(t.id)}
-          >
-            <t.icon size={22} />
-            <span>{gloss(t.key, si)}</span>
-          </button>
-        ))}
-        <button type="button" className="cashbook-tile action muted" disabled title="Coming soon">
-          <Upload size={22} />
-          <span>{gloss('import_excel', si)}</span>
+      {/* Tier 1 — Money In / Money Out (guide §5.1) */}
+      <div className="cb-tier1">
+        <button type="button" className="cb-primary-tile in" onClick={() => openMode('money_in')}>
+          <ArrowDownLeft size={28} strokeWidth={2.25} />
+          <span className={si ? 'si-text' : undefined}>{gloss('money_in', si)}</span>
+        </button>
+        <button type="button" className="cb-primary-tile out" onClick={() => openMode('money_out')}>
+          <ArrowUpRight size={28} strokeWidth={2.25} />
+          <span className={si ? 'si-text' : undefined}>{gloss('money_out', si)}</span>
         </button>
       </div>
 
-      {mode ? (
-        <div className="cashbook-entry-card">
-          <div className="cashbook-entry-head">
-            <strong>{formTitle}</strong>
-            <button type="button" className="linkish" onClick={() => setMode(null)}>
-              Close
+      {/* Tier 2 — more actions (neutral, smaller) — no Import Excel */}
+      <div className="cb-tier2-wrap">
+        <span className="cb-tier2-label">{si ? 'තවත්' : 'More actions'}</span>
+        <div className="cb-tier2">
+          {tier2.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className="cb-secondary-tile"
+              onClick={() => openMode(t.id)}
+            >
+              <t.icon size={18} />
+              <span className={si ? 'si-text' : undefined}>{gloss(t.key, si)}</span>
             </button>
-          </div>
+          ))}
+        </div>
+      </div>
 
-          {mode === 'invoice' || mode === 'bill' ? (
-            <p className="onboard-lead" style={{ margin: 0, fontSize: 13 }}>
-              {mode === 'invoice'
-                ? 'Customer invoice on credit (Accounts Receivable). Collect cash later with Money In.'
-                : 'Vendor bill on credit (Accounts Payable). Pay later with Money Out.'}
-            </p>
+      {/* Ledger table (guide §5.3) */}
+      <div className="cashbook-sheet-wrap">
+        <table className="cashbook-sheet cashbook-ledger">
+          <thead>
+            <tr>
+              <th>{gloss('date', si)}</th>
+              <th>{si ? 'කවුද' : 'Who'}</th>
+              <th>{gloss('description', si)}</th>
+              <th className="num">{si ? 'ආදායම' : 'In'}</th>
+              <th className="num">{si ? 'වියදම' : 'Out'}</th>
+              <th className="num">{si ? 'ශේෂය' : 'Bal.'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rowsWithBalance.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="empty">
+                  {emptyHint}
+                </td>
+              </tr>
+            ) : (
+              rowsWithBalance.map((r, i) => {
+                const inn = sheetInAmount(r);
+                const out = sheetOutAmount(r);
+                return (
+                  <tr key={r.id} className={i % 2 === 1 ? 'zebra' : undefined}>
+                    <td className="cb-date">{formatDisplayDate(r.date)}</td>
+                    <td>
+                      <span className={`cb-dir-dot ${inn != null ? 'in' : out != null ? 'out' : 'neu'}`} />
+                      {r.party}
+                    </td>
+                    <td>{r.description}</td>
+                    <td className="num in">{inn != null ? inn.toFixed(2) : ''}</td>
+                    <td className="num out">{out != null ? out.toFixed(2) : ''}</td>
+                    <td className={`num bal ${r.balance >= 0 ? 'in' : 'out'}`}>
+                      {r.balance.toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+          {rowsWithBalance.length > 0 ? (
+            <tfoot>
+              <tr className="cb-ledger-foot">
+                <td colSpan={3}>{si ? 'මුළු' : 'Totals'}</td>
+                <td className="num in">{sumIn.toFixed(2)}</td>
+                <td className="num out">{sumOut.toFixed(2)}</td>
+                <td className={`num bal ${sumNet >= 0 ? 'in' : 'out'}`}>{sumNet.toFixed(2)}</td>
+              </tr>
+            </tfoot>
           ) : null}
+        </table>
+      </div>
 
-          {mode === 'loan' ? (
-            <div className="cashbook-pay-tiles" style={{ marginBottom: 8 }}>
-              {(['loan_took', 'loan_paid'] as const).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`cashbook-tile pay ${loanKind === k ? 'active' : ''}`}
-                  onClick={() => setLoanKind(k)}
-                >
-                  {gloss(k, si)}
-                </button>
-              ))}
+      {/* Bottom sheet overlay (guide §5.2) — does not grow page */}
+      {mode ? (
+        <div className="cb-sheet-root" role="dialog" aria-modal="true" aria-label={formTitle}>
+          <button type="button" className="cb-sheet-backdrop" aria-label="Close" onClick={closeSheet} />
+          <div className="cb-sheet">
+            <div className="cb-sheet-handle" aria-hidden />
+            <div className="cb-sheet-head">
+              <strong className={si ? 'si-text' : undefined}>{formTitle}</strong>
+              <button type="button" className="cb-sheet-close" onClick={closeSheet} aria-label="Close">
+                <X size={22} />
+              </button>
             </div>
-          ) : null}
 
-          {mode === 'move_money' ? (
-            <>
-              <label>
-                From
-                <div className="cashbook-pay-tiles">
-                  {(['Cash', 'Bank'] as const).map((m) => (
+            <div className="cb-sheet-body">
+              {mode === 'invoice' || mode === 'bill' ? (
+                <p className="cb-sheet-hint">
+                  {mode === 'invoice'
+                    ? si
+                      ? 'ණයට ඉන්වොයිස් — පසුව මුදල් එකතු කරන්න.'
+                      : 'Credit invoice — collect cash later with Money In.'
+                    : si
+                      ? 'ණයට බිල් — පසුව ගෙවන්න.'
+                      : 'Credit bill — pay later with Money Out.'}
+                </p>
+              ) : null}
+
+              {mode === 'loan' ? (
+                <div className="cashbook-pay-tiles wrap">
+                  {(['loan_took', 'loan_paid'] as const).map((k) => (
                     <button
-                      key={m}
+                      key={k}
                       type="button"
-                      className={`cashbook-tile pay ${fromPay === m ? 'active' : ''}`}
-                      onClick={() => setFromPay(m)}
+                      className={`cashbook-tile pay ${loanKind === k ? 'active' : ''}`}
+                      onClick={() => setLoanKind(k)}
                     >
-                      {gloss(m.toLowerCase(), si)}
+                      {gloss(k, si)}
                     </button>
                   ))}
                 </div>
-              </label>
-              <label>
-                To
-                <div className="cashbook-pay-tiles">
-                  {(['Cash', 'Bank'] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      className={`cashbook-tile pay ${toPay === m ? 'active' : ''}`}
-                      onClick={() => setToPay(m)}
-                    >
-                      {gloss(m.toLowerCase(), si)}
-                    </button>
-                  ))}
-                </div>
-              </label>
-              <label>
-                {gloss('amount', si)}
+              ) : null}
+
+              {mode === 'move_money' ? (
+                <>
+                  <label className="cb-field">
+                    <span>{si ? 'සිට' : 'From'}</span>
+                    <div className="cashbook-pay-tiles">
+                      {(['Cash', 'Bank'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={`cashbook-tile pay ${fromPay === m ? 'active' : ''}`}
+                          onClick={() => setFromPay(m)}
+                        >
+                          {gloss(m.toLowerCase(), si)}
+                        </button>
+                      ))}
+                    </div>
+                  </label>
+                  <label className="cb-field">
+                    <span>{si ? 'දක්වා' : 'To'}</span>
+                    <div className="cashbook-pay-tiles">
+                      {(['Cash', 'Bank'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={`cashbook-tile pay ${toPay === m ? 'active' : ''}`}
+                          onClick={() => setToPay(m)}
+                        >
+                          {gloss(m.toLowerCase(), si)}
+                        </button>
+                      ))}
+                    </div>
+                  </label>
+                </>
+              ) : (
+                <label className="cb-field">
+                  <span>
+                    {mode === 'invoice'
+                      ? si
+                        ? 'පාරිභෝගික'
+                        : 'Customer'
+                      : mode === 'bill'
+                        ? si
+                          ? 'සැපයුම්කරු'
+                          : 'Vendor'
+                        : mode === 'money_in' || (mode === 'loan' && loanKind === 'loan_took')
+                          ? gloss('from_whom', si)
+                          : gloss('paid_to', si)}
+                  </span>
+                  <input
+                    value={party}
+                    onChange={(e) => setParty(e.target.value)}
+                    autoComplete="off"
+                    placeholder={si ? 'නම' : 'Name'}
+                  />
+                </label>
+              )}
+
+              {/* Amount — largest field (guide §7) */}
+              <label className="cb-field cb-amount-field">
+                <span>{gloss('amount', si)}</span>
                 <input
                   inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  className="cb-amount-input"
+                  value={amountDisplay}
+                  onChange={(e) => setAmountDisplay(formatAmountInput(e.target.value))}
                   placeholder="0.00"
                   autoFocus
                 />
               </label>
-              <label>
-                {gloss('date', si)}
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </label>
-              <label>
-                Note (optional)
-                <input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. ATM withdrawal"
-                />
-              </label>
-            </>
-          ) : (
-            <>
-              <label>
-                {mode === 'invoice'
-                  ? 'Customer'
-                  : mode === 'bill'
-                    ? 'Vendor'
-                    : mode === 'money_in' || (mode === 'loan' && loanKind === 'loan_took')
-                      ? gloss('from_whom', si)
-                      : gloss('paid_to', si)}
-                <input value={party} onChange={(e) => setParty(e.target.value)} autoFocus />
-              </label>
-              <label>
-                {gloss('amount', si)}
-                <input
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                />
-              </label>
-              <label>
-                {gloss('description', si)}
-                <input value={description} onChange={(e) => setDescription(e.target.value)} />
-              </label>
-              <label>
-                {gloss('date', si)}
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </label>
-              {mode === 'invoice' || mode === 'bill' ? (
-                <label>
-                  Due date (optional)
-                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                </label>
-              ) : null}
 
+              {/* Categories — explicit choice, last-used preselect if any */}
               {(mode === 'money_out' || mode === 'bill') && (
-                <div>
-                  <span className="cashbook-field-label">Category</span>
+                <div className="cb-field">
+                  <span className="cashbook-field-label">
+                    {si ? 'ප්‍රවර්ගය' : 'Category'}
+                    {!categoryCode ? (
+                      <em className="cb-required"> {si ? '(අවශ්‍ය)' : '(required)'}</em>
+                    ) : null}
+                  </span>
                   <div className="cashbook-pay-tiles wrap">
                     {expenseCats.map((c) => (
                       <button
@@ -631,34 +786,37 @@ export function CashbookHomeClient({
                         className={`cashbook-tile pay ${categoryCode === c.code ? 'active' : ''}`}
                         onClick={() => setCategoryCode(c.code)}
                       >
-                        {c.en}
-                        {si ? <small> ({c.si})</small> : null}
+                        {si ? c.si : c.en}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {mode === 'money_in' && domain === 'personal' ? (
-                <div>
-                  <span className="cashbook-field-label">Type</span>
+              {mode === 'money_in' && (
+                <div className="cb-field">
+                  <span className="cashbook-field-label">
+                    {si ? 'මුදල් ආවේ කොහෙන්ද' : 'Where from'}
+                    {!incomeCode ? (
+                      <em className="cb-required"> {si ? '(අවශ්‍ය)' : '(required)'}</em>
+                    ) : null}
+                  </span>
                   <div className="cashbook-pay-tiles wrap">
-                    {PERSONAL_INCOME_CATS.map((c) => (
+                    {incomeCats.map((c) => (
                       <button
                         key={c.code}
                         type="button"
                         className={`cashbook-tile pay ${incomeCode === c.code ? 'active' : ''}`}
                         onClick={() => setIncomeCode(c.code)}
                       >
-                        {c.en}
-                        {si ? <small> ({c.si})</small> : null}
+                        {si ? c.si : c.en}
                       </button>
                     ))}
                   </div>
                 </div>
-              ) : null}
+              )}
 
-              {mode !== 'invoice' && mode !== 'bill' ? (
+              {mode !== 'invoice' && mode !== 'bill' && mode !== 'move_money' ? (
                 <div className="cashbook-pay-tiles">
                   {(['Cash', 'Bank'] as const).map((m) => (
                     <button
@@ -672,57 +830,67 @@ export function CashbookHomeClient({
                   ))}
                 </div>
               ) : null}
-            </>
-          )}
 
-          {error ? <p className="cashbook-error">{error}</p> : null}
-          <button type="button" className="cashbook-save" disabled={pending} onClick={submit}>
-            {pending ? <Loader2 className="spin" size={18} /> : null}
-            {gloss('save', si)}
-          </button>
+              {/* Details toggle — less common fields (guide §5.4) */}
+              <button
+                type="button"
+                className="cb-details-toggle"
+                onClick={() => setShowDetails((v) => !v)}
+              >
+                {showDetails
+                  ? si
+                    ? '▲ අඩු විස්තර'
+                    : '▲ Fewer details'
+                  : si
+                    ? '▼ වැඩි විස්තර (දිනය, විස්තරය)'
+                    : '▼ More details (date, note)'}
+              </button>
+
+              {showDetails || mode === 'invoice' || mode === 'bill' || mode === 'move_money' ? (
+                <>
+                  {mode !== 'move_money' ? (
+                    <label className="cb-field">
+                      <span>{gloss('description', si)}</span>
+                      <input
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder={si ? 'කෙටි සටහන' : 'Short note'}
+                      />
+                    </label>
+                  ) : (
+                    <label className="cb-field">
+                      <span>{si ? 'සටහන' : 'Note'}</span>
+                      <input
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder={si ? 'උදා: ATM' : 'e.g. ATM'}
+                      />
+                    </label>
+                  )}
+                  <label className="cb-field">
+                    <span>{gloss('date', si)}</span>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                    <small className="cb-date-hint">{formatDisplayDate(date)}</small>
+                  </label>
+                  {mode === 'invoice' || mode === 'bill' ? (
+                    <label className="cb-field">
+                      <span>{si ? 'ගෙවිය යුතු දිනය' : 'Due date (optional)'}</span>
+                      <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                    </label>
+                  ) : null}
+                </>
+              ) : null}
+
+              {error ? <p className="cashbook-error">{error}</p> : null}
+
+              <button type="button" className="cashbook-save cb-sheet-save" disabled={pending} onClick={submit}>
+                {pending ? <Loader2 className="spin" size={20} /> : null}
+                <span className={si ? 'si-text' : undefined}>{gloss('save', si)}</span>
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
-
-      <div className="cashbook-sheet-wrap">
-        <table className="cashbook-sheet">
-          <thead>
-            <tr>
-              <th>{gloss('date', si)}</th>
-              <th>Who</th>
-              <th>{gloss('description', si)}</th>
-              <th>Type</th>
-              <th className="num">In</th>
-              <th className="num">Out</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="empty">
-                  {domain === 'business'
-                    ? 'Tap Money In, Invoice, or Money Out for your first business entry.'
-                    : (
-                      <>
-                        Tap <strong>{gloss('money_out', si)}</strong> to record your first entry.
-                      </>
-                    )}
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.date}</td>
-                  <td>{r.party}</td>
-                  <td>{r.description}</td>
-                  <td className="muted">{rowKindLabel(r)}</td>
-                  <td className="num in">{sheetInAmount(r)}</td>
-                  <td className="num out">{sheetOutAmount(r)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
     </CashbookShell>
   );
 }

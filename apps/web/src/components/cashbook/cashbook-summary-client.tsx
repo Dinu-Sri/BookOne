@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { CashbookExportButton } from '@/components/cashbook/cashbook-export-button';
 import { Badge } from '@/components/ui/bookone-ui';
-import { SiToggle } from '@/components/ui/si-toggle';
 import { gloss, readSiGlossPreference, writeSiGlossPreference } from '@/lib/si-gloss';
 import type { BookDomain } from '@/lib/entity-kind';
 
@@ -98,15 +97,10 @@ export function CashbookSummaryClient({
       title={`${tenantName} · ${gloss('summary', si)}`}
       active="summary"
       si={si}
-      right={
-        <SiToggle
-          on={si}
-          onChange={(n) => {
-            setSi(n);
-            writeSiGlossPreference(n);
-          }}
-        />
-      }
+      onSiChange={(n) => {
+        setSi(n);
+        writeSiGlossPreference(n);
+      }}
     >
       <div className="cb-summary-page">
         <header className="cb-summary-head">

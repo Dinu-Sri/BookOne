@@ -177,15 +177,10 @@ export function CashbookSettingsClient({
       active="settings"
       si={si}
       showFullErpLink={showFullErpLink}
-      right={
-        <SiToggle
-          on={si}
-          onChange={(n) => {
-            setSi(n);
-            writeSiGlossPreference(n);
-          }}
-        />
-      }
+      onSiChange={(n) => {
+        setSi(n);
+        writeSiGlossPreference(n);
+      }}
     >
       <div className="cb-settings">
         {/* Profile */}

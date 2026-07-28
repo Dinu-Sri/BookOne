@@ -319,6 +319,25 @@ describe('inferTransaction + generateJournal', () => {
     assertBalanced(journal.lines);
   });
 
+  it('resolves tenant-created bank codes 1101+', () => {
+    const entry: SimpleEntry = {
+      tenantId: tenant,
+      userId: user,
+      direction: 'money_out',
+      party: 'Shop',
+      description: 'Groceries',
+      amount: 1500,
+      paymentMethod: 'Bank',
+      paymentAccount: { kind: 'code', value: '1101' },
+      date: '2026-06-15',
+      categoryOverride: '6800',
+    };
+    const { transaction, journal } = inferTransaction(entry);
+    expect(transaction.paymentAccount.code).toBe('1101');
+    expectLine(journal.lines, '1101', 'credit', 1500);
+    assertBalanced(journal.lines);
+  });
+
   it('Move Money: throws when source equals destination', () => {
     const entry: SimpleEntry = {
       tenantId: tenant,

@@ -1,6 +1,6 @@
 # Smart Bank Statement Import — Architecture & Risk Design
 
-> **Status:** Deep plan (canonical) — **SI-1…SI-4 implemented** (batch multi-file, learned profiles, multi-month + balance flags)  
+> **Status:** Deep plan (canonical) — **SI-1…SI-4 + manual mapping** (user-confirmed columns; Sampath DR/CR + HNB Debit/Credit fixtures)  
 > **Last updated:** 2026-07-28  
 > **Surfaces:** Cashbook **Import bank** + ERP **`/reconciliation`**  
 > **Primary audience:** Personal, sole prop (lite/full), small multi-bank owners  

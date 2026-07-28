@@ -5742,17 +5742,109 @@ textarea.input {
   margin-bottom: 10px;
 }
 @media (min-width: 720px) {
+  /* Desktop: centered dialog, fit common entry forms without scroll when possible */
   .cb-sheet-root {
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 20px;
   }
   .cb-sheet {
-    width: min(440px, 100%);
-    max-height: min(90vh, 680px);
-    border-radius: 20px;
+    width: min(520px, 100%);
+    max-height: min(92vh, 760px);
+    border-radius: 18px;
   }
   .cb-sheet-handle { display: none; }
+  .cb-sheet-head {
+    padding: 12px 18px 10px;
+  }
+  .cb-sheet-body {
+    padding: 12px 18px 16px;
+    gap: 10px;
+    overflow: auto;
+    /* Prefer content height; only scroll if viewport is short */
+    max-height: min(calc(92vh - 72px), 680px);
+  }
+  .cb-sheet-body .cb-field input,
+  .cb-sheet-body .cb-field select {
+    min-height: 42px;
+    font-size: 15px;
+  }
+  .cb-amount-input {
+    min-height: 48px !important;
+    font-size: 24px !important;
+  }
+  /* Two-column density for short fields on desktop */
+  .cb-sheet-body.cb-sheet-dense {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    align-content: start;
+  }
+  .cb-sheet-body.cb-sheet-dense > .cb-sheet-hint,
+  .cb-sheet-body.cb-sheet-dense > .form-error,
+  .cb-sheet-body.cb-sheet-dense > .cb-details-toggle,
+  .cb-sheet-body.cb-sheet-dense > .cb-sheet-save,
+  .cb-sheet-body.cb-sheet-dense > .cb-liquid-tiles,
+  .cb-sheet-body.cb-sheet-dense > .cashbook-pay-tiles,
+  .cb-sheet-body.cb-sheet-dense > .cb-cat-grid,
+  .cb-sheet-body.cb-sheet-dense > .cb-amount-field,
+  .cb-sheet-body.cb-sheet-dense > .cb-full-row {
+    grid-column: 1 / -1;
+  }
+  .cb-sheet-save {
+    min-height: 48px !important;
+    font-size: 16px !important;
+    margin-top: 2px;
+  }
+}
+
+/* Mapping step denser controls */
+.stmt-map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.stmt-map-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted, #64748b);
+}
+.stmt-map-field select {
+  min-height: 44px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #0f172a);
+  background: #fff;
+}
+.stmt-preview-block h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 750;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stmt-raw-details {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.stmt-raw-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+}
+.stmt-raw-table tr.header-row td {
+  background: #eff6ff;
+  font-weight: 700;
 }
 @media (max-width: 400px) {
   .cashbook-ledger th:nth-child(3),

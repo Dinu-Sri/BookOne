@@ -11,7 +11,9 @@ export function parseAmountCell(value: unknown): number {
     .replace(/\s/g, '')
     .replace(/,/g, '')
     .trim();
-  if (!s) return 0;
+  if (!s || s === '-' || s === '—' || s === '–' || s === '.' || s.toLowerCase() === 'nil') {
+    return 0;
+  }
   // (1234.56) → -1234.56
   const paren = s.match(/^\((.+)\)$/);
   if (paren) s = `-${paren[1]}`;
@@ -29,6 +31,13 @@ export type DateParseResult = { iso: string; confidence: number };
  * Ordered strategies: ISO → DD/MM/YYYY → DD-MM-YYYY → Mon DD YYYY / DD Mon YYYY
  */
 export function parseStatementDate(value: unknown): DateParseResult {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getFullYear();
+    const m = value.getMonth() + 1;
+    const d = value.getDate();
+    return { iso: ymd(y, m, d), confidence: 0.95 };
+  }
+
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return { iso: '', confidence: 0 };
 
@@ -36,17 +45,15 @@ export function parseStatementDate(value: unknown): DateParseResult {
     return { iso: trimmed, confidence: 1 };
   }
 
-  // DD/MM/YYYY or D/M/YYYY
+  // DD/MM/YYYY or D/M/YYYY (also DD-MM-YYYY)
   const slash = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
   if (slash) {
     const a = Number(slash[1]);
     const b = Number(slash[2]);
     const y = Number(slash[3]);
-    // If first > 12 → must be DD/MM
     if (a > 12) {
       return { iso: ymd(y, b, a), confidence: 0.95 };
     }
-    // If second > 12 → must be MM/DD (rare in SL)
     if (b > 12) {
       return { iso: ymd(y, a, b), confidence: 0.9 };
     }
@@ -89,12 +96,49 @@ export function signedFromDebitCredit(
   credit: number,
   convention: 'debit_credit' | 'credit_debit' = 'debit_credit',
 ): number {
-  // Book: + in (credit to bank from customer), - out (debit)
+  // Book: + in (credit to bank), - out (debit)
   // Most SL banks: Debit = money out, Credit = money in
   if (convention === 'debit_credit') {
     return round2(credit - debit);
   }
   return round2(debit - credit);
+}
+
+/** Interpret Sampath-style DR/CR (or D/C) flag with an amount cell. */
+export function signedFromAmountAndType(amountRaw: unknown, typeRaw: unknown): number {
+  const abs = Math.abs(parseAmountCell(amountRaw));
+  if (abs < 0.001) return 0;
+  const t = String(typeRaw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '');
+  // Credit / C / CR = money in (+)
+  if (
+    t === 'c' ||
+    t === 'cr' ||
+    t === 'credit' ||
+    t.startsWith('cr') ||
+    t.includes('credit') ||
+    t === 'deposit' ||
+    t === '+'
+  ) {
+    return abs;
+  }
+  // Debit / D / DR = money out (-)
+  if (
+    t === 'd' ||
+    t === 'dr' ||
+    t === 'debit' ||
+    t.startsWith('dr') ||
+    t.includes('debit') ||
+    t === 'withdrawal' ||
+    t === '-'
+  ) {
+    return -abs;
+  }
+  // Unknown type: trust the amount's own sign if present
+  const signed = parseAmountCell(amountRaw);
+  return signed;
 }
 
 export function directionFromSigned(amountSigned: number): 'in' | 'out' | 'unknown' {

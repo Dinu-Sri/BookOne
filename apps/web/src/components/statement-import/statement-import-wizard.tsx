@@ -13,6 +13,7 @@ import {
   Link2,
   PlusCircle,
   Trash2,
+  Columns3,
 } from 'lucide-react';
 import {
   commitStatementBatch,
@@ -20,6 +21,7 @@ import {
   confirmStatementCreates,
   confirmStatementLinks,
   getStatementBatch,
+  previewStatementMapping,
   skipStatementLines,
   undoStatementCreates,
   voidStatementImport,
@@ -28,6 +30,7 @@ import {
   type StatementLineView,
 } from '@/app/actions/statement-import';
 import type { LiquidAccount } from '@/app/actions/cashbook-banks';
+import type { ColumnMap, ParseProfile, SignConvention } from '@bookone/statement-import';
 
 function formatRs(n: number) {
   const sign = n < 0 ? '-' : '';
@@ -80,6 +83,39 @@ function byMonth(lines: StatementLineView[]): { month: string; lines: StatementL
     .map(([month, ls]) => ({ month, lines: ls }));
 }
 
+type PendingFile = { file: File; name: string };
+
+type MapDraft = {
+  files: PendingFile[];
+  profile: ParseProfile;
+  headerRow: number;
+  sheetName: string;
+  sheetNames: string[];
+  rows: string[][];
+  maxColumns: number;
+  sampleLines: {
+    date: string;
+    description: string;
+    amountSigned: number;
+    direction: string;
+  }[];
+  lineCount: number;
+  periodFrom: string | null;
+  periodTo: string | null;
+  warnings: string[];
+};
+
+const MAP_FIELDS: { key: keyof ColumnMap; label: string }[] = [
+  { key: 'date', label: 'Date' },
+  { key: 'description', label: 'Description' },
+  { key: 'amount', label: 'Amount' },
+  { key: 'type', label: 'DR/CR type' },
+  { key: 'debit', label: 'Debit (out)' },
+  { key: 'credit', label: 'Credit (in)' },
+  { key: 'balance', label: 'Balance' },
+  { key: 'ref', label: 'Reference' },
+];
+
 export function StatementImportWizard({
   banks,
   source,
@@ -111,6 +147,7 @@ export function StatementImportWizard({
   const [batchViews, setBatchViews] = useState<StatementImportView[]>(
     initialImport ? [initialImport] : [],
   );
+  const [mapDraft, setMapDraft] = useState<MapDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -140,64 +177,212 @@ export function StatementImportWizard({
     }
   }, []);
 
-  function uploadFiles(fileList: FileList | File[]) {
+  function beginMapping(files: File[]) {
     setError(null);
     setInfo(null);
     if (!bankId) {
       setError(si ? 'පළමුව බැංකුව තෝරන්න.' : 'Select a bank account first.');
       return;
     }
-    const files = Array.from(fileList).filter((f) => f.size > 0);
-    if (files.length === 0) return;
+    const list = files.filter((f) => f.size > 0);
+    if (list.length === 0) return;
 
     const fd = new FormData();
-    fd.set('bankAccountId', bankId);
-    fd.set('source', source);
-    if (bookDomain) fd.set('bookDomain', bookDomain);
+    fd.set('file', list[0]!);
 
     startTransition(() => {
-      if (files.length === 1) {
-        fd.set('file', files[0]!);
+      previewStatementMapping(fd).then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        const bankName = bankOnly.find((b) => b.id === bankId)?.shortName ?? 'Bank';
+        const profile: ParseProfile = {
+          ...res.preview.suggested,
+          name: res.preview.suggested.name || `${bankName} layout`,
+          bankHint: bankName,
+          sheetName: res.preview.sheetName,
+          skipRows: res.preview.headerRowIndex,
+        };
+        setMapDraft({
+          files: list.map((f) => ({ file: f, name: f.name })),
+          profile,
+          headerRow: res.preview.headerRowIndex,
+          sheetName: res.preview.sheetName,
+          sheetNames: res.preview.sheetNames,
+          rows: res.preview.rows,
+          maxColumns: res.preview.maxColumns,
+          sampleLines: res.sampleLines,
+          lineCount: res.lineCount,
+          periodFrom: res.periodFrom,
+          periodTo: res.periodTo,
+          warnings: res.warnings,
+        });
+        setInfo(
+          si
+            ? 'තීරු සිතියම තහවුරු කරන්න — නිවැරදි මුදල් පෙන්වන තෙක්.'
+            : 'Confirm column mapping. Check sample amounts before import.',
+        );
+      });
+    });
+  }
+
+  function refreshPreview(next: Partial<MapDraft> & { profile?: ParseProfile; headerRow?: number }) {
+    if (!mapDraft) return;
+    const profile = next.profile ?? mapDraft.profile;
+    const headerRow = next.headerRow ?? mapDraft.headerRow;
+    const sheetName = next.sheetName ?? mapDraft.sheetName;
+    const merged: ParseProfile = {
+      ...profile,
+      skipRows: headerRow,
+      sheetName,
+    };
+    const fd = new FormData();
+    fd.set('file', mapDraft.files[0]!.file);
+    fd.set('profileJson', JSON.stringify(merged));
+    fd.set('headerRow', String(headerRow));
+    if (sheetName) fd.set('sheetName', sheetName);
+
+    startTransition(() => {
+      previewStatementMapping(fd).then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setMapDraft({
+          ...mapDraft,
+          ...next,
+          profile: merged,
+          headerRow,
+          sheetName: res.preview.sheetName || sheetName,
+          sheetNames: res.preview.sheetNames,
+          rows: res.preview.rows,
+          maxColumns: res.preview.maxColumns,
+          sampleLines: res.sampleLines,
+          lineCount: res.lineCount,
+          periodFrom: res.periodFrom,
+          periodTo: res.periodTo,
+          warnings: res.warnings,
+        });
+      });
+    });
+  }
+
+  function setMapField(key: keyof ColumnMap, col: number | '') {
+    if (!mapDraft) return;
+    const columnMap = { ...mapDraft.profile.columnMap };
+    if (col === '') delete columnMap[key];
+    else columnMap[key] = col;
+
+    let signConvention = mapDraft.profile.signConvention;
+    // Auto-pick convention from fields
+    if (columnMap.type != null && columnMap.amount != null) {
+      signConvention = 'amount_with_type';
+    } else if (columnMap.debit != null || columnMap.credit != null) {
+      signConvention = 'debit_credit';
+    } else {
+      signConvention = 'signed_amount';
+    }
+
+    refreshPreview({
+      profile: {
+        ...mapDraft.profile,
+        columnMap,
+        signConvention,
+        name: mapDraft.profile.name || 'My bank layout',
+      },
+    });
+  }
+
+  function setConvention(signConvention: SignConvention) {
+    if (!mapDraft) return;
+    refreshPreview({
+      profile: { ...mapDraft.profile, signConvention },
+    });
+  }
+
+  function confirmMappingAndImport() {
+    if (!mapDraft || !bankId) return;
+    if (mapDraft.lineCount === 0) {
+      setError(
+        si
+          ? 'මේ සිතියමෙන් පේළි නැත — තීරු නිවැරදි කරන්න.'
+          : 'No lines with this mapping — fix columns and try again.',
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        si
+          ? `${mapDraft.lineCount} පේළි · නියැදි මුදල් නිවැරදිද? ආයාත කරන්න.`
+          : `Import ${mapDraft.lineCount} line(s)? Check sample amounts look correct first.`,
+      )
+    ) {
+      return;
+    }
+
+    const profile: ParseProfile = {
+      ...mapDraft.profile,
+      skipRows: mapDraft.headerRow,
+      sheetName: mapDraft.sheetName,
+      name: mapDraft.profile.name || 'My bank layout',
+    };
+
+    setError(null);
+    startTransition(() => {
+      if (mapDraft.files.length === 1) {
+        const fd = new FormData();
+        fd.set('file', mapDraft.files[0]!.file);
+        fd.set('bankAccountId', bankId);
+        fd.set('source', source);
+        if (bookDomain) fd.set('bookDomain', bookDomain);
+        fd.set('profileJson', JSON.stringify(profile));
+        fd.set('forceProfile', '1');
         commitStatementImport(fd).then(async (res) => {
           if (!res.ok) {
             setError(res.error);
             return;
           }
+          setMapDraft(null);
+          setBatchId(null);
+          setBatchItems([]);
           if (res.reused) {
             setInfo(
               si
-                ? 'මෙම ගොනුව කලින් උඩුගත කර ඇත — එම සමාලෝචනය පෙන්වයි.'
+                ? 'මෙම ගොනුව කලින් උඩුගත කර ඇත.'
                 : 'This file was uploaded before — showing that review.',
             );
+          } else {
+            setInfo(si ? 'සිතියම සුරැකිණි. සමාලෝචනය කරන්න.' : 'Mapping saved. Review matches below.');
           }
-          setBatchId(null);
-          setBatchItems([]);
           await reloadFromServer(res.importId);
         });
         return;
       }
 
-      for (const f of files) fd.append('files', f);
+      const fd = new FormData();
+      fd.set('bankAccountId', bankId);
+      fd.set('source', source);
+      if (bookDomain) fd.set('bookDomain', bookDomain);
+      fd.set('profileJson', JSON.stringify(profile));
+      fd.set('forceProfile', '1');
+      for (const f of mapDraft.files) fd.append('files', f.file);
       commitStatementBatch(fd).then(async (res) => {
         if (!res.ok) {
           setError(res.error);
           return;
         }
+        setMapDraft(null);
         setBatchId(res.batchId);
         setBatchItems(res.items);
         const okIds = res.items.filter((i) => i.importId).map((i) => i.importId);
         const views = await getStatementBatch(okIds);
         setBatchViews(views);
-        const first = views[0] ?? null;
-        setImportView(first);
-        const failed = res.items.filter((i) => i.error).length;
-        const reused = res.items.filter((i) => i.reused).length;
+        setImportView(views[0] ?? null);
         setInfo(
           si
-            ? `${okIds.length} ගොනු · ${failed ? `${failed} අසාර්ථක · ` : ''}${reused ? `${reused} කලින්` : ''}`
-            : `Imported ${okIds.length} file(s)${failed ? ` · ${failed} failed` : ''}${
-                reused ? ` · ${reused} already known` : ''
-              }.`,
+            ? `${okIds.length} ගොනු ආයාත · සිතියම සුරැකිණි`
+            : `Imported ${okIds.length} file(s) with your mapping.`,
         );
       });
     });
@@ -206,7 +391,7 @@ export function StatementImportWizard({
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files?.length) uploadFiles(e.dataTransfer.files);
+    if (e.dataTransfer.files?.length) beginMapping(Array.from(e.dataTransfer.files));
   }
 
   function selectBatchFile(importId: string) {
@@ -227,7 +412,7 @@ export function StatementImportWizard({
         setInfo(
           si
             ? `${res.linked} ගැලපීම් තහවුරු කළා.`
-            : `Confirmed ${res.linked} match${res.linked === 1 ? '' : 'es'}. Layout remembered for next time.`,
+            : `Confirmed ${res.linked} match${res.linked === 1 ? '' : 'es'}. Layout remembered.`,
         );
         await reloadFromServer(importView.id);
         onComplete?.();
@@ -241,8 +426,8 @@ export function StatementImportWizard({
     if (
       !window.confirm(
         si
-          ? 'නව ඇතුළත් කිරීම් ඔබේ පොතට එකතු කරන්නද? පසුව අහෝසි කළ හැක.'
-          : 'Add new entries to your books from the bank file? You can undo later.',
+          ? 'නව ඇතුළත් කිරීම් ඔබේ පොතට එකතු කරන්නද?'
+          : 'Add new entries to your books? You can undo later.',
       )
     ) {
       return;
@@ -253,14 +438,10 @@ export function StatementImportWizard({
           setError(res.error);
           return;
         }
-        const extra =
-          res.errors.length > 0
-            ? ` (${res.errors.length} issue${res.errors.length > 1 ? 's' : ''})`
-            : '';
         setInfo(
           si
-            ? `${res.created} නව ඇතුළත් කිරීම්${extra}`
-            : `Added ${res.created} new entr${res.created === 1 ? 'y' : 'ies'}${extra}.`,
+            ? `${res.created} නව ඇතුළත් කිරීම්`
+            : `Added ${res.created} new entr${res.created === 1 ? 'y' : 'ies'}.`,
         );
         if (res.errors[0]) setError(res.errors.slice(0, 3).join(' · '));
         await reloadFromServer(importView.id);
@@ -289,8 +470,7 @@ export function StatementImportWizard({
             : `Confirmed ${total} matches across ${batchViews.length} file(s).`,
         );
         if (importView) await reloadFromServer(importView.id);
-        const ids = batchViews.map((v) => v.id);
-        const views = await getStatementBatch(ids);
+        const views = await getStatementBatch(batchViews.map((v) => v.id));
         setBatchViews(views);
         onComplete?.();
       })();
@@ -299,7 +479,6 @@ export function StatementImportWizard({
 
   function skipReviews() {
     if (!importView || !groups?.review.length) return;
-    setError(null);
     startTransition(() => {
       skipStatementLines({
         importId: importView.id,
@@ -317,28 +496,16 @@ export function StatementImportWizard({
 
   function undoCreates() {
     if (!importView) return;
-    if (
-      !window.confirm(
-        si
-          ? 'මෙම ආයාතයෙන් එකතු කළ ඇතුළත් කිරීම් අහෝසි කරන්නද?'
-          : 'Undo all entries created from this import?',
-      )
-    ) {
+    if (!window.confirm(si ? 'නව ඇතුළත් කිරීම් අහෝසි කරන්නද?' : 'Undo entries created from this import?')) {
       return;
     }
-    setError(null);
     startTransition(() => {
       undoStatementCreates({ importId: importView.id }).then(async (res) => {
         if (!res.ok) {
           setError(res.error);
           return;
         }
-        setInfo(
-          si
-            ? `${res.reversed} අහෝසි කළා`
-            : `Reversed ${res.reversed} entr${res.reversed === 1 ? 'y' : 'ies'}.`,
-        );
-        if (res.errors[0]) setError(res.errors.slice(0, 2).join(' · '));
+        setInfo(si ? `${res.reversed} අහෝසි` : `Reversed ${res.reversed}.`);
         await reloadFromServer(importView.id);
         onComplete?.();
       });
@@ -347,11 +514,7 @@ export function StatementImportWizard({
 
   function discardImport() {
     if (!importView) return;
-    if (
-      !window.confirm(si ? 'මෙම උඩුගත කිරීම ඉවත් කරන්නද?' : 'Discard this import review?')
-    ) {
-      return;
-    }
+    if (!window.confirm(si ? 'ඉවත් කරන්නද?' : 'Discard this import review?')) return;
     startTransition(() => {
       voidStatementImport(importView.id).then((res) => {
         if (!res.ok) {
@@ -370,12 +533,21 @@ export function StatementImportWizard({
     setBatchItems([]);
     setBatchViews([]);
     setBatchId(null);
+    setMapDraft(null);
     setError(null);
     setInfo(null);
   }
 
   const shellClass = variant === 'cashbook' ? 'stmt-wizard cashbook-stmt' : 'stmt-wizard erp-stmt';
   const hasBatch = batchViews.length > 1 || batchItems.length > 1;
+  const colLabels = useMemo(() => {
+    if (!mapDraft) return [] as string[];
+    const header = mapDraft.rows[mapDraft.headerRow] ?? [];
+    return Array.from({ length: mapDraft.maxColumns }, (_, i) => {
+      const h = header[i]?.trim();
+      return h ? `Col ${i + 1}: ${h}` : `Column ${i + 1}`;
+    });
+  }, [mapDraft]);
 
   return (
     <div className={shellClass}>
@@ -386,15 +558,13 @@ export function StatementImportWizard({
         </h2>
         <p className="stmt-hint">
           {si
-            ? 'එක් වරකට එක් ගිණුමක්. මාසික Excel කිහිපයක් එකවර දැමිය හැක.'
-            : 'One account per upload. You can drop several monthly Excel files at once.'}
+            ? 'එක් ගිණුමක්. බැංකු Excel වෙනස් විය හැක — සිතියම තහවුරු කරන්න.'
+            : 'One account. Banks use different Excel layouts — you will confirm columns before import.'}
         </p>
         <div className="stmt-bank-tiles">
           {bankOnly.length === 0 ? (
             <p className="form-error">
-              {si
-                ? 'බැංකු ගිණුම් නැත — සැකසුම් වෙත යන්න.'
-                : 'No bank accounts yet — add one in Settings.'}
+              {si ? 'බැංකු නැත — සැකසුම්.' : 'No bank accounts — add one in Settings.'}
             </p>
           ) : (
             bankOnly.map((b) => (
@@ -402,7 +572,7 @@ export function StatementImportWizard({
                 key={b.id}
                 type="button"
                 className={`stmt-bank-tile ${bankId === b.id ? 'active' : ''}`}
-                disabled={pending || Boolean(importView)}
+                disabled={pending || Boolean(importView) || Boolean(mapDraft)}
                 onClick={() => setBankId(b.id)}
               >
                 <strong>{b.shortName}</strong>
@@ -413,12 +583,190 @@ export function StatementImportWizard({
         </div>
       </section>
 
-      <section className="stmt-section">
-        <h2 className="stmt-h2">
-          <Upload size={20} />
-          {si ? '2. Excel / CSV උඩුගත කරන්න' : '2. Upload Excel / CSV'}
-        </h2>
-        {!importView ? (
+      {/* Mapping step */}
+      {mapDraft && !importView ? (
+        <section className="stmt-section stmt-map-section">
+          <h2 className="stmt-h2">
+            <Columns3 size={20} />
+            {si ? '2. තීරු සිතියම තහවුරු කරන්න' : '2. Confirm column mapping'}
+          </h2>
+          <p className="stmt-hint">
+            {mapDraft.files.length > 1
+              ? si
+                ? `${mapDraft.files.length} ගොනු — එකම සිතියම භාවිතා වේ.`
+                : `${mapDraft.files.length} files — same mapping applied to all.`
+              : mapDraft.files[0]?.name}
+          </p>
+
+          <div className="stmt-map-grid">
+            <label className="stmt-map-field">
+              <span>{si ? 'ශීර්ෂ පේළිය' : 'Header row #'}</span>
+              <select
+                value={mapDraft.headerRow}
+                disabled={pending}
+                onChange={(e) => refreshPreview({ headerRow: Number(e.target.value) })}
+              >
+                {mapDraft.rows.map((_, i) => (
+                  <option key={i} value={i}>
+                    Row {i + 1}
+                    {mapDraft.rows[i]?.filter(Boolean).slice(0, 3).join(' · ')
+                      ? ` — ${mapDraft.rows[i]!.filter(Boolean).slice(0, 3).join(' · ').slice(0, 40)}`
+                      : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="stmt-map-field">
+              <span>{si ? 'මුදල් ආකාරය' : 'How amounts work'}</span>
+              <select
+                value={mapDraft.profile.signConvention}
+                disabled={pending}
+                onChange={(e) => setConvention(e.target.value as SignConvention)}
+              >
+                <option value="debit_credit">Debit + Credit columns (HNB-style)</option>
+                <option value="amount_with_type">Amount + DR/CR type (Sampath-style)</option>
+                <option value="signed_amount">Single amount (signed +/−)</option>
+                <option value="credit_debit">Credit/Debit swapped (rare)</option>
+              </select>
+            </label>
+
+            {MAP_FIELDS.map((f) => {
+              const show =
+                f.key === 'date' ||
+                f.key === 'description' ||
+                f.key === 'balance' ||
+                f.key === 'ref' ||
+                (f.key === 'amount' &&
+                  (mapDraft.profile.signConvention === 'signed_amount' ||
+                    mapDraft.profile.signConvention === 'amount_with_type')) ||
+                (f.key === 'type' && mapDraft.profile.signConvention === 'amount_with_type') ||
+                ((f.key === 'debit' || f.key === 'credit') &&
+                  (mapDraft.profile.signConvention === 'debit_credit' ||
+                    mapDraft.profile.signConvention === 'credit_debit'));
+              if (!show) return null;
+              const val = mapDraft.profile.columnMap[f.key];
+              const num = typeof val === 'number' ? val : '';
+              return (
+                <label key={f.key} className="stmt-map-field">
+                  <span>{f.label}</span>
+                  <select
+                    value={num === '' ? '' : String(num)}
+                    disabled={pending}
+                    onChange={(e) =>
+                      setMapField(f.key, e.target.value === '' ? '' : Number(e.target.value))
+                    }
+                  >
+                    <option value="">— not used —</option>
+                    {colLabels.map((lab, i) => (
+                      <option key={i} value={i}>
+                        {lab}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="stmt-preview-block">
+            <h3>
+              {si ? 'නියැදි (පොතට යන ආකාරය)' : 'Sample as it will enter the books'}{' '}
+              <span className="stmt-count">{mapDraft.lineCount}</span>
+            </h3>
+            {mapDraft.periodFrom ? (
+              <p className="stmt-meta">
+                {mapDraft.periodFrom} → {mapDraft.periodTo} · {mapDraft.lineCount} lines
+              </p>
+            ) : null}
+            {mapDraft.sampleLines.length === 0 ? (
+              <p className="form-error">
+                {si
+                  ? 'පේළි නැත — තීරු වෙනස් කරන්න.'
+                  : 'No lines parsed. Adjust header row and columns.'}
+              </p>
+            ) : (
+              <div className="stmt-table-wrap">
+                <table className="stmt-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Dir</th>
+                      <th className="num">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mapDraft.sampleLines.map((l, i) => (
+                      <tr key={i}>
+                        <td>{l.date}</td>
+                        <td className="desc">{l.description}</td>
+                        <td>{l.direction === 'in' ? 'In' : l.direction === 'out' ? 'Out' : '?'}</td>
+                        <td className={`num ${l.amountSigned < 0 ? 'neg' : 'pos'}`}>
+                          {formatRs(l.amountSigned)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {mapDraft.warnings.length > 0 ? (
+            <ul className="stmt-warnings">
+              {mapDraft.warnings.slice(0, 6).map((w) => (
+                <li key={w}>
+                  <CircleAlert size={14} /> {w}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <div className="stmt-actions">
+            <button
+              type="button"
+              className="stmt-btn accent"
+              disabled={pending || mapDraft.lineCount === 0}
+              onClick={confirmMappingAndImport}
+            >
+              {pending ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
+              {si
+                ? `සිතියම සුරකින්න හා ආයාත (${mapDraft.lineCount})`
+                : `Save mapping & import (${mapDraft.lineCount})`}
+            </button>
+            <button type="button" className="stmt-btn secondary" disabled={pending} onClick={resetUpload}>
+              {si ? 'අවලංගු' : 'Cancel'}
+            </button>
+          </div>
+
+          <details className="stmt-raw-details">
+            <summary>{si ? 'අමු Excel පේළි' : 'Raw Excel rows (first lines)'}</summary>
+            <div className="stmt-table-wrap">
+              <table className="stmt-table stmt-raw-table">
+                <tbody>
+                  {mapDraft.rows.slice(0, 15).map((row, ri) => (
+                    <tr key={ri} className={ri === mapDraft.headerRow ? 'header-row' : ''}>
+                      <td className="num">{ri + 1}</td>
+                      {Array.from({ length: Math.min(mapDraft.maxColumns, 8) }, (_, ci) => (
+                        <td key={ci}>{row[ci] ?? ''}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+      ) : null}
+
+      {/* Upload */}
+      {!mapDraft && !importView ? (
+        <section className="stmt-section">
+          <h2 className="stmt-h2">
+            <Upload size={20} />
+            {si ? '2. Excel උඩුගත කරන්න' : '2. Upload Excel / CSV'}
+          </h2>
           <div
             className={`stmt-drop ${dragOver ? 'over' : ''} ${pending ? 'busy' : ''}`}
             onDragOver={(e) => {
@@ -437,12 +785,12 @@ export function StatementImportWizard({
             {pending ? <Loader2 className="spin" size={28} /> : <FileSpreadsheet size={28} />}
             <div>
               <strong>
-                {si ? 'ගෙනැවිත් දමන්න — එකක් හෝ කිහිපයක්' : 'Drag & drop one or many files'}
+                {si ? 'ගෙනැවිත් දමන්න — එකක් හෝ කිහිපයක්' : 'Drag & drop one or many bank files'}
               </strong>
               <small>
                 {si
-                  ? 'බැංකු .xlsx / .csv — මාසයකට එකක් හොඳයි (වාර්ෂිකත් හරි)'
-                  : 'Bank .xlsx / .csv — monthly is easiest (yearly OK with review)'}
+                  ? 'ඊළඟට තීරු සිතියම තහවුරු කරන්න (එක් වරක් සුරකියි)'
+                  : 'Next: confirm columns once — saved for this bank next time'}
               </small>
             </div>
             <input
@@ -453,12 +801,16 @@ export function StatementImportWizard({
               multiple
               disabled={pending}
               onChange={(e) => {
-                if (e.target.files?.length) uploadFiles(e.target.files);
+                if (e.target.files?.length) beginMapping(Array.from(e.target.files));
                 e.target.value = '';
               }}
             />
           </div>
-        ) : (
+        </section>
+      ) : null}
+
+      {importView ? (
+        <section className="stmt-section">
           <div className="stmt-file-bar">
             <div>
               <strong>{importView.fileName}</strong>
@@ -466,24 +818,7 @@ export function StatementImportWizard({
                 {importView.bankAccountName ?? 'Bank'} · {importView.periodFrom ?? '—'} →{' '}
                 {importView.periodTo ?? '—'} · {importView.rowCount} lines
                 {importView.profileName ? (
-                  <span className="stmt-flag info">
-                    {' '}
-                    · Layout: {importView.profileName}
-                    {importView.profileLearned ? ' (saved)' : ''}
-                  </span>
-                ) : null}
-                {importView.multiMonth ? (
-                  <span className="stmt-flag warn">
-                    {' '}
-                    {si ? '· බහු මාස' : '· Multi-month file'}
-                  </span>
-                ) : null}
-                {importView.counts.balanceBreaks > 0 ? (
-                  <span className="stmt-flag warn">
-                    {' '}
-                    · {importView.counts.balanceBreaks} balance flag
-                    {importView.counts.balanceBreaks > 1 ? 's' : ''}
-                  </span>
+                  <span className="stmt-flag info"> · {importView.profileName}</span>
                 ) : null}
               </p>
             </div>
@@ -491,43 +826,26 @@ export function StatementImportWizard({
               {si ? 'නව උඩුගත' : 'Upload more'}
             </button>
           </div>
-        )}
-
-        {hasBatch ? (
-          <div className="stmt-batch-tabs" role="tablist">
-            {batchViews.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                role="tab"
-                className={`stmt-batch-tab ${importView?.id === v.id ? 'active' : ''}`}
-                onClick={() => selectBatchFile(v.id)}
-              >
-                <span className="stmt-batch-name">{v.fileName}</span>
-                <small>
-                  {v.counts.link + v.counts.create + v.counts.review > 0
-                    ? `${v.counts.link}m · ${v.counts.create}n · ${v.counts.review}c`
-                    : v.status}
-                </small>
-              </button>
-            ))}
-            {batchItems
-              .filter((i) => i.error)
-              .map((i) => (
-                <div key={i.fileName} className="stmt-batch-tab error" title={i.error}>
-                  <span className="stmt-batch-name">{i.fileName}</span>
-                  <small>Failed</small>
-                </div>
+          {hasBatch ? (
+            <div className="stmt-batch-tabs" role="tablist">
+              {batchViews.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  role="tab"
+                  className={`stmt-batch-tab ${importView?.id === v.id ? 'active' : ''}`}
+                  onClick={() => selectBatchFile(v.id)}
+                >
+                  <span className="stmt-batch-name">{v.fileName}</span>
+                  <small>
+                    {v.counts.link}m · {v.counts.create}n · {v.counts.review}c
+                  </small>
+                </button>
               ))}
-          </div>
-        ) : null}
-        {batchId ? (
-          <p className="stmt-meta">
-            Batch {batchId.slice(0, 8)}… · {batchViews.length} file
-            {batchViews.length === 1 ? '' : 's'}
-          </p>
-        ) : null}
-      </section>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {error ? <p className="form-error stmt-msg">{error}</p> : null}
       {info ? <p className="stmt-info stmt-msg">{info}</p> : null}
@@ -540,8 +858,8 @@ export function StatementImportWizard({
           </h2>
           <p className="stmt-hint">
             {si
-              ? 'කිසිවක් පොතට නොයයි තහවුරු කරන තුරු. සාර්ථක ආකෘතිය මතක තබයි.'
-              : 'Nothing posts until you confirm. Successful layouts are remembered for this bank.'}
+              ? 'කිසිවක් පොතට නොයයි තහවුරු කරන තුරු.'
+              : 'Nothing posts until you confirm. Successful mapping is remembered for this bank.'}
           </p>
 
           <div className="stmt-summary">
@@ -557,10 +875,6 @@ export function StatementImportWizard({
               <strong>{groups.review.length}</strong>
               <span>{si ? 'පරීක්ෂා' : 'Check'}</span>
             </div>
-            <div className="stmt-sum grey">
-              <strong>{groups.duplicate.length}</strong>
-              <span>{si ? 'දෙවරක්' : 'Dup'}</span>
-            </div>
             <div className="stmt-sum muted">
               <strong>{groups.done.length}</strong>
               <span>{si ? 'අවසන්' : 'Done'}</span>
@@ -569,7 +883,7 @@ export function StatementImportWizard({
 
           {importView.warnings.length > 0 ? (
             <ul className="stmt-warnings">
-              {importView.warnings.map((w) => (
+              {importView.warnings.slice(0, 8).map((w) => (
                 <li key={w}>
                   <CircleAlert size={14} /> {w}
                 </li>
@@ -590,14 +904,9 @@ export function StatementImportWizard({
                 : `Confirm matches (${groups.pendingLink.length})`}
             </button>
             {hasBatch ? (
-              <button
-                type="button"
-                className="stmt-btn primary"
-                disabled={pending}
-                onClick={confirmAllBatchLinks}
-              >
+              <button type="button" className="stmt-btn primary" disabled={pending} onClick={confirmAllBatchLinks}>
                 <Link2 size={16} />
-                {si ? 'සියලු ගොනු ගැලපීම්' : 'Confirm matches (all files)'}
+                {si ? 'සියලු ගොනු' : 'Confirm all files'}
               </button>
             ) : null}
             <button
@@ -637,7 +946,7 @@ export function StatementImportWizard({
 
           {multiMonthGroups && multiMonthGroups.length > 1 ? (
             <div className="stmt-month-nav">
-              <span className="stmt-month-label">{si ? 'මාස අනුව' : 'By month'}</span>
+              <span className="stmt-month-label">{si ? 'මාස' : 'By month'}</span>
               {multiMonthGroups.map((g) => (
                 <span key={g.month} className="stmt-month-chip">
                   {formatMonth(g.month)} · {g.lines.length}
@@ -647,40 +956,27 @@ export function StatementImportWizard({
           ) : null}
 
           <LineGroup
-            title={si ? 'නිල් — පොතේ නැත' : 'New — not in books yet'}
+            title={si ? 'නව' : 'New — not in books'}
             tone="blue"
             lines={groups.pendingCreate}
             empty={si ? 'නව නැත' : 'No new lines'}
             showMonths={Boolean(multiMonthGroups && multiMonthGroups.length > 1)}
           />
           <LineGroup
-            title={si ? 'කොළ — පොතේ තිබේ' : 'Matches — already in books'}
+            title={si ? 'ගැලපේ' : 'Matches'}
             tone="green"
             lines={groups.pendingLink}
-            empty={si ? 'ගැලපීම් නැත' : 'No matches to confirm'}
+            empty={si ? 'නැත' : 'No matches'}
             showMonths={Boolean(multiMonthGroups && multiMonthGroups.length > 1)}
           />
           <LineGroup
-            title={si ? 'කහ — ඔබේ ඇස්' : 'Check — needs your eyes'}
+            title={si ? 'පරීක්ෂා' : 'Check'}
             tone="amber"
             lines={groups.review}
             empty={si ? 'හොඳයි' : 'Nothing ambiguous'}
             showMonths={Boolean(multiMonthGroups && multiMonthGroups.length > 1)}
           />
-          <LineGroup
-            title={si ? 'දැනටමත් ආයාත' : 'Already imported before'}
-            tone="grey"
-            lines={groups.duplicate}
-            empty=""
-            showMonths={false}
-          />
-          <LineGroup
-            title={si ? 'අවසන්' : 'Finished'}
-            tone="muted"
-            lines={groups.done}
-            empty=""
-            showMonths={false}
-          />
+          <LineGroup title={si ? 'අවසන්' : 'Finished'} tone="muted" lines={groups.done} empty="" showMonths={false} />
         </section>
       ) : null}
     </div>
@@ -701,7 +997,6 @@ function LineGroup({
   showMonths: boolean;
 }) {
   if (lines.length === 0 && !empty) return null;
-
   const chunks = showMonths ? byMonth(lines) : [{ month: '', lines }];
 
   return (
@@ -714,9 +1009,7 @@ function LineGroup({
       ) : (
         chunks.map((chunk) => (
           <div key={chunk.month || 'all'} className="stmt-month-block">
-            {chunk.month ? (
-              <h4 className="stmt-month-heading">{formatMonth(chunk.month)}</h4>
-            ) : null}
+            {chunk.month ? <h4 className="stmt-month-heading">{formatMonth(chunk.month)}</h4> : null}
             <div className="stmt-table-wrap">
               <table className="stmt-table">
                 <thead>
@@ -729,16 +1022,10 @@ function LineGroup({
                 </thead>
                 <tbody>
                   {chunk.lines.slice(0, 80).map((l) => (
-                    <tr key={l.id} className={l.flags.includes('BALANCE_BREAK') ? 'flag-break' : ''}>
+                    <tr key={l.id} className={l.flags?.includes('BALANCE_BREAK') ? 'flag-break' : ''}>
                       <td>{l.date}</td>
                       <td className="desc" title={l.description}>
                         {l.description}
-                        {l.flags.includes('BALANCE_BREAK') ? (
-                          <span className="stmt-inline-flag" title="Running balance does not follow">
-                            {' '}
-                            ⚠ bal
-                          </span>
-                        ) : null}
                       </td>
                       <td>
                         <span className={`stmt-chip ${l.status}`}>{labelStatus(l)}</span>
@@ -748,9 +1035,6 @@ function LineGroup({
                   ))}
                 </tbody>
               </table>
-              {chunk.lines.length > 80 ? (
-                <p className="stmt-empty">Showing first 80 of {chunk.lines.length}</p>
-              ) : null}
             </div>
           </div>
         ))
@@ -760,7 +1044,6 @@ function LineGroup({
 }
 
 function labelStatus(l: StatementLineView): string {
-  if (l.flags.includes('BALANCE_BREAK') && l.status === 'review') return 'Bal. check';
   if (l.status === 'reconciled') return 'Linked';
   if (l.status === 'created') return 'Added';
   if (l.status === 'skipped') return 'Skipped';

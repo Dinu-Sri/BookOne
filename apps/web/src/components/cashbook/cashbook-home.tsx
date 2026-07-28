@@ -814,7 +814,7 @@ export function CashbookHomeClient({
               </button>
             </div>
 
-            <div className="cb-sheet-body">
+            <div className="cb-sheet-body cb-sheet-dense">
               {mode === 'invoice' || mode === 'bill' ? (
                 <p className="cb-sheet-hint">
                   {mode === 'invoice'

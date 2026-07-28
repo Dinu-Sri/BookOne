@@ -7,10 +7,13 @@ import {
   fileSha256,
   matchAll,
   parseStatementFile,
+  previewStatementSheet,
   type BookCandidate,
   type MatchResult,
   type ParseProfile,
   type ProposedAction,
+  type SheetPreview,
+  type SignConvention,
 } from '@bookone/statement-import';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -669,6 +672,113 @@ type CommitOneResult =
   | { ok: true; importId: string; reused: boolean; fileName: string; rowCount: number; periodFrom: string | null; periodTo: string | null }
   | { ok: false; error: string; fileName: string };
 
+function parseProfileFromForm(raw: FormDataEntryValue | null): ParseProfile | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const p = JSON.parse(raw) as ParseProfile;
+    if (!p || typeof p !== 'object') return null;
+    if (!p.columnMap || typeof p.columnMap !== 'object') return null;
+    const sign = p.signConvention as SignConvention;
+    if (
+      sign !== 'signed_amount' &&
+      sign !== 'debit_credit' &&
+      sign !== 'credit_debit' &&
+      sign !== 'amount_with_type'
+    ) {
+      return null;
+    }
+    return {
+      name: String(p.name || 'Custom map').slice(0, 120),
+      bankHint: p.bankHint ? String(p.bankHint).slice(0, 120) : undefined,
+      columnMap: p.columnMap,
+      signConvention: sign,
+      dateFormatHint: p.dateFormatHint,
+      skipRows: typeof p.skipRows === 'number' ? p.skipRows : Number(p.skipRows) || 0,
+      sheetName: p.sheetName,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * SI-4.1: Preview raw sheet + suggested mapping without writing to DB.
+ * Client uses this so the user can confirm columns before import.
+ */
+export async function previewStatementMapping(formData: FormData): Promise<
+  | {
+      ok: true;
+      preview: SheetPreview;
+      sampleLines: {
+        date: string;
+        description: string;
+        amountSigned: number;
+        direction: string;
+      }[];
+      warnings: string[];
+      lineCount: number;
+      periodFrom: string | null;
+      periodTo: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  try {
+    await requireTenantContext();
+    const file = formData.get('file');
+    if (!(file instanceof File)) {
+      return { ok: false, error: 'Choose an Excel or CSV file.' };
+    }
+    if (!ALLOWED_EXT.test(file.name)) {
+      return { ok: false, error: 'Use .xlsx, .xls, or .csv.' };
+    }
+    if (file.size <= 0 || file.size > MAX_BYTES) {
+      return { ok: false, error: 'File empty or too large (max 12 MB).' };
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const sheetName = String(formData.get('sheetName') || '') || undefined;
+    const forced = parseProfileFromForm(formData.get('profileJson'));
+    const preview = previewStatementSheet(bytes, file.name, { sheetName, maxRows: 40 });
+    const profile = forced ?? preview.suggested;
+    if (forced && sheetName) profile.sheetName = sheetName;
+    if (forced && formData.get('headerRow') != null) {
+      const hr = Number(formData.get('headerRow'));
+      if (Number.isFinite(hr) && hr >= 0) profile.skipRows = hr;
+    }
+
+    const parsed = parseStatementFile(Buffer.from(bytes), file.name, {
+      tenantId: 'preview',
+      bankAccountId: 'preview',
+      profile,
+      sheetName: profile.sheetName ?? sheetName,
+    });
+
+    return {
+      ok: true,
+      preview: {
+        ...preview,
+        suggested: profile,
+        headerRowIndex: profile.skipRows ?? preview.headerRowIndex,
+      },
+      sampleLines: parsed.lines.slice(0, 12).map((l) => ({
+        date: l.date,
+        description: l.description,
+        amountSigned: l.amountSigned,
+        direction: l.direction,
+      })),
+      warnings: parsed.warnings.filter((w) => !w.startsWith('Sample:')),
+      lineCount: parsed.lines.length,
+      periodFrom: parsed.periodFrom,
+      periodTo: parsed.periodTo,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Could not preview file.',
+    };
+  }
+}
+
 async function commitOneFileBuffer(opts: {
   tenantId: string;
   userId: string;
@@ -680,6 +790,10 @@ async function commitOneFileBuffer(opts: {
   batchId?: string | null;
   batchIndex?: number;
   batchSize?: number;
+  /** User-confirmed profile — required for accurate bank layouts */
+  profile?: ParseProfile | null;
+  /** When true, do not auto-pick learned profile over user map */
+  forceProfile?: boolean;
 }): Promise<CommitOneResult> {
   const { tenantId, userId, bankAccountId, bookDomain, source, fileName, bytes } = opts;
   if (!ALLOWED_EXT.test(fileName)) {
@@ -731,11 +845,14 @@ async function commitOneFileBuffer(opts: {
       };
     }
 
-    const learned = await loadBestProfile(tenantId, bank.name);
+    const learned =
+      opts.forceProfile || opts.profile ? null : await loadBestProfile(tenantId, bank.name);
+    const profileToUse = opts.profile ?? learned?.profile ?? null;
     const parsed = parseStatementFile(Buffer.from(bytes), fileName, {
       tenantId,
       bankAccountId,
-      profile: learned?.profile ?? null,
+      profile: profileToUse,
+      sheetName: profileToUse?.sheetName,
     });
 
     if (parsed.lines.length === 0) {
@@ -775,7 +892,9 @@ async function commitOneFileBuffer(opts: {
     const period = (periodTo ?? periodFrom ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
 
     const warnings = [...parsed.warnings];
-    if (learned) {
+    if (opts.profile) {
+      warnings.unshift(`Using your confirmed mapping “${opts.profile.name}”.`);
+    } else if (learned) {
       warnings.unshift(`Using saved layout “${learned.profile.name}” for ${bank.name}.`);
     }
     if (multiMonth) {
@@ -842,11 +961,11 @@ async function commitOneFileBuffer(opts: {
           source,
           parserProfileId: learned?.id ?? null,
           metadata: {
-            warnings,
+            warnings: warnings.filter((w) => !w.startsWith('Sample:')),
             multiMonth,
             profileName: parsed.profile.name,
-            profileAuto: parsed.profileAuto,
-            profileLearned: Boolean(learned),
+            profileAuto: parsed.profileAuto && !opts.profile,
+            profileLearned: Boolean(learned) || Boolean(opts.profile),
             columnMap: parsed.profile.columnMap,
             signConvention: parsed.profile.signConvention,
             skipRows: parsed.profile.skipRows ?? parsed.headerRowIndex,
@@ -857,6 +976,7 @@ async function commitOneFileBuffer(opts: {
             batchIndex: opts.batchIndex ?? 0,
             batchSize: opts.batchSize ?? 1,
             balanceBreaks: breakCount,
+            userConfirmedMap: Boolean(opts.profile),
           },
         })
         .returning({ id: bankStatementImports.id });
@@ -965,6 +1085,8 @@ export async function commitStatementImport(formData: FormData): Promise<
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    const profile = parseProfileFromForm(formData.get('profileJson'));
+    const forceProfile = formData.get('forceProfile') === '1' || Boolean(profile);
     const result = await commitOneFileBuffer({
       tenantId: user.tenantId,
       userId: user.id,
@@ -973,6 +1095,8 @@ export async function commitStatementImport(formData: FormData): Promise<
       source,
       fileName: file.name,
       bytes,
+      profile,
+      forceProfile,
     });
 
     if (!result.ok) return { ok: false, error: result.error };
@@ -1029,6 +1153,8 @@ export async function commitStatementBatch(formData: FormData): Promise<
 
     const batchId = randomUUID();
     const items: StatementBatchItem[] = [];
+    const profile = parseProfileFromForm(formData.get('profileJson'));
+    const forceProfile = formData.get('forceProfile') === '1' || Boolean(profile);
 
     for (let i = 0; i < collected.length; i++) {
       const file = collected[i]!;
@@ -1044,6 +1170,8 @@ export async function commitStatementBatch(formData: FormData): Promise<
         batchId,
         batchIndex: i,
         batchSize: collected.length,
+        profile,
+        forceProfile,
       });
       if (result.ok) {
         items.push({

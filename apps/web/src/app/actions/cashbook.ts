@@ -2,6 +2,7 @@
 
 import { requireTenantContext } from '@bookone/auth';
 import {
+  accounts,
   db,
   eq,
   and,
@@ -9,6 +10,7 @@ import {
   desc,
   gte,
   lte,
+  inArray,
   transactions,
   withTenantContext,
 } from '@bookone/db';
@@ -24,6 +26,9 @@ export type CashbookRow = {
   currency: string;
   bookDomain: string | null;
   accountingType?: string | null;
+  paymentAccountCode?: string | null;
+  transferSourceCode?: string | null;
+  categoryCode?: string | null;
 };
 
 export type CashbookTotals = {
@@ -68,11 +73,30 @@ async function queryDomain(
         bookDomain: transactions.bookDomain,
         accountingType: transactions.accountingType,
         isAlreadySettled: transactions.isAlreadySettled,
+        categoryCode: transactions.categoryCode,
+        paymentAccountId: transactions.paymentAccountId,
+        transferSourceAccountId: transactions.transferSourceAccountId,
       })
       .from(transactions)
       .where(and(...conditions))
       .orderBy(desc(transactions.date), desc(transactions.createdAt))
       .limit(limit);
+
+    const accountIds = [
+      ...new Set(
+        raw.flatMap((r) =>
+          [r.paymentAccountId, r.transferSourceAccountId].filter(Boolean) as string[],
+        ),
+      ),
+    ];
+    const codeById = new Map<string, string>();
+    if (accountIds.length) {
+      const accRows = await db()
+        .select({ id: accounts.id, code: accounts.code })
+        .from(accounts)
+        .where(and(eq(accounts.tenantId, tenantId), inArray(accounts.id, accountIds)));
+      for (const a of accRows) codeById.set(a.id, a.code);
+    }
 
     let moneyIn = 0;
     let moneyOut = 0;
@@ -86,7 +110,6 @@ async function queryDomain(
       if (r.direction === 'money_in') moneyIn += amount;
       else if (r.direction === 'money_out') moneyOut += amount;
       else if (r.direction === 'invoice_bill') {
-        // Credit sales increase "in" economic view; credit purchases "out"
         if (r.accountingType === 'SaleCredit') {
           moneyIn += amount;
           if (!settled) receivables += amount;
@@ -106,6 +129,11 @@ async function queryDomain(
         currency: r.currency,
         bookDomain: r.bookDomain,
         accountingType: r.accountingType,
+        categoryCode: r.categoryCode,
+        paymentAccountCode: r.paymentAccountId ? codeById.get(r.paymentAccountId) ?? null : null,
+        transferSourceCode: r.transferSourceAccountId
+          ? codeById.get(r.transferSourceAccountId) ?? null
+          : null,
       };
     });
 

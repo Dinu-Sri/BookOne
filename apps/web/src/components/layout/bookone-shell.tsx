@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Suspense, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
 import { PeriodSelector } from '@/components/layout/period-selector';
 import { CompanyResetButton } from '@/components/layout/company-reset-button';
@@ -175,22 +175,43 @@ function sameDay(a: Date, b: Date): boolean {
 }
 
 function DateQuickAccess() {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState(() => {
+    const t = new Date();
+    return new Date(t.getFullYear(), t.getMonth(), 1);
+  });
   const today = useMemo(() => new Date(), []);
   const days = useMemo(() => {
-    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const first = new Date(view.getFullYear(), view.getMonth(), 1);
     const startOffset = first.getDay();
-    const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const totalDays = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
     return Array.from({ length: startOffset + totalDays }, (_, index) => {
       if (index < startOffset) return null;
-      return new Date(today.getFullYear(), today.getMonth(), index - startOffset + 1);
+      return new Date(view.getFullYear(), view.getMonth(), index - startOffset + 1);
     });
-  }, [today]);
-  const label = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const monthLabel = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }, [view]);
+  const label = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const monthLabel = view.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   return (
-    <div className="date-quick">
+    <div ref={rootRef} className="date-quick">
       <button className="date-trigger" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         <CalendarDays size={16} />
         <span>{label}</span>
@@ -198,9 +219,24 @@ function DateQuickAccess() {
       </button>
       {open ? (
         <div className="date-menu">
-          <div className="date-menu-head">
+          <div className="date-menu-head date-menu-nav">
+            <button
+              type="button"
+              className="date-nav-btn"
+              aria-label="Previous month"
+              onClick={() => setView((v) => new Date(v.getFullYear(), v.getMonth() - 1, 1))}
+            >
+              ‹
+            </button>
             <strong>{monthLabel}</strong>
-            <span>Today</span>
+            <button
+              type="button"
+              className="date-nav-btn"
+              aria-label="Next month"
+              onClick={() => setView((v) => new Date(v.getFullYear(), v.getMonth() + 1, 1))}
+            >
+              ›
+            </button>
           </div>
           <div className="date-grid date-weekdays">
             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
@@ -210,7 +246,12 @@ function DateQuickAccess() {
           <div className="date-grid">
             {days.map((day, index) =>
               day ? (
-                <button className={sameDay(day, today) ? 'today' : ''} type="button" key={day.toISOString()} onClick={() => setOpen(false)}>
+                <button
+                  className={sameDay(day, today) ? 'today' : ''}
+                  type="button"
+                  key={day.toISOString()}
+                  onClick={() => setOpen(false)}
+                >
                   {day.getDate()}
                   {sameDay(day, today) ? <Check size={11} /> : null}
                 </button>

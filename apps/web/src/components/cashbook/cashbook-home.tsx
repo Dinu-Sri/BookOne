@@ -22,10 +22,12 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { recordEntry } from '@/app/actions/record-entry';
+import { recordEntry, reverseTransactionById } from '@/app/actions/record-entry';
 import type { CashbookRow } from '@/app/actions/cashbook';
+import { listLiquidAccounts, type LiquidAccount } from '@/app/actions/cashbook-banks';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
-import { gloss, readSiGlossPreference, writeSiGlossPreference } from '@/lib/si-gloss';
+import { DateField } from '@/components/ui/date-field';
+import { gloss, readSiGlossPreference } from '@/lib/si-gloss';
 import { readBookDomainPref, writeBookDomainPref, type BookDomainPref } from '@/lib/book-domain';
 import { canAccessFullErp, type EntityKind } from '@/lib/entity-kind';
 import {
@@ -48,7 +50,13 @@ type Mode =
   | 'bill'
   | null;
 type LoanKind = 'loan_took' | 'loan_paid';
-type PayMethod = 'Cash' | 'Bank';
+type PayMethod = 'Cash' | 'Bank' | 'Card';
+
+function methodFromCode(code: string): PayMethod {
+  if (code === '1000') return 'Cash';
+  if (code === '1200' || code.startsWith('12')) return 'Card';
+  return 'Bank';
+}
 
 const PERSONAL_EXPENSE_CATS: { code: string; en: string; si: string }[] = [
   { code: '6300', en: 'Food', si: 'ආහාර' },
@@ -93,10 +101,6 @@ function formatRs(n: number) {
 
 function todayString(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function payCode(m: PayMethod): string {
-  return m === 'Cash' ? '1000' : '1100';
 }
 
 function shiftPeriod(period: string, delta: number): string {
@@ -168,16 +172,34 @@ export function CashbookHomeClient({
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(todayString());
   const [dueDate, setDueDate] = useState('');
-  const [payMethod, setPayMethod] = useState<PayMethod>('Cash');
-  const [fromPay, setFromPay] = useState<PayMethod>('Cash');
-  const [toPay, setToPay] = useState<PayMethod>('Bank');
+  /** Liquid account codes (1000 cash, 1100+ banks) */
+  const [liquid, setLiquid] = useState<LiquidAccount[]>([]);
+  const [payCodeSelected, setPayCodeSelected] = useState('1000');
+  const [fromCode, setFromCode] = useState('1000');
+  const [toCode, setToCode] = useState('1100');
   /** Empty string = must choose (guide: no silent Marketing/Other default) */
   const [categoryCode, setCategoryCode] = useState('');
   const [incomeCode, setIncomeCode] = useState('');
   const [showDetails, setShowDetails] = useState(false);
   const [error, setError] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    listLiquidAccounts()
+      .then((rows) => {
+        setLiquid(rows);
+        if (rows.length) {
+          const cash = rows.find((r) => r.code === '1000')?.code ?? rows[0]!.code;
+          const bank = rows.find((r) => r.kind === 'bank')?.code ?? rows.find((r) => r.code !== cash)?.code ?? cash;
+          setPayCodeSelected((c) => (rows.some((r) => r.code === c) ? c : cash));
+          setFromCode((c) => (rows.some((r) => r.code === c) ? c : cash));
+          setToCode((c) => (rows.some((r) => r.code === c) ? c : bank));
+        }
+      })
+      .catch(() => setLiquid([]));
+  }, []);
 
   const title = useMemo(() => {
     if (entityKind === 'sole_prop') {
@@ -244,6 +266,7 @@ export function CashbookHomeClient({
 
   function openMode(m: Mode) {
     setMode(m);
+    setEditingId(null);
     setError('');
     setParty('');
     setAmountDisplay('');
@@ -252,7 +275,6 @@ export function CashbookHomeClient({
     setDueDate('');
     setLoanKind('loan_took');
     setShowDetails(false);
-    // Smart last-used category (or force explicit choice if none)
     if (m === 'money_out' || m === 'bill') {
       const last = readLastCategory(domain, m);
       const valid = expenseCats.some((c) => c.code === last);
@@ -268,13 +290,46 @@ export function CashbookHomeClient({
       setIncomeCode('');
     }
     const lastPay = readLastPayMethod();
-    setPayMethod(lastPay || 'Cash');
-    setFromPay('Cash');
-    setToPay('Bank');
+    const cash = liquid.find((a) => a.code === '1000')?.code ?? liquid[0]?.code ?? '1000';
+    const bank = liquid.find((a) => a.kind === 'bank')?.code ?? liquid.find((a) => a.code !== cash)?.code ?? '1100';
+    if (lastPay === 'Cash') setPayCodeSelected(cash);
+    else if (lastPay === 'Bank') setPayCodeSelected(bank);
+    else setPayCodeSelected(cash);
+    setFromCode(cash);
+    setToCode(bank);
+  }
+
+  /** Double-click ledger row → edit sheet (reverse + re-post on save). */
+  function openEdit(r: CashbookRow) {
+    let m: Mode = null;
+    if (r.direction === 'money_in') m = 'money_in';
+    else if (r.direction === 'money_out') m = 'money_out';
+    else if (r.direction === 'move_money') m = 'move_money';
+    else if (r.direction === 'invoice_bill' && r.accountingType === 'SaleCredit') m = 'invoice';
+    else if (r.direction === 'invoice_bill' && r.accountingType === 'PurchaseCredit') m = 'bill';
+    if (!m) return;
+
+    setEditingId(r.id);
+    setMode(m);
+    setError('');
+    setParty(r.party === '—' ? '' : r.party);
+    setAmountDisplay(formatAmountInput(String(r.amount)));
+    setDescription(r.description);
+    setDate(r.date);
+    setDueDate('');
+    setShowDetails(true);
+    setCategoryCode(r.categoryCode && expenseCats.some((c) => c.code === r.categoryCode) ? r.categoryCode : '');
+    setIncomeCode(r.categoryCode && incomeCats.some((c) => c.code === r.categoryCode) ? r.categoryCode : '');
+    if (r.paymentAccountCode) setPayCodeSelected(r.paymentAccountCode);
+    if (r.direction === 'move_money') {
+      if (r.transferSourceCode) setFromCode(r.transferSourceCode);
+      if (r.paymentAccountCode) setToCode(r.paymentAccountCode);
+    }
   }
 
   function closeSheet() {
     setMode(null);
+    setEditingId(null);
     setError('');
   }
 
@@ -297,14 +352,24 @@ export function CashbookHomeClient({
       setError(si ? 'ආදායම් වර්ගය තෝරන්න.' : 'Choose where this money came from.');
       return;
     }
-    if (mode === 'move_money' && fromPay === toPay) {
+    if (mode === 'move_money' && fromCode === toCode) {
       setError(si ? 'සිට සහ දක්වා වෙනස් විය යුතුය.' : 'From and To must be different.');
       return;
     }
 
     startTransition(async () => {
       setError('');
-      const paymentAccount = { kind: 'code' as const, value: payCode(payMethod) };
+      // Edit = reverse original then re-post (keeps double-entry integrity)
+      if (editingId) {
+        const rev = await reverseTransactionById(editingId);
+        if (!rev.success) {
+          setError(rev.error || 'Could not reverse original entry for edit.');
+          return;
+        }
+      }
+
+      const payMethod = methodFromCode(payCodeSelected);
+      const paymentAccount = { kind: 'code' as const, value: payCodeSelected };
       const baseDate = date || todayString();
       const bookDomain = domain;
       const desc =
@@ -430,16 +495,18 @@ export function CashbookHomeClient({
         });
       } else if (mode === 'move_money') {
         sheetDirection = 'move_money';
+        const fromName = liquid.find((a) => a.code === fromCode)?.shortName ?? fromCode;
+        const toName = liquid.find((a) => a.code === toCode)?.shortName ?? toCode;
         result = await recordEntry({
           direction: 'move_money',
           party: party.trim() || 'Transfer',
-          description: desc || `${fromPay} → ${toPay}`,
+          description: desc || `${fromName} → ${toName}`,
           amount: amt,
           currency: 'LKR',
-          paymentMethod: toPay,
-          paymentAccount: { kind: 'code', value: payCode(toPay) },
-          fromAccount: { kind: 'code', value: payCode(fromPay) },
-          toAccount: { kind: 'code', value: payCode(toPay) },
+          paymentMethod: methodFromCode(toCode),
+          paymentAccount: { kind: 'code', value: toCode },
+          fromAccount: { kind: 'code', value: fromCode },
+          toAccount: { kind: 'code', value: toCode },
           date: baseDate,
           bookDomain,
         });
@@ -452,23 +519,50 @@ export function CashbookHomeClient({
         return;
       }
 
-      // Persist smart defaults
       if (mode === 'money_out' || mode === 'bill') {
         writeLastCategory(domain, mode, categoryCode);
       }
       if (mode === 'money_in') writeLastCategory(domain, 'money_in', incomeCode);
       if (mode !== 'invoice' && mode !== 'bill') writeLastPayMethod(payMethod);
 
+      if (editingId) {
+        // Remove original from sheet (reversed); append new
+        setRows((prev) => {
+          const without = prev.filter((x) => x.id !== editingId);
+          const row: CashbookRow = {
+            id: result.transactionId || String(Date.now()),
+            date: baseDate,
+            party: party.trim() || '—',
+            description: desc,
+            direction: sheetDirection,
+            amount: amt,
+            currency: 'LKR',
+            bookDomain: mode === 'invoice' || mode === 'bill' ? 'business' : bookDomain,
+            accountingType,
+            paymentAccountCode: mode === 'move_money' ? toCode : payCodeSelected,
+            transferSourceCode: mode === 'move_money' ? fromCode : null,
+            categoryCode: categoryCode || incomeCode || null,
+          };
+          return [row, ...without];
+        });
+        // Totals: simplest full recalculation from remaining rows is hard; reload page for accuracy
+        window.location.reload();
+        return;
+      }
+
       const row: CashbookRow = {
         id: result.transactionId || String(Date.now()),
         date: baseDate,
         party: party.trim() || '—',
         description: desc,
-        direction: sheetDirection,
         amount: amt,
         currency: 'LKR',
+        direction: sheetDirection,
         bookDomain: mode === 'invoice' || mode === 'bill' ? 'business' : bookDomain,
         accountingType,
+        paymentAccountCode: mode === 'move_money' ? toCode : payCodeSelected,
+        transferSourceCode: mode === 'move_money' ? fromCode : null,
+        categoryCode: categoryCode || incomeCode || null,
       };
       setRows((r) => [row, ...r]);
       if (sheetDirection === 'money_in' || accountingType === 'SaleCredit') {
@@ -480,10 +574,40 @@ export function CashbookHomeClient({
         setSumNet((v) => v - amt);
         if (accountingType === 'PurchaseCredit') setAp((v) => v + amt);
       }
-      // Peak-end: auto-dismiss + success flash
       setMode(null);
+      setEditingId(null);
       setSavedFlash(true);
     });
+  }
+
+  function LiquidTiles({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (code: string) => void;
+  }) {
+    const list =
+      liquid.length > 0
+        ? liquid
+        : [
+            { id: 'c', code: '1000', name: 'Cash', shortName: 'Cash', kind: 'cash' as const },
+            { id: 'b', code: '1100', name: 'Bank', shortName: 'Bank', kind: 'bank' as const },
+          ];
+    return (
+      <div className="cb-liquid-tiles cashbook-pay-tiles wrap">
+        {list.map((a) => (
+          <button
+            key={a.code}
+            type="button"
+            className={`cashbook-tile pay ${value === a.code ? 'active' : ''}`}
+            onClick={() => onChange(a.code)}
+          >
+            {a.shortName}
+          </button>
+        ))}
+      </div>
+    );
   }
 
   const formTitle =
@@ -628,7 +752,12 @@ export function CashbookHomeClient({
                 const inn = sheetInAmount(r);
                 const out = sheetOutAmount(r);
                 return (
-                  <tr key={r.id} className={i % 2 === 1 ? 'zebra' : undefined}>
+                  <tr
+                    key={r.id}
+                    className={i % 2 === 1 ? 'zebra' : undefined}
+                    title={si ? 'සංස්කරණයට දෙවරක් තට්ටු කරන්න' : 'Double-click to edit'}
+                    onDoubleClick={() => openEdit(r)}
+                  >
                     <td className="cb-date">{formatDisplayDate(r.date)}</td>
                     <td>
                       <span className={`cb-dir-dot ${inn != null ? 'in' : out != null ? 'out' : 'neu'}`} />
@@ -665,7 +794,10 @@ export function CashbookHomeClient({
           <div className="cb-sheet">
             <div className="cb-sheet-handle" aria-hidden />
             <div className="cb-sheet-head">
-              <strong className={si ? 'si-text' : undefined}>{formTitle}</strong>
+              <strong className={si ? 'si-text' : undefined}>
+                {editingId ? (si ? 'සංස්කරණය' : 'Edit') + ' · ' : ''}
+                {formTitle}
+              </strong>
               <button type="button" className="cb-sheet-close" onClick={closeSheet} aria-label="Close">
                 <X size={22} />
               </button>
@@ -703,33 +835,11 @@ export function CashbookHomeClient({
                 <>
                   <label className="cb-field">
                     <span>{si ? 'සිට' : 'From'}</span>
-                    <div className="cashbook-pay-tiles">
-                      {(['Cash', 'Bank'] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          className={`cashbook-tile pay ${fromPay === m ? 'active' : ''}`}
-                          onClick={() => setFromPay(m)}
-                        >
-                          {gloss(m.toLowerCase(), si)}
-                        </button>
-                      ))}
-                    </div>
+                    <LiquidTiles value={fromCode} onChange={setFromCode} />
                   </label>
                   <label className="cb-field">
                     <span>{si ? 'දක්වා' : 'To'}</span>
-                    <div className="cashbook-pay-tiles">
-                      {(['Cash', 'Bank'] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          className={`cashbook-tile pay ${toPay === m ? 'active' : ''}`}
-                          onClick={() => setToPay(m)}
-                        >
-                          {gloss(m.toLowerCase(), si)}
-                        </button>
-                      ))}
-                    </div>
+                    <LiquidTiles value={toCode} onChange={setToCode} />
                   </label>
                 </>
               ) : (
@@ -817,17 +927,9 @@ export function CashbookHomeClient({
               )}
 
               {mode !== 'invoice' && mode !== 'bill' && mode !== 'move_money' ? (
-                <div className="cashbook-pay-tiles">
-                  {(['Cash', 'Bank'] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      className={`cashbook-tile pay ${payMethod === m ? 'active' : ''}`}
-                      onClick={() => setPayMethod(m)}
-                    >
-                      {gloss(m.toLowerCase(), si)}
-                    </button>
-                  ))}
+                <div className="cb-field">
+                  <span className="cashbook-field-label">{si ? 'ගෙවූ / ලැබුණු ගිණුම' : 'Account'}</span>
+                  <LiquidTiles value={payCodeSelected} onChange={setPayCodeSelected} />
                 </div>
               ) : null}
 
@@ -867,16 +969,13 @@ export function CashbookHomeClient({
                       />
                     </label>
                   )}
-                  <label className="cb-field">
-                    <span>{gloss('date', si)}</span>
-                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                    <small className="cb-date-hint">{formatDisplayDate(date)}</small>
-                  </label>
+                  <DateField label={gloss('date', si)} value={date} onChange={setDate} />
                   {mode === 'invoice' || mode === 'bill' ? (
-                    <label className="cb-field">
-                      <span>{si ? 'ගෙවිය යුතු දිනය' : 'Due date (optional)'}</span>
-                      <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                    </label>
+                    <DateField
+                      label={si ? 'ගෙවිය යුතු දිනය' : 'Due date (optional)'}
+                      value={dueDate || date}
+                      onChange={setDueDate}
+                    />
                   ) : null}
                 </>
               ) : null}

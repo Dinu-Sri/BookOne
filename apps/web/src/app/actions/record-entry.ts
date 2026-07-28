@@ -459,3 +459,10 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
 export async function reverseTransactionFromForm(formData: FormData): Promise<void> {
   await createReversingEntry(formData);
 }
+
+/** Programmatic reverse for cashbook edit (reverse + re-post). */
+export async function reverseTransactionById(transactionId: string): Promise<ReversalResult> {
+  const fd = new FormData();
+  fd.set('transactionId', transactionId);
+  return createReversingEntry(fd);
+}

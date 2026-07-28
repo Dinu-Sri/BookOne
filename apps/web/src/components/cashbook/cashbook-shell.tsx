@@ -53,9 +53,8 @@ export function CashbookShell({
         <div className="cashbook-top-left">
           <BrandLockup compact />
           <WorkspaceSwitcher compact />
-          <span className={`cashbook-title${si ? ' si-text' : ''}`} title={title}>
-            {title}
-          </span>
+          {/* Page title intentionally omitted — logo + workspace name only (user request) */}
+          <span className="sr-only">{title}</span>
         </div>
         <div className="cashbook-top-right" ref={menuRef}>
           {right}

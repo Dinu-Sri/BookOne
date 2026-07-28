@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -8,14 +8,23 @@ import {
   ArrowUpRight,
   Building2,
   ExternalLink,
+  Landmark,
   Languages,
   Loader2,
   LogOut,
+  Plus,
   Sparkles,
   Store,
+  Trash2,
 } from 'lucide-react';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
+import {
+  archiveCashbookBank,
+  createCashbookBank,
+  listLiquidAccounts,
+  type LiquidAccount,
+} from '@/app/actions/cashbook-banks';
 import {
   downgradeSoleFullToLite,
   incorporateSoleToCompany,
@@ -131,6 +140,19 @@ export function CashbookSettingsClient({
   const [companyName, setCompanyName] = useState('');
   const [pending, start] = useTransition();
   const [confirm, setConfirm] = useState<ConfirmKind | null>(null);
+  const [banks, setBanks] = useState<LiquidAccount[]>([]);
+  const [newBank, setNewBank] = useState('');
+  const [bankError, setBankError] = useState('');
+
+  function reloadBanks() {
+    listLiquidAccounts()
+      .then(setBanks)
+      .catch(() => setBanks([]));
+  }
+
+  useEffect(() => {
+    reloadBanks();
+  }, []);
 
   function run(
     fn: () => Promise<{ ok: true; homePath: string; message: string } | { ok: false; error: string }>,
@@ -235,6 +257,87 @@ export function CashbookSettingsClient({
                 <span className="cb-chevron">→</span>
               </Link>
             ) : null}
+          </div>
+        </section>
+
+        {/* Banks / cash accounts */}
+        <section className="card cb-settings-card">
+          <div className="card-header">
+            <div>
+              <p className="eyebrow">
+                <Landmark size={12} style={{ display: 'inline', verticalAlign: -1 }} />{' '}
+                {si ? 'ගිණුම්' : 'Accounts'}
+              </p>
+              <h2 className="card-title">{si ? 'මුදල් හා බැංකු' : 'Cash & banks'}</h2>
+              <p className="card-subtitle">
+                {si
+                  ? 'කෙටි නම් Money In/Out සහ Move tiles තුළ පෙන්වයි. බැංකුවෙන් බැංකුවට මාරු කළ හැක.'
+                  : 'Short names appear as tiles for payments and Move Money (including bank → bank).'}
+              </p>
+            </div>
+          </div>
+          <div className="card-body cb-settings-body">
+            <div className="cb-banks-list">
+              {banks.map((b) => (
+                <div key={b.id} className="cb-bank-row">
+                  <div>
+                    <strong>{b.shortName}</strong>
+                    <small>
+                      {b.code} · {b.kind}
+                    </small>
+                  </div>
+                  {b.code !== '1000' ? (
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      aria-label="Remove bank"
+                      onClick={() => {
+                        start(async () => {
+                          setBankError('');
+                          const res = await archiveCashbookBank(b.id);
+                          if (!res.ok) setBankError(res.error);
+                          else reloadBanks();
+                        });
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  ) : (
+                    <Badge tone="neutral">Cash</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="cb-life-actions" style={{ marginTop: 10 }}>
+              <input
+                className="input"
+                style={{ flex: 1, minWidth: 140, minHeight: 44 }}
+                value={newBank}
+                onChange={(e) => setNewBank(e.target.value)}
+                placeholder={si ? 'උදා: HNB, BOC' : 'e.g. HNB, BOC Savings'}
+                maxLength={40}
+              />
+              <Button
+                variant="primary"
+                type="button"
+                disabled={pending || !newBank.trim()}
+                onClick={() => {
+                  start(async () => {
+                    setBankError('');
+                    const res = await createCashbookBank(newBank);
+                    if (!res.ok) setBankError(res.error);
+                    else {
+                      setNewBank('');
+                      reloadBanks();
+                    }
+                  });
+                }}
+              >
+                {pending ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+                {si ? 'එකතු කරන්න' : 'Add bank'}
+              </Button>
+            </div>
+            {bankError ? <p className="cashbook-error">{bankError}</p> : null}
           </div>
         </section>
 

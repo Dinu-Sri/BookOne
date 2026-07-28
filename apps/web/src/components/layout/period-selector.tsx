@@ -2,10 +2,10 @@
 
 import { CalendarDays, Check, ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 function formatPeriod(period: string): string {
-  return new Date(`${period}-01`).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  return new Date(`${period}-01`).toLocaleString('en-GB', { month: 'short', year: 'numeric' });
 }
 
 export function PeriodSelector({
@@ -20,9 +20,26 @@ export function PeriodSelector({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const options = useMemo(() => ['all', ...available], [available]);
   const selectedLabel = selected ? formatPeriod(selected) : 'All time';
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   function updatePeriod(value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -37,7 +54,7 @@ export function PeriodSelector({
   }
 
   return (
-    <div className={`period-picker ${compact ? 'compact' : ''}`}>
+    <div ref={rootRef} className={`period-picker ${compact ? 'compact' : ''}`}>
       <button
         className="period-trigger"
         type="button"

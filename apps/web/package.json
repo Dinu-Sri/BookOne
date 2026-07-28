@@ -17,6 +17,7 @@
     "@bookone/auth": "workspace:*",
     "@bookone/db": "workspace:*",
     "@bookone/modules": "workspace:*",
+    "@bookone/statement-import": "workspace:*",
     "@bookone/ui": "workspace:*",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/mdx": "^2.0.14",

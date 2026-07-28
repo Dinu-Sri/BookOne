@@ -17,11 +17,13 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  FileSpreadsheet,
   FileText,
   Landmark,
   Loader2,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import { recordEntry, reverseTransactionById } from '@/app/actions/record-entry';
 import type { CashbookRow } from '@/app/actions/cashbook';
 import { listLiquidAccounts, type LiquidAccount } from '@/app/actions/cashbook-banks';
@@ -709,7 +711,7 @@ export function CashbookHomeClient({
         </button>
       </div>
 
-      {/* Tier 2 — more actions (neutral, smaller) — no Import Excel */}
+      {/* Tier 2 — more actions + Import bank (safe staged import) */}
       <div className="cb-tier2-wrap">
         <span className="cb-tier2-label">{si ? 'තවත්' : 'More actions'}</span>
         <div className="cb-tier2">
@@ -724,6 +726,15 @@ export function CashbookHomeClient({
               <span className={si ? 'si-text' : undefined}>{gloss(t.key, si)}</span>
             </button>
           ))}
+          <Link
+            href={`/cashbook/import${domain ? `?domain=${domain}` : ''}`}
+            className="cb-secondary-tile"
+          >
+            <FileSpreadsheet size={18} />
+            <span className={si ? 'si-text' : undefined}>
+              {si ? 'බැංකු Excel' : 'Import bank'}
+            </span>
+          </Link>
         </div>
       </div>
 

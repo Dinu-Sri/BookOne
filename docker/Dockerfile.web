@@ -15,6 +15,7 @@ COPY packages/accounting/package.json ./packages/accounting/
 COPY packages/auth/package.json ./packages/auth/
 COPY packages/db/package.json ./packages/db/
 COPY packages/modules/package.json ./packages/modules/
+COPY packages/statement-import/package.json ./packages/statement-import/
 COPY packages/ui/package.json ./packages/ui/
 
 # Optional packages if present in lockfile workspace

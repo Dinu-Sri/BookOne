@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getDashboardData, getTenantInfo, listTransactions } from '@/app/actions/workspace';
+import { getDashboardData, getTenantInfo } from '@/app/actions/workspace';
 import { getReconciliationForPeriod } from '@/app/actions/reconciliation';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { BankReconciliationWizard } from '@/components/reconciliation/bank-reconciliation-wizard';
@@ -13,10 +13,9 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   const params = await searchParams;
   let tenant;
   let data;
-  let transactions;
   let reconciliation;
   try {
-    [tenant, data, transactions] = await Promise.all([getTenantInfo(), getDashboardData(params?.period), listTransactions(params?.period)]);
+    [tenant, data] = await Promise.all([getTenantInfo(), getDashboardData(params?.period)]);
   } catch (err) {
     redirect('/login');
   }
@@ -74,7 +73,6 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
 
           <BankReconciliationWizard
             period={reconciliationPeriod}
-            transactions={transactions}
             initialImport={reconciliation.importSummary}
           />
           <PeriodCloseControls

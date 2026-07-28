@@ -8,7 +8,13 @@ export { journalEntries } from './journal-entries';
 export { journalLines } from './journal-lines';
 export { settlementAllocations } from './settlement-allocations';
 export { auditLog } from './audit-log';
-export { bankStatementImports, bankStatementLines, periodLocks } from './reconciliation';
+export {
+  bankStatementImports,
+  bankStatementLines,
+  bankStatementProfiles,
+  bankStatementImportEvents,
+  periodLocks,
+} from './reconciliation';
 export { businessDocuments, businessDocumentLines } from './business-documents';
 export {
   tenantMemberships,

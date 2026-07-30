@@ -12,7 +12,9 @@ export {
   bankStatementImports,
   bankStatementLines,
   bankStatementProfiles,
+  bankStatementProfileVersions,
   bankStatementImportEvents,
+  bankImportIssues,
   periodLocks,
 } from './reconciliation';
 export { businessDocuments, businessDocumentLines } from './business-documents';

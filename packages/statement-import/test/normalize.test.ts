@@ -82,6 +82,7 @@ describe('matchLine', () => {
 });
 
 import { annotateBalanceContinuity } from '../src/balance';
+import { checkStatementBalance, totalsFromSignedAmounts } from '../src/validate-balance';
 
 describe('annotateBalanceContinuity', () => {
   it('flags broken running balance', () => {
@@ -110,5 +111,25 @@ describe('annotateBalanceContinuity', () => {
       },
     ]);
     expect(flags.get(2)).toBe('BALANCE_BREAK');
+  });
+});
+
+describe('checkStatementBalance', () => {
+  it('passes when equation holds', () => {
+    const totals = totalsFromSignedAmounts([1000, -400, 200], 500, 1300);
+    const r = checkStatementBalance(totals);
+    expect(r.ok).toBe(true);
+    expect(r.difference).toBe(0);
+  });
+  it('fails when reversed money direction', () => {
+    const totals = {
+      openingBalance: 1000,
+      closingBalance: 1500,
+      totalMoneyIn: 100,
+      totalMoneyOut: 600,
+      transactionCount: 2,
+    };
+    const r = checkStatementBalance(totals);
+    expect(r.ok).toBe(false);
   });
 });

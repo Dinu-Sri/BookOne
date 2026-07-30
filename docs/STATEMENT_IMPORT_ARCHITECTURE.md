@@ -1,7 +1,8 @@
 # Smart Bank Statement Import — Architecture & Risk Design
 
-> **Status:** Deep plan (canonical) — **SI-1…SI-4 + manual mapping** (user-confirmed columns; Sampath DR/CR + HNB Debit/Credit fixtures)  
-> **Last updated:** 2026-07-28  
+> **Status:** **LEGACY SI engine** (SI-1…SI-4) — kept for rollback.  
+> **Canonical product path:** `docs/BANK_IMPORT_STUDIO.md` (Smart Bank Import Studio)  
+> **Last updated:** 2026-07-30  
 > **Surfaces:** Cashbook **Import bank** + ERP **`/reconciliation`**  
 > **Primary audience:** Personal, sole prop (lite/full), small multi-bank owners  
 > **AI in v1:** **Not required** (deterministic parse/match first; AI optional later)  

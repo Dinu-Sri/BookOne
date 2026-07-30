@@ -32,3 +32,10 @@ export {
   type SlBankPreset,
   type SlBankPresetId,
 } from './sl-bank-presets';
+export { inspectStatementFile, type FileInspection, type InspectSheet } from './inspect';
+export {
+  checkStatementBalance,
+  totalsFromSignedAmounts,
+  type StatementTotals,
+  type BalanceCheckResult,
+} from './validate-balance';

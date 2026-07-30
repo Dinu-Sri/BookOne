@@ -727,7 +727,7 @@ export function CashbookHomeClient({
             </button>
           ))}
           <Link
-            href={`/cashbook/import${domain ? `?domain=${domain}` : ''}`}
+            href={`/cashbook/import-studio${domain ? `?domain=${domain}` : ''}`}
             className="cb-secondary-tile"
           >
             <FileSpreadsheet size={18} />

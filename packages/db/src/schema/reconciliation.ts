@@ -7,12 +7,14 @@ import {
   text,
   jsonb,
   integer,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { users } from './users';
 import { transactions } from './transactions';
 import { accounts } from './accounts';
 
+/** Parent import profile (tenant-learned or system). */
 export const bankStatementProfiles = pgTable('bank_statement_profiles', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').references(() => tenants.id),
@@ -25,8 +27,33 @@ export const bankStatementProfiles = pgTable('bank_statement_profiles', {
   sheetName: varchar('sheet_name', { length: 120 }),
   successCount: integer('success_count').notNull().default(0),
   version: integer('version').notNull().default(1),
+  bankAccountId: uuid('bank_account_id').references(() => accounts.id),
+  currentVersionId: uuid('current_version_id'),
+  profileStatus: varchar('profile_status', { length: 20 }).default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+/** Versioned studio rules — never mutate approved versions in place. */
+export const bankStatementProfileVersions = pgTable('bank_statement_profile_versions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  profileId: uuid('profile_id').notNull().references(() => bankStatementProfiles.id),
+  versionNumber: integer('version_number').notNull().default(1),
+  status: varchar('status', { length: 20 }).notNull().default('draft'),
+  columnMappings: jsonb('column_mappings').$type<Record<string, unknown>>().notNull().default({}),
+  amountRules: jsonb('amount_rules').$type<Record<string, unknown>>().notNull().default({}),
+  dateRules: jsonb('date_rules').$type<Record<string, unknown>>().notNull().default({}),
+  rowFilters: jsonb('row_filters').$type<unknown[]>().notNull().default([]),
+  structureFingerprint: jsonb('structure_fingerprint').$type<Record<string, unknown>>().notNull().default({}),
+  sampleSignatures: jsonb('sample_signatures'),
+  notes: text('notes'),
+  createdBy: uuid('created_by').references(() => users.id),
+  approvedBy: uuid('approved_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  supersededAt: timestamp('superseded_at', { withTimezone: true }),
   voidedAt: timestamp('voided_at', { withTimezone: true }),
 });
 
@@ -49,6 +76,18 @@ export const bankStatementImports = pgTable('bank_statement_imports', {
   periodTo: varchar('period_to', { length: 10 }),
   parserProfileId: uuid('parser_profile_id').references(() => bankStatementProfiles.id),
   source: varchar('source', { length: 20 }).default('erp_recon'),
+  /** Studio: open | draft | ready | committed | voided | rolled_back */
+  wizardStatus: varchar('wizard_status', { length: 20 }).default('open'),
+  wizardStep: varchar('wizard_step', { length: 40 }),
+  draftPayload: jsonb('draft_payload'),
+  draftVersion: integer('draft_version').notNull().default(1),
+  contentFingerprint: varchar('content_fingerprint', { length: 64 }),
+  openingBalance: numeric('opening_balance', { precision: 18, scale: 2 }),
+  closingBalance: numeric('closing_balance', { precision: 18, scale: 2 }),
+  totalMoneyIn: numeric('total_money_in', { precision: 18, scale: 2 }),
+  totalMoneyOut: numeric('total_money_out', { precision: 18, scale: 2 }),
+  idempotencyKey: varchar('idempotency_key', { length: 80 }),
+  profileVersionId: uuid('profile_version_id').references(() => bankStatementProfileVersions.id),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),
@@ -78,6 +117,14 @@ export const bankStatementLines = pgTable('bank_statement_lines', {
   proposedAction: varchar('proposed_action', { length: 20 }).default('review'),
   createdTransactionId: uuid('created_transaction_id').references(() => transactions.id),
   confidence: numeric('confidence', { precision: 5, scale: 4 }),
+  valueDate: varchar('value_date', { length: 10 }),
+  debitAmount: numeric('debit_amount', { precision: 18, scale: 2 }),
+  creditAmount: numeric('credit_amount', { precision: 18, scale: 2 }),
+  validationStatus: varchar('validation_status', { length: 20 }).default('valid'),
+  validationMessages: jsonb('validation_messages'),
+  sourceRowHash: varchar('source_row_hash', { length: 64 }),
+  transformLog: jsonb('transform_log'),
+  reconciliationStatus: varchar('reconciliation_status', { length: 20 }).default('unmatched'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),
@@ -92,6 +139,26 @@ export const bankStatementImportEvents = pgTable('bank_statement_import_events',
   action: varchar('action', { length: 40 }).notNull(),
   detail: jsonb('detail'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const bankImportIssues = pgTable('bank_import_issues', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  importId: uuid('import_id').notNull().references(() => bankStatementImports.id),
+  lineId: uuid('line_id').references(() => bankStatementLines.id),
+  issueType: varchar('issue_type', { length: 40 }).notNull(),
+  severity: varchar('severity', { length: 20 }).notNull().default('error'),
+  status: varchar('status', { length: 20 }).notNull().default('open'),
+  title: varchar('title', { length: 255 }).notNull(),
+  detail: jsonb('detail'),
+  resolution: varchar('resolution', { length: 40 }),
+  resolutionDetail: jsonb('resolution_detail'),
+  applyToSimilar: boolean('apply_to_similar').notNull().default(false),
+  resolvedBy: uuid('resolved_by').references(() => users.id),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
 });
 
 export const periodLocks = pgTable('period_locks', {

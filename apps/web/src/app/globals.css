@@ -7008,3 +7008,278 @@ textarea.input {
     flex: 1 1 55% !important;
   }
 }
+
+/* ── Compact coach UI (post audit round-2) ── */
+.bis-workspace {
+  align-items: stretch !important;
+}
+.bis-workspace.split {
+  /* content packs from top; sheet fills remaining height only */
+  min-height: 0 !important;
+}
+.bis-pane-sheet {
+  display: flex !important;
+  flex-direction: column !important;
+}
+.bis-pane-step {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+}
+.bis-step-body {
+  justify-content: flex-start !important;
+  align-content: flex-start !important;
+}
+
+.bis-step-top.tone-blue { background: linear-gradient(180deg, #eff6ff 0%, #fff 100%); }
+.bis-step-top.tone-yellow { background: linear-gradient(180deg, #fef9c3 0%, #fff 100%); }
+.bis-step-top.tone-green { background: linear-gradient(180deg, #ecfdf5 0%, #fff 100%); }
+.bis-step-top.tone-amber { background: linear-gradient(180deg, #fffbeb 0%, #fff 100%); }
+.bis-step-top.tone-purple { background: linear-gradient(180deg, #f5f3ff 0%, #fff 100%); }
+
+.bis-q-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bis-q-icon {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+}
+.bis-q-icon.tone-blue { background: #dbeafe; color: #1d4ed8; }
+.bis-q-icon.tone-yellow { background: #fef08a; color: #a16207; }
+.bis-q-icon.tone-green { background: #bbf7d0; color: #15803d; }
+.bis-q-icon.tone-amber { background: #fde68a; color: #b45309; }
+.bis-q-icon.tone-purple { background: #ddd6fe; color: #6d28d9; }
+.bis-q { font-size: 15px !important; }
+.bis-step-num {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: #94a3b8;
+}
+
+.bis-coach {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+}
+.bis-coach.blue { background: #eff6ff; border-color: #bfdbfe; }
+.bis-coach.yellow { background: #fefce8; border-color: #fde047; }
+.bis-coach.green { background: #ecfdf5; border-color: #86efac; }
+.bis-coach strong { display: block; font-size: 13px; font-weight: 800; margin-bottom: 2px; }
+.bis-coach p { margin: 0; font-size: 12px; color: #475569; font-weight: 600; line-height: 1.35; }
+.bis-coach-swatch {
+  width: 14px;
+  height: 36px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.bis-coach-swatch.blue { background: #3b82f6; }
+.bis-coach-swatch.yellow { background: #eab308; }
+.bis-coach-swatch.green { background: #22c55e; }
+
+.bis-selected-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  width: fit-content;
+}
+.bis-selected-pill.blue { background: #dbeafe; color: #1e40af; }
+.bis-selected-pill.yellow { background: #fef08a; color: #854d0e; }
+.bis-selected-pill.green { background: #bbf7d0; color: #166534; }
+
+.bis-money-box {
+  background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 55%, #fde68a 100%);
+  border: 1.5px solid #fbbf24;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(251, 191, 36, 0.18);
+}
+.bis-money-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #92400e;
+}
+.bis-mode-card {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 120px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1.5px solid #f59e0b;
+  background: #fffbeb;
+  cursor: pointer;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bis-mode-card strong { font-size: 12px; font-weight: 800; color: #78350f; }
+.bis-mode-card span { font-size: 10px; font-weight: 600; color: #a16207; }
+.bis-mode-card.active {
+  background: #fff;
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px #fbbf24;
+}
+.bis-map-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bis-map-card {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.bis-map-card.out { background: #fecaca; color: #991b1b; }
+.bis-map-card.in { background: #a7f3d0; color: #065f46; }
+.bis-map-card.amount { background: #c7d2fe; color: #3730a3; }
+.bis-map-card.type { background: #fbcfe8; color: #9d174d; }
+.bis-map-card.bal { background: #e2e8f0; color: #334155; }
+
+.bis-review-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.bis-hero-card {
+  padding: 10px 8px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: center;
+}
+.bis-hero-card span {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.bis-hero-card strong { font-size: 14px; font-weight: 800; }
+.bis-hero-card.in {
+  background: #ecfdf5;
+  border-color: #86efac;
+}
+.bis-hero-card.in strong { color: #15803d; }
+.bis-hero-card.out {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+.bis-hero-card.out strong { color: #b91c1c; }
+
+.bis-status-ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 750;
+}
+.bis-status-bad {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.bis-issue-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #b91c1c;
+  line-height: 1.4;
+}
+.bis-advanced {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+.bis-advanced summary { cursor: pointer; margin-bottom: 6px; }
+
+.bis-continue-hint {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #b45309;
+  max-width: 160px;
+  text-align: right;
+  line-height: 1.25;
+}
+.bis-foot-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.bis-done-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+}
+.bis-done-card strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  color: #065f46;
+  margin-bottom: 4px;
+}
+.bis-done-card p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #166534;
+  line-height: 1.4;
+}
+.bis-done-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bis-done-actions .bis-btn {
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sheet: pack table to content height; scroll only if needed */
+.bis-excel {
+  height: 100%;
+}
+.bis-excel-scroll {
+  flex: 1 1 auto;
+  max-height: none;
+}

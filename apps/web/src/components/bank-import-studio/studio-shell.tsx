@@ -15,20 +15,23 @@ const STEPS = [
 ] as const;
 
 export type StudioStepId = (typeof STEPS)[number]['id'];
+export type StepTone = 'neutral' | 'blue' | 'yellow' | 'green' | 'amber' | 'purple';
 
 /**
- * Split layout: Excel sheet (left) + short step panel (right).
- * Upload/account can omit the sheet pane.
+ * Compact split: sheet left, coach panel right (top-aligned, no empty stretch).
  */
 export function StudioShell({
   step,
   title,
+  tone = 'neutral',
+  icon,
   children,
   sheet,
   onBack,
   onContinue,
   continueLabel = 'Next',
   continueDisabled,
+  continueHint,
   pending,
   stepIndex,
   stepTotal,
@@ -36,38 +39,45 @@ export function StudioShell({
 }: {
   step: StudioStepId;
   title: string;
+  tone?: StepTone;
+  icon?: ReactNode;
   children: ReactNode;
-  /** Excel-like pane; when set, uses two-column workspace */
   sheet?: ReactNode;
   onBack?: () => void;
   onContinue?: () => void;
   continueLabel?: string;
   continueDisabled?: boolean;
+  /** Why Next/Import is disabled */
+  continueHint?: string | null;
   pending?: boolean;
   stepIndex: number;
   stepTotal: number;
-  /** Tighter single-column for upload */
   compact?: boolean;
 }) {
   const activeIdx = STEPS.findIndex((s) => s.id === step);
   const split = Boolean(sheet) && !compact;
 
   return (
-    <div className={`bis-workspace ${split ? 'split' : 'single'}`}>
+    <div className={`bis-workspace tone-${tone} ${split ? 'split' : 'single'}`}>
       {split ? <aside className="bis-pane-sheet">{sheet}</aside> : null}
 
       <section className="bis-pane-step">
-        <div className="bis-step-top">
+        <div className={`bis-step-top tone-${tone}`}>
           <div className="bis-dots" aria-label={`Step ${stepIndex} of ${stepTotal}`}>
             {STEPS.map((s, i) => (
               <span
                 key={s.id}
                 className={`bis-dot ${i < activeIdx ? 'done' : ''} ${i === activeIdx ? 'active' : ''}`}
-                title={s.id}
               />
             ))}
+            <span className="bis-step-num">
+              {stepIndex}/{stepTotal}
+            </span>
           </div>
-          <h1 className="bis-q">{title}</h1>
+          <div className="bis-q-row">
+            {icon ? <span className={`bis-q-icon tone-${tone}`}>{icon}</span> : null}
+            <h1 className="bis-q">{title}</h1>
+          </div>
         </div>
 
         <div className="bis-step-body">{children}</div>
@@ -80,16 +90,21 @@ export function StudioShell({
           ) : (
             <span />
           )}
-          {onContinue ? (
-            <button
-              type="button"
-              className="bis-btn primary"
-              onClick={onContinue}
-              disabled={pending || continueDisabled}
-            >
-              {pending ? '…' : continueLabel}
-            </button>
-          ) : null}
+          <div className="bis-foot-right">
+            {continueHint && continueDisabled ? (
+              <p className="bis-continue-hint">{continueHint}</p>
+            ) : null}
+            {onContinue ? (
+              <button
+                type="button"
+                className="bis-btn primary"
+                onClick={onContinue}
+                disabled={pending || continueDisabled}
+              >
+                {pending ? '…' : continueLabel}
+              </button>
+            ) : null}
+          </div>
         </footer>
       </section>
     </div>

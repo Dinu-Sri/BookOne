@@ -526,10 +526,20 @@ export async function commitStudioImport(formData: FormData): Promise<
           .join(' · ')}`,
       };
     }
-    if (transform.lines.length === 0) {
+    const readyLines = transform.lines.filter(
+      (l) => l.validationStatus === 'valid' || l.validationStatus === 'warning',
+    );
+    if (readyLines.length === 0) {
       return { ok: false, error: 'No valid transactions to import.' };
     }
-    if (!transform.balanceCheck.ok) {
+    // Only enforce statement balance when both opening & closing were provided
+    if (
+      !transform.balanceCheck.ok &&
+      mapping.openingBalance != null &&
+      mapping.closingBalance != null &&
+      Number.isFinite(mapping.openingBalance) &&
+      Number.isFinite(mapping.closingBalance)
+    ) {
       return { ok: false, error: transform.balanceCheck.message };
     }
 
@@ -635,9 +645,7 @@ export async function commitStudioImport(formData: FormData): Promise<
           .where(eq(bankStatementProfiles.id, profile.id));
       }
 
-      const ready = transform.lines.filter(
-        (l) => l.validationStatus === 'valid' || l.validationStatus === 'warning',
-      );
+      const ready = readyLines;
 
       await db().transaction(async (tx) => {
         // Clear any previous draft lines

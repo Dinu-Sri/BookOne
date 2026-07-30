@@ -1,7 +1,17 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
-import { FileSpreadsheet, Loader2 } from 'lucide-react';
+import {
+  Calendar,
+  CheckCircle2,
+  Columns3,
+  FileSpreadsheet,
+  LayoutList,
+  Loader2,
+  MousePointerClick,
+  Rows3,
+  Wallet,
+} from 'lucide-react';
 import {
   commitStudioImport,
   createStudioDraft,
@@ -367,18 +377,35 @@ export function BankImportStudioWizard({
     });
   }
 
+  function importBlockReason(): string | null {
+    const t = preview?.transform;
+    if (!t) return 'Still reading the file…';
+    if (t.readyCount <= 0) return 'No valid lines yet — check date & money columns.';
+    if (t.errorCount > 0) {
+      const top = t.issues.find((i) => i.severity === 'error');
+      return top
+        ? `${t.errorCount} problem(s): ${top.title}`
+        : `${t.errorCount} problem(s) — go Back and fix columns.`;
+    }
+    // Only hard-block balance when both open & close were entered
+    if (
+      !t.balanceCheck.ok &&
+      openingBalance.trim() !== '' &&
+      closingBalance.trim() !== ''
+    ) {
+      return 'Opening/closing balance do not match. Fix or clear those fields.';
+    }
+    return null;
+  }
+
   function doCommit() {
     if (!draft || !file || !bankId || !mapping || !sheetName) return;
-    const t = preview?.transform;
-    if (t && t.errorCount > 0) {
-      setError(`Fix ${t.errorCount} problem(s) first`);
+    const block = importBlockReason();
+    if (block) {
+      setError(block);
       return;
     }
-    if (t && !t.balanceCheck.ok) {
-      setError(t.balanceCheck.message);
-      return;
-    }
-    if (!window.confirm('Import bank lines only? Books stay unchanged until reconciliation.')) {
+    if (!window.confirm('Save bank lines only? Your cashbook stays the same until you match later.')) {
       return;
     }
 
@@ -553,14 +580,25 @@ export function BankImportStudioWizard({
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title="Tap header row"
+        title="Find the header"
+        tone="blue"
+        icon={<Rows3 size={18} />}
         sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('sheet')}
         onContinue={goNextFromTable}
       >
-        <p className="bis-tip">Blue = header. Tap a row number.</p>
-        <p className="bis-tip muted">Row {mapping.headerRowIndex + 1}</p>
+        <div className="bis-coach blue">
+          <div className="bis-coach-swatch blue" />
+          <div>
+            <strong>Blue row = column names</strong>
+            <p>Tap any row number on the left sheet.</p>
+          </div>
+        </div>
+        <div className="bis-selected-pill blue">
+          <MousePointerClick size={14} />
+          Row {mapping.headerRowIndex + 1} selected
+        </div>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -568,24 +606,31 @@ export function BankImportStudioWizard({
 
   // ─── DATE ───
   if (phase === 'date' && mapping) {
+    const lab = preview?.columns.find((c) => c.index === mapping.dateCol)?.label;
     return (
       <StudioShell
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title="Tap date column"
+        title="Which column is the date?"
+        tone="yellow"
+        icon={<Calendar size={18} />}
         sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('table')}
         onContinue={goNextFromDate}
       >
-        <p className="bis-tip">Yellow = date. Tap a column (1, 2, 3…).</p>
-        <p className="bis-tip muted">
+        <div className="bis-coach yellow">
+          <div className="bis-coach-swatch yellow" />
+          <div>
+            <strong>Yellow = date</strong>
+            <p>Tap column 1, 2, 3… on the sheet.</p>
+          </div>
+        </div>
+        <div className="bis-selected-pill yellow">
           Col {mapping.dateCol + 1}
-          {preview?.columns.find((c) => c.index === mapping.dateCol)?.label
-            ? ` · ${preview.columns.find((c) => c.index === mapping.dateCol)!.label}`
-            : ''}
-        </p>
+          {lab ? ` · ${lab}` : ''}
+        </div>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -593,24 +638,31 @@ export function BankImportStudioWizard({
 
   // ─── DESCRIPTION ───
   if (phase === 'description' && mapping) {
+    const lab = preview?.columns.find((c) => c.index === mapping.descriptionCol)?.label;
     return (
       <StudioShell
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title="Tap details column"
+        title="Which column is the details?"
+        tone="green"
+        icon={<LayoutList size={18} />}
         sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('date')}
         onContinue={goNextFromDesc}
       >
-        <p className="bis-tip">Green = details. Tap a column (1, 2, 3…).</p>
-        <p className="bis-tip muted">
+        <div className="bis-coach green">
+          <div className="bis-coach-swatch green" />
+          <div>
+            <strong>Green = details</strong>
+            <p>Particulars / narration / description.</p>
+          </div>
+        </div>
+        <div className="bis-selected-pill green">
           Col {mapping.descriptionCol + 1}
-          {preview?.columns.find((c) => c.index === mapping.descriptionCol)?.label
-            ? ` · ${preview.columns.find((c) => c.index === mapping.descriptionCol)!.label}`
-            : ''}
-        </p>
+          {lab ? ` · ${lab}` : ''}
+        </div>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -625,118 +677,124 @@ export function BankImportStudioWizard({
         stepIndex={meta.index}
         stepTotal={9}
         title="How is money shown?"
+        tone="amber"
+        icon={<Wallet size={18} />}
         sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('description')}
         onContinue={goNextFromMoney}
         continueLabel="Review"
       >
-        <div className="bis-mode-row">
-          {(
-            [
-              ['debit_credit', 'Out + In cols'],
-              ['amount_with_type', 'Amount + DR/CR'],
-              ['signed_amount', 'One amount ±'],
-              ['embedded_indicator', 'Amount has DR'],
-            ] as const
-          ).map(([m, lab]) => (
-            <button
-              key={m}
-              type="button"
-              className={`bis-chip ${mode === m ? 'active' : ''}`}
-              onClick={() => updateMode(m)}
-            >
-              {lab}
-            </button>
-          ))}
-        </div>
+        <div className="bis-money-box">
+          <p className="bis-money-label">1. Pick layout</p>
+          <div className="bis-mode-row">
+            {(
+              [
+                ['debit_credit', 'Out + In', 'Two amount columns'],
+                ['amount_with_type', 'Amount + type', 'e.g. DR / CR'],
+                ['signed_amount', 'One amount ±', 'Minus = out'],
+                ['embedded_indicator', 'DR in amount', '5,000 DR'],
+              ] as const
+            ).map(([m, lab, hint]) => (
+              <button
+                key={m}
+                type="button"
+                className={`bis-mode-card ${mode === m ? 'active' : ''}`}
+                onClick={() => updateMode(m)}
+              >
+                <strong>{lab}</strong>
+                <span>{hint}</span>
+              </button>
+            ))}
+          </div>
 
-        <p className="bis-tip">Then tap columns on the sheet:</p>
-        <div className="bis-mode-row">
-          {mode === 'debit_credit' ? (
-            <>
-              <button
-                type="button"
-                className={`bis-chip role-out ${moneyPick === 'out' ? 'active' : ''}`}
-                onClick={() => setMoneyPick('out')}
-              >
-                Out col
-              </button>
-              <button
-                type="button"
-                className={`bis-chip role-in ${moneyPick === 'in' ? 'active' : ''}`}
-                onClick={() => setMoneyPick('in')}
-              >
-                In col
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className={`bis-chip role-amount ${moneyPick === 'amount' ? 'active' : ''}`}
-                onClick={() => setMoneyPick('amount')}
-              >
-                Amount
-              </button>
-              {mode === 'amount_with_type' ? (
+          <p className="bis-money-label">2. Tap columns on the sheet</p>
+          <div className="bis-mode-row">
+            {mode === 'debit_credit' ? (
+              <>
                 <button
                   type="button"
-                  className={`bis-chip role-type ${moneyPick === 'type' ? 'active' : ''}`}
-                  onClick={() => setMoneyPick('type')}
+                  className={`bis-chip role-out ${moneyPick === 'out' ? 'active' : ''}`}
+                  onClick={() => setMoneyPick('out')}
                 >
-                  DR/CR
+                  Money out
                 </button>
-              ) : null}
-            </>
-          )}
-          <button
-            type="button"
-            className={`bis-chip role-balance ${moneyPick === 'balance' ? 'active' : ''}`}
-            onClick={() => setMoneyPick('balance')}
-          >
-            Balance?
-          </button>
-        </div>
+                <button
+                  type="button"
+                  className={`bis-chip role-in ${moneyPick === 'in' ? 'active' : ''}`}
+                  onClick={() => setMoneyPick('in')}
+                >
+                  Money in
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={`bis-chip role-amount ${moneyPick === 'amount' ? 'active' : ''}`}
+                  onClick={() => setMoneyPick('amount')}
+                >
+                  Amount
+                </button>
+                {mode === 'amount_with_type' ? (
+                  <button
+                    type="button"
+                    className={`bis-chip role-type ${moneyPick === 'type' ? 'active' : ''}`}
+                    onClick={() => setMoneyPick('type')}
+                  >
+                    DR / CR
+                  </button>
+                ) : null}
+              </>
+            )}
+            <button
+              type="button"
+              className={`bis-chip role-balance ${moneyPick === 'balance' ? 'active' : ''}`}
+              onClick={() => setMoneyPick('balance')}
+            >
+              Balance (opt.)
+            </button>
+          </div>
 
-        <ul className="bis-map-summary">
-          {mode === 'debit_credit' ? (
-            <>
-              <li>
-                Out → Col{' '}
-                {mapping.amountRules.moneyOutCol != null
-                  ? mapping.amountRules.moneyOutCol + 1
-                  : '—'}
-              </li>
-              <li>
-                In → Col{' '}
-                {mapping.amountRules.moneyInCol != null
-                  ? mapping.amountRules.moneyInCol + 1
-                  : '—'}
-              </li>
-            </>
-          ) : (
-            <>
-              <li>
-                Amount → Col{' '}
-                {mapping.amountRules.amountCol != null
-                  ? mapping.amountRules.amountCol + 1
-                  : '—'}
-              </li>
-              {mode === 'amount_with_type' ? (
-                <li>
-                  DR/CR → Col{' '}
-                  {mapping.amountRules.typeCol != null
-                    ? mapping.amountRules.typeCol + 1
+          <div className="bis-map-cards">
+            {mode === 'debit_credit' ? (
+              <>
+                <span className="bis-map-card out">
+                  Out · Col{' '}
+                  {mapping.amountRules.moneyOutCol != null
+                    ? mapping.amountRules.moneyOutCol + 1
                     : '—'}
-                </li>
-              ) : null}
-            </>
-          )}
-          {mapping.balanceCol != null ? (
-            <li>Balance → Col {mapping.balanceCol + 1}</li>
-          ) : null}
-        </ul>
+                </span>
+                <span className="bis-map-card in">
+                  In · Col{' '}
+                  {mapping.amountRules.moneyInCol != null
+                    ? mapping.amountRules.moneyInCol + 1
+                    : '—'}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="bis-map-card amount">
+                  Amount · Col{' '}
+                  {mapping.amountRules.amountCol != null
+                    ? mapping.amountRules.amountCol + 1
+                    : '—'}
+                </span>
+                {mode === 'amount_with_type' ? (
+                  <span className="bis-map-card type">
+                    DR/CR · Col{' '}
+                    {mapping.amountRules.typeCol != null
+                      ? mapping.amountRules.typeCol + 1
+                      : '—'}
+                  </span>
+                ) : null}
+              </>
+            )}
+            {mapping.balanceCol != null ? (
+              <span className="bis-map-card bal">Balance · Col {mapping.balanceCol + 1}</span>
+            ) : null}
+          </div>
+        </div>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -745,43 +803,65 @@ export function BankImportStudioWizard({
   // ─── REVIEW ───
   if (phase === 'review' && preview?.transform && mapping) {
     const t = preview.transform;
-    const canImport = t.errorCount === 0 && t.balanceCheck.ok && t.readyCount > 0;
+    const block = importBlockReason();
+    const canImport = !block;
     return (
       <StudioShell
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title="Check amounts"
+        title="Ready to save?"
+        tone="purple"
+        icon={<Columns3 size={18} />}
         sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('money')}
         onContinue={doCommit}
-        continueLabel="Import"
+        continueLabel="Save bank lines"
         continueDisabled={!canImport || pending}
+        continueHint={block}
       >
-        <div className="bis-mini-stats">
-          <div>
+        <div className="bis-review-hero">
+          <div className="bis-hero-card">
             <span>Lines</span>
             <strong>{t.readyCount + t.warningCount}</strong>
           </div>
-          <div className="in">
-            <span>In</span>
+          <div className="bis-hero-card in">
+            <span>Money in</span>
             <strong>{formatRs(t.totals.totalMoneyIn)}</strong>
           </div>
-          <div className="out">
-            <span>Out</span>
+          <div className="bis-hero-card out">
+            <span>Money out</span>
             <strong>{formatRs(t.totals.totalMoneyOut)}</strong>
           </div>
         </div>
 
-        {t.errorCount > 0 ? (
-          <p className="bis-error">{t.errorCount} problems — go Back and fix columns</p>
+        {canImport ? (
+          <div className="bis-status-ok">
+            <CheckCircle2 size={16} />
+            Looks good · cashbook not changed yet
+          </div>
         ) : (
-          <p className="bis-tip ok">✓ Ready · books not changed yet</p>
+          <div className="bis-status-bad">{block}</div>
         )}
 
+        {t.issues.filter((i) => i.severity === 'error').length > 0 ? (
+          <ul className="bis-issue-list">
+            {t.issues
+              .filter((i) => i.severity === 'error')
+              .slice(0, 4)
+              .map((i) => (
+                <li key={i.type}>
+                  {i.count}× {i.title}
+                  {i.sample ? ` · ${i.sample}` : ''}
+                </li>
+              ))}
+          </ul>
+        ) : null}
+
+        <p className="bis-money-label">Sample lines</p>
         <div className="bis-sample-list">
-          {t.samplePreview.slice(0, 6).map((l) => (
+          {t.samplePreview.slice(0, 5).map((l) => (
             <div key={l.rowNumber} className="bis-sample-row">
               <span className="d">{l.date}</span>
               <span className="t">{l.description}</span>
@@ -790,45 +870,52 @@ export function BankImportStudioWizard({
           ))}
         </div>
 
-        <div className="bis-two-col tight">
-          <label className="bis-field">
-            <span>Open bal.</span>
-            <input
-              inputMode="decimal"
-              value={openingBalance}
-              onChange={(e) => setOpeningBalance(e.target.value)}
-              placeholder="optional"
-            />
-          </label>
-          <label className="bis-field">
-            <span>Close bal.</span>
-            <input
-              inputMode="decimal"
-              value={closingBalance}
-              onChange={(e) => setClosingBalance(e.target.value)}
-              placeholder="optional"
-            />
-          </label>
-        </div>
-        {(openingBalance || closingBalance) && file && bankId && sheetName ? (
-          <button
-            type="button"
-            className="bis-link"
-            onClick={() => {
-              startTransition(() => {
-                runPreview(file, bankId, sheetName, mapping, openingBalance, closingBalance).then(
-                  (res) => {
+        <details className="bis-advanced">
+          <summary>Opening / closing balance (optional)</summary>
+          <div className="bis-two-col tight">
+            <label className="bis-field">
+              <span>Open</span>
+              <input
+                inputMode="decimal"
+                value={openingBalance}
+                onChange={(e) => setOpeningBalance(e.target.value)}
+                placeholder="optional"
+              />
+            </label>
+            <label className="bis-field">
+              <span>Close</span>
+              <input
+                inputMode="decimal"
+                value={closingBalance}
+                onChange={(e) => setClosingBalance(e.target.value)}
+                placeholder="optional"
+              />
+            </label>
+          </div>
+          {(openingBalance || closingBalance) && file && bankId && sheetName ? (
+            <button
+              type="button"
+              className="bis-link"
+              onClick={() => {
+                startTransition(() => {
+                  runPreview(
+                    file,
+                    bankId,
+                    sheetName,
+                    mapping,
+                    openingBalance,
+                    closingBalance,
+                  ).then((res) => {
                     if (res.ok) setPreview(res.preview);
                     else setError(res.error);
-                  },
-                );
-              });
-            }}
-          >
-            Recheck balance
-          </button>
-        ) : null}
-        {!t.balanceCheck.ok ? <p className="bis-error">{t.balanceCheck.message}</p> : null}
+                  });
+                });
+              }}
+            >
+              Recheck totals
+            </button>
+          ) : null}
+        </details>
 
         <label className="bis-check">
           <input
@@ -836,7 +923,7 @@ export function BankImportStudioWizard({
             checked={saveProfile}
             onChange={(e) => setSaveProfile(e.target.checked)}
           />
-          <span>Remember setup</span>
+          <span>Remember this bank layout</span>
         </label>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
@@ -850,22 +937,26 @@ export function BankImportStudioWizard({
         step="import"
         stepIndex={9}
         stepTotal={9}
-        title="Imported"
+        title="Bank file saved"
+        tone="green"
+        icon={<CheckCircle2 size={18} />}
         compact
       >
-        <p className="bis-tip ok">
-          {importedCount} bank lines saved. Ledger unchanged.
-        </p>
-        <a className="bis-btn primary" href="/cashbook" style={{ display: 'inline-flex', textDecoration: 'none' }}>
-          Cashbook
-        </a>
-        <p className="bis-tip muted">
-          <a href="/reconciliation">Reconciliation</a>
-          {' · '}
-          <button type="button" className="bis-link" onClick={() => window.location.reload()}>
-            Another file
+        <div className="bis-done-card">
+          <strong>{importedCount} lines</strong>
+          <p>Stored as bank statement data only. Your cashbook entries were not changed.</p>
+        </div>
+        <div className="bis-done-actions">
+          <a className="bis-btn primary" href="/cashbook">
+            Back to cashbook
+          </a>
+          <a className="bis-btn secondary" href="/reconciliation">
+            Match to books
+          </a>
+          <button type="button" className="bis-btn secondary" onClick={() => window.location.reload()}>
+            Import another file
           </button>
-        </p>
+        </div>
       </StudioShell>
     );
   }

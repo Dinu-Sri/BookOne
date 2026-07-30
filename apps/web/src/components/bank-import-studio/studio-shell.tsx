@@ -3,100 +3,95 @@
 import type { ReactNode } from 'react';
 
 const STEPS = [
-  { id: 'upload', label: 'Upload' },
-  { id: 'account', label: 'Account' },
-  { id: 'sheet', label: 'Sheet' },
-  { id: 'table', label: 'Rows' },
-  { id: 'date', label: 'Date' },
-  { id: 'description', label: 'Details' },
-  { id: 'money', label: 'Money' },
-  { id: 'review', label: 'Review' },
-  { id: 'import', label: 'Import' },
+  { id: 'upload', label: '1' },
+  { id: 'account', label: '2' },
+  { id: 'sheet', label: '3' },
+  { id: 'table', label: '4' },
+  { id: 'date', label: '5' },
+  { id: 'description', label: '6' },
+  { id: 'money', label: '7' },
+  { id: 'review', label: '8' },
+  { id: 'import', label: '9' },
 ] as const;
 
 export type StudioStepId = (typeof STEPS)[number]['id'];
 
+/**
+ * Split layout: Excel sheet (left) + short step panel (right).
+ * Upload/account can omit the sheet pane.
+ */
 export function StudioShell({
   step,
   title,
-  subtitle,
   children,
+  sheet,
   onBack,
   onContinue,
-  continueLabel = 'Continue',
+  continueLabel = 'Next',
   continueDisabled,
   pending,
-  onSaveExit,
   stepIndex,
   stepTotal,
+  compact = false,
 }: {
   step: StudioStepId;
   title: string;
-  subtitle?: string;
   children: ReactNode;
+  /** Excel-like pane; when set, uses two-column workspace */
+  sheet?: ReactNode;
   onBack?: () => void;
   onContinue?: () => void;
   continueLabel?: string;
   continueDisabled?: boolean;
   pending?: boolean;
-  onSaveExit?: () => void;
   stepIndex: number;
   stepTotal: number;
+  /** Tighter single-column for upload */
+  compact?: boolean;
 }) {
   const activeIdx = STEPS.findIndex((s) => s.id === step);
+  const split = Boolean(sheet) && !compact;
 
   return (
-    <div className="bis-shell">
-      <header className="bis-header">
-        <div>
-          <p className="bis-eyebrow">Import bank statement</p>
-          <p className="bis-progress-label">
-            Step {stepIndex} of {stepTotal}
-          </p>
+    <div className={`bis-workspace ${split ? 'split' : 'single'}`}>
+      {split ? <aside className="bis-pane-sheet">{sheet}</aside> : null}
+
+      <section className="bis-pane-step">
+        <div className="bis-step-top">
+          <div className="bis-dots" aria-label={`Step ${stepIndex} of ${stepTotal}`}>
+            {STEPS.map((s, i) => (
+              <span
+                key={s.id}
+                className={`bis-dot ${i < activeIdx ? 'done' : ''} ${i === activeIdx ? 'active' : ''}`}
+                title={s.id}
+              />
+            ))}
+          </div>
+          <h1 className="bis-q">{title}</h1>
         </div>
-        {onSaveExit ? (
-          <button type="button" className="bis-link" onClick={onSaveExit} disabled={pending}>
-            Save &amp; Exit
-          </button>
-        ) : null}
-      </header>
 
-      <nav className="bis-steps" aria-label="Progress">
-        {STEPS.map((s, i) => (
-          <span
-            key={s.id}
-            className={`bis-step-dot ${i < activeIdx ? 'done' : ''} ${i === activeIdx ? 'active' : ''}`}
-          >
-            {s.label}
-          </span>
-        ))}
-      </nav>
+        <div className="bis-step-body">{children}</div>
 
-      <main className="bis-main">
-        <h1 className="bis-title">{title}</h1>
-        {subtitle ? <p className="bis-subtitle">{subtitle}</p> : null}
-        <div className="bis-body">{children}</div>
-      </main>
-
-      <footer className="bis-footer">
-        {onBack ? (
-          <button type="button" className="bis-btn secondary" onClick={onBack} disabled={pending}>
-            Back
-          </button>
-        ) : (
-          <span />
-        )}
-        {onContinue ? (
-          <button
-            type="button"
-            className="bis-btn primary"
-            onClick={onContinue}
-            disabled={pending || continueDisabled}
-          >
-            {pending ? 'Please wait…' : continueLabel}
-          </button>
-        ) : null}
-      </footer>
+        <footer className="bis-step-foot">
+          {onBack ? (
+            <button type="button" className="bis-btn secondary" onClick={onBack} disabled={pending}>
+              Back
+            </button>
+          ) : (
+            <span />
+          )}
+          {onContinue ? (
+            <button
+              type="button"
+              className="bis-btn primary"
+              onClick={onContinue}
+              disabled={pending || continueDisabled}
+            >
+              {pending ? '…' : continueLabel}
+            </button>
+          ) : null}
+        </footer>
+      </section>
     </div>
   );
 }

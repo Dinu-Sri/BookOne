@@ -40,16 +40,9 @@ export default async function CashbookImportPage({
     >
       <div className="cashbook-import-page">
         <div className="cashbook-import-head">
-          <div>
-            <p className="eyebrow">Bank statement</p>
-            <h1 className="cashbook-import-title">Import bank Excel</h1>
-            <p className="cashbook-import-sub">
-              Guided setup for any bank file. We read and check the statement first — your
-              books are not changed until you finish reconciliation later.
-            </p>
-          </div>
+          <h1 className="cashbook-import-title">Import bank</h1>
           <Link href="/cashbook" className="cashbook-import-back">
-            ← Back to cashbook
+            ← Cashbook
           </Link>
         </div>
         <BankImportStudioWizard

@@ -12,6 +12,7 @@ import {
 } from '@/app/actions/bank-import-studio';
 import type { LiquidAccount } from '@/app/actions/cashbook-banks';
 import type { AmountMode, AmountRules, StudioMapping } from '@bookone/statement-import';
+import { SheetGrid, type SheetHighlight } from './sheet-grid';
 import { StudioShell, type StudioStepId } from './studio-shell';
 
 type Phase =
@@ -24,6 +25,8 @@ type Phase =
   | 'money'
   | 'review'
   | 'done';
+
+type MoneyPick = 'out' | 'in' | 'amount' | 'type' | 'balance' | null;
 
 function formatRs(n: number) {
   const sign = n < 0 ? '-' : '';
@@ -46,8 +49,7 @@ const STEP_META: Record<Phase, { step: StudioStepId; index: number }> = {
 };
 
 /**
- * Smart Bank Import Studio — BIS-2/3/4
- * Upload → Account → Sheet → Table → Date → Description → Money → Review → Commit (bank only)
+ * Two-column studio: Excel grid + short step questions with live highlights.
  */
 export function BankImportStudioWizard({
   banks,
@@ -72,7 +74,6 @@ export function BankImportStudioWizard({
     return 'sheet';
   });
   const [draft, setDraft] = useState<StudioDraftView | null>(initialDraft);
-  /** Keep file in browser for preview/commit (not stored in DB). */
   const [file, setFile] = useState<File | null>(null);
   const [bankId, setBankId] = useState(
     initialDraft?.bankAccountId ?? bankOnly.find((b) => b.kind === 'bank')?.id ?? '',
@@ -84,6 +85,7 @@ export function BankImportStudioWizard({
   );
   const [mapping, setMapping] = useState<StudioMapping | null>(null);
   const [preview, setPreview] = useState<StudioPreviewPayload | null>(null);
+  const [moneyPick, setMoneyPick] = useState<MoneyPick>('out');
   const [openingBalance, setOpeningBalance] = useState('');
   const [closingBalance, setClosingBalance] = useState('');
   const [saveProfile, setSaveProfile] = useState(true);
@@ -109,6 +111,125 @@ export function BankImportStudioWizard({
     },
     [],
   );
+
+  const highlight: SheetHighlight = useMemo(() => {
+    if (!mapping || !preview) return { clickMode: 'none' };
+    const roles: SheetHighlight['colRoles'] = {};
+    const cols: number[] = [];
+    const rows: number[] = [];
+
+    if (phase === 'table') {
+      rows.push(mapping.headerRowIndex);
+      return {
+        rows,
+        dimAboveRow: mapping.headerRowIndex,
+        clickMode: 'row',
+        onRowClick: (abs) => {
+          const next = { ...mapping, headerRowIndex: abs };
+          setMapping(next);
+          if (file && bankId && sheetName) {
+            startTransition(() => {
+              runPreview(file, bankId, sheetName, next).then((res) => {
+                if (res.ok) {
+                  setPreview(res.preview);
+                  setMapping({
+                    ...res.preview.suggested,
+                    headerRowIndex: abs,
+                    dateCol: next.dateCol >= 0 ? next.dateCol : res.preview.suggested.dateCol,
+                    descriptionCol:
+                      next.descriptionCol >= 0
+                        ? next.descriptionCol
+                        : res.preview.suggested.descriptionCol,
+                    amountRules: next.amountRules.mode
+                      ? next.amountRules
+                      : res.preview.suggested.amountRules,
+                  });
+                }
+              });
+            });
+          }
+        },
+      };
+    }
+
+    if (phase === 'date') {
+      cols.push(mapping.dateCol);
+      roles[mapping.dateCol] = 'date';
+      rows.push(mapping.headerRowIndex);
+      return {
+        cols,
+        rows,
+        colRoles: roles,
+        dimAboveRow: mapping.headerRowIndex,
+        clickMode: 'column',
+        onColClick: (c) => setMapping({ ...mapping, dateCol: c }),
+      };
+    }
+
+    if (phase === 'description') {
+      cols.push(mapping.descriptionCol);
+      roles[mapping.descriptionCol] = 'desc';
+      rows.push(mapping.headerRowIndex);
+      return {
+        cols,
+        rows,
+        colRoles: roles,
+        dimAboveRow: mapping.headerRowIndex,
+        clickMode: 'column',
+        onColClick: (c) => setMapping({ ...mapping, descriptionCol: c }),
+      };
+    }
+
+    if (phase === 'money' || phase === 'review') {
+      const ar = mapping.amountRules;
+      if (ar.mode === 'debit_credit') {
+        if (ar.moneyOutCol != null) {
+          cols.push(ar.moneyOutCol);
+          roles[ar.moneyOutCol] = 'out';
+        }
+        if (ar.moneyInCol != null) {
+          cols.push(ar.moneyInCol);
+          roles[ar.moneyInCol] = 'in';
+        }
+      } else {
+        if (ar.amountCol != null) {
+          cols.push(ar.amountCol);
+          roles[ar.amountCol] = 'amount';
+        }
+        if (ar.mode === 'amount_with_type' && ar.typeCol != null) {
+          cols.push(ar.typeCol);
+          roles[ar.typeCol] = 'type';
+        }
+      }
+      if (mapping.balanceCol != null) {
+        cols.push(mapping.balanceCol);
+        roles[mapping.balanceCol] = 'balance';
+      }
+      rows.push(mapping.headerRowIndex);
+      return {
+        cols,
+        rows,
+        colRoles: roles,
+        dimAboveRow: mapping.headerRowIndex,
+        clickMode: phase === 'money' ? 'column' : 'none',
+        onColClick: (c) => {
+          if (phase !== 'money') return;
+          const ar2 = { ...mapping.amountRules };
+          if (moneyPick === 'out') ar2.moneyOutCol = c;
+          else if (moneyPick === 'in') ar2.moneyInCol = c;
+          else if (moneyPick === 'amount') ar2.amountCol = c;
+          else if (moneyPick === 'type') ar2.typeCol = c;
+          else if (moneyPick === 'balance') {
+            setMapping({ ...mapping, balanceCol: c });
+            return;
+          }
+          setMapping({ ...mapping, amountRules: ar2 });
+        },
+      };
+    }
+
+    return { clickMode: 'none' };
+  }, [mapping, preview, phase, moneyPick, file, bankId, sheetName, runPreview]);
 
   function upload(chosen: File) {
     setError(null);
@@ -138,14 +259,18 @@ export function BankImportStudioWizard({
     });
   }
 
-  function patchDraft(step: string, patch: Record<string, unknown>, next: Phase) {
-    if (!draft) return;
+  function continueAccount() {
+    if (!draft || !bankId) {
+      setError('Select a bank');
+      return;
+    }
+    setError(null);
     startTransition(() => {
       saveStudioDraftStep({
         importId: draft.id,
         expectedDraftVersion: draft.draftVersion,
-        wizardStep: step,
-        patch,
+        wizardStep: 'sheet',
+        patch: { bankAccountId: bankId },
       }).then((res) => {
         if (!res.ok) {
           setError(res.error);
@@ -153,29 +278,18 @@ export function BankImportStudioWizard({
         }
         setDraft({
           ...draft,
+          bankAccountId: bankId,
           draftVersion: res.draftVersion,
-          wizardStep: step,
-          bankAccountId:
-            typeof patch.bankAccountId === 'string' ? patch.bankAccountId : draft.bankAccountId,
-          draftPayload: { ...draft.draftPayload, ...patch },
+          wizardStep: 'sheet',
         });
-        setPhase(next);
+        setPhase('sheet');
       });
     });
   }
 
-  function continueAccount() {
-    if (!draft || !bankId) {
-      setError(si ? 'බැංකුව තෝරන්න.' : 'Select a bank account.');
-      return;
-    }
-    setError(null);
-    patchDraft('sheet', { bankAccountId: bankId }, 'sheet');
-  }
-
   function continueSheet() {
     if (!draft || !sheetName || !file || !bankId) {
-      setError(si ? 'පත්‍රය තෝරන්න.' : 'Select the sheet with transactions.');
+      setError('Select a sheet');
       return;
     }
     setError(null);
@@ -203,7 +317,7 @@ export function BankImportStudioWizard({
                   ...d,
                   draftVersion: s.draftVersion,
                   wizardStep: 'table',
-                  draftPayload: { ...d.draftPayload, sheetName, mapping: res.preview.suggested },
+                  draftPayload: { ...d.draftPayload, sheetName },
                 }
               : d,
           );
@@ -213,45 +327,33 @@ export function BankImportStudioWizard({
     });
   }
 
-  function refreshPreview(nextMap: StudioMapping, nextPhase?: Phase) {
-    if (!file || !bankId || !sheetName) return;
-    setError(null);
-    startTransition(() => {
-      runPreview(file, bankId, sheetName, nextMap, openingBalance, closingBalance).then((res) => {
-        if (!res.ok) {
-          setError(res.error);
-          return;
-        }
-        setPreview(res.preview);
-        setMapping(nextMap);
-        if (nextPhase) setPhase(nextPhase);
-      });
-    });
+  function goNextFromTable() {
+    setPhase('date');
   }
 
-  function continueTable() {
-    if (!mapping) return;
-    refreshPreview(mapping, 'date');
-  }
-
-  function continueDate() {
+  function goNextFromDate() {
     if (!mapping || mapping.dateCol < 0) {
-      setError(si ? 'දින තීරුව තෝරන්න.' : 'Choose the date column.');
+      setError('Tap a column on the sheet');
       return;
     }
+    setError(null);
     setPhase('description');
   }
 
-  function continueDescription() {
+  function goNextFromDesc() {
     if (!mapping || mapping.descriptionCol < 0) {
-      setError(si ? 'විස්තර තීරුව තෝරන්න.' : 'Choose the description column.');
+      setError('Tap a column on the sheet');
       return;
     }
+    setError(null);
+    // Set sensible money pick default for mode
+    const m = mapping.amountRules.mode;
+    setMoneyPick(m === 'debit_credit' ? 'out' : 'amount');
     setPhase('money');
   }
 
-  function continueMoney() {
-    if (!mapping || !file || !bankId || !sheetName) return;
+  function goNextFromMoney() {
+    if (!file || !bankId || !sheetName || !mapping) return;
     setError(null);
     startTransition(() => {
       runPreview(file, bankId, sheetName, mapping, openingBalance, closingBalance).then((res) => {
@@ -267,25 +369,16 @@ export function BankImportStudioWizard({
 
   function doCommit() {
     if (!draft || !file || !bankId || !mapping || !sheetName) return;
-    if (preview && preview.transform.errorCount > 0) {
-      setError(
-        si
-          ? 'ගැටලු නිවැරදි කරන්න.'
-          : `Fix ${preview.transform.errorCount} problem(s) before import.`,
-      );
+    const t = preview?.transform;
+    if (t && t.errorCount > 0) {
+      setError(`Fix ${t.errorCount} problem(s) first`);
       return;
     }
-    if (preview && !preview.transform.balanceCheck.ok) {
-      setError(preview.transform.balanceCheck.message);
+    if (t && !t.balanceCheck.ok) {
+      setError(t.balanceCheck.message);
       return;
     }
-    if (
-      !window.confirm(
-        si
-          ? 'Statement එක import කරන්නද? ගිණුම් entries ස්වයංක්‍රීයව නොවෙනස් වේ.'
-          : 'Import this statement? This does not change accounting entries automatically.',
-      )
-    ) {
+    if (!window.confirm('Import bank lines only? Books stay unchanged until reconciliation.')) {
       return;
     }
 
@@ -317,15 +410,25 @@ export function BankImportStudioWizard({
     });
   }
 
-  function updateAmountRules(patch: Partial<AmountRules>) {
+  function updateMode(mode: AmountMode) {
     if (!mapping) return;
-    const amountRules = { ...mapping.amountRules, ...patch };
-    const next = { ...mapping, amountRules };
-    setMapping(next);
+    setMapping({
+      ...mapping,
+      amountRules: { ...mapping.amountRules, mode },
+    });
+    setMoneyPick(mode === 'debit_credit' ? 'out' : 'amount');
   }
 
-  const columns = preview?.columns ?? [];
-  const t = preview?.transform;
+  const sheetPane =
+    preview?.sheetGrid && phase !== 'upload' && phase !== 'account' && phase !== 'sheet' && phase !== 'done' ? (
+      <SheetGrid
+        grid={preview.sheetGrid}
+        startRow={preview.sheetGridStartRow}
+        totalRows={preview.sheetRowCount}
+        highlight={highlight}
+        fileLabel={file?.name ?? draft?.fileName}
+      />
+    ) : null;
 
   // ─── UPLOAD ───
   if (phase === 'upload') {
@@ -334,12 +437,8 @@ export function BankImportStudioWizard({
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title={si ? 'බැංකු statement එක උඩුගත කරන්න' : 'Upload your bank statement'}
-        subtitle={
-          si
-            ? 'Excel හෝ CSV. මාසික ගොනු ලේසියි. ගිණුම් පොත මෙතැනින් වෙනස් නොවේ.'
-            : 'Excel or CSV from your bank. Monthly is easiest. This does not change your books.'
-        }
+        title="Upload bank file"
+        compact
         pending={pending}
       >
         <div
@@ -359,9 +458,9 @@ export function BankImportStudioWizard({
           role="button"
           tabIndex={0}
         >
-          {pending ? <Loader2 className="spin" size={32} /> : <FileSpreadsheet size={32} />}
-          <strong>{si ? 'ගෙනැවිත් දමන්න හෝ තෝරන්න' : 'Drop file here or choose'}</strong>
-          <small>Excel or CSV, up to 20 MB</small>
+          {pending ? <Loader2 className="spin" size={28} /> : <FileSpreadsheet size={28} />}
+          <strong>Drop Excel / CSV</strong>
+          <small>or click to choose</small>
           <input
             ref={fileRef}
             type="file"
@@ -387,8 +486,8 @@ export function BankImportStudioWizard({
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title={si ? 'මෙය කුමන බැංකු ගිණුමද?' : 'Which bank account is this statement for?'}
-        subtitle={draft.fileName}
+        title="Which bank?"
+        compact
         pending={pending}
         onBack={() => setPhase('upload')}
         onContinue={continueAccount}
@@ -414,29 +513,20 @@ export function BankImportStudioWizard({
 
   // ─── SHEET ───
   if (phase === 'sheet' && draft?.inspection) {
-    const inspection = draft.inspection;
     return (
       <StudioShell
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title={
-          inspection.sheets.length > 1
-            ? si
-              ? 'කුමන sheet එකේ transactions තිබේද?'
-              : 'Which sheet contains the transactions?'
-            : si
-              ? 'Transaction sheet තහවුරු කරන්න'
-              : 'Confirm the transaction sheet'
-        }
-        subtitle={draft.fileName}
+        title="Which sheet?"
+        compact
         pending={pending}
         onBack={() => setPhase(bankId ? 'upload' : 'account')}
         onContinue={continueSheet}
         continueDisabled={!sheetName}
       >
         <div className="bis-cards">
-          {inspection.sheets.map((s) => (
+          {draft.inspection.sheets.map((s) => (
             <button
               key={s.name}
               type="button"
@@ -445,10 +535,9 @@ export function BankImportStudioWizard({
             >
               <strong>{s.name}</strong>
               <span>
-                {s.probableTransactionCount} possible
-                {s.dateFrom ? ` · ${s.dateFrom} → ${s.dateTo}` : ''}
+                ~{s.probableTransactionCount} lines
+                {s.dateFrom ? ` · ${s.dateFrom}` : ''}
               </span>
-              <em className={`bis-conf ${s.confidence}`}>{s.confidence}</em>
             </button>
           ))}
         </div>
@@ -457,73 +546,21 @@ export function BankImportStudioWizard({
     );
   }
 
-  // ─── TABLE / HEADER ROW ───
-  if (phase === 'table' && mapping && preview) {
+  // ─── TABLE ───
+  if (phase === 'table' && mapping) {
     return (
       <StudioShell
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title={si ? 'තීරු නම් ඇති පේළිය කුමක්ද?' : 'Which row has the column names?'}
-        subtitle={si ? 'Highlight කළ පේළිය header එකයි.' : 'The highlighted row should be the header.'}
+        title="Tap header row"
+        sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('sheet')}
-        onContinue={continueTable}
+        onContinue={goNextFromTable}
       >
-        <label className="bis-field">
-          <span>{si ? 'Header පේළිය' : 'Header row number'}</span>
-          <select
-            value={mapping.headerRowIndex}
-            onChange={(e) => {
-              const headerRowIndex = Number(e.target.value);
-              const next = { ...mapping, headerRowIndex };
-              setMapping(next);
-              if (file && bankId && sheetName) {
-                startTransition(() => {
-                  runPreview(file, bankId, sheetName, next).then((res) => {
-                    if (res.ok) {
-                      setPreview(res.preview);
-                      // Keep user's header choice; merge suggested amount if empty
-                      setMapping({
-                        ...res.preview.suggested,
-                        headerRowIndex,
-                        dateCol: mapping.dateCol >= 0 ? mapping.dateCol : res.preview.suggested.dateCol,
-                        descriptionCol:
-                          mapping.descriptionCol >= 0
-                            ? mapping.descriptionCol
-                            : res.preview.suggested.descriptionCol,
-                      });
-                    }
-                  });
-                });
-              }
-            }}
-          >
-            {Array.from({ length: Math.min(40, (preview.headerPreviewRows.length || 1) + 20) }, (_, i) => (
-              <option key={i} value={i}>
-                Row {i + 1}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="bis-table-wrap">
-          <table className="bis-mini-table">
-            <tbody>
-              {preview.headerPreviewRows.map((row, ri) => {
-                const absRow = Math.max(0, mapping.headerRowIndex - 2) + ri;
-                const isHeader = absRow === mapping.headerRowIndex;
-                return (
-                  <tr key={ri} className={isHeader ? 'is-header' : ''}>
-                    <td className="num">{absRow + 1}</td>
-                    {row.map((c, ci) => (
-                      <td key={ci}>{c}</td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <p className="bis-tip">Blue row = column names. Tap another row to change.</p>
+        <p className="bis-tip muted">Row {mapping.headerRowIndex + 1} selected</p>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -536,25 +573,16 @@ export function BankImportStudioWizard({
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title={si ? 'Transaction date තීරුව කුමක්ද?' : 'Which column shows the transaction date?'}
-        subtitle={si ? 'උදාහරණ බලන්න.' : 'Look at the sample values.'}
+        title="Tap date column"
+        sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('table')}
-        onContinue={continueDate}
+        onContinue={goNextFromDate}
       >
-        <div className="bis-cards">
-          {columns.map((c) => (
-            <button
-              key={c.index}
-              type="button"
-              className={`bis-card ${mapping.dateCol === c.index ? 'active' : ''}`}
-              onClick={() => setMapping({ ...mapping, dateCol: c.index })}
-            >
-              <strong>{c.label}</strong>
-              <span>{c.samples.slice(0, 3).join(' · ') || '—'}</span>
-            </button>
-          ))}
-        </div>
+        <p className="bis-tip">Yellow column = date. Tap a column letter or any cell in it.</p>
+        <p className="bis-tip muted">
+          {preview?.columns.find((c) => c.index === mapping.dateCol)?.label ?? `Col ${mapping.dateCol + 1}`}
+        </p>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -567,24 +595,17 @@ export function BankImportStudioWizard({
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title={si ? 'විස්තර තීරුව කුමක්ද?' : 'Which column best describes each transaction?'}
+        title="Tap details column"
+        sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('date')}
-        onContinue={continueDescription}
+        onContinue={goNextFromDesc}
       >
-        <div className="bis-cards">
-          {columns.map((c) => (
-            <button
-              key={c.index}
-              type="button"
-              className={`bis-card ${mapping.descriptionCol === c.index ? 'active' : ''}`}
-              onClick={() => setMapping({ ...mapping, descriptionCol: c.index })}
-            >
-              <strong>{c.label}</strong>
-              <span className="bis-sample-clamp">{c.samples.slice(0, 2).join(' · ') || '—'}</span>
-            </button>
-          ))}
-        </div>
+        <p className="bis-tip">Green column = description / particulars.</p>
+        <p className="bis-tip muted">
+          {preview?.columns.find((c) => c.index === mapping.descriptionCol)?.label ??
+            `Col ${mapping.descriptionCol + 1}`}
+        </p>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -598,249 +619,175 @@ export function BankImportStudioWizard({
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title={
-          si
-            ? 'මුදල් යන / එන ආකාරය කෙසේද?'
-            : 'How does this statement show money going out and coming in?'
-        }
-        subtitle={si ? 'නිවැරදි තේරීම වැදගත්ය.' : 'Choosing wrong would reverse every amount.'}
+        title="How is money shown?"
+        sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('description')}
-        onContinue={continueMoney}
-        continueLabel={si ? 'සමාලෝචනය' : 'Review statement'}
+        onContinue={goNextFromMoney}
+        continueLabel="Review"
       >
-        <div className="bis-cards">
+        <div className="bis-mode-row">
           {(
             [
-              ['debit_credit', 'Separate Money Out and Money In columns', 'Withdrawal | Deposit'],
-              ['signed_amount', 'One amount with + and −', '-5,000.00 / 20,000.00'],
-              ['amount_with_type', 'Amount + DR/CR label column', '5,000.00 | DR'],
-              ['embedded_indicator', 'DR/CR written inside the amount', '5,000.00 DR'],
+              ['debit_credit', 'Out + In cols'],
+              ['amount_with_type', 'Amount + DR/CR'],
+              ['signed_amount', 'One amount ±'],
+              ['embedded_indicator', 'Amount has DR'],
             ] as const
-          ).map(([m, label, ex]) => (
+          ).map(([m, lab]) => (
             <button
               key={m}
               type="button"
-              className={`bis-card ${mode === m ? 'active' : ''}`}
-              onClick={() => updateAmountRules({ mode: m })}
+              className={`bis-chip ${mode === m ? 'active' : ''}`}
+              onClick={() => updateMode(m)}
             >
-              <strong>{label}</strong>
-              <span>{ex}</span>
+              {lab}
             </button>
           ))}
         </div>
 
-        {mode === 'debit_credit' ? (
-          <div className="bis-two-col">
-            <label className="bis-field">
-              <span>Money Out (Debit)</span>
-              <select
-                value={mapping.amountRules.moneyOutCol ?? ''}
-                onChange={(e) =>
-                  updateAmountRules({
-                    moneyOutCol: e.target.value === '' ? undefined : Number(e.target.value),
-                  })
-                }
+        <p className="bis-tip">Then tap columns on the sheet:</p>
+        <div className="bis-mode-row">
+          {mode === 'debit_credit' ? (
+            <>
+              <button
+                type="button"
+                className={`bis-chip role-out ${moneyPick === 'out' ? 'active' : ''}`}
+                onClick={() => setMoneyPick('out')}
               >
-                <option value="">—</option>
-                {columns.map((c) => (
-                  <option key={c.index} value={c.index}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="bis-field">
-              <span>Money In (Credit)</span>
-              <select
-                value={mapping.amountRules.moneyInCol ?? ''}
-                onChange={(e) =>
-                  updateAmountRules({
-                    moneyInCol: e.target.value === '' ? undefined : Number(e.target.value),
-                  })
-                }
+                Out col
+              </button>
+              <button
+                type="button"
+                className={`bis-chip role-in ${moneyPick === 'in' ? 'active' : ''}`}
+                onClick={() => setMoneyPick('in')}
               >
-                <option value="">—</option>
-                {columns.map((c) => (
-                  <option key={c.index} value={c.index}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        ) : null}
-
-        {(mode === 'signed_amount' ||
-          mode === 'amount_with_type' ||
-          mode === 'embedded_indicator') && (
-          <label className="bis-field">
-            <span>Amount column</span>
-            <select
-              value={mapping.amountRules.amountCol ?? ''}
-              onChange={(e) =>
-                updateAmountRules({
-                  amountCol: e.target.value === '' ? undefined : Number(e.target.value),
-                })
-              }
-            >
-              <option value="">—</option>
-              {columns.map((c) => (
-                <option key={c.index} value={c.index}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        {mode === 'amount_with_type' ? (
-          <label className="bis-field">
-            <span>DR/CR label column</span>
-            <select
-              value={mapping.amountRules.typeCol ?? ''}
-              onChange={(e) =>
-                updateAmountRules({
-                  typeCol: e.target.value === '' ? undefined : Number(e.target.value),
-                })
-              }
-            >
-              <option value="">—</option>
-              {columns.map((c) => (
-                <option key={c.index} value={c.index}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        {mode === 'signed_amount' ? (
-          <label className="bis-field">
-            <span>Negative values mean</span>
-            <select
-              value={mapping.amountRules.negativeMeansOut === false ? 'in' : 'out'}
-              onChange={(e) =>
-                updateAmountRules({ negativeMeansOut: e.target.value === 'out' })
-              }
-            >
-              <option value="out">Money Out</option>
-              <option value="in">Money In</option>
-            </select>
-          </label>
-        ) : null}
-
-        {mode === 'amount_with_type' || mode === 'embedded_indicator' ? (
-          <label className="bis-field">
-            <span>DR means</span>
-            <select
-              value={mapping.amountRules.drMeansOut === false ? 'in' : 'out'}
-              onChange={(e) => updateAmountRules({ drMeansOut: e.target.value === 'out' })}
-            >
-              <option value="out">Money Out</option>
-              <option value="in">Money In</option>
-            </select>
-          </label>
-        ) : null}
-
-        <label className="bis-field">
-          <span>{si ? 'ශේෂ තීරුව (විකල්ප)' : 'Running balance column (optional)'}</span>
-          <select
-            value={mapping.balanceCol ?? ''}
-            onChange={(e) =>
-              setMapping({
-                ...mapping,
-                balanceCol: e.target.value === '' ? null : Number(e.target.value),
-              })
-            }
+                In col
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={`bis-chip role-amount ${moneyPick === 'amount' ? 'active' : ''}`}
+                onClick={() => setMoneyPick('amount')}
+              >
+                Amount
+              </button>
+              {mode === 'amount_with_type' ? (
+                <button
+                  type="button"
+                  className={`bis-chip role-type ${moneyPick === 'type' ? 'active' : ''}`}
+                  onClick={() => setMoneyPick('type')}
+                >
+                  DR/CR
+                </button>
+              ) : null}
+            </>
+          )}
+          <button
+            type="button"
+            className={`bis-chip role-balance ${moneyPick === 'balance' ? 'active' : ''}`}
+            onClick={() => setMoneyPick('balance')}
           >
-            <option value="">— not used —</option>
-            {columns.map((c) => (
-              <option key={c.index} value={c.index}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            Balance?
+          </button>
+        </div>
 
+        <ul className="bis-map-summary">
+          {mode === 'debit_credit' ? (
+            <>
+              <li>
+                Out → col {((mapping.amountRules.moneyOutCol ?? -1) + 1) || '—'}
+              </li>
+              <li>
+                In → col {((mapping.amountRules.moneyInCol ?? -1) + 1) || '—'}
+              </li>
+            </>
+          ) : (
+            <>
+              <li>
+                Amount → col {((mapping.amountRules.amountCol ?? -1) + 1) || '—'}
+              </li>
+              {mode === 'amount_with_type' ? (
+                <li>
+                  DR/CR → col {((mapping.amountRules.typeCol ?? -1) + 1) || '—'}
+                </li>
+              ) : null}
+            </>
+          )}
+          {mapping.balanceCol != null ? <li>Balance → col {mapping.balanceCol + 1}</li> : null}
+        </ul>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
   }
 
   // ─── REVIEW ───
-  if (phase === 'review' && t && mapping) {
+  if (phase === 'review' && preview?.transform && mapping) {
+    const t = preview.transform;
     const canImport = t.errorCount === 0 && t.balanceCheck.ok && t.readyCount > 0;
     return (
       <StudioShell
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title={si ? 'Statement එක සමාලෝචනය කරන්න' : 'Review your statement'}
-        subtitle={file?.name}
+        title="Check amounts"
+        sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('money')}
         onContinue={doCommit}
-        continueLabel={si ? 'Import කරන්න' : 'Import statement'}
+        continueLabel="Import"
         continueDisabled={!canImport || pending}
       >
-        <div className="bis-summary-grid">
-          <div className="bis-sum-card">
-            <span>Transactions</span>
+        <div className="bis-mini-stats">
+          <div>
+            <span>Lines</span>
             <strong>{t.readyCount + t.warningCount}</strong>
           </div>
-          <div className="bis-sum-card in">
-            <span>Money In</span>
+          <div className="in">
+            <span>In</span>
             <strong>{formatRs(t.totals.totalMoneyIn)}</strong>
           </div>
-          <div className="bis-sum-card out">
-            <span>Money Out</span>
+          <div className="out">
+            <span>Out</span>
             <strong>{formatRs(t.totals.totalMoneyOut)}</strong>
           </div>
-          <div className="bis-sum-card">
-            <span>Period</span>
-            <strong className="small">
-              {t.totals.periodFrom ?? '—'} → {t.totals.periodTo ?? '—'}
-            </strong>
-          </div>
         </div>
 
-        <div className="bis-status-row">
-          <span className="ok">✓ {t.readyCount} ready</span>
-          {t.warningCount > 0 ? <span className="warn">! {t.warningCount} review</span> : null}
-          {t.errorCount > 0 ? <span className="err">× {t.errorCount} problems</span> : null}
+        {t.errorCount > 0 ? (
+          <p className="bis-error">{t.errorCount} problems — go Back and fix columns</p>
+        ) : (
+          <p className="bis-tip ok">✓ Ready · books not changed yet</p>
+        )}
+
+        <div className="bis-sample-list">
+          {t.samplePreview.slice(0, 6).map((l) => (
+            <div key={l.rowNumber} className="bis-sample-row">
+              <span className="d">{l.date}</span>
+              <span className="t">{l.description}</span>
+              <span className={l.signedAmount < 0 ? 'neg' : 'pos'}>{formatRs(l.signedAmount)}</span>
+            </div>
+          ))}
         </div>
 
-        {t.issues.length > 0 ? (
-          <ul className="bis-issues">
-            {t.issues.map((i) => (
-              <li key={i.type} className={i.severity}>
-                <strong>
-                  {i.count}× {i.title}
-                </strong>
-                {i.sample ? <span> e.g. {i.sample}</span> : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <div className="bis-two-col">
+        <div className="bis-two-col tight">
           <label className="bis-field">
-            <span>Opening balance (optional)</span>
+            <span>Open bal.</span>
             <input
               inputMode="decimal"
               value={openingBalance}
               onChange={(e) => setOpeningBalance(e.target.value)}
-              placeholder="125000.00"
+              placeholder="optional"
             />
           </label>
           <label className="bis-field">
-            <span>Closing balance (optional)</span>
+            <span>Close bal.</span>
             <input
               inputMode="decimal"
               value={closingBalance}
               onChange={(e) => setClosingBalance(e.target.value)}
-              placeholder="210500.00"
+              placeholder="optional"
             />
           </label>
         </div>
@@ -859,36 +806,10 @@ export function BankImportStudioWizard({
               });
             }}
           >
-            Recheck statement balance
+            Recheck balance
           </button>
         ) : null}
-
-        <p className={t.balanceCheck.ok ? 'bis-hint' : 'bis-error'}>{t.balanceCheck.message}</p>
-
-        <div className="bis-table-wrap">
-          <table className="bis-mini-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Dir</th>
-                <th className="num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {t.samplePreview.map((l) => (
-                <tr key={l.rowNumber}>
-                  <td>{l.date}</td>
-                  <td className="desc">{l.description}</td>
-                  <td>{l.direction === 'in' ? 'In' : l.direction === 'out' ? 'Out' : '?'}</td>
-                  <td className={`num ${l.signedAmount < 0 ? 'neg' : 'pos'}`}>
-                    {formatRs(l.signedAmount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {!t.balanceCheck.ok ? <p className="bis-error">{t.balanceCheck.message}</p> : null}
 
         <label className="bis-check">
           <input
@@ -896,14 +817,8 @@ export function BankImportStudioWizard({
             checked={saveProfile}
             onChange={(e) => setSaveProfile(e.target.checked)}
           />
-          <span>{si ? 'මෙම setup එක ඊළඟට මතක තබන්න' : 'Remember this setup for next time'}</span>
+          <span>Remember setup</span>
         </label>
-
-        <p className="bis-note">
-          {si
-            ? 'Import කිරීමෙන් bank transactions පමණක් එකතු වේ — ledger entries ස්වයංක්‍රීය නොවේ.'
-            : 'Import adds bank transactions for reconciliation only — it will not change accounting entries automatically.'}
-        </p>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -916,34 +831,28 @@ export function BankImportStudioWizard({
         step="import"
         stepIndex={9}
         stepTotal={9}
-        title={si ? 'Statement import විය' : 'Statement imported'}
-        subtitle={`${importedCount} bank transactions`}
+        title="Imported"
+        compact
       >
-        <div className="bis-stub">
-          <p>
-            {si
-              ? 'Bank lines staging එකේ ඇත. Ledger තවම වෙනස් වී නැත. ඊළඟට reconciliation.'
-              : 'Bank lines are staged. Your ledger was not changed. Next: match to your books (reconciliation).'}
-          </p>
-          <p>
-            <a className="bis-btn primary" href="/cashbook" style={{ display: 'inline-flex', textDecoration: 'none' }}>
-              {si ? 'Cashbook වෙත' : 'Back to cashbook'}
-            </a>
-          </p>
-          <p className="bis-note">
-            <a href="/reconciliation">Go to reconciliation</a>
-            {' · '}
-            <button type="button" className="bis-link" onClick={() => window.location.reload()}>
-              Import another
-            </button>
-          </p>
-        </div>
+        <p className="bis-tip ok">
+          {importedCount} bank lines saved. Ledger unchanged.
+        </p>
+        <a className="bis-btn primary" href="/cashbook" style={{ display: 'inline-flex', textDecoration: 'none' }}>
+          Cashbook
+        </a>
+        <p className="bis-tip muted">
+          <a href="/reconciliation">Reconciliation</a>
+          {' · '}
+          <button type="button" className="bis-link" onClick={() => window.location.reload()}>
+            Another file
+          </button>
+        </p>
       </StudioShell>
     );
   }
 
   return (
-    <StudioShell step="upload" stepIndex={1} stepTotal={9} title="Loading…">
+    <StudioShell step="upload" stepIndex={1} stepTotal={9} title="…" compact>
       {pending ? <Loader2 className="spin" /> : null}
       {error ? <p className="bis-error">{error}</p> : null}
     </StudioShell>

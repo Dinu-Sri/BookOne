@@ -382,6 +382,12 @@ export type StudioPreviewPayload = {
   transform: StudioTransformResult;
   sheetName: string;
   headerPreviewRows: string[][];
+  /** Full sheet grid for Excel-like UI (capped rows/cols) */
+  sheetGrid: string[][];
+  /** Absolute 0-based row index of sheetGrid[0] in the workbook matrix */
+  sheetGridStartRow: number;
+  sheetColCount: number;
+  sheetRowCount: number;
 };
 
 /**
@@ -432,6 +438,16 @@ export async function previewStudioTransform(formData: FormData): Promise<
         (row as unknown[]).slice(0, 8).map((c) => String(c ?? '').trim()),
       );
 
+    const maxCols = Math.min(
+      14,
+      matrix.reduce((m, r) => Math.max(m, (r as unknown[]).length), 0),
+    );
+    const maxRows = Math.min(80, matrix.length);
+    const sheetGridStartRow = 0;
+    const sheetGrid = matrix.slice(0, maxRows).map((row) =>
+      Array.from({ length: maxCols }, (_, i) => String((row as unknown[])[i] ?? '').trim()),
+    );
+
     return {
       ok: true,
       preview: {
@@ -440,6 +456,10 @@ export async function previewStudioTransform(formData: FormData): Promise<
         transform,
         sheetName: resolvedSheet,
         headerPreviewRows,
+        sheetGrid,
+        sheetGridStartRow,
+        sheetColCount: maxCols,
+        sheetRowCount: matrix.length,
       },
     };
   } catch (e) {

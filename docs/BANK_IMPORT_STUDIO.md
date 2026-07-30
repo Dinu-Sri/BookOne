@@ -1,10 +1,10 @@
 # BookOne Smart Bank Import Studio
 
-> **Status:** Canonical product + engineering spec for bank document import (supersedes SI wizard UX)  
+> **Status:** **Final default** bank import path for cashbook (`/cashbook/import`)  
 > **Last updated:** 2026-07-30  
 > **External research source:** `bookone_smart_bank_import_studio_spec.md`  
-> **Legacy engine:** `docs/STATEMENT_IMPORT_ARCHITECTURE.md` (SI-1…SI-4 — keep for rollback)  
-> **Feature flag:** `BANK_IMPORT_STUDIO=1` (or tenant later)
+> **Legacy SI notes:** `docs/STATEMENT_IMPORT_ARCHITECTURE.md`  
+> **Feature flag:** none — always on
 
 ---
 
@@ -78,9 +78,9 @@ Unknown money labels are **blocking errors**.
 | Schema | Migration `023_bank_import_studio.sql` + `packages/db/src/schema/reconciliation.ts` |
 | Server actions | `apps/web/src/app/actions/bank-import-studio.ts` |
 | Wizard UI | `apps/web/src/components/bank-import-studio/*` |
-| Cashbook route | `/cashbook/import-studio` |
+| Cashbook route | `/cashbook/import` (always) |
 | ERP | `/reconciliation` consumes committed batches |
-| Flag | `process.env.BANK_IMPORT_STUDIO === '1'` |
+| Flag | none |
 
 ## 8. Phases
 
@@ -99,11 +99,12 @@ Unknown money labels are **blocking errors**.
 
 AI may **suggest** mappings or explain matches. AI must **not** finalize debit/credit, override amounts, or auto-post journals.
 
-## 10. Rollout
+## 10. Deploy (single pull)
 
-1. Flag off by default in production until BIS-4 green  
-2. Cashbook personal/sole first  
-3. Keep `/cashbook/import` legacy path until studio stable  
+1. Pull latest `master`  
+2. Run migrations **022** and **023**  
+3. Rebuild web — no env flags required  
+4. Cashbook → **Import bank** → guided studio  
 
 ---
 

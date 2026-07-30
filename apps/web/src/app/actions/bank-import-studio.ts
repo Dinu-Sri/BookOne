@@ -28,8 +28,6 @@ import {
   isNull,
   withTenantContext,
 } from '@bookone/db';
-import { isBankImportStudioEnabled } from '@/lib/bank-import-studio-flag';
-
 const MAX_BYTES = 20 * 1024 * 1024;
 const ALLOWED = /\.(xlsx|xls|csv|tsv|txt)$/i;
 
@@ -47,12 +45,6 @@ export type StudioDraftView = {
   period: string;
 };
 
-function assertStudioEnabled() {
-  if (!isBankImportStudioEnabled()) {
-    throw new Error('Bank Import Studio is not enabled. Set BANK_IMPORT_STUDIO=1.');
-  }
-}
-
 /**
  * Create a studio draft from uploaded file + initial inspection.
  * Does not write ledger. Does not finalize bank lines.
@@ -61,7 +53,6 @@ export async function createStudioDraft(formData: FormData): Promise<
   { ok: true; draft: StudioDraftView } | { ok: false; error: string }
 > {
   try {
-    assertStudioEnabled();
     const user = await requireTenantContext();
     const file = formData.get('file');
     const bankAccountIdRaw = String(formData.get('bankAccountId') ?? '');
@@ -217,7 +208,7 @@ export async function createStudioDraft(formData: FormData): Promise<
       return row;
     });
 
-    revalidatePath('/cashbook/import-studio');
+    revalidatePath('/cashbook/import');
     return {
       ok: true,
       draft: {
@@ -249,7 +240,6 @@ export async function saveStudioDraftStep(input: {
   patch: Record<string, unknown>;
 }): Promise<{ ok: true; draftVersion: number } | { ok: false; error: string }> {
   try {
-    assertStudioEnabled();
     const user = await requireTenantContext();
     const importId = z.string().uuid().parse(input.importId);
     const expected = z.number().int().positive().parse(input.expectedDraftVersion);
@@ -328,7 +318,6 @@ export async function saveStudioDraftStep(input: {
 export async function getStudioDraft(
   importId: string,
 ): Promise<StudioDraftView | null> {
-  if (!isBankImportStudioEnabled()) return null;
   const user = await requireTenantContext();
   if (!z.string().uuid().safeParse(importId).success) return null;
 
@@ -402,7 +391,6 @@ export async function previewStudioTransform(formData: FormData): Promise<
   { ok: true; preview: StudioPreviewPayload } | { ok: false; error: string }
 > {
   try {
-    assertStudioEnabled();
     const user = await requireTenantContext();
     const file = formData.get('file');
     if (!(file instanceof File)) return { ok: false, error: 'File required for preview.' };
@@ -469,7 +457,6 @@ export async function commitStudioImport(formData: FormData): Promise<
   { ok: true; importId: string; lineCount: number } | { ok: false; error: string }
 > {
   try {
-    assertStudioEnabled();
     const user = await requireTenantContext();
     const importId = String(formData.get('importId') ?? '');
     if (!z.string().uuid().safeParse(importId).success) {
@@ -727,7 +714,7 @@ export async function commitStudioImport(formData: FormData): Promise<
     });
 
     revalidatePath('/cashbook');
-    revalidatePath('/cashbook/import-studio');
+    revalidatePath('/cashbook/import');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     return { ok: true, importId, lineCount };

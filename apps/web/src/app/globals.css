@@ -6381,3 +6381,128 @@ textarea.input {
   font-size: 13px;
 }
 .bis-legacy-link a { color: var(--ink-muted); font-weight: 650; }
+
+.bis-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-muted, #64748b);
+}
+.bis-field select,
+.bis-field input {
+  min-height: 44px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #fff;
+}
+.bis-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 520px) {
+  .bis-two-col { grid-template-columns: 1fr; }
+}
+.bis-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 12px;
+}
+.bis-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.bis-mini-table th,
+.bis-mini-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+  vertical-align: top;
+}
+.bis-mini-table th {
+  background: #f8fafc;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.bis-mini-table tr.is-header td {
+  background: #dbeafe;
+  font-weight: 750;
+}
+.bis-mini-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.bis-mini-table .pos { color: #15835f; font-weight: 700; }
+.bis-mini-table .neg { color: #c94141; font-weight: 700; }
+.bis-mini-table .desc {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+.bis-sample-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bis-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.bis-sum-card {
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--line, #e2e8f0);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bis-sum-card span { font-size: 12px; font-weight: 650; color: var(--ink-muted); }
+.bis-sum-card strong { font-size: 18px; font-weight: 800; }
+.bis-sum-card strong.small { font-size: 13px; font-weight: 700; }
+.bis-sum-card.in strong { color: #15835f; }
+.bis-sum-card.out strong { color: #c94141; }
+.bis-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 750;
+}
+.bis-status-row .ok { color: #065f46; }
+.bis-status-row .warn { color: #92400e; }
+.bis-status-row .err { color: #991b1b; }
+.bis-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.bis-issues li {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  background: #fffbeb;
+  color: #92400e;
+}
+.bis-issues li.error { background: #fef2f2; color: #991b1b; }
+.bis-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 650;
+  min-height: 44px;
+}
+.bis-check input { width: 18px; height: 18px; }

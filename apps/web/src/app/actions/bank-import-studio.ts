@@ -2,12 +2,26 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { fileSha256, inspectStatementFile, type FileInspection } from '@bookone/statement-import';
+import {
+  fileSha256,
+  inspectStatementFile,
+  loadWorkbookMatrix,
+  suggestStudioMapping,
+  transformStudioMatrix,
+  listColumns,
+  type FileInspection,
+  type StudioMapping,
+  type StudioTransformResult,
+  type AmountRules,
+} from '@bookone/statement-import';
 import { requireTenantContext } from '@bookone/auth';
 import {
   and,
   bankStatementImportEvents,
   bankStatementImports,
+  bankStatementLines,
+  bankStatementProfiles,
+  bankStatementProfileVersions,
   db,
   desc,
   eq,
@@ -358,3 +372,370 @@ export async function getStudioDraft(
     };
   });
 }
+
+function parseMappingFromForm(formData: FormData): StudioMapping | null {
+  const raw = formData.get('mappingJson');
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const m = JSON.parse(raw) as StudioMapping;
+    if (typeof m.headerRowIndex !== 'number') return null;
+    if (typeof m.dateCol !== 'number' || typeof m.descriptionCol !== 'number') return null;
+    if (!m.amountRules || typeof m.amountRules.mode !== 'string') return null;
+    return m;
+  } catch {
+    return null;
+  }
+}
+
+export type StudioPreviewPayload = {
+  columns: { index: number; label: string; samples: string[] }[];
+  suggested: StudioMapping;
+  transform: StudioTransformResult;
+  sheetName: string;
+  headerPreviewRows: string[][];
+};
+
+/**
+ * Preview transform with current mapping. Client re-sends the file (not stored in DB).
+ */
+export async function previewStudioTransform(formData: FormData): Promise<
+  { ok: true; preview: StudioPreviewPayload } | { ok: false; error: string }
+> {
+  try {
+    assertStudioEnabled();
+    const user = await requireTenantContext();
+    const file = formData.get('file');
+    if (!(file instanceof File)) return { ok: false, error: 'File required for preview.' };
+
+    const bankAccountId = String(formData.get('bankAccountId') ?? '');
+    if (!z.string().uuid().safeParse(bankAccountId).success) {
+      return { ok: false, error: 'Select a bank account first.' };
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const sheetName = String(formData.get('sheetName') || '') || undefined;
+    const { matrix, sheetName: resolvedSheet } = loadWorkbookMatrix(bytes, file.name, sheetName);
+    if (matrix.length === 0) return { ok: false, error: 'No readable rows in this file.' };
+
+    const suggested = suggestStudioMapping(matrix);
+    suggested.sheetName = resolvedSheet;
+    const mapping = parseMappingFromForm(formData) ?? suggested;
+    mapping.sheetName = resolvedSheet;
+
+    // Opening/closing optional overrides
+    const openRaw = formData.get('openingBalance');
+    const closeRaw = formData.get('closingBalance');
+    if (typeof openRaw === 'string' && openRaw.trim() !== '') {
+      mapping.openingBalance = Number(openRaw);
+    }
+    if (typeof closeRaw === 'string' && closeRaw.trim() !== '') {
+      mapping.closingBalance = Number(closeRaw);
+    }
+
+    const columns = listColumns(matrix, mapping.headerRowIndex);
+    const transform = transformStudioMatrix(matrix, mapping, {
+      tenantId: user.tenantId,
+      bankAccountId,
+    });
+
+    const headerPreviewRows = matrix
+      .slice(Math.max(0, mapping.headerRowIndex - 2), mapping.headerRowIndex + 8)
+      .map((row) =>
+        (row as unknown[]).slice(0, 8).map((c) => String(c ?? '').trim()),
+      );
+
+    return {
+      ok: true,
+      preview: {
+        columns,
+        suggested,
+        transform,
+        sheetName: resolvedSheet,
+        headerPreviewRows,
+      },
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Could not preview statement.',
+    };
+  }
+}
+
+/**
+ * Commit normalized bank lines only — no journal entries.
+ */
+export async function commitStudioImport(formData: FormData): Promise<
+  { ok: true; importId: string; lineCount: number } | { ok: false; error: string }
+> {
+  try {
+    assertStudioEnabled();
+    const user = await requireTenantContext();
+    const importId = String(formData.get('importId') ?? '');
+    if (!z.string().uuid().safeParse(importId).success) {
+      return { ok: false, error: 'Missing import draft.' };
+    }
+    const file = formData.get('file');
+    if (!(file instanceof File)) {
+      return { ok: false, error: 'Re-attach the same bank file to import.' };
+    }
+    const bankAccountId = String(formData.get('bankAccountId') ?? '');
+    if (!z.string().uuid().safeParse(bankAccountId).success) {
+      return { ok: false, error: 'Select a bank account.' };
+    }
+    const mapping = parseMappingFromForm(formData);
+    if (!mapping) return { ok: false, error: 'Mapping is incomplete.' };
+    const saveProfile = formData.get('saveProfile') === '1';
+    const profileName = String(formData.get('profileName') || 'Bank layout').slice(0, 120);
+    const idempotencyKey = String(formData.get('idempotencyKey') || `studio-${importId}`);
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const sha = fileSha256(Buffer.from(bytes));
+    const sheetName = String(formData.get('sheetName') || mapping.sheetName || '') || undefined;
+    const { matrix, sheetName: resolvedSheet } = loadWorkbookMatrix(bytes, file.name, sheetName);
+    mapping.sheetName = resolvedSheet;
+
+    const openRaw = formData.get('openingBalance');
+    const closeRaw = formData.get('closingBalance');
+    if (typeof openRaw === 'string' && openRaw.trim() !== '') {
+      mapping.openingBalance = Number(openRaw);
+    }
+    if (typeof closeRaw === 'string' && closeRaw.trim() !== '') {
+      mapping.closingBalance = Number(closeRaw);
+    }
+
+    const transform = transformStudioMatrix(matrix, mapping, {
+      tenantId: user.tenantId,
+      bankAccountId,
+    });
+
+    if (transform.errorCount > 0) {
+      return {
+        ok: false,
+        error: `Fix ${transform.errorCount} problem(s) before import. ${transform.issues
+          .filter((i) => i.severity === 'error')
+          .map((i) => i.title)
+          .slice(0, 2)
+          .join(' · ')}`,
+      };
+    }
+    if (transform.lines.length === 0) {
+      return { ok: false, error: 'No valid transactions to import.' };
+    }
+    if (!transform.balanceCheck.ok) {
+      return { ok: false, error: transform.balanceCheck.message };
+    }
+
+    const period = (
+      transform.totals.periodTo ??
+      transform.totals.periodFrom ??
+      new Date().toISOString().slice(0, 10)
+    ).slice(0, 7);
+
+    const lineCount = await withTenantContext(user.tenantId, async () => {
+      const [imp] = await db()
+        .select({
+          id: bankStatementImports.id,
+          wizardStatus: bankStatementImports.wizardStatus,
+          draftPayload: bankStatementImports.draftPayload,
+        })
+        .from(bankStatementImports)
+        .where(
+          and(
+            eq(bankStatementImports.id, importId),
+            eq(bankStatementImports.tenantId, user.tenantId),
+            isNull(bankStatementImports.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!imp) throw new Error('Import draft not found.');
+      if (imp.wizardStatus === 'committed') {
+        throw new Error('This statement was already imported.');
+      }
+
+      // Idempotency
+      const [byKey] = await db()
+        .select({ id: bankStatementImports.id })
+        .from(bankStatementImports)
+        .where(
+          and(
+            eq(bankStatementImports.tenantId, user.tenantId),
+            eq(bankStatementImports.idempotencyKey, idempotencyKey),
+            isNull(bankStatementImports.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (byKey && byKey.id !== importId) {
+        throw new Error('Duplicate import request.');
+      }
+
+      let profileVersionId: string | null = null;
+      if (saveProfile) {
+        const [profile] = await db()
+          .insert(bankStatementProfiles)
+          .values({
+            tenantId: user.tenantId,
+            name: profileName,
+            bankHint: profileName.slice(0, 120),
+            bankAccountId,
+            columnMap: {
+              date: mapping.dateCol,
+              description: mapping.descriptionCol,
+              amount: mapping.amountRules.amountCol ?? '',
+              debit: mapping.amountRules.moneyOutCol ?? '',
+              credit: mapping.amountRules.moneyInCol ?? '',
+              type: mapping.amountRules.typeCol ?? '',
+              balance: mapping.balanceCol ?? '',
+            },
+            signConvention: mapping.amountRules.mode,
+            skipRows: mapping.headerRowIndex,
+            sheetName: resolvedSheet,
+            successCount: 1,
+            profileStatus: 'active',
+          })
+          .returning({ id: bankStatementProfiles.id });
+
+        const [ver] = await db()
+          .insert(bankStatementProfileVersions)
+          .values({
+            tenantId: user.tenantId,
+            profileId: profile.id,
+            versionNumber: 1,
+            status: 'approved',
+            columnMappings: {
+              dateCol: mapping.dateCol,
+              descriptionCol: mapping.descriptionCol,
+              balanceCol: mapping.balanceCol ?? null,
+              headerRowIndex: mapping.headerRowIndex,
+              sheetName: resolvedSheet,
+            },
+            amountRules: mapping.amountRules as unknown as Record<string, unknown>,
+            structureFingerprint: {
+              mode: mapping.amountRules.mode,
+              headerRow: mapping.headerRowIndex,
+              sheet: resolvedSheet,
+            },
+            createdBy: user.id,
+            approvedBy: user.id,
+            approvedAt: new Date(),
+          })
+          .returning({ id: bankStatementProfileVersions.id });
+
+        profileVersionId = ver.id;
+        await db()
+          .update(bankStatementProfiles)
+          .set({ currentVersionId: ver.id, updatedAt: new Date() })
+          .where(eq(bankStatementProfiles.id, profile.id));
+      }
+
+      const ready = transform.lines.filter(
+        (l) => l.validationStatus === 'valid' || l.validationStatus === 'warning',
+      );
+
+      await db().transaction(async (tx) => {
+        // Clear any previous draft lines
+        await tx
+          .update(bankStatementLines)
+          .set({ voidedAt: new Date(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(bankStatementLines.importId, importId),
+              eq(bankStatementLines.tenantId, user.tenantId),
+              isNull(bankStatementLines.voidedAt),
+            ),
+          );
+
+        for (const line of ready) {
+          await tx.insert(bankStatementLines).values({
+            tenantId: user.tenantId,
+            importId,
+            rowNumber: String(line.rowNumber),
+            transactionDate: line.date,
+            description: line.description,
+            amount: line.signedAmount.toFixed(2),
+            status: 'imported',
+            raw: line.raw,
+            fingerprint: line.fingerprint,
+            direction: line.direction,
+            balanceAfter:
+              line.balanceAfter != null ? line.balanceAfter.toFixed(2) : null,
+            debitAmount: line.debitAmount.toFixed(2),
+            creditAmount: line.creditAmount.toFixed(2),
+            validationStatus: line.validationStatus,
+            validationMessages: line.validationMessages,
+            sourceRowHash: line.sourceRowHash,
+            reconciliationStatus: 'unmatched',
+            proposedAction: 'review',
+            confidence: line.dateConfidence.toFixed(4),
+          });
+        }
+
+        const prevPayload = (imp.draftPayload ?? {}) as Record<string, unknown>;
+        await tx
+          .update(bankStatementImports)
+          .set({
+            status: 'committed',
+            wizardStatus: 'committed',
+            wizardStep: 'done',
+            bankAccountId,
+            fileSha256: sha,
+            fileName: file.name.slice(0, 255),
+            period,
+            periodFrom: transform.totals.periodFrom,
+            periodTo: transform.totals.periodTo,
+            rowCount: String(ready.length),
+            matchedCount: '0',
+            unmatchedCount: String(ready.length),
+            openingBalance:
+              mapping.openingBalance != null ? mapping.openingBalance.toFixed(2) : null,
+            closingBalance:
+              mapping.closingBalance != null ? mapping.closingBalance.toFixed(2) : null,
+            totalMoneyIn: transform.totals.totalMoneyIn.toFixed(2),
+            totalMoneyOut: transform.totals.totalMoneyOut.toFixed(2),
+            idempotencyKey,
+            profileVersionId,
+            draftPayload: {
+              ...prevPayload,
+              mapping,
+              committedAt: new Date().toISOString(),
+            },
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(bankStatementImports.id, importId),
+              eq(bankStatementImports.tenantId, user.tenantId),
+            ),
+          );
+
+        await tx.insert(bankStatementImportEvents).values({
+          tenantId: user.tenantId,
+          importId,
+          userId: user.id,
+          action: 'committed',
+          detail: {
+            lineCount: ready.length,
+            totalMoneyIn: transform.totals.totalMoneyIn,
+            totalMoneyOut: transform.totals.totalMoneyOut,
+            balanceOk: transform.balanceCheck.ok,
+            saveProfile,
+          },
+        });
+      });
+
+      return ready.length;
+    });
+
+    revalidatePath('/cashbook');
+    revalidatePath('/cashbook/import-studio');
+    revalidatePath('/reconciliation');
+    revalidatePath('/transactions');
+    return { ok: true, importId, lineCount };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Could not import statement.',
+    };
+  }
+}
+

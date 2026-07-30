@@ -39,3 +39,20 @@ export {
   type StatementTotals,
   type BalanceCheckResult,
 } from './validate-balance';
+export {
+  interpretAmount,
+  suggestAmountModeFromHeaders,
+  type AmountRules,
+  type AmountMode,
+  type AmountInterpretResult,
+} from './amount-rules';
+export {
+  loadWorkbookMatrix,
+  suggestStudioMapping,
+  transformStudioMatrix,
+  listColumns,
+  columnSamples,
+  type StudioMapping,
+  type StudioLine,
+  type StudioTransformResult,
+} from './studio-transform';

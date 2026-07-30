@@ -86,14 +86,14 @@ Unknown money labels are **blocking errors**.
 
 | Phase | Scope |
 |-------|--------|
-| **BIS-0** | This doc + flag + legacy note |
-| **BIS-1** | Schema 023 + draft fields |
-| **BIS-2** | Inspect + multi-step wizard shell |
-| **BIS-3** | Amount rules A–D + validation + balance equation |
-| **BIS-4** | Bank-only commit + profile versions + fixtures |
-| **BIS-5** | Reconciliation passes 1–3 UI |
-| **BIS-6** | Cashbook create rail post-recon |
-| **BIS-7+** | Issues UX, overlap, advanced rules, AI assist |
+| **BIS-0** | This doc + flag + legacy note | **Done** |
+| **BIS-1** | Schema 023 + draft fields | **Done** |
+| **BIS-2** | Inspect + multi-step wizard shell | **Done** |
+| **BIS-3** | Amount rules A–D + validation + balance equation | **Done** |
+| **BIS-4** | Bank-only commit + profile versions + fixtures | **Done** |
+| **BIS-5** | Reconciliation passes 1–3 UI | Next |
+| **BIS-6** | Cashbook create rail post-recon | Next |
+| **BIS-7+** | Issues UX, overlap, advanced rules, AI assist | Later |
 
 ## 9. AI policy
 

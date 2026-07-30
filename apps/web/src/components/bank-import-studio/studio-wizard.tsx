@@ -559,8 +559,8 @@ export function BankImportStudioWizard({
         onBack={() => setPhase('sheet')}
         onContinue={goNextFromTable}
       >
-        <p className="bis-tip">Blue row = column names. Tap another row to change.</p>
-        <p className="bis-tip muted">Row {mapping.headerRowIndex + 1} selected</p>
+        <p className="bis-tip">Blue = header. Tap a row number.</p>
+        <p className="bis-tip muted">Row {mapping.headerRowIndex + 1}</p>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
@@ -579,9 +579,12 @@ export function BankImportStudioWizard({
         onBack={() => setPhase('table')}
         onContinue={goNextFromDate}
       >
-        <p className="bis-tip">Yellow column = date. Tap a column letter or any cell in it.</p>
+        <p className="bis-tip">Yellow = date. Tap a column (1, 2, 3…).</p>
         <p className="bis-tip muted">
-          {preview?.columns.find((c) => c.index === mapping.dateCol)?.label ?? `Col ${mapping.dateCol + 1}`}
+          Col {mapping.dateCol + 1}
+          {preview?.columns.find((c) => c.index === mapping.dateCol)?.label
+            ? ` · ${preview.columns.find((c) => c.index === mapping.dateCol)!.label}`
+            : ''}
         </p>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
@@ -601,10 +604,12 @@ export function BankImportStudioWizard({
         onBack={() => setPhase('date')}
         onContinue={goNextFromDesc}
       >
-        <p className="bis-tip">Green column = description / particulars.</p>
+        <p className="bis-tip">Green = details. Tap a column (1, 2, 3…).</p>
         <p className="bis-tip muted">
-          {preview?.columns.find((c) => c.index === mapping.descriptionCol)?.label ??
-            `Col ${mapping.descriptionCol + 1}`}
+          Col {mapping.descriptionCol + 1}
+          {preview?.columns.find((c) => c.index === mapping.descriptionCol)?.label
+            ? ` · ${preview.columns.find((c) => c.index === mapping.descriptionCol)!.label}`
+            : ''}
         </p>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
@@ -698,25 +703,39 @@ export function BankImportStudioWizard({
           {mode === 'debit_credit' ? (
             <>
               <li>
-                Out → col {((mapping.amountRules.moneyOutCol ?? -1) + 1) || '—'}
+                Out → Col{' '}
+                {mapping.amountRules.moneyOutCol != null
+                  ? mapping.amountRules.moneyOutCol + 1
+                  : '—'}
               </li>
               <li>
-                In → col {((mapping.amountRules.moneyInCol ?? -1) + 1) || '—'}
+                In → Col{' '}
+                {mapping.amountRules.moneyInCol != null
+                  ? mapping.amountRules.moneyInCol + 1
+                  : '—'}
               </li>
             </>
           ) : (
             <>
               <li>
-                Amount → col {((mapping.amountRules.amountCol ?? -1) + 1) || '—'}
+                Amount → Col{' '}
+                {mapping.amountRules.amountCol != null
+                  ? mapping.amountRules.amountCol + 1
+                  : '—'}
               </li>
               {mode === 'amount_with_type' ? (
                 <li>
-                  DR/CR → col {((mapping.amountRules.typeCol ?? -1) + 1) || '—'}
+                  DR/CR → Col{' '}
+                  {mapping.amountRules.typeCol != null
+                    ? mapping.amountRules.typeCol + 1
+                    : '—'}
                 </li>
               ) : null}
             </>
           )}
-          {mapping.balanceCol != null ? <li>Balance → col {mapping.balanceCol + 1}</li> : null}
+          {mapping.balanceCol != null ? (
+            <li>Balance → Col {mapping.balanceCol + 1}</li>
+          ) : null}
         </ul>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>

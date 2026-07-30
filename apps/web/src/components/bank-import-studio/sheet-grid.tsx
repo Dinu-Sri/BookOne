@@ -1,22 +1,25 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
+
 export type SheetHighlight = {
-  /** Absolute workbook row indices (0-based) */
   rows?: number[];
-  /** Column indices */
   cols?: number[];
-  /** Named roles for color legend */
-  colRoles?: Record<number, 'date' | 'desc' | 'out' | 'in' | 'amount' | 'type' | 'balance' | 'active'>;
-  /** Dim rows strictly above header */
+  colRoles?: Record<
+    number,
+    'date' | 'desc' | 'out' | 'in' | 'amount' | 'type' | 'balance' | 'active'
+  >;
   dimAboveRow?: number | null;
-  /** Click mode */
   clickMode?: 'row' | 'column' | 'none';
   onRowClick?: (absRow: number) => void;
   onColClick?: (col: number) => void;
 };
 
+const PAGE_SIZE = 12;
+
 /**
- * Excel-like sheet preview with step-driven highlights.
+ * Excel-like sheet with numeric column headers (Col 1…) matching step copy,
+ * and row pagination so the page never needs to scroll for the grid.
  */
 export function SheetGrid({
   grid,
@@ -36,39 +39,62 @@ export function SheetGrid({
   const colSet = new Set(highlight.cols ?? []);
   const roles = highlight.colRoles ?? {};
 
+  // Prefer showing the header row in view when highlighted
+  const focusRow = highlight.rows?.[0] ?? startRow;
+  const initialPage = Math.max(0, Math.floor((focusRow - startRow) / PAGE_SIZE));
+  const [page, setPage] = useState(initialPage);
+
+  useEffect(() => {
+    const fr = highlight.rows?.[0];
+    if (fr == null) return;
+    setPage(Math.max(0, Math.floor((fr - startRow) / PAGE_SIZE)));
+  }, [highlight.rows, startRow, grid.length]);
+
+  const totalPages = Math.max(1, Math.ceil(grid.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageRows = useMemo(() => {
+    const from = safePage * PAGE_SIZE;
+    return grid.slice(from, from + PAGE_SIZE).map((row, i) => ({
+      abs: startRow + from + i,
+      cells: row,
+    }));
+  }, [grid, safePage, startRow]);
+
   return (
     <div className="bis-excel">
       <div className="bis-excel-bar">
-        <span className="bis-excel-title">{fileLabel ?? 'Sheet'}</span>
+        <span className="bis-excel-title" title={fileLabel}>
+          {fileLabel ?? 'Sheet'}
+        </span>
         <span className="bis-excel-meta">
           {totalRows} rows · {colCount} cols
-          {grid.length < totalRows ? ` · showing first ${grid.length}` : ''}
         </span>
       </div>
+
       <div className="bis-excel-scroll">
         <table className="bis-excel-table">
           <thead>
             <tr>
-              <th className="bis-excel-corner" />
+              <th className="bis-excel-corner">#</th>
               {Array.from({ length: colCount }, (_, c) => (
                 <th
                   key={c}
-                  className={`bis-excel-colhead ${colSet.has(c) ? 'hl' : ''} ${roles[c] ? `role-${roles[c]}` : ''}`}
+                  className={`bis-excel-colhead ${colSet.has(c) ? 'hl' : ''} ${
+                    roles[c] ? `role-${roles[c]}` : ''
+                  }`}
                   onClick={() => {
                     if (highlight.clickMode === 'column') highlight.onColClick?.(c);
                   }}
                 >
-                  {colLetter(c)}
+                  {c + 1}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {grid.map((row, ri) => {
-              const abs = startRow + ri;
+            {pageRows.map(({ abs, cells }) => {
               const isHeader = rowSet.has(abs);
-              const dim =
-                highlight.dimAboveRow != null && abs < highlight.dimAboveRow;
+              const dim = highlight.dimAboveRow != null && abs < highlight.dimAboveRow;
               return (
                 <tr
                   key={abs}
@@ -84,18 +110,16 @@ export function SheetGrid({
                     return (
                       <td
                         key={c}
-                        className={`${colHl ? 'col-hl' : ''} ${role ? `role-${role}` : ''} ${
-                          isHeader && colHl ? 'cell-focus' : ''
-                        }`}
+                        className={`${colHl ? 'col-hl' : ''} ${role ? `role-${role}` : ''}`}
                         onClick={(e) => {
                           if (highlight.clickMode === 'column') {
                             e.stopPropagation();
                             highlight.onColClick?.(c);
                           }
                         }}
-                        title={row[c] ?? ''}
+                        title={cells[c] ?? ''}
                       >
-                        {row[c] ?? ''}
+                        {cells[c] ?? ''}
                       </td>
                     );
                   })}
@@ -105,27 +129,42 @@ export function SheetGrid({
           </tbody>
         </table>
       </div>
-      {(highlight.cols?.length || highlight.rows?.length) ? (
+
+      <div className="bis-excel-pager">
+        <button
+          type="button"
+          className="bis-pager-btn"
+          disabled={safePage <= 0}
+          onClick={() => setPage((p) => Math.max(0, p - 1))}
+        >
+          ‹ Prev
+        </button>
+        <span className="bis-pager-label">
+          Rows {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, grid.length)}
+          {' · '}
+          page {safePage + 1}/{totalPages}
+        </span>
+        <button
+          type="button"
+          className="bis-pager-btn"
+          disabled={safePage >= totalPages - 1}
+          onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+        >
+          Next ›
+        </button>
+      </div>
+
+      {highlight.cols?.length || highlight.rows?.length ? (
         <div className="bis-excel-legend">
           {Object.entries(roles).map(([col, role]) => (
             <span key={col} className={`leg role-${role}`}>
-              {colLetter(Number(col))} · {roleLabel(role)}
+              Col {Number(col) + 1} · {roleLabel(role)}
             </span>
           ))}
         </div>
       ) : null}
     </div>
   );
-}
-
-function colLetter(i: number): string {
-  let n = i;
-  let s = '';
-  do {
-    s = String.fromCharCode(65 + (n % 26)) + s;
-    n = Math.floor(n / 26) - 1;
-  } while (n >= 0);
-  return s;
 }
 
 function roleLabel(role: string): string {

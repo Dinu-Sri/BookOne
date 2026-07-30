@@ -6832,3 +6832,179 @@ textarea.input {
     flex: 1;
   }
 }
+
+/* Viewport-locked import page — no document scroll */
+.cashbook-app:has(.cashbook-import-page) {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.cashbook-app:has(.cashbook-import-page) .cashbook-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+  padding-top: 4px;
+}
+.cashbook-import-page {
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  max-width: none !important;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 8px 4px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.cashbook-import-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px !important;
+  margin: 0 !important;
+}
+.cashbook-import-title {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  margin: 0 !important;
+}
+.cashbook-import-back {
+  min-height: 36px !important;
+  font-size: 12px !important;
+}
+
+.bis-workspace {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  border-radius: 12px !important;
+}
+.bis-workspace.split {
+  flex-direction: row !important;
+  align-items: stretch !important;
+}
+.bis-pane-sheet {
+  flex: 1 1 62% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.bis-pane-step {
+  flex: 0 0 300px !important;
+  width: 300px !important;
+  max-width: 34% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.bis-workspace.single .bis-pane-step {
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 1 !important;
+}
+.bis-step-top {
+  flex: 0 0 auto;
+  padding: 10px 12px 6px !important;
+}
+.bis-q {
+  font-size: 16px !important;
+}
+.bis-step-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 8px 12px !important;
+  gap: 8px !important;
+}
+.bis-step-foot {
+  flex: 0 0 auto;
+  padding: 8px 12px !important;
+}
+
+.bis-excel {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+.bis-excel-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+}
+.bis-excel-bar,
+.bis-excel-pager,
+.bis-excel-legend {
+  flex: 0 0 auto;
+}
+.bis-excel-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-top: 1px solid #e2e8f0;
+  background: #f1f5f9;
+}
+.bis-pager-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bis-pager-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.bis-pager-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-align: center;
+}
+.bis-excel-table th,
+.bis-excel-table td {
+  font-size: 11px !important;
+  padding: 4px 6px !important;
+}
+.bis-excel-colhead {
+  min-width: 40px;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .bis-workspace.split {
+    flex-direction: column !important;
+  }
+  .bis-pane-sheet {
+    flex: 0 0 45% !important;
+    max-height: 45% !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--line, #e2e8f0) !important;
+  }
+  .bis-pane-step {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 55% !important;
+  }
+}

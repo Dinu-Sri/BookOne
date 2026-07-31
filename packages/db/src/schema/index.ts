@@ -16,6 +16,14 @@ export {
   bankStatementImportEvents,
   bankImportIssues,
   periodLocks,
+  bankReconciliationSessions,
+  bankReconciliationSessionImports,
+  bankReconciliationCases,
+  bankReconciliationCaseBankLines,
+  bankReconciliationCaseBookTransactions,
+  bankReconciliationOutstandingItems,
+  bankReconciliationEvents,
+  bankReconciliationSnapshots,
 } from './reconciliation';
 export { businessDocuments, businessDocumentLines } from './business-documents';
 export {

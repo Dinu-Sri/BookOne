@@ -753,7 +753,7 @@ export function CashbookHomeClient({
           <Link href="/cashbook/bank-imports" className="cb-secondary-tile">
             <Landmark size={18} />
             <span className={si ? 'si-text' : undefined}>
-              {si ? 'බැංකු ආයාත' : 'Bank imports'}
+              {si ? 'බැංකු ගැලපීම' : 'Bank reconciliation'}
             </span>
           </Link>
         </div>

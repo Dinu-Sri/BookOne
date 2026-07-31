@@ -92,7 +92,7 @@ export function CashbookShell({
                 onClick={() => setMenuOpen(false)}
               >
                 <Landmark size={16} />
-                <span>{si ? 'බැංකු ආයාත' : 'Bank imports'}</span>
+                <span>{si ? 'බැංකු ගැලපීම' : 'Bank reconciliation'}</span>
               </Link>
               {showFullErpLink ? (
                 <Link

@@ -1,13 +1,12 @@
 import Link from 'next/link';
-import { listBankImportsForHub } from '@/app/actions/statement-import';
-import { BankImportsHub } from '@/components/bank-import-studio/bank-imports-hub';
+import { listReconciliationSessions } from '@/app/actions/bank-reconciliation';
+import { ReconciliationInbox } from '@/components/reconciliation/reconciliation-inbox';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { canAccessFullErp } from '@/lib/entity-kind';
 import { requireEntityTenant } from '@/lib/require-entity-shell';
 
 /**
- * Bank Imports inbox (personal / sole prop).
- * Staging files → open workbench at /cashbook/match?importId=
+ * Cashbook Bank reconciliation inbox (same sessions as full ERP).
  */
 export default async function CashbookBankImportsPage() {
   const tenant = await requireEntityTenant({
@@ -16,34 +15,34 @@ export default async function CashbookBankImportsPage() {
   });
 
   const fullErp = canAccessFullErp(tenant.entityKind, tenant.capabilityTier);
-  let items: Awaited<ReturnType<typeof listBankImportsForHub>> = [];
+  let sessions: Awaited<ReturnType<typeof listReconciliationSessions>> = [];
   try {
-    items = await listBankImportsForHub(40);
+    sessions = await listReconciliationSessions();
   } catch {
-    items = [];
+    sessions = [];
   }
 
   return (
     <CashbookShell
-      title={`${tenant.name} · Bank imports`}
+      title={`${tenant.name} · Bank reconciliation`}
       active="home"
       showFullErpLink={fullErp}
     >
       <div className="cashbook-import-page">
         <div className="cashbook-import-head">
-          <h1 className="cashbook-import-title">Bank imports</h1>
+          <h1 className="cashbook-import-title">Bank reconciliation</h1>
           <Link href="/cashbook" className="cashbook-import-back">
             ← Cashbook
           </Link>
         </div>
         <p className="bih-lead">
-          Files you imported stay here until you match them to cashbook entries or create new ones.
-          Your cashbook list only shows real books — not raw bank rows.
+          Each card is a bank account and statement period. Import files are attached as evidence —
+          match them to cashbook entries here.
         </p>
-        <BankImportsHub
-          items={items}
+        <ReconciliationInbox
+          sessions={sessions}
           importHref="/cashbook/import"
-          workbenchBase="/cashbook/match"
+          sessionBase="/cashbook/recon"
         />
       </div>
     </CashbookShell>

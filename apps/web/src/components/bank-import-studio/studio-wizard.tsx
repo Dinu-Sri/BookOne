@@ -172,7 +172,6 @@ export function BankImportStudioWizard({
 }) {
   const isErp = source === 'erp_recon';
   const hubAfterImport = isErp ? '/reconciliation' : '/cashbook/bank-imports';
-  const matchBase = isErp ? '/reconciliation' : '/cashbook/match';
   const homeAfterImport = isErp ? '/dashboard' : '/cashbook';
   const bankOnly = useMemo(
     () => banks.filter((b) => b.kind === 'bank' || b.kind === 'card' || b.code === '1000'),
@@ -1545,13 +1544,17 @@ export function BankImportStudioWizard({
           <a
             className="bis-btn primary"
             href={
-              importedId ? `${matchBase}?importId=${importedId}` : hubAfterImport
+              importedId
+                ? isErp
+                  ? `/reconciliation/from-import?importId=${importedId}`
+                  : `/cashbook/match?importId=${importedId}`
+                : hubAfterImport
             }
           >
-            Match to books
+            Reconcile now
           </a>
           <a className="bis-btn secondary" href={hubAfterImport}>
-            All bank imports
+            Bank reconciliation
           </a>
           <a className="bis-btn secondary" href={homeAfterImport}>
             {isErp ? 'Dashboard' : 'Back to cashbook'}

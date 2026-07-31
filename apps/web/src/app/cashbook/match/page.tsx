@@ -1,75 +1,30 @@
-import Link from 'next/link';
-import { listBankImportsForHub } from '@/app/actions/statement-import';
-import { BankImportsHub } from '@/components/bank-import-studio/bank-imports-hub';
-import { BankMatchWizard } from '@/components/bank-import-studio/match-wizard';
-import { CashbookShell } from '@/components/cashbook/cashbook-shell';
-import { canAccessFullErp } from '@/lib/entity-kind';
+import { redirect } from 'next/navigation';
+import { resolveImportToSession } from '@/app/actions/bank-reconciliation';
 import { requireEntityTenant } from '@/lib/require-entity-shell';
 
 /**
- * Workbench for one bank import (match → create).
- * Without importId, shows the same hub as /cashbook/bank-imports.
+ * Compatibility: old match?importId= URLs → recon session workbench.
  */
-export default async function CashbookMatchPage({
+export default async function CashbookMatchCompatPage({
   searchParams,
 }: {
   searchParams?: Promise<{ importId?: string }> | { importId?: string };
 }) {
-  const tenant = await requireEntityTenant({
+  await requireEntityTenant({
     requirePersonalShell: true,
     loginFrom: '/cashbook/match',
   });
 
   const params = searchParams instanceof Promise ? await searchParams : searchParams;
   const importId = params?.importId;
-  const fullErp = canAccessFullErp(tenant.entityKind, tenant.capabilityTier);
 
-  if (importId) {
-    return (
-      <CashbookShell
-        title={`${tenant.name} · Match bank`}
-        active="home"
-        showFullErpLink={fullErp}
-      >
-        <div className="cashbook-import-page">
-          <div className="cashbook-import-head">
-            <h1 className="cashbook-import-title">Match to books</h1>
-            <Link href="/cashbook/bank-imports" className="cashbook-import-back">
-              ← Bank imports
-            </Link>
-          </div>
-          <BankMatchWizard importId={importId} />
-        </div>
-      </CashbookShell>
-    );
+  if (!importId) {
+    redirect('/cashbook/bank-imports');
   }
 
-  let items: Awaited<ReturnType<typeof listBankImportsForHub>> = [];
-  try {
-    items = await listBankImportsForHub(40);
-  } catch {
-    items = [];
+  const res = await resolveImportToSession(importId);
+  if (!res.ok) {
+    redirect('/cashbook/bank-imports');
   }
-
-  return (
-    <CashbookShell
-      title={`${tenant.name} · Bank imports`}
-      active="home"
-      showFullErpLink={fullErp}
-    >
-      <div className="cashbook-import-page">
-        <div className="cashbook-import-head">
-          <h1 className="cashbook-import-title">Bank imports</h1>
-          <Link href="/cashbook" className="cashbook-import-back">
-            ← Cashbook
-          </Link>
-        </div>
-        <BankImportsHub
-          items={items}
-          importHref="/cashbook/import"
-          workbenchBase="/cashbook/match"
-        />
-      </div>
-    </CashbookShell>
-  );
+  redirect(`/cashbook/recon/${res.sessionId}`);
 }

@@ -81,11 +81,12 @@ Unknown money labels are **blocking errors**.
 | Schema | Migration `023_bank_import_studio.sql` + `packages/db/src/schema/reconciliation.ts` |
 | Server actions | `apps/web/src/app/actions/bank-import-studio.ts` |
 | Wizard UI | `apps/web/src/components/bank-import-studio/*` |
-| Cashbook import | `/cashbook/import` (studio) |
-| Bank imports hub | `/cashbook/bank-imports` (personal/sole) · `/reconciliation` (full ERP) |
-| Workbench | `/cashbook/match?importId=` or `/reconciliation?importId=` → same `BankMatchWizard` |
-| Engine | One path: studio → match → create (no legacy ERP uploader) |
-| Flag | none |
+| Cashbook import | `/cashbook/import` (studio — staging only) |
+| Recon inbox | `/cashbook/bank-imports` · `/reconciliation` — **sessions** (bank + period) |
+| Workbench | `/cashbook/recon/[sessionId]` · `/reconciliation/session/[sessionId]` |
+| Compat | `/cashbook/match?importId=` → creates/opens session |
+| Spec | `docs/BANK_RECONCILIATION_WORKBENCH.md` |
+| Engine | One: studio stage → session/cases → confirm (no silent GL) |
 
 ## 8. Phases
 

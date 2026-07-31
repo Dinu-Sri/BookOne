@@ -174,3 +174,131 @@ export const periodLocks = pgTable('period_locks', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),
 });
+
+/** Workbench: bank account + statement period (authoritative recon object). */
+export const bankReconciliationSessions = pgTable('bank_reconciliation_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  bankAccountId: uuid('bank_account_id').notNull().references(() => accounts.id),
+  bookDomain: varchar('book_domain', { length: 20 }),
+  periodFrom: varchar('period_from', { length: 10 }).notNull(),
+  periodTo: varchar('period_to', { length: 10 }).notNull(),
+  statementReference: varchar('statement_reference', { length: 120 }),
+  status: varchar('status', { length: 30 }).notNull().default('ready'),
+  statementOpeningBalance: numeric('statement_opening_balance', { precision: 18, scale: 2 }),
+  statementClosingBalance: numeric('statement_closing_balance', { precision: 18, scale: 2 }),
+  bookOpeningBalanceSnapshot: numeric('book_opening_balance_snapshot', { precision: 18, scale: 2 }),
+  bookClosingBalanceSnapshot: numeric('book_closing_balance_snapshot', { precision: 18, scale: 2 }),
+  outstandingNet: numeric('outstanding_net', { precision: 18, scale: 2 }).notNull().default('0'),
+  adjustmentNet: numeric('adjustment_net', { precision: 18, scale: 2 }).notNull().default('0'),
+  differenceAmount: numeric('difference_amount', { precision: 18, scale: 2 }).notNull().default('0'),
+  toleranceAmount: numeric('tolerance_amount', { precision: 18, scale: 2 }).notNull().default('0.01'),
+  sourceFileCount: integer('source_file_count').notNull().default(0),
+  bankLineCount: integer('bank_line_count').notNull().default(0),
+  resolvedCaseCount: integer('resolved_case_count').notNull().default(0),
+  openCaseCount: integer('open_case_count').notNull().default(0),
+  version: integer('version').notNull().default(1),
+  preparedBy: uuid('prepared_by').references(() => users.id),
+  reconciledBy: uuid('reconciled_by').references(() => users.id),
+  reconciledAt: timestamp('reconciled_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+export const bankReconciliationSessionImports = pgTable('bank_reconciliation_session_imports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  sessionId: uuid('session_id').notNull().references(() => bankReconciliationSessions.id),
+  importId: uuid('import_id').notNull().references(() => bankStatementImports.id),
+  attachedBy: uuid('attached_by').references(() => users.id),
+  attachedAt: timestamp('attached_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const bankReconciliationCases = pgTable('bank_reconciliation_cases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  sessionId: uuid('session_id').notNull().references(() => bankReconciliationSessions.id),
+  caseType: varchar('case_type', { length: 40 }).notNull(),
+  confidence: varchar('confidence', { length: 20 }).notNull().default('none'),
+  state: varchar('state', { length: 30 }).notNull().default('suggested'),
+  matchScore: numeric('match_score', { precision: 5, scale: 4 }),
+  matchMethod: varchar('match_method', { length: 20 }),
+  explanation: text('explanation'),
+  reasonCodes: jsonb('reason_codes').$type<string[]>().notNull().default([]),
+  userLabel: varchar('user_label', { length: 80 }),
+  resultLabel: varchar('result_label', { length: 80 }),
+  createdTransactionId: uuid('created_transaction_id').references(() => transactions.id),
+  exclusionReason: varchar('exclusion_reason', { length: 80 }),
+  deferredUntil: varchar('deferred_until', { length: 10 }),
+  sortDate: varchar('sort_date', { length: 10 }),
+  sortAmount: numeric('sort_amount', { precision: 18, scale: 2 }),
+  version: integer('version').notNull().default(1),
+  confirmedBy: uuid('confirmed_by').references(() => users.id),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+export const bankReconciliationCaseBankLines = pgTable('bank_reconciliation_case_bank_lines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  caseId: uuid('case_id').notNull().references(() => bankReconciliationCases.id),
+  bankLineId: uuid('bank_line_id').notNull().references(() => bankStatementLines.id),
+  allocatedAmount: numeric('allocated_amount', { precision: 18, scale: 2 }),
+  role: varchar('role', { length: 30 }).notNull().default('primary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+export const bankReconciliationCaseBookTransactions = pgTable(
+  'bank_reconciliation_case_book_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+    caseId: uuid('case_id').notNull().references(() => bankReconciliationCases.id),
+    transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+    allocatedAmount: numeric('allocated_amount', { precision: 18, scale: 2 }),
+    role: varchar('role', { length: 30 }).notNull().default('primary'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    voidedAt: timestamp('voided_at', { withTimezone: true }),
+  },
+);
+
+export const bankReconciliationOutstandingItems = pgTable('bank_reconciliation_outstanding_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  sessionId: uuid('session_id').notNull().references(() => bankReconciliationSessions.id),
+  transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+  caseId: uuid('case_id').references(() => bankReconciliationCases.id),
+  reason: varchar('reason', { length: 40 }).notNull().default('not_cleared'),
+  expectedClearDate: varchar('expected_clear_date', { length: 10 }),
+  status: varchar('status', { length: 20 }).notNull().default('open'),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+export const bankReconciliationEvents = pgTable('bank_reconciliation_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  sessionId: uuid('session_id').notNull().references(() => bankReconciliationSessions.id),
+  caseId: uuid('case_id').references(() => bankReconciliationCases.id),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  action: varchar('action', { length: 40 }).notNull(),
+  beforeValues: jsonb('before_values'),
+  afterValues: jsonb('after_values'),
+  reason: text('reason'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const bankReconciliationSnapshots = pgTable('bank_reconciliation_snapshots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  sessionId: uuid('session_id').notNull().references(() => bankReconciliationSessions.id),
+  summary: jsonb('summary').$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});

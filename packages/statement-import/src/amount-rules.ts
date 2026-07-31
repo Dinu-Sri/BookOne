@@ -24,9 +24,14 @@ export type AmountRules = {
   negativeMeansOut?: boolean;
   /** For type/embedded: does DR mean Money Out? default true */
   drMeansOut?: boolean;
-  /** Known tokens (extended by user resolutions) */
+  /** Extra tokens (merged with built-in defaults; from issue wizard) */
   moneyOutTokens?: string[];
   moneyInTokens?: string[];
+  /**
+   * Labels the user chose to skip entirely (issue wizard "Ignore").
+   * Matching rows are excluded from import, not errors.
+   */
+  ignoreMoneyLabels?: string[];
 };
 
 export type AmountInterpretResult = {
@@ -40,11 +45,35 @@ export type AmountInterpretResult = {
   unknownLabel?: string;
 };
 
-const DEFAULT_OUT = ['dr', 'd', 'debit', 'withdrawal', 'wd', 'db', 'out', 'paid'];
-const DEFAULT_IN = ['cr', 'c', 'credit', 'deposit', 'dep', 'in', 'received'];
+export const DEFAULT_MONEY_OUT_TOKENS = [
+  'dr',
+  'd',
+  'debit',
+  'withdrawal',
+  'wd',
+  'db',
+  'out',
+  'paid',
+];
+export const DEFAULT_MONEY_IN_TOKENS = [
+  'cr',
+  'c',
+  'credit',
+  'deposit',
+  'dep',
+  'in',
+  'received',
+];
 
 function normToken(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function tokenMatch(raw: string, token: string): boolean {
+  const t = normToken(raw);
+  const n = normToken(token);
+  if (!t || !n) return false;
+  return t === n || t.includes(n) || n.includes(t);
 }
 
 function classifyToken(
@@ -54,9 +83,25 @@ function classifyToken(
 ): 'out' | 'in' | 'unknown' {
   const t = normToken(raw);
   if (!t) return 'unknown';
-  if (outTokens.some((x) => t === normToken(x) || t.includes(normToken(x)))) return 'out';
-  if (inTokens.some((x) => t === normToken(x) || t.includes(normToken(x)))) return 'in';
+  if (outTokens.some((x) => tokenMatch(raw, x))) return 'out';
+  if (inTokens.some((x) => tokenMatch(raw, x))) return 'in';
   return 'unknown';
+}
+
+function isIgnoredLabel(raw: string, ignore: string[] | undefined): boolean {
+  if (!ignore?.length) return false;
+  return ignore.some((x) => tokenMatch(raw, x));
+}
+
+/** Built-in tokens plus any user-resolved extras (never drop defaults). */
+export function mergeAmountTokens(rules: AmountRules): {
+  out: string[];
+  in: string[];
+} {
+  return {
+    out: [...DEFAULT_MONEY_OUT_TOKENS, ...(rules.moneyOutTokens ?? [])],
+    in: [...DEFAULT_MONEY_IN_TOKENS, ...(rules.moneyInTokens ?? [])],
+  };
 }
 
 function pack(signed: number): AmountInterpretResult {
@@ -84,8 +129,7 @@ export function interpretAmount(
   cells: unknown[],
   rules: AmountRules,
 ): AmountInterpretResult {
-  const outTok = rules.moneyOutTokens?.length ? rules.moneyOutTokens : DEFAULT_OUT;
-  const inTok = rules.moneyInTokens?.length ? rules.moneyInTokens : DEFAULT_IN;
+  const { out: outTok, in: inTok } = mergeAmountTokens(rules);
   const drOut = rules.drMeansOut !== false;
   const negOut = rules.negativeMeansOut !== false;
 
@@ -154,6 +198,16 @@ export function interpretAmount(
       };
     }
     const label = String(cells[tCol] ?? '').trim();
+    if (isIgnoredLabel(label, rules.ignoreMoneyLabels)) {
+      return {
+        signedAmount: 0,
+        debitAmount: 0,
+        creditAmount: 0,
+        direction: 'unknown',
+        error: 'ignored_money_label',
+        unknownLabel: label || '(empty)',
+      };
+    }
     const kind = classifyToken(label, outTok, inTok);
     if (kind === 'unknown') {
       return {
@@ -185,6 +239,16 @@ export function interpretAmount(
       };
     }
     const raw = String(cells[col] ?? '');
+    if (isIgnoredLabel(raw, rules.ignoreMoneyLabels)) {
+      return {
+        signedAmount: 0,
+        debitAmount: 0,
+        creditAmount: 0,
+        direction: 'unknown',
+        error: 'ignored_money_label',
+        unknownLabel: raw.slice(0, 40) || '(empty)',
+      };
+    }
     const upper = raw.toUpperCase();
     let kind: 'out' | 'in' | 'unknown' = 'unknown';
     for (const t of outTok) {

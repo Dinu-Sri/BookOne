@@ -42,6 +42,9 @@ export {
 export {
   interpretAmount,
   suggestAmountModeFromHeaders,
+  mergeAmountTokens,
+  DEFAULT_MONEY_OUT_TOKENS,
+  DEFAULT_MONEY_IN_TOKENS,
   type AmountRules,
   type AmountMode,
   type AmountInterpretResult,
@@ -50,9 +53,11 @@ export {
   loadWorkbookMatrix,
   suggestStudioMapping,
   transformStudioMatrix,
+  collectUnknownMoneyLabels,
   listColumns,
   columnSamples,
   type StudioMapping,
   type StudioLine,
   type StudioTransformResult,
+  type UnknownLabelIssue,
 } from './studio-transform';

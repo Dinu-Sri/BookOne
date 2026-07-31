@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
 import {
+  ArrowRight,
   Calendar,
   CheckCircle2,
   Columns3,
@@ -10,6 +11,7 @@ import {
   Loader2,
   MousePointerClick,
   Rows3,
+  SkipForward,
   Wallet,
 } from 'lucide-react';
 import {
@@ -21,7 +23,14 @@ import {
   type StudioPreviewPayload,
 } from '@/app/actions/bank-import-studio';
 import type { LiquidAccount } from '@/app/actions/cashbook-banks';
-import type { AmountMode, AmountRules, StudioMapping } from '@bookone/statement-import';
+import {
+  collectUnknownMoneyLabels,
+  type AmountMode,
+  type AmountRules,
+  type StudioLine,
+  type StudioMapping,
+  type UnknownLabelIssue,
+} from '@bookone/statement-import';
 import { SheetGrid, type SheetHighlight } from './sheet-grid';
 import { StudioShell, type StudioStepId } from './studio-shell';
 
@@ -33,8 +42,11 @@ type Phase =
   | 'date'
   | 'description'
   | 'money'
+  | 'resolve'
   | 'review'
   | 'done';
+
+type LabelChoice = 'out' | 'in' | 'ignore';
 
 type MoneyPick = 'out' | 'in' | 'amount' | 'type' | 'balance' | null;
 
@@ -54,6 +66,7 @@ const STEP_META: Record<Phase, { step: StudioStepId; index: number }> = {
   date: { step: 'date', index: 5 },
   description: { step: 'description', index: 6 },
   money: { step: 'money', index: 7 },
+  resolve: { step: 'review', index: 8 },
   review: { step: 'review', index: 8 },
   done: { step: 'import', index: 9 },
 };
@@ -102,6 +115,9 @@ export function BankImportStudioWizard({
   const [importedCount, setImportedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  /** One-by-one unknown-label queue (issue wizard) */
+  const [resolveQueue, setResolveQueue] = useState<UnknownLabelIssue[]>([]);
+  const [resolveIdx, setResolveIdx] = useState(0);
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const idempotencyRef = useRef(`studio-${Date.now()}`);
@@ -130,6 +146,19 @@ export function BankImportStudioWizard({
       .filter((l) => l.validationStatus === 'error')
       .map((l) => l.rowNumber - 1);
   }, [preview]);
+
+  const currentResolveIssue = resolveQueue[resolveIdx] ?? null;
+
+  const resolveErrorRows = useMemo(() => {
+    if (!preview?.transform?.lines || !currentResolveIssue) return [] as number[];
+    return preview.transform.lines
+      .filter(
+        (l) =>
+          l.validationStatus === 'error' &&
+          l.unknownLabel === currentResolveIssue.label,
+      )
+      .map((l) => l.rowNumber - 1);
+  }, [preview, currentResolveIssue]);
 
   const highlight: SheetHighlight = useMemo(() => {
     if (!mapping || !preview) return { clickMode: 'none' };
@@ -199,7 +228,7 @@ export function BankImportStudioWizard({
       };
     }
 
-    if (phase === 'money' || phase === 'review') {
+    if (phase === 'money' || phase === 'review' || phase === 'resolve') {
       const ar = mapping.amountRules;
       if (ar.mode === 'debit_credit') {
         if (ar.moneyOutCol != null) {
@@ -225,10 +254,16 @@ export function BankImportStudioWizard({
         roles[mapping.balanceCol] = 'balance';
       }
       rows.push(mapping.headerRowIndex);
+      const errRows =
+        phase === 'resolve'
+          ? resolveErrorRows
+          : phase === 'review'
+            ? errorRowNumbers
+            : undefined;
       return {
         cols,
         rows,
-        errorRows: phase === 'review' ? errorRowNumbers : undefined,
+        errorRows: errRows,
         colRoles: roles,
         dimAboveRow: mapping.headerRowIndex,
         clickMode: phase === 'money' ? 'column' : 'none',
@@ -249,7 +284,18 @@ export function BankImportStudioWizard({
     }
 
     return { clickMode: 'none' };
-  }, [mapping, preview, phase, moneyPick, file, bankId, sheetName, runPreview, errorRowNumbers]);
+  }, [
+    mapping,
+    preview,
+    phase,
+    moneyPick,
+    file,
+    bankId,
+    sheetName,
+    runPreview,
+    errorRowNumbers,
+    resolveErrorRows,
+  ]);
 
   function upload(chosen: File) {
     setError(null);
@@ -372,6 +418,19 @@ export function BankImportStudioWizard({
     setPhase('money');
   }
 
+  function enterResolveWizard(lines: StudioLine[]) {
+    const queue = collectUnknownMoneyLabels(lines);
+    if (queue.length === 0) {
+      setResolveQueue([]);
+      setResolveIdx(0);
+      setPhase('review');
+      return;
+    }
+    setResolveQueue(queue);
+    setResolveIdx(0);
+    setPhase('resolve');
+  }
+
   function goNextFromMoney() {
     if (!file || !bankId || !sheetName || !mapping) return;
     setError(null);
@@ -382,7 +441,16 @@ export function BankImportStudioWizard({
           return;
         }
         setPreview(res.preview);
-        setPhase('review');
+        const unknowns = collectUnknownMoneyLabels(res.preview.transform.lines);
+        if (unknowns.length > 0) {
+          setResolveQueue(unknowns);
+          setResolveIdx(0);
+          setPhase('resolve');
+        } else {
+          setResolveQueue([]);
+          setResolveIdx(0);
+          setPhase('review');
+        }
       });
     });
   }
@@ -410,7 +478,13 @@ export function BankImportStudioWizard({
   /** Map issue type → which step to open for fixing */
   function stepForIssue(type: string): Phase {
     if (type === 'invalid_date' || type === 'ambiguous_date') return 'date';
-    if (type === 'unknown_label' || type === 'both_in_out' || type === 'unknown_direction' || type === 'money_setup' || type === 'empty_amount')
+    if (type === 'unknown_label') return 'resolve';
+    if (
+      type === 'both_in_out' ||
+      type === 'unknown_direction' ||
+      type === 'money_setup' ||
+      type === 'empty_amount'
+    )
       return 'money';
     if (type === 'repeated_header' || type === 'excluded_summary') return 'table';
     if (type === 'balance_mismatch') return 'review';
@@ -419,12 +493,75 @@ export function BankImportStudioWizard({
 
   function goFixIssue(type: string) {
     setError(null);
+    if (type === 'unknown_label' && preview?.transform?.lines) {
+      enterResolveWizard(preview.transform.lines);
+      return;
+    }
     const next = stepForIssue(type);
     if (next === 'money') {
       const m = mapping?.amountRules.mode;
       setMoneyPick(m === 'debit_credit' ? 'out' : 'amount');
     }
     setPhase(next);
+  }
+
+  /** Apply Money Out / Money In / Ignore to one unknown label, re-preview, next issue. */
+  function applyLabelResolution(label: string, choice: LabelChoice) {
+    if (!file || !bankId || !sheetName || !mapping) return;
+    setError(null);
+    const ar: AmountRules = { ...mapping.amountRules };
+    if (choice === 'out') {
+      const list = [...(ar.moneyOutTokens ?? [])];
+      if (!list.some((t) => t.toLowerCase() === label.toLowerCase())) list.push(label);
+      ar.moneyOutTokens = list;
+      // Ensure it is not also ignored / in
+      ar.ignoreMoneyLabels = (ar.ignoreMoneyLabels ?? []).filter(
+        (t) => t.toLowerCase() !== label.toLowerCase(),
+      );
+      ar.moneyInTokens = (ar.moneyInTokens ?? []).filter(
+        (t) => t.toLowerCase() !== label.toLowerCase(),
+      );
+    } else if (choice === 'in') {
+      const list = [...(ar.moneyInTokens ?? [])];
+      if (!list.some((t) => t.toLowerCase() === label.toLowerCase())) list.push(label);
+      ar.moneyInTokens = list;
+      ar.ignoreMoneyLabels = (ar.ignoreMoneyLabels ?? []).filter(
+        (t) => t.toLowerCase() !== label.toLowerCase(),
+      );
+      ar.moneyOutTokens = (ar.moneyOutTokens ?? []).filter(
+        (t) => t.toLowerCase() !== label.toLowerCase(),
+      );
+    } else {
+      const list = [...(ar.ignoreMoneyLabels ?? [])];
+      if (!list.some((t) => t.toLowerCase() === label.toLowerCase())) list.push(label);
+      ar.ignoreMoneyLabels = list;
+      ar.moneyOutTokens = (ar.moneyOutTokens ?? []).filter(
+        (t) => t.toLowerCase() !== label.toLowerCase(),
+      );
+      ar.moneyInTokens = (ar.moneyInTokens ?? []).filter(
+        (t) => t.toLowerCase() !== label.toLowerCase(),
+      );
+    }
+    const nextMap: StudioMapping = { ...mapping, amountRules: ar };
+    setMapping(nextMap);
+    startTransition(() => {
+      runPreview(file, bankId, sheetName, nextMap, openingBalance, closingBalance).then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setPreview(res.preview);
+        const remaining = collectUnknownMoneyLabels(res.preview.transform.lines);
+        if (remaining.length === 0) {
+          setResolveQueue([]);
+          setResolveIdx(0);
+          setPhase('review');
+        } else {
+          setResolveQueue(remaining);
+          setResolveIdx(0);
+        }
+      });
+    });
   }
 
   function doCommit(opts?: { skipErrorLines?: boolean }) {
@@ -834,6 +971,130 @@ export function BankImportStudioWizard({
     );
   }
 
+  // ─── RESOLVE (one label at a time) ───
+  if (phase === 'resolve' && mapping && preview?.transform) {
+    const issue = currentResolveIssue;
+    const totalIssues = resolveQueue.length;
+    const issueNum = Math.min(resolveIdx + 1, Math.max(totalIssues, 1));
+    const sampleLines = issue
+      ? preview.transform.lines
+          .filter(
+            (l) => l.validationStatus === 'error' && l.unknownLabel === issue.label,
+          )
+          .slice(0, 4)
+      : [];
+
+    return (
+      <StudioShell
+        step={meta.step}
+        stepIndex={meta.index}
+        stepTotal={9}
+        title={
+          issue
+            ? `What is “${issue.label}”?`
+            : 'Resolve unknown labels'
+        }
+        tone="amber"
+        icon={<Wallet size={18} />}
+        sheet={sheetPane}
+        pending={pending}
+        onBack={() => setPhase('money')}
+        onContinue={() => {
+          if (preview?.transform) {
+            const remaining = collectUnknownMoneyLabels(preview.transform.lines);
+            if (remaining.length === 0) setPhase('review');
+            else {
+              setResolveQueue(remaining);
+              setResolveIdx(0);
+            }
+          } else setPhase('review');
+        }}
+        continueLabel={totalIssues === 0 ? 'Review' : 'Skip rest → Review'}
+        continueDisabled={pending}
+      >
+        {issue ? (
+          <div className="bis-resolve-panel">
+            <div className="bis-resolve-progress">
+              <span>
+                Label {issueNum} of {totalIssues}
+              </span>
+              <div className="bis-resolve-bar" aria-hidden>
+                <i style={{ width: `${(issueNum / Math.max(totalIssues, 1)) * 100}%` }} />
+              </div>
+            </div>
+
+            <div className="bis-coach amber">
+              <div className="bis-coach-swatch amber" />
+              <div>
+                <strong>
+                  “{issue.label}” on {issue.count} row{issue.count === 1 ? '' : 's'}
+                </strong>
+                <p>
+                  Red rows on the sheet use this bank code. Choose once — applies to all of them.
+                </p>
+              </div>
+            </div>
+
+            <div className="bis-label-badge" title={issue.label}>
+              {issue.label}
+            </div>
+
+            {sampleLines.length > 0 ? (
+              <div className="bis-problem-lines">
+                <p className="bis-money-label">Examples on sheet</p>
+                {sampleLines.map((l) => (
+                  <div key={l.rowNumber} className="bis-sample-row err">
+                    <span className="d">R{l.rowNumber}</span>
+                    <span className="t">{l.description || '—'}</span>
+                    <span className="neg">{issue.label}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <p className="bis-money-label">This label means…</p>
+            <div className="bis-resolve-actions">
+              <button
+                type="button"
+                className="bis-resolve-choice out"
+                disabled={pending}
+                onClick={() => applyLabelResolution(issue.label, 'out')}
+              >
+                <strong>Money out</strong>
+                <span>Paid / debit / withdrawal</span>
+              </button>
+              <button
+                type="button"
+                className="bis-resolve-choice in"
+                disabled={pending}
+                onClick={() => applyLabelResolution(issue.label, 'in')}
+              >
+                <strong>Money in</strong>
+                <span>Received / credit / deposit</span>
+              </button>
+              <button
+                type="button"
+                className="bis-resolve-choice skip"
+                disabled={pending}
+                onClick={() => applyLabelResolution(issue.label, 'ignore')}
+              >
+                <SkipForward size={14} />
+                <strong>Skip these rows</strong>
+                <span>Do not import them</span>
+              </button>
+            </div>
+            {error ? <p className="bis-error">{error}</p> : null}
+          </div>
+        ) : (
+          <div className="bis-status-ok">
+            <CheckCircle2 size={16} />
+            No unknown labels left
+          </div>
+        )}
+      </StudioShell>
+    );
+  }
+
   // ─── REVIEW ───
   if (phase === 'review' && preview?.transform && mapping) {
     const t = preview.transform;
@@ -841,6 +1102,7 @@ export function BankImportStudioWizard({
     const canImportAll = !block;
     const canImportGoodOnly = t.readyCount > 0;
     const errorIssues = t.issues.filter((i) => i.severity === 'error');
+    const unknownLabelCount = collectUnknownMoneyLabels(t.lines).length;
     const problemLines = t.lines.filter((l) => l.validationStatus === 'error').slice(0, 8);
 
     return (
@@ -853,7 +1115,16 @@ export function BankImportStudioWizard({
         icon={<Columns3 size={18} />}
         sheet={sheetPane}
         pending={pending}
-        onBack={() => setPhase('money')}
+        onBack={() => {
+          const unknowns = collectUnknownMoneyLabels(t.lines);
+          if (unknowns.length > 0) {
+            setResolveQueue(unknowns);
+            setResolveIdx(0);
+            setPhase('resolve');
+          } else {
+            setPhase('money');
+          }
+        }}
         onContinue={() => doCommit()}
         continueLabel="Save bank lines"
         continueDisabled={!canImportAll || pending}
@@ -878,8 +1149,20 @@ export function BankImportStudioWizard({
           <div className="bis-fix-panel">
             <div className="bis-fix-head">
               <strong>{t.errorCount} problem line(s)</strong>
-              <span>Red rows on the sheet · fix mapping or skip them</span>
+              <span>Red rows on the sheet · resolve labels one by one or skip</span>
             </div>
+            {unknownLabelCount > 0 ? (
+              <button
+                type="button"
+                className="bis-btn primary bis-btn-block"
+                disabled={pending}
+                onClick={() => enterResolveWizard(t.lines)}
+              >
+                Resolve {unknownLabelCount} unknown label
+                {unknownLabelCount === 1 ? '' : 's'} one by one
+                <ArrowRight size={14} />
+              </button>
+            ) : null}
             <ul className="bis-fix-list">
               {errorIssues.map((i) => (
                 <li key={i.type}>
@@ -890,7 +1173,7 @@ export function BankImportStudioWizard({
                     {i.sample ? <span>{i.sample}</span> : null}
                   </div>
                   <button type="button" className="bis-fix-btn" onClick={() => goFixIssue(i.type)}>
-                    Fix
+                    {i.type === 'unknown_label' ? 'Resolve' : 'Fix'}
                   </button>
                 </li>
               ))}

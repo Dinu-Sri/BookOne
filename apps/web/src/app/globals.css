@@ -7074,6 +7074,7 @@ textarea.input {
 .bis-coach.blue { background: #eff6ff; border-color: #bfdbfe; }
 .bis-coach.yellow { background: #fefce8; border-color: #fde047; }
 .bis-coach.green { background: #ecfdf5; border-color: #86efac; }
+.bis-coach.amber { background: #fffbeb; border-color: #fcd34d; }
 .bis-coach strong { display: block; font-size: 13px; font-weight: 800; margin-bottom: 2px; }
 .bis-coach p { margin: 0; font-size: 12px; color: #475569; font-weight: 600; line-height: 1.35; }
 .bis-coach-swatch {
@@ -7085,6 +7086,7 @@ textarea.input {
 .bis-coach-swatch.blue { background: #3b82f6; }
 .bis-coach-swatch.yellow { background: #eab308; }
 .bis-coach-swatch.green { background: #22c55e; }
+.bis-coach-swatch.amber { background: #f59e0b; }
 
 .bis-selected-pill {
   display: inline-flex;
@@ -7407,4 +7409,111 @@ textarea.input {
 .bis-btn-block {
   width: 100%;
   justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+
+/* Issue-by-issue unknown label wizard */
+.bis-resolve-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bis-resolve-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bis-resolve-progress > span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #92400e;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.bis-resolve-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #fde68a;
+  overflow: hidden;
+}
+.bis-resolve-bar > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+.bis-label-badge {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #1e293b;
+  color: #fef3c7;
+  font-size: 18px;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bis-resolve-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bis-resolve-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+.bis-resolve-choice:hover:not(:disabled) {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+.bis-resolve-choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.bis-resolve-choice strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+.bis-resolve-choice span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.bis-resolve-choice.out {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.bis-resolve-choice.out strong { color: #b91c1c; }
+.bis-resolve-choice.in {
+  border-color: #86efac;
+  background: #ecfdf5;
+}
+.bis-resolve-choice.in strong { color: #15803d; }
+.bis-resolve-choice.skip {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+.bis-resolve-choice.skip strong { color: #475569; }
+.bis-resolve-choice.skip span { width: 100%; margin-left: 22px; }

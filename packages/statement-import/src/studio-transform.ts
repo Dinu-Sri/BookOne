@@ -251,6 +251,15 @@ export function transformStudioMatrix(
       // skip zero noise
       return;
     }
+    if (money.error === 'ignored_money_label') {
+      bump(
+        'ignored_label',
+        'warning',
+        'Rows skipped (ignored money labels)',
+        money.unknownLabel,
+      );
+      return;
+    }
     if (money.error === 'both_in_and_out') {
       messages.push('Both Money Out and Money In have values');
       validationStatus = 'error';
@@ -377,6 +386,38 @@ export function transformStudioMatrix(
     excludedCount: 0,
     samplePreview: lines.filter((l) => l.validationStatus === 'valid').slice(0, 12),
   };
+}
+
+/** Unique unknown money labels for the issue-by-issue resolve wizard. */
+export type UnknownLabelIssue = {
+  label: string;
+  count: number;
+  sampleRows: number[];
+  sampleDescriptions: string[];
+};
+
+export function collectUnknownMoneyLabels(lines: StudioLine[]): UnknownLabelIssue[] {
+  const map = new Map<string, UnknownLabelIssue>();
+  for (const l of lines) {
+    if (l.validationStatus !== 'error' || !l.unknownLabel) continue;
+    const key = l.unknownLabel;
+    const cur = map.get(key);
+    if (cur) {
+      cur.count += 1;
+      if (cur.sampleRows.length < 4) cur.sampleRows.push(l.rowNumber);
+      if (cur.sampleDescriptions.length < 3 && l.description) {
+        cur.sampleDescriptions.push(l.description.slice(0, 80));
+      }
+    } else {
+      map.set(key, {
+        label: key,
+        count: 1,
+        sampleRows: [l.rowNumber],
+        sampleDescriptions: l.description ? [l.description.slice(0, 80)] : [],
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 export function columnSamples(matrix: unknown[][], headerRowIndex: number, col: number, n = 5): string[] {

@@ -47,6 +47,35 @@ describe('interpretAmount modes', () => {
     expect(r.error).toBe('unknown_money_label');
   });
 
+  it('resolves custom tokens without dropping defaults', () => {
+    const custom = interpretAmount(['100', 'ZZ'], {
+      mode: 'amount_with_type',
+      amountCol: 0,
+      typeCol: 1,
+      moneyOutTokens: ['ZZ'],
+    });
+    expect(custom.error).toBeUndefined();
+    expect(custom.signedAmount).toBe(-100);
+    // Built-in DR still works when extras are set
+    const dr = interpretAmount(['50', 'DR'], {
+      mode: 'amount_with_type',
+      amountCol: 0,
+      typeCol: 1,
+      moneyOutTokens: ['ZZ'],
+    });
+    expect(dr.signedAmount).toBe(-50);
+  });
+
+  it('ignores labels the user skipped', () => {
+    const r = interpretAmount(['100', 'ZZ'], {
+      mode: 'amount_with_type',
+      amountCol: 0,
+      typeCol: 1,
+      ignoreMoneyLabels: ['ZZ'],
+    });
+    expect(r.error).toBe('ignored_money_label');
+  });
+
   it('blocks both in and out filled', () => {
     const r = interpretAmount(['50', '50'], {
       mode: 'debit_credit',

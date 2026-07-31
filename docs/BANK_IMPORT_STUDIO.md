@@ -1,7 +1,7 @@
 # BookOne Smart Bank Import Studio
 
 > **Status:** **Final default** bank import path for cashbook (`/cashbook/import`)  
-> **Last updated:** 2026-07-30  
+> **Last updated:** 2026-07-31  
 > **External research source:** `bookone_smart_bank_import_studio_spec.md`  
 > **Legacy SI notes:** `docs/STATEMENT_IMPORT_ARCHITECTURE.md`  
 > **Feature flag:** none — always on
@@ -38,7 +38,9 @@ File → Studio (map + validate) → Normalized bank transactions (staging)
 
 ### Wizard steps (skip when high confidence)
 
-Upload → Account → Sheet → Table/header → Date → Description → Money mode → Balance column → Review → Fix issues → Balance proof → Save profile → Import → Done → Reconcile
+Upload → Account → Sheet → Table/header → Date → Description → Money mode → **Resolve labels (one by one)** → Review → Save profile → Import → Done → Reconcile
+
+**Resolve labels:** each unique unknown DR/CR-style token is shown once with sample rows. User picks Money Out / Money In / Skip rows. Choice is written into `amountRules.moneyOutTokens` / `moneyInTokens` / `ignoreMoneyLabels` and re-previewed before the next label.
 
 ## 4. Amount modes (structured rules, no eval)
 
@@ -91,9 +93,25 @@ Unknown money labels are **blocking errors**.
 | **BIS-2** | Inspect + multi-step wizard shell | **Done** |
 | **BIS-3** | Amount rules A–D + validation + balance equation | **Done** |
 | **BIS-4** | Bank-only commit + profile versions + fixtures | **Done** |
-| **BIS-5** | Reconciliation passes 1–3 UI | Next |
-| **BIS-6** | Cashbook create rail post-recon | Next |
-| **BIS-7+** | Issues UX, overlap, advanced rules, AI assist | Later |
+| **BIS-4.1** | Coach UI, sheet grid, fix-problems, viewport fit | **Done** |
+| **BIS-4.2** | Issue-by-issue unknown label wizard (Out/In/Skip) | **Done** |
+| **BIS-5** | Reconciliation passes 1–3 UI (match after import) | **Next** |
+| **BIS-6** | Cashbook create rail for unmatched (explicit confirm) | After BIS-5 |
+| **BIS-7+** | Overlap detection, advanced rules F, AI suggest only | Later |
+
+### Remaining roadmap (post-studio)
+
+1. **BIS-5 — Match UI**  
+   After import, walk bank lines vs cashbook: exact → fuzzy → manual. No journal writes.
+
+2. **BIS-6 — Create unmatched**  
+   Optional “create cashbook entry” for leftover bank lines via `recordEntry` only with user confirm.
+
+3. **Hardening**  
+   File overlap / multi-statement continuity, password Excel, more SL presets from real exports.
+
+4. **Not in studio**  
+   AI must not finalize debit/credit or post journals.
 
 ## 9. AI policy
 

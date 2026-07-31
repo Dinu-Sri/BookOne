@@ -688,21 +688,44 @@ async function rebuildSessionSuggestionsInternal(
     }
   }
 
-  const activeLines = lines.filter(
-    (l) =>
-      !lockedBankLines.has(l.id) &&
-      !['duplicate', 'skipped'].includes(l.status ?? '') &&
-      l.status !== 'created' &&
-      l.status !== 'reconciled',
-  );
-
-  // Already reconciled lines (from prior engine) → seed confirmed match cases if not locked
+  // Already reconciled / created lines (from prior match wizard) → seed confirmed cases
+  // Do NOT drop bank lines with status reconciled/created from the open pool when they
+  // have no usable book link — that left 0 bank-side cases and a book-only flood.
   for (const l of lines) {
     if (lockedBankLines.has(l.id)) continue;
+    if (['duplicate', 'skipped'].includes(l.status ?? '')) {
+      if (l.status === 'duplicate') {
+        const [c] = await db()
+          .insert(bankReconciliationCases)
+          .values({
+            tenantId,
+            sessionId,
+            caseType: 'duplicate',
+            confidence: 'strong',
+            state: 'excluded',
+            explanation: 'Already imported earlier for this bank.',
+            reasonCodes: ['duplicate_fingerprint'],
+            userLabel: 'Duplicate',
+            resultLabel: 'Excluded',
+            sortDate: l.date,
+            sortAmount: l.amount,
+            exclusionReason: 'duplicate_import',
+          })
+          .returning({ id: bankReconciliationCases.id });
+        await db().insert(bankReconciliationCaseBankLines).values({
+          tenantId,
+          caseId: c.id,
+          bankLineId: l.id,
+        });
+        lockedBankLines.add(l.id);
+      }
+      continue;
+    }
+    const priorBookId = l.matchedTransactionId ?? null;
     if (
-      (l.status === 'reconciled' || l.status === 'matched') &&
-      l.matchedTransactionId &&
-      !lockedBooks.has(l.matchedTransactionId)
+      priorBookId &&
+      (l.status === 'reconciled' || l.status === 'matched' || l.status === 'created') &&
+      !lockedBooks.has(priorBookId)
     ) {
       const [c] = await db()
         .insert(bankReconciliationCases)
@@ -732,40 +755,20 @@ async function rebuildSessionSuggestionsInternal(
       await db().insert(bankReconciliationCaseBookTransactions).values({
         tenantId,
         caseId: c.id,
-        transactionId: l.matchedTransactionId,
+        transactionId: priorBookId,
         allocatedAmount: l.amount,
       });
       lockedBankLines.add(l.id);
-      lockedBooks.add(l.matchedTransactionId);
-    }
-    if (l.status === 'duplicate' && !lockedBankLines.has(l.id)) {
-      const [c] = await db()
-        .insert(bankReconciliationCases)
-        .values({
-          tenantId,
-          sessionId,
-          caseType: 'duplicate',
-          confidence: 'strong',
-          state: 'excluded',
-          explanation: 'Already imported earlier for this bank.',
-          reasonCodes: ['duplicate_fingerprint'],
-          userLabel: 'Duplicate',
-          resultLabel: 'Excluded',
-          sortDate: l.date,
-          sortAmount: l.amount,
-          exclusionReason: 'duplicate_import',
-        })
-        .returning({ id: bankReconciliationCases.id });
-      await db().insert(bankReconciliationCaseBankLines).values({
-        tenantId,
-        caseId: c.id,
-        bankLineId: l.id,
-      });
-      lockedBankLines.add(l.id);
+      lockedBooks.add(priorBookId);
     }
   }
 
-  const openBankLines = activeLines.filter((l) => !lockedBankLines.has(l.id));
+  // Every non-duplicate bank line that is not already a confirmed case stays open
+  const openBankLines = lines.filter(
+    (l) =>
+      !lockedBankLines.has(l.id) &&
+      !['duplicate', 'skipped'].includes(l.status ?? ''),
+  );
   const books = await loadBookCandidates(
     tenantId,
     session.bankAccountId,

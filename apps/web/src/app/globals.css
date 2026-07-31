@@ -7849,3 +7849,86 @@ textarea.input {
   font-weight: 600;
   color: #64748b;
 }
+
+/* BIS-6 create rail */
+.bis-create-cats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.bis-create-cats .bis-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+.bis-create-cats .bis-field span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.bis-create-cats select {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  background: #fff;
+}
+.bis-create-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bis-check.tight {
+  margin: 0;
+  font-size: 12px;
+}
+.bis-create-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: min(40vh, 300px);
+  overflow: auto;
+}
+.bis-create-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 12px;
+  cursor: pointer;
+}
+.bis-create-row.on {
+  border-color: #86efac;
+  background: #ecfdf5;
+}
+.bis-create-row .d {
+  font-weight: 800;
+  color: #334155;
+  white-space: nowrap;
+}
+.bis-create-row .t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: #475569;
+}
+.bis-create-row .pos { color: #15803d; font-weight: 800; }
+.bis-create-row .neg { color: #b91c1c; font-weight: 800; }
+.bis-create-row input { width: 16px; height: 16px; accent-color: #16a34a; }
+
+@media (max-width: 420px) {
+  .bis-create-cats { grid-template-columns: 1fr; }
+}

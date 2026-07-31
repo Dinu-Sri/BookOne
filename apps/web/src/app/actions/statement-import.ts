@@ -1613,12 +1613,18 @@ export async function confirmStatementCreates(input: {
   defaultExpenseCode?: string;
   /** Default income category for money in */
   defaultIncomeCode?: string;
+  /**
+   * Optional per-line category overrides (code).
+   * Keyed by line id; direction still comes from amount sign.
+   */
+  categoryByLineId?: Record<string, string>;
 }): Promise<{ ok: true; created: number; errors: string[] } | { ok: false; error: string }> {
   try {
     const importId = z.string().uuid().parse(input.importId);
     const user = await requireTenantContext();
     const expenseCode = (input.defaultExpenseCode ?? '6800').slice(0, 20);
     const incomeCode = (input.defaultIncomeCode ?? '4300').slice(0, 20);
+    const categoryByLineId = input.categoryByLineId ?? {};
 
     // Load staging data first (own tenant context — do not nest recordEntry inside)
     const prepared = await withTenantContext(user.tenantId, async () => {
@@ -1652,18 +1658,13 @@ export async function confirmStatementCreates(input: {
         .limit(1);
       if (!bank) throw new Error('Bank account not found.');
 
-      const conditions = [
+      // Open unmatched lines — explicit lineIds from create rail preferred
+      const base = [
         eq(bankStatementLines.tenantId, user.tenantId),
         eq(bankStatementLines.importId, importId),
         isNull(bankStatementLines.voidedAt),
-        eq(bankStatementLines.proposedAction, 'create'),
-        inArray(bankStatementLines.status, ['unmatched', 'review']),
         isNull(bankStatementLines.createdTransactionId),
       ];
-      if (input.lineIds?.length) {
-        conditions.push(inArray(bankStatementLines.id, input.lineIds));
-      }
-
       const lines = await db()
         .select({
           id: bankStatementLines.id,
@@ -1671,11 +1672,32 @@ export async function confirmStatementCreates(input: {
           description: bankStatementLines.description,
           amount: bankStatementLines.amount,
           fingerprint: bankStatementLines.fingerprint,
+          status: bankStatementLines.status,
+          proposedAction: bankStatementLines.proposedAction,
         })
         .from(bankStatementLines)
-        .where(and(...conditions));
+        .where(
+          and(
+            ...base,
+            input.lineIds?.length
+              ? inArray(bankStatementLines.id, input.lineIds)
+              : and(
+                  inArray(bankStatementLines.status, ['unmatched', 'review', 'imported']),
+                  or(
+                    eq(bankStatementLines.proposedAction, 'create'),
+                    eq(bankStatementLines.status, 'unmatched'),
+                    eq(bankStatementLines.proposedAction, 'review'),
+                  ),
+                ),
+          ),
+        );
 
-      const periods = [...new Set(lines.map((l) => l.date.slice(0, 7)))];
+      // Never create for already-linked/finalized rows
+      const allowed = lines.filter(
+        (l) => !['reconciled', 'created', 'skipped', 'duplicate'].includes(l.status),
+      );
+
+      const periods = [...new Set(allowed.map((l) => l.date.slice(0, 7)))];
       for (const period of periods) {
         const [lock] = await db()
           .select({ id: periodLocks.id })
@@ -1699,7 +1721,7 @@ export async function confirmStatementCreates(input: {
       return {
         bankCode: bank.code,
         bookDomain: imp.bookDomain,
-        lines,
+        lines: allowed,
       };
     });
 
@@ -1727,6 +1749,8 @@ export async function confirmStatementCreates(input: {
       const isIn = signed > 0;
       const desc = line.description.slice(0, 1000) || 'Bank statement';
       const party = isIn ? 'Bank deposit' : 'Bank payment';
+      const lineCat = categoryByLineId[line.id]?.slice(0, 20);
+      const catCode = lineCat || (isIn ? incomeCode : expenseCode);
 
       const entryResult = isIn
         ? await recordEntry({
@@ -1740,7 +1764,7 @@ export async function confirmStatementCreates(input: {
             paymentAccount: { kind: 'code', value: prepared.bankCode },
             date: line.date,
             bookDomain,
-            categoryOverride: incomeCode,
+            categoryOverride: catCode,
             forceDuplicate: true,
             receiptRef: `stmt:${line.fingerprint?.slice(0, 16) ?? line.id.slice(0, 8)}`,
           })
@@ -1754,7 +1778,7 @@ export async function confirmStatementCreates(input: {
             paymentAccount: { kind: 'code', value: prepared.bankCode },
             date: line.date,
             bookDomain,
-            categoryOverride: expenseCode,
+            categoryOverride: catCode,
             forceDuplicate: true,
             receiptRef: `stmt:${line.fingerprint?.slice(0, 16) ?? line.id.slice(0, 8)}`,
           });
@@ -1769,8 +1793,10 @@ export async function confirmStatementCreates(input: {
           .update(bankStatementLines)
           .set({
             status: 'created',
+            proposedAction: 'create',
             createdTransactionId: entryResult.transactionId,
             matchedTransactionId: entryResult.transactionId,
+            reconciliationStatus: 'created',
             reviewedByUserId: user.id,
             reviewedAt: new Date(),
             updatedAt: new Date(),
@@ -1788,7 +1814,11 @@ export async function confirmStatementCreates(input: {
           userId: user.id,
           lineId: line.id,
           action: 'create_confirmed',
-          detail: { transactionId: entryResult.transactionId },
+          detail: {
+            transactionId: entryResult.transactionId,
+            category: catCode,
+            direction: isIn ? 'in' : 'out',
+          },
         });
       });
       created += 1;
@@ -1797,10 +1827,20 @@ export async function confirmStatementCreates(input: {
     await withTenantContext(user.tenantId, async () => {
       await refreshImportCounts(importId, user.tenantId);
       await learnProfileFromImport(user.tenantId, importId);
+      await db()
+        .update(bankStatementImports)
+        .set({ wizardStep: 'create', updatedAt: new Date() })
+        .where(
+          and(
+            eq(bankStatementImports.id, importId),
+            eq(bankStatementImports.tenantId, user.tenantId),
+          ),
+        );
     });
 
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
+    revalidatePath('/cashbook/match');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     revalidatePath('/');

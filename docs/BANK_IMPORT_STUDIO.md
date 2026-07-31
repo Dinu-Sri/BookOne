@@ -97,7 +97,7 @@ Unknown money labels are **blocking errors**.
 | **BIS-4.1** | Coach UI, sheet grid, fix-problems, viewport fit | **Done** |
 | **BIS-4.2** | Issue-by-issue unknown label wizard (Out/In/Skip) | **Done** |
 | **BIS-5** | Reconciliation passes 1–3 UI (match after import) | **Done** |
-| **BIS-6** | Cashbook create rail for unmatched (explicit confirm) | **Next** |
+| **BIS-6** | Cashbook create rail for unmatched (explicit confirm) | **Done** |
 | **BIS-7+** | Overlap detection, advanced rules F, AI suggest only | Later |
 
 ### BIS-5 Match UI
@@ -106,23 +106,30 @@ Unknown money labels are **blocking errors**.
 |------|------|------------------|
 | 1 Exact | Auto-proposed links (score ≥ ~0.9) → Confirm all | **No** (link only) |
 | 2 Fuzzy | One-by-one pick from candidates / search | **No** |
-| 3 Leftover | Unmatched bank lines listed for later create | **No** |
+| 3 Leftover | Unmatched bank lines listed | **No** |
+| 4 Create | Select lines → category defaults → confirm → `recordEntry` | **Yes** (explicit) |
 
 - Route: `/cashbook/match?importId=…` (also list recent imports)
 - Engine: `runStatementMatchPass` → `matchAll` vs cashbook book candidates
 - Studio **Done** primary CTA → Match to books
 - Confirm links: `confirmStatementLinks` / `manualLinkStatementLine`
+- Create: `confirmStatementCreates` (defaults Other expense 6800 / Other income 4300)
+- Undo: `undoStatementCreates` (reverse journals)
+
+### BIS-6 Create rail
+
+1. After match leftover, **Add N to cashbook**  
+2. Tick lines, pick default categories for money out / money in  
+3. Browser confirm → posts via `recordEntry` only  
+4. **Undo creates** reverses journals from this import  
 
 ### Remaining roadmap
 
-1. **BIS-6 — Create unmatched**  
-   Optional “create cashbook entry” for leftover bank lines via `recordEntry` only with user confirm.
-
-2. **Hardening**  
+1. **Hardening**  
    File overlap / multi-statement continuity, password Excel, more SL presets from real exports.
 
-3. **Not in studio / match**  
-   AI must not finalize debit/credit or post journals.
+2. **Not in studio / match / create**  
+   AI must not finalize debit/credit or auto-post without confirm.
 
 ## 9. AI policy
 

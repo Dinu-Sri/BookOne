@@ -5,25 +5,47 @@ import {
   CheckCircle2,
   Link2,
   Loader2,
+  PlusCircle,
   Search,
   SkipForward,
+  Undo2,
   Unlink,
   Wallet,
 } from 'lucide-react';
 import {
+  confirmStatementCreates,
   confirmStatementLinks,
   getStatementImport,
   manualLinkStatementLine,
   markLinesUnmatched,
   runStatementMatchPass,
   searchBookCandidatesForMatch,
+  skipStatementLines,
+  undoStatementCreates,
   type MatchCandidateView,
   type StatementImportView,
   type StatementLineView,
 } from '@/app/actions/statement-import';
 import { StudioShell } from './studio-shell';
 
-type Pass = 'loading' | 'exact' | 'fuzzy' | 'leftover' | 'done';
+type Pass = 'loading' | 'exact' | 'fuzzy' | 'leftover' | 'create' | 'done';
+
+const EXPENSE_CATS = [
+  { code: '6800', label: 'Other' },
+  { code: '6600', label: 'Bank fees' },
+  { code: '6400', label: 'Transport' },
+  { code: '6200', label: 'Utilities' },
+  { code: '6100', label: 'Rent' },
+  { code: '6300', label: 'Food' },
+  { code: '6000', label: 'Marketing' },
+];
+
+const INCOME_CATS = [
+  { code: '4300', label: 'Other income' },
+  { code: '4000', label: 'Sales' },
+  { code: '4200', label: 'Salary' },
+  { code: '3000', label: 'Own money in' },
+];
 
 function formatRs(n: number) {
   const sign = n < 0 ? '-' : '';
@@ -37,13 +59,32 @@ function isOpen(l: StatementLineView) {
   return !['reconciled', 'created', 'skipped', 'duplicate'].includes(l.status);
 }
 
+function isCreatable(l: StatementLineView) {
+  if (!isOpen(l)) return false;
+  if (l.proposedAction === 'link' && l.matchedTransactionId) return false;
+  if (l.proposedAction === 'review' && (l.candidates?.length ?? 0) > 0) return false;
+  // unmatched / create proposals / leftover
+  return (
+    l.proposedAction === 'create' ||
+    l.status === 'unmatched' ||
+    l.status === 'imported' ||
+    (l.proposedAction !== 'link' && (l.candidates?.length ?? 0) === 0)
+  );
+}
+
 function groupForMatch(lines: StatementLineView[]) {
   const exact: StatementLineView[] = [];
   const fuzzy: StatementLineView[] = [];
   const leftover: StatementLineView[] = [];
   const done: StatementLineView[] = [];
+  const created: StatementLineView[] = [];
 
   for (const l of lines) {
+    if (l.status === 'created') {
+      created.push(l);
+      done.push(l);
+      continue;
+    }
     if (!isOpen(l)) {
       done.push(l);
       continue;
@@ -56,12 +97,12 @@ function groupForMatch(lines: StatementLineView[]) {
       leftover.push(l);
     }
   }
-  return { exact, fuzzy, leftover, done };
+  return { exact, fuzzy, leftover, done, created };
 }
 
 /**
- * BIS-5: After studio import — match bank lines to cashbook (link only, no creates).
- * Pass 1 exact auto-links → Pass 2 fuzzy pick → Pass 3 leftover unmatched.
+ * BIS-5 + BIS-6: Match bank lines to books, then optionally create cashbook entries
+ * for unmatched lines (explicit confirm only).
  */
 export function BankMatchWizard({
   importId,
@@ -77,9 +118,18 @@ export function BankMatchWizard({
   const [info, setInfo] = useState<string | null>(null);
   const [searchQ, setSearchQ] = useState('');
   const [searchHits, setSearchHits] = useState<MatchCandidateView[]>([]);
+  const [selectedCreateIds, setSelectedCreateIds] = useState<Set<string>>(new Set());
+  const [expenseCode, setExpenseCode] = useState('6800');
+  const [incomeCode, setIncomeCode] = useState('4300');
+  const [lastCreated, setLastCreated] = useState(0);
   const [pending, startTransition] = useTransition();
 
   const groups = useMemo(() => (view ? groupForMatch(view.lines) : null), [view]);
+
+  const creatableLines = useMemo(() => {
+    if (!view) return [] as StatementLineView[];
+    return view.lines.filter(isCreatable);
+  }, [view]);
 
   const reload = useCallback(async () => {
     const v = await getStatementImport(importId);
@@ -123,6 +173,13 @@ export function BankMatchWizard({
       else setPass('done');
     }
   }, [pass, groups]);
+
+  // When entering create pass, select all creatable by default
+  useEffect(() => {
+    if (pass === 'create') {
+      setSelectedCreateIds(new Set(creatableLines.map((l) => l.id)));
+    }
+  }, [pass, creatableLines]);
 
   function goNextPass(from: Pass, nextView?: StatementImportView | null) {
     const v = nextView ?? view;
@@ -237,9 +294,105 @@ export function BankMatchWizard({
   }
 
   function finishLeftover() {
-    // Leave unmatched for BIS-6 create later
     setPass('done');
     onDone?.();
+  }
+
+  function enterCreateRail() {
+    setError(null);
+    setSelectedCreateIds(new Set(creatableLines.map((l) => l.id)));
+    setPass('create');
+  }
+
+  function toggleCreateId(id: string) {
+    setSelectedCreateIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllCreate(on: boolean) {
+    if (on) setSelectedCreateIds(new Set(creatableLines.map((l) => l.id)));
+    else setSelectedCreateIds(new Set());
+  }
+
+  function doCreateSelected() {
+    if (!view || selectedCreateIds.size === 0) return;
+    const n = selectedCreateIds.size;
+    const msg = `Add ${n} new cashbook entr${n === 1 ? 'y' : 'ies'} from the bank file?\n\nThis posts journals. You can undo creates from this screen.`;
+    if (!window.confirm(msg)) return;
+    setError(null);
+    startTransition(() => {
+      confirmStatementCreates({
+        importId: view.id,
+        lineIds: [...selectedCreateIds],
+        defaultExpenseCode: expenseCode,
+        defaultIncomeCode: incomeCode,
+      }).then(async (res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setLastCreated(res.created);
+        setInfo(
+          res.errors.length
+            ? `Created ${res.created}. ${res.errors.slice(0, 2).join(' · ')}`
+            : `Created ${res.created} cashbook entr${res.created === 1 ? 'y' : 'ies'}.`,
+        );
+        if (res.errors[0]) setError(res.errors.slice(0, 3).join(' · '));
+        const v = await reload();
+        const left = v ? v.lines.filter(isCreatable) : [];
+        if (left.length === 0) {
+          setPass('done');
+          onDone?.();
+        } else {
+          setSelectedCreateIds(new Set(left.map((l) => l.id)));
+        }
+      });
+    });
+  }
+
+  function doSkipSelected() {
+    if (!view || selectedCreateIds.size === 0) return;
+    if (!window.confirm(`Skip ${selectedCreateIds.size} line(s)? They stay out of your cashbook.`)) {
+      return;
+    }
+    startTransition(() => {
+      skipStatementLines({ importId: view.id, lineIds: [...selectedCreateIds] }).then(
+        async (res) => {
+          if (!res.ok) {
+            setError(res.error);
+            return;
+          }
+          setInfo(`Skipped ${res.skipped} line(s).`);
+          const v = await reload();
+          const left = v ? v.lines.filter(isCreatable) : [];
+          if (left.length === 0) setPass('done');
+          else setSelectedCreateIds(new Set(left.map((l) => l.id)));
+        },
+      );
+    });
+  }
+
+  function doUndoCreates() {
+    if (!view) return;
+    if (!window.confirm('Undo entries created from this bank file? Journals will be reversed.')) {
+      return;
+    }
+    startTransition(() => {
+      undoStatementCreates({ importId: view.id }).then(async (res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setInfo(`Reversed ${res.reversed} entr${res.reversed === 1 ? 'y' : 'ies'}.`);
+        setLastCreated(0);
+        await reload();
+        setPass('create');
+      });
+    });
   }
 
   if (pass === 'loading' || !view || !groups) {
@@ -485,9 +638,11 @@ export function BankMatchWizard({
     );
   }
 
-  // ─── PASS 3: Leftover ───
+  // ─── PASS 3: Leftover summary → create or finish ───
   if (pass === 'leftover') {
     const list = groups.leftover;
+    const outN = list.filter((l) => l.amount < 0).length;
+    const inN = list.filter((l) => l.amount > 0).length;
     return (
       <StudioShell
         step="import"
@@ -498,17 +653,21 @@ export function BankMatchWizard({
         icon={<Unlink size={18} />}
         compact
         pending={pending}
-        onContinue={finishLeftover}
-        continueLabel="Done for now"
+        onContinue={list.length > 0 ? enterCreateRail : finishLeftover}
+        continueLabel={
+          list.length > 0 ? `Add ${list.length} to cashbook` : 'Finish'
+        }
         continueDisabled={pending}
+        onBack={() => setPass(groups.fuzzy.length > 0 ? 'fuzzy' : 'exact')}
       >
         <div className="bis-coach">
           <div className="bis-coach-swatch" style={{ background: '#8b5cf6' }} />
           <div>
             <strong>Pass 3 · Unmatched bank lines</strong>
             <p>
-              {list.length} line(s) have no book match. Creating cashbook entries is a separate
-              step (coming next). Staging stays safe.
+              {list.length} line(s) have no book match
+              {outN || inN ? ` · ${outN} out · ${inN} in` : ''}. You choose whether to post new
+              cashbook entries.
             </p>
           </div>
         </div>
@@ -525,13 +684,181 @@ export function BankMatchWizard({
             <p className="bis-money-label">+{list.length - 10} more</p>
           ) : null}
         </div>
+
+        {list.length > 0 ? (
+          <button
+            type="button"
+            className="bis-btn secondary bis-btn-block"
+            disabled={pending}
+            onClick={finishLeftover}
+          >
+            Skip create · finish for now
+          </button>
+        ) : null}
+        {error ? <p className="bis-error">{error}</p> : null}
+      </StudioShell>
+    );
+  }
+
+  // ─── PASS 4 (BIS-6): Create cashbook entries ───
+  if (pass === 'create') {
+    const list = creatableLines;
+    const selected = list.filter((l) => selectedCreateIds.has(l.id));
+    const totalOut = selected.filter((l) => l.amount < 0).reduce((s, l) => s + Math.abs(l.amount), 0);
+    const totalIn = selected.filter((l) => l.amount > 0).reduce((s, l) => s + l.amount, 0);
+
+    return (
+      <StudioShell
+        step="import"
+        stepIndex={9}
+        stepTotal={9}
+        title="Add to cashbook?"
+        tone="green"
+        icon={<PlusCircle size={18} />}
+        compact
+        pending={pending}
+        onBack={() => setPass('leftover')}
+        onContinue={doCreateSelected}
+        continueLabel={
+          selected.length > 0
+            ? `Create ${selected.length} entr${selected.length === 1 ? 'y' : 'ies'}`
+            : 'Select lines'
+        }
+        continueDisabled={pending || selected.length === 0}
+        continueHint={
+          selected.length === 0 ? 'Tick the bank lines to post.' : null
+        }
+      >
+        <div className="bis-coach green">
+          <div className="bis-coach-swatch green" />
+          <div>
+            <strong>BIS-6 · Explicit create only</strong>
+            <p>
+              Posts real cashbook journals for selected lines. Defaults to Other expense / Other
+              income — change below if you know the category.
+            </p>
+          </div>
+        </div>
+
+        <div className="bis-review-hero">
+          <div className="bis-hero-card out">
+            <span>Money out</span>
+            <strong>{formatRs(-totalOut)}</strong>
+          </div>
+          <div className="bis-hero-card in">
+            <span>Money in</span>
+            <strong>{formatRs(totalIn)}</strong>
+          </div>
+          <div className="bis-hero-card">
+            <span>Selected</span>
+            <strong>
+              {selected.length}/{list.length}
+            </strong>
+          </div>
+        </div>
+
+        <div className="bis-create-cats">
+          <label className="bis-field">
+            <span>Default for money out</span>
+            <select value={expenseCode} onChange={(e) => setExpenseCode(e.target.value)}>
+              {EXPENSE_CATS.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label} ({c.code})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="bis-field">
+            <span>Default for money in</span>
+            <select value={incomeCode} onChange={(e) => setIncomeCode(e.target.value)}>
+              {INCOME_CATS.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label} ({c.code})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="bis-create-toolbar">
+          <label className="bis-check tight">
+            <input
+              type="checkbox"
+              checked={list.length > 0 && selected.length === list.length}
+              onChange={(e) => selectAllCreate(e.target.checked)}
+            />
+            <span>Select all</span>
+          </label>
+          <button
+            type="button"
+            className="bis-btn secondary"
+            disabled={pending || selected.length === 0}
+            onClick={doSkipSelected}
+          >
+            <SkipForward size={14} />
+            Skip selected
+          </button>
+        </div>
+
+        <div className="bis-create-list">
+          {list.length === 0 ? (
+            <div className="bis-status-ok">
+              <CheckCircle2 size={16} />
+              Nothing left to create
+            </div>
+          ) : (
+            list.map((l) => (
+              <label
+                key={l.id}
+                className={`bis-create-row ${selectedCreateIds.has(l.id) ? 'on' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedCreateIds.has(l.id)}
+                  onChange={() => toggleCreateId(l.id)}
+                />
+                <span className="d">{l.date}</span>
+                <span className="t" title={l.description}>
+                  {l.description}
+                </span>
+                <span className={l.amount < 0 ? 'neg' : 'pos'}>{formatRs(l.amount)}</span>
+              </label>
+            ))
+          )}
+        </div>
+
+        {groups.created.length > 0 ? (
+          <button
+            type="button"
+            className="bis-btn secondary bis-btn-block"
+            disabled={pending}
+            onClick={doUndoCreates}
+          >
+            <Undo2 size={14} />
+            Undo {groups.created.length} created entr
+            {groups.created.length === 1 ? 'y' : 'ies'}
+          </button>
+        ) : null}
+
+        <button
+          type="button"
+          className="bis-btn secondary bis-btn-block"
+          disabled={pending}
+          onClick={finishLeftover}
+        >
+          Finish without more creates
+        </button>
+        {info ? <p className="bis-match-info">{info}</p> : null}
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>
     );
   }
 
   // ─── DONE ───
-  const linked = groups.done.filter((l) => l.status === 'reconciled' || l.status === 'matched').length;
+  const linked = groups.done.filter(
+    (l) => l.status === 'reconciled' || l.status === 'matched',
+  ).length;
+  const createdN = groups.created.length;
   const openLeft = groups.exact.length + groups.fuzzy.length + groups.leftover.length;
 
   return (
@@ -539,20 +866,44 @@ export function BankMatchWizard({
       step="import"
       stepIndex={9}
       stepTotal={9}
-      title="Match complete"
+      title="All set"
       tone="green"
       icon={<CheckCircle2 size={18} />}
       compact
     >
       <div className="bis-done-card">
         <strong>
-          {linked} linked · {openLeft} still open
+          {linked} linked
+          {createdN > 0 ? ` · ${createdN} created` : ''}
+          {openLeft > 0 ? ` · ${openLeft} still open` : ''}
         </strong>
         <p>
-          Bank lines are staged. Linked rows are matched to existing cashbook entries. Open lines
-          stay unmatched until you create or match later.
+          Linked rows point at existing cashbook entries. Created rows are new journals from the
+          bank file. Open lines can still be matched or added later.
         </p>
       </div>
+      {lastCreated > 0 || createdN > 0 ? (
+        <button
+          type="button"
+          className="bis-btn secondary bis-btn-block"
+          disabled={pending || createdN === 0}
+          onClick={doUndoCreates}
+        >
+          <Undo2 size={14} />
+          Undo creates from this file
+        </button>
+      ) : null}
+      {openLeft > 0 ? (
+        <button
+          type="button"
+          className="bis-btn primary bis-btn-block"
+          disabled={pending}
+          onClick={enterCreateRail}
+        >
+          <PlusCircle size={14} />
+          Add remaining to cashbook
+        </button>
+      ) : null}
       {info ? <p className="bis-match-info">{info}</p> : null}
       <div className="bis-done-actions">
         <a className="bis-btn primary" href="/cashbook">

@@ -46,6 +46,7 @@ export default async function ReconciliationPage() {
           sessions={sessions}
           importHref="/reconciliation/import"
           sessionBase="/reconciliation/session"
+          showImportButton={false}
         />
       </div>
     </BookOneShell>

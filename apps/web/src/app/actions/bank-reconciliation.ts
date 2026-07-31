@@ -108,6 +108,8 @@ export type ReconSessionDetail = {
     outstandingNet: number;
     sourceFiles: { importId: string; fileName: string }[];
   };
+  /** Resolved tab after 'auto' preference */
+  activeTab: string;
   tabCounts: Record<string, number>;
   cases: ReconCaseRow[];
   page: number;
@@ -127,15 +129,41 @@ function formatPeriodLabel(from: string, to: string) {
   try {
     const a = new Date(`${from}T12:00:00`);
     const b = new Date(`${to}T12:00:00`);
+    const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
     const sameMonth =
       a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
     if (sameMonth) {
       return `${a.getDate()}–${b.getDate()} ${a.toLocaleString('en-GB', { month: 'short', year: 'numeric' })}`;
     }
-    return `${from} → ${to}`;
+    return `${a.toLocaleString('en-GB', opts)} – ${b.toLocaleString('en-GB', opts)}`;
   } catch {
     return `${from} → ${to}`;
   }
+}
+
+/** Prefer real bank-line dates; cap absurd multi-year spans to the statement-end month. */
+function normalizePeriodFromDates(
+  minD: string | null | undefined,
+  maxD: string | null | undefined,
+  fallbackFrom?: string | null,
+  fallbackTo?: string | null,
+): { periodFrom: string; periodTo: string } {
+  let periodFrom =
+    minD || fallbackFrom || new Date().toISOString().slice(0, 10);
+  let periodTo = maxD || fallbackTo || periodFrom;
+  if (periodFrom && periodTo && periodFrom.slice(0, 7) !== periodTo.slice(0, 7)) {
+    const months =
+      (Number(periodTo.slice(0, 4)) - Number(periodFrom.slice(0, 4))) * 12 +
+      (Number(periodTo.slice(5, 7)) - Number(periodFrom.slice(5, 7)));
+    if (months > 2) {
+      const ym = periodTo.slice(0, 7);
+      const [y, m] = ym.split('-').map(Number);
+      const last = new Date(y!, m!, 0).getDate();
+      periodFrom = `${ym}-01`;
+      periodTo = `${ym}-${String(last).padStart(2, '0')}`;
+    }
+  }
+  return { periodFrom, periodTo };
 }
 
 function statusLabel(status: string) {
@@ -389,15 +417,26 @@ export async function getOrCreateSessionFromImport(
         return existingLink.sessionId;
       }
 
-      const periodFrom =
-        imp.periodFrom ??
-        (imp.period ? `${imp.period}-01` : new Date().toISOString().slice(0, 10));
-      let periodTo = imp.periodTo ?? periodFrom;
-      if (!imp.periodTo && imp.period) {
-        const [y, m] = imp.period.split('-').map(Number);
-        const last = new Date(y!, m!, 0).getDate();
-        periodTo = `${imp.period}-${String(last).padStart(2, '0')}`;
-      }
+      // Prefer actual bank-line date span (import periodFrom/To can be multi-year noise)
+      const dateSpan = await db()
+        .select({
+          minD: sql<string>`min(${bankStatementLines.transactionDate})`,
+          maxD: sql<string>`max(${bankStatementLines.transactionDate})`,
+        })
+        .from(bankStatementLines)
+        .where(
+          and(
+            eq(bankStatementLines.importId, id),
+            eq(bankStatementLines.tenantId, user.tenantId),
+            isNull(bankStatementLines.voidedAt),
+          ),
+        );
+      const { periodFrom, periodTo } = normalizePeriodFromDates(
+        dateSpan[0]?.minD,
+        dateSpan[0]?.maxD,
+        imp.periodFrom || (imp.period ? `${imp.period}-01` : null),
+        imp.periodTo || null,
+      );
 
       // Find session for same bank + period
       let [session] = await db()
@@ -589,6 +628,66 @@ async function rebuildSessionSuggestionsInternal(
       ),
     );
 
+  // Heal multi-year / wrong session periods from actual bank lines
+  const liveDates = lines
+    .filter((l) => !['duplicate', 'skipped'].includes(l.status ?? ''))
+    .map((l) => l.date)
+    .filter(Boolean)
+    .sort();
+  if (liveDates.length > 0) {
+    const healed = normalizePeriodFromDates(
+      liveDates[0],
+      liveDates[liveDates.length - 1],
+      session.periodFrom,
+      session.periodTo,
+    );
+    if (healed.periodFrom !== session.periodFrom || healed.periodTo !== session.periodTo) {
+      await db()
+        .update(bankReconciliationSessions)
+        .set({
+          periodFrom: healed.periodFrom,
+          periodTo: healed.periodTo,
+          updatedAt: new Date(),
+        })
+        .where(eq(bankReconciliationSessions.id, sessionId));
+      session.periodFrom = healed.periodFrom;
+      session.periodTo = healed.periodTo;
+    }
+  }
+
+  // Backfill statement balances from attached imports when missing
+  if (session.statementClosingBalance == null || session.statementOpeningBalance == null) {
+    const [impBal] = await db()
+      .select({
+        opening: bankStatementImports.openingBalance,
+        closing: bankStatementImports.closingBalance,
+      })
+      .from(bankStatementImports)
+      .where(
+        and(
+          inArray(bankStatementImports.id, importIds),
+          eq(bankStatementImports.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+    if (impBal) {
+      await db()
+        .update(bankReconciliationSessions)
+        .set({
+          statementOpeningBalance:
+            session.statementOpeningBalance ?? impBal.opening ?? null,
+          statementClosingBalance:
+            session.statementClosingBalance ?? impBal.closing ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(bankReconciliationSessions.id, sessionId));
+      session.statementOpeningBalance =
+        session.statementOpeningBalance ?? impBal.opening ?? null;
+      session.statementClosingBalance =
+        session.statementClosingBalance ?? impBal.closing ?? null;
+    }
+  }
+
   const activeLines = lines.filter(
     (l) =>
       !lockedBankLines.has(l.id) &&
@@ -676,12 +775,13 @@ async function rebuildSessionSuggestionsInternal(
   );
   const freeBooks = books.filter((b) => !lockedBooks.has(b.id));
 
-  const canonical: CanonicalStatementLine[] = openBankLines.map((l) => {
+  // Pair by array index (matchAll preserves input order) — avoid rowNumber key collisions
+  const canonical: CanonicalStatementLine[] = openBankLines.map((l, idx) => {
     const amountSigned = Number(l.amount);
     return {
-      rowNumber: Number(l.rowNumber),
+      rowNumber: Number.isFinite(Number(l.rowNumber)) ? Number(l.rowNumber) : idx + 1,
       date: l.date,
-      description: l.description,
+      description: l.description ?? '',
       amountSigned,
       direction:
         l.direction === 'in' || l.direction === 'out'
@@ -698,14 +798,14 @@ async function rebuildSessionSuggestionsInternal(
   });
 
   const matches = matchAll(canonical, freeBooks);
-  const byRow = new Map(matches.map((m) => [m.line.rowNumber, m]));
   const usedBooks = new Set<string>();
 
-  for (const line of openBankLines) {
-    const m = byRow.get(Number(line.rowNumber));
-    const amount = Number(line.amount);
+  for (let i = 0; i < openBankLines.length; i++) {
+    const line = openBankLines[i]!;
+    const m = matches[i];
+    if (!m) continue;
 
-    if (m && m.proposedAction === 'link' && m.matchedTransactionId && !usedBooks.has(m.matchedTransactionId)) {
+    if (m.proposedAction === 'link' && m.matchedTransactionId && !usedBooks.has(m.matchedTransactionId)) {
       usedBooks.add(m.matchedTransactionId);
       lockedBooks.add(m.matchedTransactionId);
       const [c] = await db()
@@ -741,13 +841,13 @@ async function rebuildSessionSuggestionsInternal(
         transactionId: m.matchedTransactionId,
         allocatedAmount: line.amount,
       });
-      // stash candidates on reason? skip for now
       continue;
     }
 
-    if (m && m.proposedAction === 'review' && m.candidates.length > 0) {
+    if (m.proposedAction === 'review' && m.candidates.length > 0) {
       const best = m.candidates[0]!;
       if (!usedBooks.has(best.id)) {
+        usedBooks.add(best.id);
         const [c] = await db()
           .insert(bankReconciliationCases)
           .values({
@@ -772,7 +872,6 @@ async function rebuildSessionSuggestionsInternal(
           bankLineId: line.id,
           allocatedAmount: line.amount,
         });
-        // Suggest best as book join for display only (not confirmed)
         await db().insert(bankReconciliationCaseBookTransactions).values({
           tenantId,
           caseId: c.id,
@@ -829,11 +928,13 @@ async function rebuildSessionSuggestionsInternal(
     });
   }
 
-  // Book-only (not used in any match)
-  const freeBookOnly = freeBooks.filter((b) => !usedBooks.has(b.id) && !lockedBooks.has(b.id));
+  // Book-only “waiting to clear” — limited, period-bounded, not a flood of every ledger row
+  const freeBookOnly = freeBooks
+    .filter((b) => !usedBooks.has(b.id) && !lockedBooks.has(b.id))
+    .filter((b) => b.date >= session.periodFrom && b.date <= session.periodTo)
+    .sort((a, b) => Math.abs(b.amountSigned) - Math.abs(a.amountSigned))
+    .slice(0, 40);
   for (const b of freeBookOnly) {
-    // Only inside strict statement period for "waiting"
-    if (b.date < session.periodFrom || b.date > session.periodTo) continue;
     const [c] = await db()
       .insert(bankReconciliationCases)
       .values({
@@ -995,11 +1096,11 @@ export async function openReconciliationSession(
     const user = await requireTenantContext();
     const page = Math.max(1, opts?.page ?? 1);
     const pageSize = Math.min(50, Math.max(10, opts?.pageSize ?? 20));
-    const tab = opts?.tab ?? 'all';
+    let tab = opts?.tab ?? 'auto';
     const q = (opts?.q ?? '').trim().toLowerCase();
 
     const detail = await withTenantContext(user.tenantId, async () => {
-      const [session] = await db()
+      let [session] = await db()
         .select()
         .from(bankReconciliationSessions)
         .where(
@@ -1012,9 +1113,9 @@ export async function openReconciliationSession(
         .limit(1);
       if (!session) throw new Error('Session not found.');
 
-      // Seed if empty
-      const [{ c }] = await db()
-        .select({ c: sql<number>`count(*)::int` })
+      // Seed if empty, or reseed when bank lines exist but no bank-side cases (book-only flood bug)
+      const [{ totalC }] = await db()
+        .select({ totalC: sql<number>`count(*)::int` })
         .from(bankReconciliationCases)
         .where(
           and(
@@ -1022,8 +1123,36 @@ export async function openReconciliationSession(
             isNull(bankReconciliationCases.voidedAt),
           ),
         );
-      if (Number(c) === 0) {
+      const [{ bankC }] = await db()
+        .select({ bankC: sql<number>`count(*)::int` })
+        .from(bankReconciliationCases)
+        .where(
+          and(
+            eq(bankReconciliationCases.sessionId, id),
+            isNull(bankReconciliationCases.voidedAt),
+            inArray(bankReconciliationCases.caseType, [
+              'match_1_1',
+              'create_entry',
+              'duplicate',
+            ]),
+          ),
+        );
+      const needsRebuild =
+        Number(totalC) === 0 ||
+        (session.bankLineCount > 0 && Number(bankC) === 0) ||
+        // Multi-year session periods need period heal + reseed
+        (session.periodFrom.slice(0, 7) !== session.periodTo.slice(0, 7) &&
+          (Number(session.periodTo.slice(0, 4)) - Number(session.periodFrom.slice(0, 4))) * 12 +
+            (Number(session.periodTo.slice(5, 7)) - Number(session.periodFrom.slice(5, 7))) >
+            2);
+      if (needsRebuild) {
         await rebuildSessionSuggestionsInternal(user.tenantId, user.id, id);
+        [session] = await db()
+          .select()
+          .from(bankReconciliationSessions)
+          .where(eq(bankReconciliationSessions.id, id))
+          .limit(1);
+        if (!session) throw new Error('Session not found.');
       }
 
       const [bank] = await db()
@@ -1044,7 +1173,7 @@ export async function openReconciliationSession(
         )
         .where(eq(bankReconciliationSessionImports.sessionId, id));
 
-      const allCases = await db()
+      const allCasesRaw = await db()
         .select()
         .from(bankReconciliationCases)
         .where(
@@ -1054,6 +1183,21 @@ export async function openReconciliationSession(
           ),
         )
         .orderBy(desc(bankReconciliationCases.sortDate));
+
+      // Bank-side work first in "All" (match/add before book-only waiting)
+      const typeRank = (t: string) => {
+        if (t === 'match_1_1') return 0;
+        if (t === 'create_entry') return 1;
+        if (t === 'duplicate') return 2;
+        if (t === 'outstanding_book') return 3;
+        return 4;
+      };
+      const allCases = [...allCasesRaw].sort((a, b) => {
+        const ra = typeRank(a.caseType);
+        const rb = typeRank(b.caseType);
+        if (ra !== rb) return ra - rb;
+        return (b.sortDate ?? '').localeCompare(a.sortDate ?? '');
+      });
 
       const tabCounts: Record<string, number> = {
         all: allCases.length,
@@ -1066,30 +1210,46 @@ export async function openReconciliationSession(
       };
       for (const c of allCases) {
         if (c.state === 'confirmed' || c.state === 'excluded') tabCounts.completed! += 1;
-        else if (c.caseType === 'duplicate' || c.state === 'excluded') tabCounts.duplicates! += 1;
+        else if (c.caseType === 'duplicate') tabCounts.duplicates! += 1;
         else if (c.caseType === 'outstanding_book') tabCounts.waiting! += 1;
         else if (c.caseType === 'create_entry') tabCounts.add! += 1;
         else if (c.state === 'suggested' && c.confidence === 'strong') tabCounts.ready! += 1;
+        else if (c.caseType === 'match_1_1') tabCounts.decision! += 1;
         else tabCounts.decision! += 1;
+      }
+
+      // Spec default tab: decision → add → ready → waiting → all
+      if (tab === 'auto') {
+        if ((tabCounts.decision ?? 0) > 0) tab = 'decision';
+        else if ((tabCounts.add ?? 0) > 0) tab = 'add';
+        else if ((tabCounts.ready ?? 0) > 0) tab = 'ready';
+        else if ((tabCounts.waiting ?? 0) > 0) tab = 'waiting';
+        else tab = 'all';
       }
 
       let filtered = allCases;
       if (tab === 'ready')
         filtered = allCases.filter(
-          (c) => c.state === 'suggested' && c.confidence === 'strong' && c.caseType === 'match_1_1',
+          (c) =>
+            c.state === 'suggested' &&
+            c.confidence === 'strong' &&
+            c.caseType === 'match_1_1',
         );
       else if (tab === 'decision')
         filtered = allCases.filter(
           (c) =>
-            c.state === 'needs_review' &&
-            c.caseType === 'match_1_1',
+            c.caseType === 'match_1_1' &&
+            c.state !== 'confirmed' &&
+            !(c.state === 'suggested' && c.confidence === 'strong'),
         );
       else if (tab === 'add')
         filtered = allCases.filter(
           (c) => c.caseType === 'create_entry' && c.state !== 'confirmed',
         );
       else if (tab === 'waiting')
-        filtered = allCases.filter((c) => c.caseType === 'outstanding_book' && c.state !== 'confirmed');
+        filtered = allCases.filter(
+          (c) => c.caseType === 'outstanding_book' && c.state !== 'confirmed',
+        );
       else if (tab === 'duplicates')
         filtered = allCases.filter((c) => c.caseType === 'duplicate' || c.state === 'excluded');
       else if (tab === 'completed')
@@ -1250,6 +1410,7 @@ export async function openReconciliationSession(
 
       return {
         session: listItem,
+        activeTab: tab,
         tabCounts,
         cases,
         page,

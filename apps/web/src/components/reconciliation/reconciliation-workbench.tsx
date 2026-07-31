@@ -10,6 +10,7 @@ import {
   Unlink,
   ChevronLeft,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 import {
   bulkConfirmStrongMatches,
@@ -31,19 +32,41 @@ function formatRs(n: number | null | undefined) {
   })}`;
 }
 
-const TABS: { id: string; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'ready', label: 'Ready to confirm' },
-  { id: 'decision', label: 'Needs decision' },
-  { id: 'add', label: 'Add to BookOne' },
-  { id: 'waiting', label: 'Waiting to clear' },
-  { id: 'duplicates', label: 'Duplicates' },
-  { id: 'completed', label: 'Completed' },
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return '—';
+  try {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+const TABS: { id: string; label: string; short: string }[] = [
+  { id: 'decision', label: 'Needs decision', short: 'Decide' },
+  { id: 'add', label: 'Add to BookOne', short: 'Add' },
+  { id: 'ready', label: 'Ready to confirm', short: 'Ready' },
+  { id: 'waiting', label: 'Waiting to clear', short: 'Waiting' },
+  { id: 'duplicates', label: 'Duplicates', short: 'Dupes' },
+  { id: 'completed', label: 'Completed', short: 'Done' },
+  { id: 'all', label: 'All', short: 'All' },
 ];
+
+function resultTone(row: ReconCaseRow): string {
+  if (row.state === 'confirmed' || row.state === 'excluded') return 'ok';
+  if (row.caseType === 'create_entry') return 'add';
+  if (row.caseType === 'outstanding_book') return 'wait';
+  if (row.caseType === 'match_1_1' && row.confidence === 'strong') return 'ready';
+  if (row.caseType === 'match_1_1') return 'decide';
+  return 'muted';
+}
 
 /**
  * Two-sided reconciliation workbench (spec Screen 2).
- * BookOne table + card patterns; plain-language labels only.
+ * Summary first, then work tabs; mobile card list + desktop table.
  */
 export function ReconciliationWorkbench({
   sessionId,
@@ -56,7 +79,7 @@ export function ReconciliationWorkbench({
   createHref?: string;
 }) {
   const [detail, setDetail] = useState<ReconSessionDetail | null>(null);
-  const [tab, setTab] = useState('all');
+  const [tab, setTab] = useState('auto');
   const [page, setPage] = useState(1);
   const [q, setQ] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +97,9 @@ export function ReconciliationWorkbench({
               return;
             }
             setDetail(res.detail);
+            if (t === 'auto' || res.detail.activeTab !== t) {
+              setTab(res.detail.activeTab);
+            }
             setError(null);
           },
         );
@@ -83,14 +109,14 @@ export function ReconciliationWorkbench({
   );
 
   useEffect(() => {
-    load('all', 1, '');
-    // initial
+    load('auto', 1, '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   function changeTab(t: string) {
     setTab(t);
     setPage(1);
+    setSelected(null);
     load(t, 1, q);
   }
 
@@ -103,7 +129,7 @@ export function ReconciliationWorkbench({
           return;
         }
         setInfo('Suggestions updated.');
-        load(tab, page, q);
+        load(tab === 'auto' ? 'auto' : tab, 1, q);
       });
     });
   }
@@ -183,6 +209,7 @@ export function ReconciliationWorkbench({
   }
 
   const s = detail.session;
+  const counts = detail.tabCounts;
   const totalPages = Math.max(1, Math.ceil(detail.totalCases / detail.pageSize));
   const bankClose = s.statementClosingBalance;
   const bookClose = s.bookClosingBalance;
@@ -190,6 +217,71 @@ export function ReconciliationWorkbench({
     bankClose != null && bookClose != null
       ? Math.round((bankClose - bookClose - s.outstandingNet) * 100) / 100
       : s.differenceAmount;
+  const workLeft =
+    (counts.decision ?? 0) + (counts.add ?? 0) + (counts.ready ?? 0) + (counts.waiting ?? 0);
+  const readyN = counts.ready ?? 0;
+
+  function rowActions(row: ReconCaseRow, block = false) {
+    const cls = block ? 'bis-btn primary bis-btn-block' : 'bis-btn primary';
+    const clsSec = block ? 'bis-btn secondary bis-btn-block' : 'bis-btn secondary';
+    return (
+      <>
+        {row.caseType === 'match_1_1' && row.state !== 'confirmed' ? (
+          <button type="button" className={cls} disabled={pending} onClick={() => doConfirm(row.id)}>
+            Confirm
+          </button>
+        ) : null}
+        {row.caseType === 'match_1_1' && row.state === 'confirmed' ? (
+          <button type="button" className={clsSec} disabled={pending} onClick={() => doUndo(row.id)}>
+            <Unlink size={14} />
+            Unlink
+          </button>
+        ) : null}
+        {row.caseType === 'outstanding_book' && row.state !== 'confirmed' ? (
+          <button
+            type="button"
+            className={clsSec}
+            disabled={pending}
+            onClick={() => doOutstanding(row.id)}
+          >
+            Still waiting
+          </button>
+        ) : null}
+        {row.caseType === 'create_entry' && createHref ? (
+          <Link href={createHref} className={clsSec}>
+            <Plus size={14} />
+            Add…
+          </Link>
+        ) : null}
+        {row.state === 'confirmed' || row.state === 'excluded' ? (
+          <CheckCircle2 size={16} className="brw-done-icon" aria-label="Done" />
+        ) : null}
+      </>
+    );
+  }
+
+  function SideCell({
+    side,
+    empty,
+  }: {
+    side: { date: string | null; description: string | null; amount: number | null };
+    empty: string;
+  }) {
+    if (!side.date && side.amount == null) {
+      return <span className="brw-muted">{empty}</span>;
+    }
+    return (
+      <>
+        <div className="brw-cell-date">{formatDate(side.date)}</div>
+        <div className="brw-cell-desc" title={side.description ?? undefined}>
+          {side.description || '—'}
+        </div>
+        <div className={(side.amount ?? 0) < 0 ? 'brw-amt out' : 'brw-amt in'}>
+          {formatRs(side.amount)}
+        </div>
+      </>
+    );
+  }
 
   return (
     <div className="brw">
@@ -200,17 +292,23 @@ export function ReconciliationWorkbench({
           </Link>
           <h1 className="brw-title">
             {s.bankName}
-            <span className="brw-period"> · {s.periodLabel}</span>
+            {s.bankCode ? ` · ${s.bankCode}` : ''}
           </h1>
           <p className="brw-sub">
-            {s.sourceFileCount} source file{s.sourceFileCount === 1 ? '' : 's'}
-            {s.sourceFiles[0] ? ` · ${s.sourceFiles.map((f) => f.fileName).join(', ')}` : ''}
+            <span className="brw-period-pill">{s.periodLabel}</span>
+            {s.sourceFileCount > 0 ? (
+              <span>
+                {' '}
+                · {s.sourceFileCount} file{s.sourceFileCount === 1 ? '' : 's'}
+                {s.sourceFiles[0] ? ` · ${s.sourceFiles.map((f) => f.fileName).join(', ')}` : ''}
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="brw-head-actions">
           <button type="button" className="bis-btn secondary" disabled={pending} onClick={doRebuild}>
-            <RefreshCw size={14} />
-            Refresh suggestions
+            <RefreshCw size={14} className={pending ? 'spin' : undefined} />
+            Refresh
           </button>
         </div>
       </header>
@@ -234,22 +332,77 @@ export function ReconciliationWorkbench({
         </div>
       </div>
 
+      {/* Spec: summary first — what needs attention */}
+      <div className="brw-attention" aria-label="What needs attention">
+        <button
+          type="button"
+          className={`brw-chip decide ${tab === 'decision' ? 'active' : ''}`}
+          onClick={() => changeTab('decision')}
+        >
+          Needs decision <em>{counts.decision ?? 0}</em>
+        </button>
+        <button
+          type="button"
+          className={`brw-chip add ${tab === 'add' ? 'active' : ''}`}
+          onClick={() => changeTab('add')}
+        >
+          Add to BookOne <em>{counts.add ?? 0}</em>
+        </button>
+        <button
+          type="button"
+          className={`brw-chip ready ${tab === 'ready' ? 'active' : ''}`}
+          onClick={() => changeTab('ready')}
+        >
+          Ready to confirm <em>{readyN}</em>
+        </button>
+        <button
+          type="button"
+          className={`brw-chip wait ${tab === 'waiting' ? 'active' : ''}`}
+          onClick={() => changeTab('waiting')}
+        >
+          Waiting to clear <em>{counts.waiting ?? 0}</em>
+        </button>
+        {(counts.duplicates ?? 0) > 0 ? (
+          <button
+            type="button"
+            className={`brw-chip muted ${tab === 'duplicates' ? 'active' : ''}`}
+            onClick={() => changeTab('duplicates')}
+          >
+            Duplicates <em>{counts.duplicates}</em>
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={`brw-chip muted ${tab === 'completed' ? 'active' : ''}`}
+          onClick={() => changeTab('completed')}
+        >
+          Completed <em>{counts.completed ?? 0}</em>
+        </button>
+      </div>
+
       <div className="brw-progress-block">
         <div className="brw-progress-meta">
           <strong>
             {s.resolvedCaseCount} of{' '}
             {Math.max(s.resolvedCaseCount + s.openCaseCount, s.bankLineCount, 1)} resolved
+            {workLeft > 0 ? (
+              <span className="brw-work-left"> · {workLeft} still need a look</span>
+            ) : (
+              <span className="brw-work-done"> · All clear</span>
+            )}
           </strong>
           <div className="brw-progress-actions">
-            <button
-              type="button"
-              className="bis-btn primary"
-              disabled={pending || (detail.tabCounts.ready ?? 0) === 0}
-              onClick={doBulkStrong}
-            >
-              <Link2 size={14} />
-              Confirm safe matches ({detail.tabCounts.ready ?? 0})
-            </button>
+            {readyN > 0 ? (
+              <button
+                type="button"
+                className="bis-btn primary"
+                disabled={pending}
+                onClick={doBulkStrong}
+              >
+                <Link2 size={14} />
+                Confirm safe matches ({readyN})
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="brw-progress-bar tall" aria-hidden>
@@ -258,24 +411,33 @@ export function ReconciliationWorkbench({
       </div>
 
       <div className="brw-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            className={`brw-tab ${tab === t.id ? 'active' : ''}`}
-            onClick={() => changeTab(t.id)}
-          >
-            {t.label}
-            <em>{detail.tabCounts[t.id] ?? 0}</em>
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const n = counts[t.id] ?? 0;
+          // Hide empty secondary tabs to reduce noise
+          if ((t.id === 'duplicates' || t.id === 'completed') && n === 0 && tab !== t.id) {
+            return null;
+          }
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`brw-tab ${tab === t.id ? 'active' : ''}`}
+              onClick={() => changeTab(t.id)}
+            >
+              <span className="brw-tab-full">{t.label}</span>
+              <span className="brw-tab-short">{t.short}</span>
+              <em>{n}</em>
+            </button>
+          );
+        })}
       </div>
 
       <div className="brw-toolbar">
         <input
           className="brw-search"
-          placeholder="Search…"
+          placeholder="Search description…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -301,7 +463,8 @@ export function ReconciliationWorkbench({
       {error ? <p className="bis-error">{error}</p> : null}
       {info ? <p className="bis-match-info">{info}</p> : null}
 
-      <div className="brw-table-wrap table-wrap">
+      {/* Desktop table */}
+      <div className="brw-table-wrap table-wrap brw-desktop-only">
         <table className="table brw-table">
           <thead>
             <tr>
@@ -315,8 +478,8 @@ export function ReconciliationWorkbench({
           <tbody>
             {detail.cases.length === 0 ? (
               <tr>
-                <td colSpan={5} style={{ textAlign: 'center', color: 'var(--ink-muted)' }}>
-                  {pending ? 'Loading…' : 'Nothing in this tab.'}
+                <td colSpan={5} className="brw-empty-cell">
+                  {pending ? 'Loading…' : emptyTabMessage(tab)}
                 </td>
               </tr>
             ) : (
@@ -327,23 +490,9 @@ export function ReconciliationWorkbench({
                   onClick={() => setSelected(row)}
                 >
                   <td>
-                    {row.bank.date ? (
-                      <>
-                        <div className="brw-cell-date">{row.bank.date}</div>
-                        <div className="brw-cell-desc">{row.bank.description}</div>
-                        <div
-                          className={
-                            (row.bank.amount ?? 0) < 0 ? 'brw-amt out' : 'brw-amt in'
-                          }
-                        >
-                          {formatRs(row.bank.amount)}
-                        </div>
-                      </>
-                    ) : (
-                      <span className="brw-muted">No bank transaction</span>
-                    )}
+                    <SideCell side={row.bank} empty="No bank transaction" />
                   </td>
-                  <td className="brw-conn">
+                  <td className="brw-conn" aria-hidden>
                     {row.connection === 'match'
                       ? '↔'
                       : row.connection === 'bank_only'
@@ -351,71 +500,62 @@ export function ReconciliationWorkbench({
                         : '←'}
                   </td>
                   <td>
-                    {row.book.date ? (
-                      <>
-                        <div className="brw-cell-date">{row.book.date}</div>
-                        <div className="brw-cell-desc">{row.book.description}</div>
-                        <div
-                          className={
-                            (row.book.amount ?? 0) < 0 ? 'brw-amt out' : 'brw-amt in'
-                          }
-                        >
-                          {formatRs(row.book.amount)}
-                        </div>
-                      </>
-                    ) : (
-                      <span className="brw-muted">No BookOne record</span>
-                    )}
+                    <SideCell side={row.book} empty="No BookOne record" />
                   </td>
                   <td>
-                    <span className="brw-result">{row.resultLabel ?? row.userLabel ?? '—'}</span>
+                    <span className={`brw-result tone-${resultTone(row)}`}>
+                      {row.resultLabel ?? row.userLabel ?? '—'}
+                    </span>
                   </td>
                   <td className="brw-row-actions" onClick={(e) => e.stopPropagation()}>
-                    {row.caseType === 'match_1_1' && row.state !== 'confirmed' ? (
-                      <button
-                        type="button"
-                        className="bis-btn primary"
-                        disabled={pending}
-                        onClick={() => doConfirm(row.id)}
-                      >
-                        Confirm
-                      </button>
-                    ) : null}
-                    {row.caseType === 'match_1_1' && row.state === 'confirmed' ? (
-                      <button
-                        type="button"
-                        className="bis-btn secondary"
-                        disabled={pending}
-                        onClick={() => doUndo(row.id)}
-                      >
-                        <Unlink size={14} />
-                        Unlink
-                      </button>
-                    ) : null}
-                    {row.caseType === 'outstanding_book' && row.state !== 'confirmed' ? (
-                      <button
-                        type="button"
-                        className="bis-btn secondary"
-                        disabled={pending}
-                        onClick={() => doOutstanding(row.id)}
-                      >
-                        Still waiting
-                      </button>
-                    ) : null}
-                    {row.caseType === 'create_entry' && createHref ? (
-                      <Link href={createHref} className="bis-btn secondary">
-                        Add…
-                      </Link>
-                    ) : null}
-                    {row.state === 'confirmed' || row.state === 'excluded' ? (
-                      <CheckCircle2 size={16} className="brw-done-icon" />
-                    ) : null}
+                    {rowActions(row)}
                   </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="brw-cards-list brw-mobile-only">
+        {detail.cases.length === 0 ? (
+          <div className="brw-empty-cell">{pending ? 'Loading…' : emptyTabMessage(tab)}</div>
+        ) : (
+          detail.cases.map((row) => (
+            <article
+              key={row.id}
+              className={`brw-case-card ${selected?.id === row.id ? 'selected' : ''}`}
+              onClick={() => setSelected(row)}
+            >
+              <div className="brw-case-card-head">
+                <span className={`brw-result tone-${resultTone(row)}`}>
+                  {row.resultLabel ?? row.userLabel ?? '—'}
+                </span>
+                <span className="brw-case-conn" aria-hidden>
+                  {row.connection === 'match'
+                    ? 'Match'
+                    : row.connection === 'bank_only'
+                      ? 'Bank only'
+                      : 'Book only'}
+                </span>
+              </div>
+              <div className="brw-case-sides">
+                <div className="brw-case-side">
+                  <span className="brw-case-side-label">Bank</span>
+                  <SideCell side={row.bank} empty="—" />
+                </div>
+                <div className="brw-case-side">
+                  <span className="brw-case-side-label">BookOne</span>
+                  <SideCell side={row.book} empty="—" />
+                </div>
+              </div>
+              <div className="brw-row-actions" onClick={(e) => e.stopPropagation()}>
+                {rowActions(row)}
+              </div>
+            </article>
+          ))
+        )}
       </div>
 
       <div className="brw-pager">
@@ -453,7 +593,7 @@ export function ReconciliationWorkbench({
       {selected ? (
         <aside className="brw-drawer" aria-label="Case detail">
           <div className="brw-drawer-head">
-            <strong>{selected.userLabel ?? 'Details'}</strong>
+            <strong>{selected.userLabel ?? selected.resultLabel ?? 'Details'}</strong>
             <button type="button" className="bis-btn secondary" onClick={() => setSelected(null)}>
               Close
             </button>
@@ -462,40 +602,38 @@ export function ReconciliationWorkbench({
           {selected.reasonCodes.length > 0 ? (
             <p className="brw-muted">Why: {selected.reasonCodes.join(', ')}</p>
           ) : null}
-          <div className="brw-drawer-actions">
-            {selected.caseType === 'match_1_1' && selected.state !== 'confirmed' ? (
-              <button
-                type="button"
-                className="bis-btn primary bis-btn-block"
-                disabled={pending}
-                onClick={() => doConfirm(selected.id)}
-              >
-                Confirm this match
-              </button>
-            ) : null}
-            {selected.caseType === 'match_1_1' && selected.state === 'confirmed' ? (
-              <button
-                type="button"
-                className="bis-btn secondary bis-btn-block"
-                disabled={pending}
-                onClick={() => doUndo(selected.id)}
-              >
-                Unlink match
-              </button>
-            ) : null}
-            {selected.caseType === 'outstanding_book' && selected.state !== 'confirmed' ? (
-              <button
-                type="button"
-                className="bis-btn primary bis-btn-block"
-                disabled={pending}
-                onClick={() => doOutstanding(selected.id)}
-              >
-                Mark as waiting to clear
-              </button>
-            ) : null}
+          <div className="brw-drawer-sides">
+            <div>
+              <span className="brw-case-side-label">Bank</span>
+              <SideCell side={selected.bank} empty="No bank transaction" />
+            </div>
+            <div>
+              <span className="brw-case-side-label">BookOne</span>
+              <SideCell side={selected.book} empty="No BookOne record" />
+            </div>
           </div>
+          <div className="brw-drawer-actions">{rowActions(selected, true)}</div>
         </aside>
       ) : null}
     </div>
   );
+}
+
+function emptyTabMessage(tab: string) {
+  switch (tab) {
+    case 'decision':
+      return 'Nothing needs a decision right now.';
+    case 'add':
+      return 'No bank transactions waiting to be added.';
+    case 'ready':
+      return 'No strong matches ready to confirm.';
+    case 'waiting':
+      return 'No BookOne records waiting to clear the bank.';
+    case 'duplicates':
+      return 'No duplicates.';
+    case 'completed':
+      return 'Nothing completed yet.';
+    default:
+      return 'Nothing in this tab.';
+  }
 }

@@ -62,9 +62,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
     redirect('/login');
   }
 
-  const monthLabel = periodOptions.selected
-    ? new Date(periodOptions.selected + '-01').toLocaleString('en-US', { month: 'long', year: 'numeric' })
-    : 'All time';
+  const monthLabel = periodOptions.label || 'All time';
 
   return (
     <BookOneShell active="Transactions" tenant={tenant} period={periodOptions}>

@@ -530,7 +530,8 @@ export interface CommercialDocRow {
 
 export async function listCommercialDocuments(types: string[], period?: string): Promise<CommercialDocRow[]> {
   const user = await requireTenantContext();
-  const selectedPeriod = period && period !== 'all' && /^\d{4}-\d{2}$/.test(period) ? period : null;
+  const { resolvePeriodBounds } = await import('@/lib/period-range');
+  const periodBounds = resolvePeriodBounds(period ?? 'all');
 
   return withTenantContext(user.tenantId, async () => {
     const conditions = [
@@ -538,9 +539,9 @@ export async function listCommercialDocuments(types: string[], period?: string):
       inArray(businessDocuments.documentType, types),
       isNull(businessDocuments.voidedAt),
     ];
-    if (selectedPeriod) {
-      conditions.push(gte(businessDocuments.issueDate, `${selectedPeriod}-01`));
-      conditions.push(lte(businessDocuments.issueDate, `${selectedPeriod}-31`));
+    if (periodBounds.from && periodBounds.to) {
+      conditions.push(gte(businessDocuments.issueDate, periodBounds.from));
+      conditions.push(lte(businessDocuments.issueDate, periodBounds.to));
     }
 
     const rows = await db()

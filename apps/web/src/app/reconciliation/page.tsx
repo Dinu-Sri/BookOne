@@ -20,16 +20,22 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
     redirect('/login');
   }
 
-  const period = { selected: data.selectedPeriod, available: data.availablePeriods };
-  const reconciliationPeriod = period.selected ?? new Date().toISOString().slice(0, 7);
+  const period = {
+    selected: data.selectedPeriod,
+    available: data.availablePeriods,
+    from: data.periodFrom,
+    to: data.periodTo,
+    label: data.periodLabel,
+  };
+  // Period locks / recon still key by calendar month — use range start month
+  const reconciliationPeriod =
+    data.periodFrom?.slice(0, 7) ?? new Date().toISOString().slice(0, 7);
   try {
     reconciliation = await getReconciliationForPeriod(reconciliationPeriod);
   } catch (err) {
     redirect('/login');
   }
-  const periodLabel = period.selected
-    ? new Date(`${period.selected}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })
-    : 'All time';
+  const periodLabel = data.periodLabel || 'All time';
 
   return (
     <BookOneShell active="Reconciliation" tenant={tenant} period={period}>

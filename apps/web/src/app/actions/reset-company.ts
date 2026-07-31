@@ -357,6 +357,9 @@ function revalidateAllPaths() {
     '/reconciliation',
     '/parties',
     '/documents',
+    '/cashbook',
+    '/cashbook/import',
+    '/cashbook/match',
     '/sales/invoices',
     '/sales/orders',
     '/sales/quotations',
@@ -376,6 +379,79 @@ function revalidateAllPaths() {
     '/pos',
     '/control-room/health-check',
     '/control-room/modules',
+    '/control-room/companies',
   ];
   for (const p of paths) revalidatePath(p);
+}
+
+/**
+ * Platform Control Room: master wipe any company (super_admin only).
+ * Does not require staging flag — for test/demo company clean restarts.
+ * Confirm: MASTER RESET
+ */
+export async function resetPlatformCompanyData(
+  companyId: string,
+  confirmText: string,
+): Promise<ResetCompanyResult> {
+  try {
+    if (confirmText !== 'MASTER RESET') {
+      return { ok: false, error: 'Type MASTER RESET exactly to wipe this company.' };
+    }
+    if (!/^[0-9a-f-]{36}$/i.test(companyId)) {
+      return { ok: false, error: 'Invalid company id.' };
+    }
+
+    const user = await requireTenantContext();
+    const isSuper =
+      user.role === 'super_admin' || user.email === 'dinu.sri.m@gmail.com';
+    if (!isSuper) {
+      return { ok: false, error: 'Only platform super admin can reset another company.' };
+    }
+
+    const [target] = await db()
+      .select({ id: tenants.id, name: tenants.name, slug: tenants.slug })
+      .from(tenants)
+      .where(eq(tenants.id, companyId))
+      .limit(1);
+    if (!target) return { ok: false, error: 'Company not found.' };
+
+    const fileResult = await deleteTenantUploadedFiles(target.id);
+    const tablesCleared = await wipeOperationalData(target.id, user.id);
+
+    // Audit on the acting admin’s current tenant context as well
+    try {
+      await withTenantContext(user.tenantId, async () => {
+        await db().insert(auditLog).values({
+          tenantId: user.tenantId,
+          userId: user.id,
+          action: 'RESET',
+          tableName: 'platform_company_wipe',
+          recordId: target.id,
+          newValues: {
+            targetTenantId: target.id,
+            targetName: target.name,
+            targetSlug: target.slug,
+            tablesCleared,
+            deletedFiles: fileResult.deleted,
+          },
+          notes: `Platform master wipe of company ${target.name} (${target.slug})`,
+        });
+      });
+    } catch {
+      // non-fatal
+    }
+
+    revalidateAllPaths();
+    revalidatePath(`/control-room/companies/${target.id}`);
+
+    return {
+      ok: true,
+      deletedFiles: fileResult.deleted,
+      tablesCleared,
+      warning: fileResult.warning,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Platform company wipe failed.';
+    return { ok: false, error: message };
+  }
 }

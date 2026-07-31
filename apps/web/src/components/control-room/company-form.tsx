@@ -13,6 +13,7 @@ import {
 import { entityKindLabel } from '@/lib/entity-labels';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { MODULE_CATALOG, MODULE_KEYS, modulesForPlan, type ModuleKey } from '@/lib/platform-modules';
+import { CompanyMasterResetButton } from '@/components/control-room/company-master-reset-button';
 import { StatusBadge } from '@/components/module/list-page';
 import { Button } from '@/components/ui/bookone-ui';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -555,6 +556,10 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
               <small style={{ color: 'var(--ink-soft)', display: 'block', marginTop: 8 }}>
                 Suspended companies should not use the product; block at login in a follow-up if needed.
               </small>
+            </div>
+            <div className="field field-full">
+              <label>Master reset (test companies)</label>
+              <CompanyMasterResetButton companyId={company.id} companyName={company.name} />
             </div>
             {company.environment === 'staging' ? (
               <div className="field field-full">

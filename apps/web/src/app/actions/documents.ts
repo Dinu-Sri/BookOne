@@ -161,13 +161,14 @@ function toDocumentRow(row: {
 
 export async function listDocuments(period?: string): Promise<DocumentSummary> {
   const user = await requireTenantContext();
-  const selectedPeriod = period && period !== 'all' && /^\d{4}-\d{2}$/.test(period) ? period : null;
+  const { resolvePeriodBounds } = await import('@/lib/period-range');
+  const periodBounds = resolvePeriodBounds(period ?? 'all');
 
   return withTenantContext(user.tenantId, async () => {
     const conditions = [eq(businessDocuments.tenantId, user.tenantId), isNull(businessDocuments.voidedAt)];
-    if (selectedPeriod) {
-      conditions.push(gte(businessDocuments.issueDate, `${selectedPeriod}-01`));
-      conditions.push(lte(businessDocuments.issueDate, `${selectedPeriod}-31`));
+    if (periodBounds.from && periodBounds.to) {
+      conditions.push(gte(businessDocuments.issueDate, periodBounds.from));
+      conditions.push(lte(businessDocuments.issueDate, periodBounds.to));
     }
 
     const rows = await db()

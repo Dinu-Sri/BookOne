@@ -28,6 +28,7 @@ import { recordEntry, reverseTransactionById } from '@/app/actions/record-entry'
 import type { CashbookRow } from '@/app/actions/cashbook';
 import { listLiquidAccounts, type LiquidAccount } from '@/app/actions/cashbook-banks';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
+import { PeriodSelector } from '@/components/layout/period-selector';
 import { DateField } from '@/components/ui/date-field';
 import { gloss, readSiGlossPreference } from '@/lib/si-gloss';
 import { readBookDomainPref, writeBookDomainPref, type BookDomainPref } from '@/lib/book-domain';
@@ -42,6 +43,7 @@ import {
   writeLastCategory,
   writeLastPayMethod,
 } from '@/lib/cashbook-prefs';
+import { resolvePeriodBounds, writePeriodCookie } from '@/lib/period-range';
 
 type Mode =
   | 'money_in'
@@ -667,7 +669,20 @@ export function CashbookHomeClient({
         >
           <ChevronLeft size={20} />
         </button>
-        <span className="cashbook-period-label">{formatPeriodLabel(period)}</span>
+        <div className="cashbook-period-picker-wrap">
+          <PeriodSelector
+            selected={period}
+            compact
+            onApply={(token) => {
+              // Cashbook ledger is month-based today → map any range to start month
+              const b = resolvePeriodBounds(token);
+              const next = b.from?.slice(0, 7) ?? period;
+              writePeriodCookie(token);
+              setPeriod(next);
+              navigate(domain, next);
+            }}
+          />
+        </div>
         <button
           type="button"
           className="cashbook-period-btn"

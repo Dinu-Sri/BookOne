@@ -893,13 +893,115 @@ textarea.input {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  z-index: 30;
+  z-index: 40;
   min-width: 232px;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-md);
+}
+
+/* Rich period popover (From/To + presets + Apply) — matches design */
+.period-menu-rich {
+  min-width: 300px;
+  max-width: min(340px, 92vw);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.period-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 4px;
+}
+.period-menu-head strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.period-menu-badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--brand-strong, #1677c9);
+}
+.period-range-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.period-range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.period-range-field > span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.period-range-field .date-field {
+  width: 100%;
+}
+.period-range-field .date-trigger {
+  width: 100%;
+  min-width: 0;
+}
+.period-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: min(42vh, 320px);
+  overflow: auto;
+}
+.period-menu-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.period-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.period-btn.primary {
+  border-color: transparent;
+  background: var(--brand, #1677c9);
+  color: #fff;
+}
+.period-btn.ghost {
+  background: transparent;
+}
+.period-btn:hover {
+  filter: brightness(0.98);
+}
+
+.cashbook-period-picker-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+.cashbook-period-picker-wrap .period-trigger {
+  min-width: 140px;
+  justify-content: center;
+}
+.cashbook-period-picker-wrap .period-menu {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
 }
 
 .period-option {

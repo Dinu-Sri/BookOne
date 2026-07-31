@@ -112,16 +112,9 @@ export function DateField({
               <ChevronRight size={16} />
             </button>
           </div>
-          <button
-            type="button"
-            className="date-today-link"
-            onClick={() => pick(new Date())}
-          >
-            Today
-          </button>
           <div className="date-grid date-weekdays">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-              <span key={day}>{day}</span>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+              <span key={`${day}-${i}`}>{day}</span>
             ))}
           </div>
           <div className="date-grid">
@@ -130,7 +123,7 @@ export function DateField({
                 <button
                   type="button"
                   key={day.toISOString()}
-                  className={sameDay(day, selected) ? 'today' : ''}
+                  className={sameDay(day, selected) ? 'today selected' : ''}
                   onClick={() => pick(day)}
                 >
                   {day.getDate()}

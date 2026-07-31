@@ -20,6 +20,11 @@ import {
   sql,
 } from '@bookone/db';
 import { requireTenantContext } from '@bookone/auth';
+import {
+  normalizePeriodToken,
+  resolvePeriodBounds,
+  type PeriodBounds,
+} from '@/lib/period-range';
 
 export interface TenantInfo {
   id: string;
@@ -75,7 +80,11 @@ export interface DashboardData {
   }[];
   lowConfidenceCount: number;
   availablePeriods: string[]; // e.g. ["2026-06", "2026-05"]
+  /** Encoded period token (all | this_month | YYYY-MM | custom range …) */
   selectedPeriod: string | null;
+  periodFrom: string | null;
+  periodTo: string | null;
+  periodLabel: string;
   cashFlow: {
     moneyIn: number;
     moneyOut: number;
@@ -85,8 +94,12 @@ export interface DashboardData {
 }
 
 export interface PeriodOptions {
+  /** Encoded token for PeriodSelector */
   selected: string | null;
   available: string[];
+  from: string | null;
+  to: string | null;
+  label: string;
 }
 
 /** Returns the current tenant + user info for the topbar. */
@@ -127,16 +140,19 @@ export async function getTenantInfo(): Promise<TenantInfo> {
  * signed journal line amounts. Uses each account's normalSide to determine
  * whether debits or credits increase the balance.
  */
-async function computeAccountBalances(tenantId: string, period?: string | null): Promise<AccountBalance[]> {
-  const selectedPeriod = normalizePeriod(period ?? undefined);
+async function computeAccountBalances(
+  tenantId: string,
+  period?: string | null,
+): Promise<AccountBalance[]> {
+  const bounds = resolvePeriodBounds(period ?? 'all');
   return withTenantContext(tenantId, async () => {
     const journalJoinConditions = [
       eq(journalEntries.id, journalLines.journalEntryId),
       isNull(journalEntries.voidedAt),
     ];
-    if (selectedPeriod) {
-      journalJoinConditions.push(gte(journalEntries.entryDate, `${selectedPeriod}-01`));
-      journalJoinConditions.push(lte(journalEntries.entryDate, `${selectedPeriod}-31`));
+    if (bounds.from && bounds.to) {
+      journalJoinConditions.push(gte(journalEntries.entryDate, bounds.from));
+      journalJoinConditions.push(lte(journalEntries.entryDate, bounds.to));
     }
 
     // Sum debits - credits per account, then adjust for normalSide.
@@ -186,24 +202,34 @@ function currentPeriod(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
+/** @deprecated prefer resolvePeriodBounds — kept for month-only callers */
 function normalizePeriod(period?: string): string | null {
   if (!period || period === 'all') return null;
   return /^\d{4}-\d{2}$/.test(period) ? period : null;
 }
 
-function selectedPeriodFromInput(period?: string): string | null {
-  if (period === 'all') return null;
-  return normalizePeriod(period) ?? currentPeriod();
+/**
+ * Canonical period token for UI + filters.
+ * `all` → selected token "all"; missing → this_month for dashboards.
+ * (Not exported — file is 'use server'; only async actions may export.)
+ */
+function selectedPeriodFromInput(period?: string | null): string {
+  if (!period) return 'this_month';
+  return normalizePeriodToken(period);
 }
 
-async function collectAvailablePeriods(tenantId: string, selectedPeriod: string | null): Promise<string[]> {
+function periodBoundsFromInput(period?: string | null): PeriodBounds {
+  return resolvePeriodBounds(selectedPeriodFromInput(period));
+}
+
+async function collectAvailablePeriods(tenantId: string, selectedToken: string): Promise<string[]> {
   const monthRows = await db()
     .select({ date: transactions.date })
     .from(transactions)
     .where(and(eq(transactions.tenantId, tenantId), isNull(transactions.voidedAt)));
 
   const periodSet = new Set<string>([currentPeriod()]);
-  if (selectedPeriod) periodSet.add(selectedPeriod);
+  if (/^\d{4}-\d{2}$/.test(selectedToken)) periodSet.add(selectedToken);
   for (const r of monthRows) {
     if (r.date && /^\d{4}-\d{2}/.test(r.date)) {
       periodSet.add(r.date.slice(0, 7));
@@ -216,9 +242,13 @@ async function collectAvailablePeriods(tenantId: string, selectedPeriod: string 
 export async function getPeriodOptions(period?: string): Promise<PeriodOptions> {
   const user = await requireTenantContext();
   const selected = selectedPeriodFromInput(period);
+  const bounds = resolvePeriodBounds(selected);
   return withTenantContext(user.tenantId, async () => ({
     selected,
     available: await collectAvailablePeriods(user.tenantId, selected),
+    from: bounds.from,
+    to: bounds.to,
+    label: bounds.label,
   }));
 }
 
@@ -226,6 +256,7 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
   const user = await requireTenantContext();
   const tenant = await getTenantInfo();
   const selectedPeriod = selectedPeriodFromInput(period);
+  const bounds = resolvePeriodBounds(selectedPeriod);
 
   return withTenantContext(user.tenantId, async () => {
     const balances = await computeAccountBalances(user.tenantId, selectedPeriod);
@@ -270,11 +301,11 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
       },
     ];
 
-    // Recent transactions (last 10)
+    // Recent transactions (last 10) — universal period bounds
     const transactionConditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
-    if (selectedPeriod) {
-      transactionConditions.push(gte(transactions.date, `${selectedPeriod}-01`));
-      transactionConditions.push(lte(transactions.date, `${selectedPeriod}-31`));
+    if (bounds.from && bounds.to) {
+      transactionConditions.push(gte(transactions.date, bounds.from));
+      transactionConditions.push(lte(transactions.date, bounds.to));
     }
 
     const periodTransactions = await db()
@@ -315,9 +346,9 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
       isNull(transactions.voidedAt),
       sql`${transactions.categoryConfidence} IS NOT NULL AND ${transactions.categoryConfidence}::numeric < 0.7`,
     ];
-    if (selectedPeriod) {
-      lowConfidenceConditions.push(gte(transactions.date, `${selectedPeriod}-01`));
-      lowConfidenceConditions.push(lte(transactions.date, `${selectedPeriod}-31`));
+    if (bounds.from && bounds.to) {
+      lowConfidenceConditions.push(gte(transactions.date, bounds.from));
+      lowConfidenceConditions.push(lte(transactions.date, bounds.to));
     }
 
     const [{ count: lowConfidenceCount }] = await db()
@@ -365,6 +396,9 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
       lowConfidenceCount: Number(lowConfidenceCount) || 0,
       availablePeriods,
       selectedPeriod,
+      periodFrom: bounds.from,
+      periodTo: bounds.to,
+      periodLabel: bounds.label,
       cashFlow: {
         moneyIn,
         moneyOut,
@@ -433,11 +467,12 @@ export async function listTransactions(input?: string | TransactionFilters): Pro
   const user = await requireTenantContext();
   const filters = filtersFromInput(input);
   const selectedPeriod = selectedPeriodFromInput(filters.period);
+  const bounds = resolvePeriodBounds(selectedPeriod);
   return withTenantContext(user.tenantId, async () => {
     const conditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
-    if (selectedPeriod) {
-      conditions.push(gte(transactions.date, `${selectedPeriod}-01`));
-      conditions.push(lte(transactions.date, `${selectedPeriod}-31`));
+    if (bounds.from && bounds.to) {
+      conditions.push(gte(transactions.date, bounds.from));
+      conditions.push(lte(transactions.date, bounds.to));
     }
     const rows = await db()
       .select({
@@ -564,11 +599,12 @@ export interface JournalEntryRow {
 export async function listJournalEntries(period?: string): Promise<JournalEntryRow[]> {
   const user = await requireTenantContext();
   const selectedPeriod = selectedPeriodFromInput(period);
+  const bounds = resolvePeriodBounds(selectedPeriod);
   return withTenantContext(user.tenantId, async () => {
     const conditions = [eq(journalEntries.tenantId, user.tenantId), isNull(journalEntries.voidedAt)];
-    if (selectedPeriod) {
-      conditions.push(gte(journalEntries.entryDate, `${selectedPeriod}-01`));
-      conditions.push(lte(journalEntries.entryDate, `${selectedPeriod}-31`));
+    if (bounds.from && bounds.to) {
+      conditions.push(gte(journalEntries.entryDate, bounds.from));
+      conditions.push(lte(journalEntries.entryDate, bounds.to));
     }
     const entries = await db()
       .select({
@@ -680,6 +716,7 @@ export interface ReportsData {
 export async function getReports(period?: string): Promise<ReportsData> {
   const user = await requireTenantContext();
   const selectedPeriod = selectedPeriodFromInput(period);
+  const bounds = resolvePeriodBounds(selectedPeriod);
   const balances = await computeAccountBalances(user.tenantId, selectedPeriod);
   const trialBalance: ReportRow[] = balances.map((b) => ({
     accountCode: b.code,
@@ -698,9 +735,9 @@ export async function getReports(period?: string): Promise<ReportsData> {
   const netIncome = revenue.reduce((s, r) => s + r.balance, 0) - expense.reduce((s, r) => s + r.balance, 0);
 
   const transactionConditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
-  if (selectedPeriod) {
-    transactionConditions.push(gte(transactions.date, `${selectedPeriod}-01`));
-    transactionConditions.push(lte(transactions.date, `${selectedPeriod}-31`));
+  if (bounds.from && bounds.to) {
+    transactionConditions.push(gte(transactions.date, bounds.from));
+    transactionConditions.push(lte(transactions.date, bounds.to));
   }
   const periodTransactions = await withTenantContext(user.tenantId, async () => {
     return db()

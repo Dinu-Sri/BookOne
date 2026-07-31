@@ -26,9 +26,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
     redirect('/login');
   }
 
-  const monthLabel = periodOptions.selected
-    ? new Date(periodOptions.selected + '-01').toLocaleString('en-US', { month: 'long', year: 'numeric' })
-    : 'All time';
+  const monthLabel = periodOptions.label || 'All time';
 
   const audited = entries.map((entry) => {
     const debit = entry.lines.reduce((sum, line) => sum + (line.side === 'debit' ? line.amount : 0), 0);

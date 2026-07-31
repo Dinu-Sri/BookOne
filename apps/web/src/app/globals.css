@@ -6318,8 +6318,8 @@ textarea.input {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 180px;
-  padding: 24px;
+  min-height: 120px;
+  padding: 20px 16px;
   border: 2px dashed #cbd5e1;
   border-radius: 16px;
   background: #f8fafc;
@@ -6524,7 +6524,7 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 0;
-  min-height: min(72vh, 720px);
+  min-height: 0;
   border: 1px solid var(--line, #e2e8f0);
   border-radius: 14px;
   overflow: hidden;
@@ -6833,34 +6833,39 @@ textarea.input {
   }
 }
 
-/* Viewport-locked import page — no document scroll */
+/*
+ * Compact import studio: card hugs content (no full-viewport white void).
+ * Bottom border sits under sheet + coach content; page may scroll slightly.
+ */
 .cashbook-app:has(.cashbook-import-page) {
-  height: 100dvh;
-  max-height: 100dvh;
-  overflow: hidden;
+  min-height: 100dvh;
+  height: auto;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 .cashbook-app:has(.cashbook-import-page) .cashbook-main {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+  overflow: visible;
+  display: block;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
   padding-top: 4px;
 }
 .cashbook-import-page {
-  flex: 1 1 auto;
+  flex: 0 0 auto !important;
   min-height: 0 !important;
+  height: auto !important;
   max-width: none !important;
   width: 100%;
   margin: 0 !important;
-  padding: 0 8px 4px !important;
+  padding: 0 10px 8px !important;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  overflow: hidden;
+  gap: 6px;
+  overflow: visible;
 }
 .cashbook-import-head {
   flex: 0 0 auto;
@@ -6881,76 +6886,108 @@ textarea.input {
   font-size: 12px !important;
 }
 
+/* Card = content height only (kills empty band under grid/footer) */
 .bis-workspace {
-  flex: 1 1 auto !important;
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  height: auto !important;
   min-height: 0 !important;
-  max-height: 100% !important;
-  height: 100% !important;
+  max-height: none !important;
   display: flex !important;
-  border-radius: 12px !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .bis-workspace.split {
   flex-direction: row !important;
-  align-items: stretch !important;
+  /* Hug each pane’s content — no equal-stretch void under coach/sheet */
+  align-items: flex-start !important;
+  background: #f8fafc !important; /* under shorter column matches sheet */
+}
+.bis-workspace.single {
+  max-width: 520px !important;
+  margin: 8px auto 0 !important;
+  align-self: center;
 }
 .bis-pane-sheet {
   flex: 1 1 62% !important;
   min-width: 0 !important;
   min-height: 0 !important;
-  max-height: 100% !important;
+  height: auto !important;
+  max-height: none !important;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  align-self: flex-start !important;
+  background: #f8fafc !important;
 }
 .bis-pane-step {
   flex: 0 0 300px !important;
   width: 300px !important;
-  max-width: 34% !important;
+  max-width: 36% !important;
   min-height: 0 !important;
-  max-height: 100% !important;
-  overflow: hidden !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
   display: flex !important;
   flex-direction: column !important;
+  justify-content: flex-start !important;
+  align-self: flex-start !important;
+  border-left: 1px solid var(--line, #e2e8f0);
+  background: #fff !important;
+  /* When sheet is taller, coach column still ends at its footer (no void) */
+  box-shadow: -1px 0 0 transparent;
 }
 .bis-workspace.single .bis-pane-step {
   width: 100% !important;
   max-width: 100% !important;
-  flex: 1 !important;
+  flex: 0 0 auto !important;
 }
 .bis-step-top {
-  flex: 0 0 auto;
+  flex: 0 0 auto !important;
   padding: 10px 12px 6px !important;
 }
 .bis-q {
-  font-size: 16px !important;
+  font-size: 15px !important;
 }
+/* Body + footer pack together — no grow into empty space */
 .bis-step-body {
-  flex: 1 1 auto !important;
+  flex: 0 1 auto !important;
   min-height: 0 !important;
+  max-height: min(52vh, 420px) !important;
   overflow: auto !important;
   padding: 8px 12px !important;
   gap: 8px !important;
+  justify-content: flex-start !important;
+  align-content: flex-start !important;
 }
 .bis-step-foot {
-  flex: 0 0 auto;
+  flex: 0 0 auto !important;
+  margin-top: 0 !important; /* sit directly under coach content */
   padding: 8px 12px !important;
 }
 
+/* Sheet sizes to table + chrome (no flex-grow void under pager) */
 .bis-excel {
-  flex: 1 1 auto !important;
+  flex: 0 0 auto !important;
+  height: auto !important;
   min-height: 0 !important;
-  max-height: 100% !important;
+  max-height: none !important;
   overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 .bis-excel-scroll {
-  flex: 1 1 auto !important;
+  flex: 0 1 auto !important;
+  height: auto !important;
   min-height: 0 !important;
+  max-height: min(48vh, 380px) !important;
   overflow: auto !important;
 }
 .bis-excel-bar,
 .bis-excel-pager,
 .bis-excel-legend {
-  flex: 0 0 auto;
+  flex: 0 0 auto !important;
 }
 .bis-excel-pager {
   display: flex;
@@ -6992,44 +7029,165 @@ textarea.input {
   cursor: pointer;
 }
 
+/* Upload drop zone — compact, not half-screen */
+.bis-workspace.single .bis-drop {
+  min-height: 140px !important;
+  padding: 28px 16px !important;
+  margin-bottom: 4px;
+}
+
 @media (max-width: 900px) {
   .bis-workspace.split {
     flex-direction: column !important;
+    align-items: stretch !important;
   }
   .bis-pane-sheet {
-    flex: 0 0 45% !important;
-    max-height: 45% !important;
+    flex: 0 0 auto !important;
+    max-height: none !important;
     border-right: 0 !important;
     border-bottom: 1px solid var(--line, #e2e8f0) !important;
   }
   .bis-pane-step {
     width: 100% !important;
     max-width: 100% !important;
-    flex: 1 1 55% !important;
+    flex: 0 0 auto !important;
+  }
+  .bis-step-body {
+    max-height: min(40vh, 320px) !important;
+  }
+  .bis-excel-scroll {
+    max-height: min(36vh, 280px) !important;
   }
 }
 
-/* ── Compact coach UI (post audit round-2) ── */
+/* Override older min-height that forced tall empty cards */
 .bis-workspace {
-  align-items: stretch !important;
-}
-.bis-workspace.split {
-  /* content packs from top; sheet fills remaining height only */
   min-height: 0 !important;
 }
 .bis-pane-sheet {
-  display: flex !important;
-  flex-direction: column !important;
+  min-height: 0 !important;
 }
-.bis-pane-step {
-  display: flex !important;
-  flex-direction: column !important;
-  justify-content: flex-start !important;
+
+/* ── Problems detail modal (review) ── */
+.bis-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
 }
-.bis-step-body {
-  justify-content: flex-start !important;
-  align-content: flex-start !important;
+.bis-modal {
+  width: min(560px, 100%);
+  max-height: min(84dvh, 720px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
 }
+.bis-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fef2f2;
+}
+.bis-modal-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #7f1d1d;
+}
+.bis-modal-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+.bis-modal-close {
+  flex-shrink: 0;
+  min-height: 36px;
+  min-width: 36px;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fff;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: #991b1b;
+  cursor: pointer;
+  line-height: 1;
+}
+.bis-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bis-modal-issue {
+  border: 1.5px solid #fecaca;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bis-modal-issue-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bis-modal-issue-head strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: #7f1d1d;
+}
+.bis-modal-issue-head span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+.bis-modal-steps {
+  margin: 0;
+  padding: 0 0 0 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.45;
+}
+.bis-modal-steps li { margin-bottom: 3px; }
+.bis-modal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 140px;
+  overflow: auto;
+  padding: 6px;
+  border-radius: 8px;
+  background: #fef2f2;
+}
+.bis-modal-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+.bis-modal-foot .bis-btn { flex: 1 1 auto; min-width: 120px; justify-content: center; }
 
 .bis-step-top.tone-blue { background: linear-gradient(180deg, #eff6ff 0%, #fff 100%); }
 .bis-step-top.tone-yellow { background: linear-gradient(180deg, #fef9c3 0%, #fff 100%); }

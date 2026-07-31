@@ -6,6 +6,7 @@ import {
   Calendar,
   CheckCircle2,
   Columns3,
+  ExternalLink,
   FileSpreadsheet,
   LayoutList,
   Loader2,
@@ -13,6 +14,7 @@ import {
   Rows3,
   SkipForward,
   Wallet,
+  X,
 } from 'lucide-react';
 import {
   commitStudioImport,
@@ -56,6 +58,86 @@ function formatRs(n: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/** Clear fix guidance for the review problems modal */
+function fixGuideForIssue(type: string): { how: string; steps: string[] } {
+  switch (type) {
+    case 'unknown_label':
+      return {
+        how: 'Bank used a money code we do not know yet (not plain DR/CR).',
+        steps: [
+          'Tap “Resolve labels one by one”.',
+          'For each code, choose Money out, Money in, or Skip those rows.',
+          'We re-check the file after each choice.',
+        ],
+      };
+    case 'invalid_date':
+    case 'ambiguous_date':
+      return {
+        how: 'Some rows have a missing or unclear date.',
+        steps: [
+          'Tap Fix → Date step.',
+          'Tap the correct date column on the sheet (yellow).',
+          'If the bank uses DD/MM, keep that column; skip junk header rows if needed.',
+        ],
+      };
+    case 'both_in_out':
+      return {
+        how: 'A row has values in both Money out and Money in columns.',
+        steps: [
+          'Tap Fix → Money step.',
+          'Confirm Out and In columns are not the same column.',
+          'Or re-map layout to Amount + type if the bank uses DR/CR.',
+        ],
+      };
+    case 'money_setup':
+    case 'unknown_direction':
+    case 'empty_amount':
+      return {
+        how: 'Money columns are not set up correctly for this layout.',
+        steps: [
+          'Tap Fix → Money step.',
+          'Pick the layout that matches your file (Out+In, Amount+type, …).',
+          'Tap the correct columns on the sheet, then Review again.',
+        ],
+      };
+    case 'balance_mismatch':
+      return {
+        how: 'Opening + money in − money out does not equal closing.',
+        steps: [
+          'Open “Opening / closing balance” on Review.',
+          'Clear both fields if you are not sure, or correct the numbers.',
+          'Fix any red problem rows first if amounts look wrong.',
+        ],
+      };
+    case 'duplicate_row':
+      return {
+        how: 'Two rows look identical (same date, amount, description).',
+        steps: [
+          'Check the sheet for repeated lines.',
+          'Save good lines only to skip duplicates, or fix the file and re-import.',
+        ],
+      };
+    case 'repeated_header':
+    case 'excluded_summary':
+      return {
+        how: 'Header or summary rows are mixed into the data.',
+        steps: [
+          'Tap Fix → header step.',
+          'Select the true column-name row (blue).',
+          'Review again — summary rows are skipped automatically when possible.',
+        ],
+      };
+    default:
+      return {
+        how: 'This row could not be read safely.',
+        steps: [
+          'Use Fix to jump to the related mapping step.',
+          'Or “Save good lines only” to import the rest without this row.',
+        ],
+      };
+  }
 }
 
 const STEP_META: Record<Phase, { step: StudioStepId; index: number }> = {
@@ -119,6 +201,8 @@ export function BankImportStudioWizard({
   /** One-by-one unknown-label queue (issue wizard) */
   const [resolveQueue, setResolveQueue] = useState<UnknownLabelIssue[]>([]);
   const [resolveIdx, setResolveIdx] = useState(0);
+  /** Full problems + fix steps modal on review */
+  const [problemsOpen, setProblemsOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const idempotencyRef = useRef(`studio-${Date.now()}`);
@@ -1105,158 +1189,295 @@ export function BankImportStudioWizard({
     const canImportGoodOnly = t.readyCount > 0;
     const errorIssues = t.issues.filter((i) => i.severity === 'error');
     const unknownLabelCount = collectUnknownMoneyLabels(t.lines).length;
-    const problemLines = t.lines.filter((l) => l.validationStatus === 'error').slice(0, 8);
+    const allProblemLines = t.lines.filter((l) => l.validationStatus === 'error');
+    const problemLinesPreview = allProblemLines.slice(0, 3);
 
     return (
-      <StudioShell
-        step={meta.step}
-        stepIndex={meta.index}
-        stepTotal={9}
-        title="Ready to save?"
-        tone="purple"
-        icon={<Columns3 size={18} />}
-        sheet={sheetPane}
-        pending={pending}
-        onBack={() => {
-          const unknowns = collectUnknownMoneyLabels(t.lines);
-          if (unknowns.length > 0) {
-            setResolveQueue(unknowns);
-            setResolveIdx(0);
-            setPhase('resolve');
-          } else {
-            setPhase('money');
-          }
-        }}
-        onContinue={() => doCommit()}
-        continueLabel="Save bank lines"
-        continueDisabled={!canImportAll || pending}
-        continueHint={canImportAll ? null : block}
-      >
-        <div className="bis-review-hero">
-          <div className="bis-hero-card">
-            <span>Good</span>
-            <strong>{t.readyCount + t.warningCount}</strong>
-          </div>
-          <div className="bis-hero-card in">
-            <span>Money in</span>
-            <strong>{formatRs(t.totals.totalMoneyIn)}</strong>
-          </div>
-          <div className="bis-hero-card out">
-            <span>Money out</span>
-            <strong>{formatRs(t.totals.totalMoneyOut)}</strong>
-          </div>
-        </div>
-
-        {t.errorCount > 0 ? (
-          <div className="bis-fix-panel">
-            <div className="bis-fix-head">
-              <strong>{t.errorCount} problem line(s)</strong>
-              <span>Red rows on the sheet · resolve labels one by one or skip</span>
+      <>
+        <StudioShell
+          step={meta.step}
+          stepIndex={meta.index}
+          stepTotal={9}
+          title="Ready to save?"
+          tone="purple"
+          icon={<Columns3 size={18} />}
+          sheet={sheetPane}
+          pending={pending}
+          onBack={() => {
+            setProblemsOpen(false);
+            const unknowns = collectUnknownMoneyLabels(t.lines);
+            if (unknowns.length > 0) {
+              setResolveQueue(unknowns);
+              setResolveIdx(0);
+              setPhase('resolve');
+            } else {
+              setPhase('money');
+            }
+          }}
+          onContinue={() => doCommit()}
+          continueLabel="Save bank lines"
+          continueDisabled={!canImportAll || pending}
+          continueHint={canImportAll ? null : block}
+        >
+          <div className="bis-review-hero">
+            <div className="bis-hero-card">
+              <span>Good</span>
+              <strong>{t.readyCount + t.warningCount}</strong>
             </div>
-            {unknownLabelCount > 0 ? (
+            <div className="bis-hero-card in">
+              <span>Money in</span>
+              <strong>{formatRs(t.totals.totalMoneyIn)}</strong>
+            </div>
+            <div className="bis-hero-card out">
+              <span>Money out</span>
+              <strong>{formatRs(t.totals.totalMoneyOut)}</strong>
+            </div>
+          </div>
+
+          {t.errorCount > 0 ? (
+            <div className="bis-fix-panel">
+              <div className="bis-fix-head">
+                <strong>{t.errorCount} problem line(s)</strong>
+                <span>Red on sheet · open details to fix safely</span>
+              </div>
               <button
                 type="button"
                 className="bis-btn primary bis-btn-block"
                 disabled={pending}
-                onClick={() => enterResolveWizard(t.lines)}
+                onClick={() => setProblemsOpen(true)}
               >
-                Resolve {unknownLabelCount} unknown label
-                {unknownLabelCount === 1 ? '' : 's'} one by one
-                <ArrowRight size={14} />
+                <ExternalLink size={14} />
+                View all problems & how to fix
               </button>
-            ) : null}
-            <ul className="bis-fix-list">
-              {errorIssues.map((i) => (
-                <li key={i.type}>
-                  <div className="bis-fix-text">
-                    <strong>
-                      {i.count}× {i.title}
-                    </strong>
-                    {i.sample ? <span>{i.sample}</span> : null}
-                  </div>
-                  <button type="button" className="bis-fix-btn" onClick={() => goFixIssue(i.type)}>
-                    {i.type === 'unknown_label' ? 'Resolve' : 'Fix'}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {problemLines.length > 0 ? (
-              <div className="bis-problem-lines">
-                <p className="bis-money-label">Problem rows (on sheet)</p>
-                {problemLines.map((l) => (
-                  <div key={l.rowNumber} className="bis-sample-row err">
-                    <span className="d">R{l.rowNumber}</span>
-                    <span className="t" title={l.validationMessages.join('; ')}>
-                      {l.description || l.validationMessages[0] || '—'}
+              {unknownLabelCount > 0 ? (
+                <button
+                  type="button"
+                  className="bis-btn secondary bis-btn-block"
+                  disabled={pending}
+                  onClick={() => enterResolveWizard(t.lines)}
+                >
+                  Resolve {unknownLabelCount} label{unknownLabelCount === 1 ? '' : 's'}
+                  <ArrowRight size={14} />
+                </button>
+              ) : null}
+              {problemLinesPreview.length > 0 ? (
+                <div className="bis-problem-lines">
+                  {problemLinesPreview.map((l) => (
+                    <div key={l.rowNumber} className="bis-sample-row err">
+                      <span className="d">R{l.rowNumber}</span>
+                      <span className="t" title={l.validationMessages.join('; ')}>
+                        {l.description || l.validationMessages[0] || '—'}
+                      </span>
+                    </div>
+                  ))}
+                  {allProblemLines.length > 3 ? (
+                    <p className="bis-money-label">+{allProblemLines.length - 3} more in details</p>
+                  ) : null}
+                </div>
+              ) : null}
+              {canImportGoodOnly ? (
+                <button
+                  type="button"
+                  className="bis-btn secondary bis-btn-block"
+                  disabled={pending}
+                  onClick={() => doCommit({ skipErrorLines: true })}
+                >
+                  Save {t.readyCount + t.warningCount} good lines only
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="bis-status-ok">
+              <CheckCircle2 size={16} />
+              Looks good · cashbook not changed yet
+            </div>
+          )}
+
+          {t.errorCount === 0 ? (
+            <details className="bis-advanced">
+              <summary>Sample good lines ({t.samplePreview.length})</summary>
+              <div className="bis-sample-list">
+                {t.samplePreview.slice(0, 4).map((l) => (
+                  <div key={l.rowNumber} className="bis-sample-row">
+                    <span className="d">{l.date}</span>
+                    <span className="t">{l.description}</span>
+                    <span className={l.signedAmount < 0 ? 'neg' : 'pos'}>
+                      {formatRs(l.signedAmount)}
                     </span>
-                    <span className="neg">{l.validationMessages[0]?.slice(0, 24) ?? 'error'}</span>
                   </div>
                 ))}
               </div>
-            ) : null}
-            {canImportGoodOnly ? (
-              <button
-                type="button"
-                className="bis-btn secondary bis-btn-block"
-                disabled={pending}
-                onClick={() => doCommit({ skipErrorLines: true })}
-              >
-                Save {t.readyCount + t.warningCount} good lines only
-              </button>
-            ) : null}
-          </div>
-        ) : (
-          <div className="bis-status-ok">
-            <CheckCircle2 size={16} />
-            Looks good · cashbook not changed yet
-          </div>
-        )}
+            </details>
+          ) : null}
 
-        <p className="bis-money-label">Sample good lines</p>
-        <div className="bis-sample-list">
-          {t.samplePreview.slice(0, 5).map((l) => (
-            <div key={l.rowNumber} className="bis-sample-row">
-              <span className="d">{l.date}</span>
-              <span className="t">{l.description}</span>
-              <span className={l.signedAmount < 0 ? 'neg' : 'pos'}>{formatRs(l.signedAmount)}</span>
+          <details className="bis-advanced">
+            <summary>Opening / closing balance (optional)</summary>
+            <div className="bis-two-col tight">
+              <label className="bis-field">
+                <span>Open</span>
+                <input
+                  inputMode="decimal"
+                  value={openingBalance}
+                  onChange={(e) => setOpeningBalance(e.target.value)}
+                  placeholder="optional"
+                />
+              </label>
+              <label className="bis-field">
+                <span>Close</span>
+                <input
+                  inputMode="decimal"
+                  value={closingBalance}
+                  onChange={(e) => setClosingBalance(e.target.value)}
+                  placeholder="optional"
+                />
+              </label>
             </div>
-          ))}
-        </div>
+          </details>
 
-        <details className="bis-advanced">
-          <summary>Opening / closing balance (optional)</summary>
-          <div className="bis-two-col tight">
-            <label className="bis-field">
-              <span>Open</span>
-              <input
-                inputMode="decimal"
-                value={openingBalance}
-                onChange={(e) => setOpeningBalance(e.target.value)}
-                placeholder="optional"
-              />
-            </label>
-            <label className="bis-field">
-              <span>Close</span>
-              <input
-                inputMode="decimal"
-                value={closingBalance}
-                onChange={(e) => setClosingBalance(e.target.value)}
-                placeholder="optional"
-              />
-            </label>
+          <label className="bis-check">
+            <input
+              type="checkbox"
+              checked={saveProfile}
+              onChange={(e) => setSaveProfile(e.target.checked)}
+            />
+            <span>Remember this bank layout</span>
+          </label>
+          {error ? <p className="bis-error">{error}</p> : null}
+        </StudioShell>
+
+        {problemsOpen ? (
+          <div
+            className="bis-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bis-problems-title"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setProblemsOpen(false);
+            }}
+          >
+            <div className="bis-modal">
+              <div className="bis-modal-head">
+                <div>
+                  <h2 id="bis-problems-title">{t.errorCount} problem line(s)</h2>
+                  <p>Each issue type with steps. Red rows are highlighted on the sheet.</p>
+                </div>
+                <button
+                  type="button"
+                  className="bis-modal-close"
+                  aria-label="Close"
+                  onClick={() => setProblemsOpen(false)}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="bis-modal-body">
+                {errorIssues.length === 0 ? (
+                  <p className="bis-money-label">No grouped issues — see rows below.</p>
+                ) : (
+                  errorIssues.map((i) => {
+                    const guide = fixGuideForIssue(i.type);
+                    const rows = allProblemLines
+                      .filter((l) =>
+                        l.validationMessages.some((m) =>
+                          m.toLowerCase().includes(
+                            i.type === 'unknown_label'
+                              ? 'unknown money'
+                              : i.title.toLowerCase().slice(0, 12),
+                          ),
+                        ) ||
+                        (i.type === 'unknown_label' && Boolean(l.unknownLabel)) ||
+                        (i.type === 'invalid_date' &&
+                          l.validationMessages.some((m) => m.toLowerCase().includes('date'))),
+                      )
+                      .slice(0, 12);
+                    const rowFallback =
+                      rows.length > 0
+                        ? rows
+                        : allProblemLines.slice(0, 8);
+                    return (
+                      <div key={i.type} className="bis-modal-issue">
+                        <div className="bis-modal-issue-head">
+                          <strong>
+                            {i.count}× {i.title}
+                          </strong>
+                          {i.sample ? <span>e.g. {i.sample}</span> : null}
+                        </div>
+                        <p className="bis-money-label" style={{ margin: 0 }}>
+                          {guide.how}
+                        </p>
+                        <ol className="bis-modal-steps">
+                          {guide.steps.map((s) => (
+                            <li key={s}>{s}</li>
+                          ))}
+                        </ol>
+                        {rowFallback.length > 0 ? (
+                          <div className="bis-modal-rows">
+                            {rowFallback.map((l) => (
+                              <div key={l.rowNumber} className="bis-sample-row err">
+                                <span className="d">R{l.rowNumber}</span>
+                                <span className="t" title={l.validationMessages.join('; ')}>
+                                  {l.description || '—'}
+                                  {l.unknownLabel ? ` · ${l.unknownLabel}` : ''}
+                                </span>
+                                <span className="neg">
+                                  {l.validationMessages[0]?.slice(0, 28) ?? 'error'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="bis-fix-btn"
+                          onClick={() => {
+                            setProblemsOpen(false);
+                            goFixIssue(i.type);
+                          }}
+                        >
+                          {i.type === 'unknown_label' ? 'Resolve labels' : 'Go fix this'}
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="bis-modal-foot">
+                {unknownLabelCount > 0 ? (
+                  <button
+                    type="button"
+                    className="bis-btn primary"
+                    onClick={() => {
+                      setProblemsOpen(false);
+                      enterResolveWizard(t.lines);
+                    }}
+                  >
+                    Resolve labels
+                  </button>
+                ) : null}
+                {canImportGoodOnly ? (
+                  <button
+                    type="button"
+                    className="bis-btn secondary"
+                    onClick={() => {
+                      setProblemsOpen(false);
+                      doCommit({ skipErrorLines: true });
+                    }}
+                  >
+                    Save good lines only
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="bis-btn secondary"
+                  onClick={() => setProblemsOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
-        </details>
-
-        <label className="bis-check">
-          <input
-            type="checkbox"
-            checked={saveProfile}
-            onChange={(e) => setSaveProfile(e.target.checked)}
-          />
-          <span>Remember this bank layout</span>
-        </label>
-        {error ? <p className="bis-error">{error}</p> : null}
-      </StudioShell>
+        ) : null}
+      </>
     );
   }
 

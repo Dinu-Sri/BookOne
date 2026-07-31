@@ -9,6 +9,8 @@ import { interpretAmount, type AmountRules, suggestAmountModeFromHeaders } from 
 import { checkStatementBalance, totalsFromSignedAmounts } from './validate-balance';
 import { detectHeaderAndMap } from './templates';
 import { lineFingerprint } from './fingerprint';
+import { annotateBalanceContinuity } from './balance';
+import { assertWorkbookReadable, friendlyWorkbookError } from './file-safety';
 import type { StudioLine, StudioMapping, StudioTransformResult } from './studio-transform-types';
 
 export type {
@@ -28,17 +30,28 @@ export function loadWorkbookMatrix(
   fileName: string,
   sheetName?: string,
 ): { matrix: unknown[][]; sheetNames: string[]; sheetName: string } {
+  const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  try {
+    assertWorkbookReadable(buf, fileName);
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(String(e));
+  }
   const lower = fileName.toLowerCase();
   let workbook: XLSX.WorkBook;
-  if (lower.endsWith('.csv') || lower.endsWith('.txt') || lower.endsWith('.tsv')) {
-    const text = Buffer.from(bytes).toString('utf8').replace(/^\uFEFF/, '');
-    workbook = XLSX.read(text, {
-      type: 'string',
-      raw: false,
-      FS: lower.endsWith('.tsv') ? '\t' : undefined,
-    });
-  } else {
-    workbook = XLSX.read(bytes, { type: 'buffer', cellDates: true, raw: false });
+  try {
+    if (lower.endsWith('.csv') || lower.endsWith('.txt') || lower.endsWith('.tsv')) {
+      const text = Buffer.from(buf).toString('utf8').replace(/^\uFEFF/, '');
+      workbook = XLSX.read(text, {
+        type: 'string',
+        raw: false,
+        FS: lower.endsWith('.tsv') ? '\t' : undefined,
+      });
+    } else {
+      workbook = XLSX.read(buf, { type: 'buffer', cellDates: true, raw: false });
+    }
+  } catch (e) {
+    const friendly = friendlyWorkbookError(e, fileName);
+    throw new Error(friendly ?? (e instanceof Error ? e.message : 'Could not read file.'));
   }
   const names = workbook.SheetNames ?? [];
   const name =
@@ -296,9 +309,47 @@ export function transformStudioMatrix(
     }
   }
 
-  const validAmounts = lines
-    .filter((l) => l.validationStatus !== 'excluded' && l.validationStatus !== 'error')
-    .map((l) => l.signedAmount);
+  // Running-balance continuity when balance column mapped (multi-statement hardening)
+  const hasBalanceCol = mapping.balanceCol != null && mapping.balanceCol >= 0;
+  if (hasBalanceCol) {
+    const cont = annotateBalanceContinuity(
+      lines.map((l) => ({
+        rowNumber: l.rowNumber,
+        date: l.date,
+        description: l.description,
+        amountSigned: l.signedAmount,
+        direction: l.direction,
+        balanceAfter: l.balanceAfter,
+        fingerprint: l.fingerprint,
+        dateConfidence: l.dateConfidence,
+        raw: l.raw,
+      })),
+    );
+    let breaks = 0;
+    for (const line of lines) {
+      if (cont.get(line.rowNumber) === 'BALANCE_BREAK') {
+        breaks += 1;
+        line.validationMessages = [
+          ...line.validationMessages,
+          'Running balance does not follow previous line',
+        ];
+        if (line.validationStatus === 'valid') line.validationStatus = 'warning';
+        const rawFlags = Array.isArray((line.raw as { _flags?: unknown })._flags)
+          ? ([...(line.raw as { _flags: string[] })._flags] as string[])
+          : [];
+        if (!rawFlags.includes('BALANCE_BREAK')) rawFlags.push('BALANCE_BREAK');
+        line.raw = { ...line.raw, _flags: rawFlags };
+      }
+    }
+    if (breaks > 0) {
+      bump(
+        'balance_break',
+        'warning',
+        `${breaks} running-balance break(s) — check missing or reordered rows`,
+      );
+    }
+  }
+
   // Include error rows in totals only if they have amount? Spec: ready rows for equation
   const totalsBase = totalsFromSignedAmounts(
     lines.filter((l) => l.validationStatus === 'valid' || l.validationStatus === 'warning').map((l) => l.signedAmount),

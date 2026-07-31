@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
+  buildOverlapReport,
   fileSha256,
   inspectStatementFile,
   loadWorkbookMatrix,
@@ -25,7 +26,9 @@ import {
   db,
   desc,
   eq,
+  inArray,
   isNull,
+  or,
   withTenantContext,
 } from '@bookone/db';
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -388,6 +391,8 @@ export type StudioPreviewPayload = {
   sheetGridStartRow: number;
   sheetColCount: number;
   sheetRowCount: number;
+  /** Multi-file / period overlap + continuity hints (not blocking) */
+  hardeningWarnings: string[];
 };
 
 /**
@@ -432,6 +437,71 @@ export async function previewStudioTransform(formData: FormData): Promise<
       bankAccountId,
     });
 
+    const hardeningWarnings = await withTenantContext(user.tenantId, async () => {
+      const fps = transform.lines
+        .filter((l) => l.validationStatus === 'valid' || l.validationStatus === 'warning')
+        .map((l) => l.fingerprint)
+        .filter(Boolean);
+      const known = new Set<string>();
+      for (let i = 0; i < fps.length; i += 400) {
+        const chunk = fps.slice(i, i + 400);
+        if (chunk.length === 0) continue;
+        const rows = await db()
+          .select({ fingerprint: bankStatementLines.fingerprint })
+          .from(bankStatementLines)
+          .where(
+            and(
+              eq(bankStatementLines.tenantId, user.tenantId),
+              isNull(bankStatementLines.voidedAt),
+              inArray(bankStatementLines.fingerprint, chunk),
+            ),
+          );
+        for (const r of rows) {
+          if (r.fingerprint) known.add(r.fingerprint);
+        }
+      }
+      const prior = await db()
+        .select({
+          fileName: bankStatementImports.fileName,
+          periodFrom: bankStatementImports.periodFrom,
+          periodTo: bankStatementImports.periodTo,
+        })
+        .from(bankStatementImports)
+        .where(
+          and(
+            eq(bankStatementImports.tenantId, user.tenantId),
+            eq(bankStatementImports.bankAccountId, bankAccountId),
+            isNull(bankStatementImports.voidedAt),
+            or(
+              inArray(bankStatementImports.wizardStatus, ['committed', 'completed']),
+              inArray(bankStatementImports.status, [
+                'committed',
+                'completed',
+                'ready',
+                'partial',
+              ]),
+            ),
+          ),
+        )
+        .orderBy(desc(bankStatementImports.createdAt))
+        .limit(12);
+      return buildOverlapReport({
+        newFingerprints: fps,
+        knownFingerprints: known,
+        newRange: {
+          from: transform.totals.periodFrom,
+          to: transform.totals.periodTo,
+        },
+        priorImports: prior,
+      }).warnings;
+    });
+
+    // Surface balance-break as preview hardening hint
+    const breakIssue = transform.issues.find((i) => i.type === 'balance_break');
+    if (breakIssue) {
+      hardeningWarnings.unshift(breakIssue.title);
+    }
+
     const headerPreviewRows = matrix
       .slice(Math.max(0, mapping.headerRowIndex - 2), mapping.headerRowIndex + 8)
       .map((row) =>
@@ -460,6 +530,7 @@ export async function previewStudioTransform(formData: FormData): Promise<
         sheetGridStartRow,
         sheetColCount: maxCols,
         sheetRowCount: matrix.length,
+        hardeningWarnings,
       },
     };
   } catch (e) {
@@ -474,7 +545,14 @@ export async function previewStudioTransform(formData: FormData): Promise<
  * Commit normalized bank lines only — no journal entries.
  */
 export async function commitStudioImport(formData: FormData): Promise<
-  { ok: true; importId: string; lineCount: number } | { ok: false; error: string }
+  | {
+      ok: true;
+      importId: string;
+      lineCount: number;
+      duplicateCount: number;
+      warnings: string[];
+    }
+  | { ok: false; error: string }
 > {
   try {
     const user = await requireTenantContext();
@@ -646,7 +724,72 @@ export async function commitStudioImport(formData: FormData): Promise<
           .where(eq(bankStatementProfiles.id, profile.id));
       }
 
-      const ready = readyLines;
+      // Cross-import fingerprint + period overlap (multi-statement continuity)
+      const fps = readyLines.map((l) => l.fingerprint).filter(Boolean);
+      const knownFp = new Set<string>();
+      for (let i = 0; i < fps.length; i += 400) {
+        const chunk = fps.slice(i, i + 400);
+        if (chunk.length === 0) continue;
+        const found = await db()
+          .select({ fingerprint: bankStatementLines.fingerprint })
+          .from(bankStatementLines)
+          .where(
+            and(
+              eq(bankStatementLines.tenantId, user.tenantId),
+              isNull(bankStatementLines.voidedAt),
+              inArray(bankStatementLines.fingerprint, chunk),
+            ),
+          );
+        for (const r of found) {
+          if (r.fingerprint) knownFp.add(r.fingerprint);
+        }
+      }
+      const priorImports = await db()
+        .select({
+          fileName: bankStatementImports.fileName,
+          periodFrom: bankStatementImports.periodFrom,
+          periodTo: bankStatementImports.periodTo,
+        })
+        .from(bankStatementImports)
+        .where(
+          and(
+            eq(bankStatementImports.tenantId, user.tenantId),
+            eq(bankStatementImports.bankAccountId, bankAccountId),
+            isNull(bankStatementImports.voidedAt),
+            or(
+              inArray(bankStatementImports.wizardStatus, ['committed', 'completed']),
+              inArray(bankStatementImports.status, [
+                'committed',
+                'completed',
+                'ready',
+                'partial',
+              ]),
+            ),
+          ),
+        )
+        .orderBy(desc(bankStatementImports.createdAt))
+        .limit(20);
+
+      const overlap = buildOverlapReport({
+        newFingerprints: fps,
+        knownFingerprints: knownFp,
+        newRange: {
+          from: transform.totals.periodFrom,
+          to: transform.totals.periodTo,
+        },
+        priorImports,
+      });
+
+      const fresh = readyLines.filter((l) => !knownFp.has(l.fingerprint));
+      const dups = readyLines.filter((l) => knownFp.has(l.fingerprint));
+      if (fresh.length === 0 && dups.length > 0) {
+        throw new Error(
+          'All lines in this file were already imported for this bank. Nothing new to save.',
+        );
+      }
+      if (fresh.length === 0) {
+        throw new Error('No valid transactions to import.');
+      }
 
       await db().transaction(async (tx) => {
         // Clear any previous draft lines
@@ -661,7 +804,7 @@ export async function commitStudioImport(formData: FormData): Promise<
             ),
           );
 
-        for (const line of ready) {
+        for (const line of fresh) {
           await tx.insert(bankStatementLines).values({
             tenantId: user.tenantId,
             importId,
@@ -685,8 +828,42 @@ export async function commitStudioImport(formData: FormData): Promise<
             confidence: line.dateConfidence.toFixed(4),
           });
         }
+        for (const line of dups) {
+          await tx.insert(bankStatementLines).values({
+            tenantId: user.tenantId,
+            importId,
+            rowNumber: String(line.rowNumber),
+            transactionDate: line.date,
+            description: line.description,
+            amount: line.signedAmount.toFixed(2),
+            status: 'duplicate',
+            raw: line.raw,
+            fingerprint: line.fingerprint,
+            direction: line.direction,
+            balanceAfter:
+              line.balanceAfter != null ? line.balanceAfter.toFixed(2) : null,
+            debitAmount: line.debitAmount.toFixed(2),
+            creditAmount: line.creditAmount.toFixed(2),
+            validationStatus: 'warning',
+            validationMessages: [
+              ...line.validationMessages,
+              'Already imported for this bank (fingerprint match)',
+            ],
+            sourceRowHash: line.sourceRowHash,
+            reconciliationStatus: 'duplicate',
+            proposedAction: 'duplicate',
+            confidence: line.dateConfidence.toFixed(4),
+          });
+        }
 
         const prevPayload = (imp.draftPayload ?? {}) as Record<string, unknown>;
+        const hardeningWarnings = [
+          ...overlap.warnings,
+          ...transform.issues
+            .filter((i) => i.severity === 'warning')
+            .map((i) => i.title)
+            .slice(0, 5),
+        ];
         await tx
           .update(bankStatementImports)
           .set({
@@ -699,9 +876,9 @@ export async function commitStudioImport(formData: FormData): Promise<
             period,
             periodFrom: transform.totals.periodFrom,
             periodTo: transform.totals.periodTo,
-            rowCount: String(ready.length),
+            rowCount: String(fresh.length + dups.length),
             matchedCount: '0',
-            unmatchedCount: String(ready.length),
+            unmatchedCount: String(fresh.length),
             openingBalance:
               mapping.openingBalance != null ? mapping.openingBalance.toFixed(2) : null,
             closingBalance:
@@ -714,6 +891,8 @@ export async function commitStudioImport(formData: FormData): Promise<
               ...prevPayload,
               mapping,
               committedAt: new Date().toISOString(),
+              hardeningWarnings,
+              duplicateCount: dups.length,
             },
             updatedAt: new Date(),
           })
@@ -730,23 +909,36 @@ export async function commitStudioImport(formData: FormData): Promise<
           userId: user.id,
           action: 'committed',
           detail: {
-            lineCount: ready.length,
+            lineCount: fresh.length,
+            duplicateCount: dups.length,
             totalMoneyIn: transform.totals.totalMoneyIn,
             totalMoneyOut: transform.totals.totalMoneyOut,
             balanceOk: transform.balanceCheck.ok,
             saveProfile,
+            hardeningWarnings,
           },
         });
       });
 
-      return ready.length;
+      return {
+        lineCount: fresh.length,
+        duplicateCount: dups.length,
+        warnings: overlap.warnings,
+      };
     });
 
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
+    revalidatePath('/cashbook/match');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
-    return { ok: true, importId, lineCount };
+    return {
+      ok: true,
+      importId,
+      lineCount: lineCount.lineCount,
+      duplicateCount: lineCount.duplicateCount,
+      warnings: lineCount.warnings,
+    };
   } catch (e) {
     return {
       ok: false,

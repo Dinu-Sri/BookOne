@@ -27,9 +27,15 @@ export type SlBankPresetId =
   | 'seylan_generic'
   | 'dfcc_generic'
   | 'nsb_generic'
+  | 'panasia_generic'
+  | 'union_generic'
+  | 'amana_generic'
+  | 'cargills_generic'
+  | 'hdfc_generic'
+  | 'sdb_generic'
   | 'debit_credit_generic'
   | 'amount_drcr_generic'
-  | 'signed_amount_generic';
+  | 'signed_amount_generic'
 
 export type SlBankPreset = {
   id: SlBankPresetId;
@@ -191,6 +197,92 @@ export const SL_BANK_PRESETS: SlBankPreset[] = [
     label: 'NSB (National Savings Bank)',
     matchHints: ['nsb', 'national savings'],
     description: 'Often Debit/Credit; use Manual if your download is different.',
+    signConvention: 'debit_credit',
+    headerHints: {
+      date: ['date', 'transaction date'],
+      description: ['description', 'particulars'],
+      debit: ['debit'],
+      credit: ['credit'],
+      balance: ['balance'],
+    },
+  },
+  {
+    id: 'panasia_generic',
+    label: 'Pan Asia Bank',
+    matchHints: ['pan asia', 'panasia', 'pabc'],
+    description: 'Typical Debit/Credit export; confirm columns on first import.',
+    signConvention: 'debit_credit',
+    headerHints: {
+      date: ['date', 'transaction date', 'txn date'],
+      description: ['description', 'particulars', 'narrative'],
+      debit: ['debit', 'withdrawal'],
+      credit: ['credit', 'deposit'],
+      balance: ['balance'],
+    },
+  },
+  {
+    id: 'union_generic',
+    label: 'Union Bank of Colombo',
+    matchHints: ['union bank', 'ubc'],
+    description: 'Debit/Credit style; use Manual if headers differ.',
+    signConvention: 'debit_credit',
+    headerHints: {
+      date: ['date', 'transaction date'],
+      description: ['description', 'particulars'],
+      debit: ['debit'],
+      credit: ['credit'],
+      balance: ['balance'],
+    },
+  },
+  {
+    id: 'amana_generic',
+    label: 'Amana Bank',
+    matchHints: ['amana'],
+    description: 'Often Debit/Credit or Amount+type — confirm after Auto-detect.',
+    signConvention: 'debit_credit',
+    headerHints: {
+      date: ['date', 'transaction date', 'value date'],
+      description: ['description', 'particulars', 'narration'],
+      debit: ['debit', 'withdrawal'],
+      credit: ['credit', 'deposit'],
+      amount: ['amount'],
+      type: ['dr/cr', 'type'],
+      balance: ['balance'],
+    },
+  },
+  {
+    id: 'cargills_generic',
+    label: 'Cargills Bank',
+    matchHints: ['cargills'],
+    description: 'Typical SL Debit/Credit statement layout.',
+    signConvention: 'debit_credit',
+    headerHints: {
+      date: ['date', 'transaction date'],
+      description: ['description', 'particulars'],
+      debit: ['debit'],
+      credit: ['credit'],
+      balance: ['balance'],
+    },
+  },
+  {
+    id: 'hdfc_generic',
+    label: 'HDFC Bank / Building Society',
+    matchHints: ['hdfc'],
+    description: 'Debit/Credit starter map; adjust if your export uses Amount + DR/CR.',
+    signConvention: 'debit_credit',
+    headerHints: {
+      date: ['date', 'transaction date'],
+      description: ['description', 'particulars'],
+      debit: ['debit'],
+      credit: ['credit'],
+      balance: ['balance'],
+    },
+  },
+  {
+    id: 'sdb_generic',
+    label: 'Sanasa Development Bank (SDB)',
+    matchHints: ['sdb', 'sanasa'],
+    description: 'Typical Debit/Credit; confirm columns on first import.',
     signConvention: 'debit_credit',
     headerHints: {
       date: ['date', 'transaction date'],

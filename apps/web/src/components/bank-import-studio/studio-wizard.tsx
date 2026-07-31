@@ -197,6 +197,7 @@ export function BankImportStudioWizard({
   const [saveProfile, setSaveProfile] = useState(true);
   const [importedCount, setImportedCount] = useState(0);
   const [importedId, setImportedId] = useState<string | null>(null);
+  const [importNotes, setImportNotes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   /** One-by-one unknown-label queue (issue wizard) */
@@ -690,6 +691,14 @@ export function BankImportStudioWizard({
         }
         setImportedCount(res.lineCount);
         setImportedId(res.importId);
+        setImportNotes(
+          [
+            res.duplicateCount > 0
+              ? `${res.duplicateCount} already-imported line(s) marked duplicate (not re-saved as new).`
+              : '',
+            ...(res.warnings ?? []).slice(0, 4),
+          ].filter(Boolean),
+        );
         setPhase('done');
       });
     });
@@ -1294,6 +1303,26 @@ export function BankImportStudioWizard({
             </div>
           )}
 
+          {(preview.hardeningWarnings?.length ?? 0) > 0 ||
+          t.issues.some((i) => i.severity === 'warning') ? (
+            <div className="bis-harden-warn">
+              <p className="bis-money-label">Checks (not blocking)</p>
+              <ul>
+                {(preview.hardeningWarnings ?? []).slice(0, 4).map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+                {t.issues
+                  .filter((i) => i.severity === 'warning')
+                  .slice(0, 3)
+                  .map((i) => (
+                    <li key={i.type}>
+                      {i.count}× {i.title}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ) : null}
+
           {t.errorCount === 0 ? (
             <details className="bis-advanced">
               <summary>Sample good lines ({t.samplePreview.length})</summary>
@@ -1495,11 +1524,18 @@ export function BankImportStudioWizard({
         compact
       >
         <div className="bis-done-card">
-          <strong>{importedCount} lines</strong>
+          <strong>{importedCount} lines saved</strong>
           <p>
             Stored as bank statement data only. Next: match to existing cashbook entries (no new
             journals yet).
           </p>
+          {importNotes.length > 0 ? (
+            <ul className="bis-done-notes">
+              {importNotes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
         <div className="bis-done-actions">
           <a

@@ -5,6 +5,7 @@
 import * as XLSX from 'xlsx';
 import { detectHeaderAndMap } from './templates';
 import { parseAmountCell, parseStatementDate } from './normalize';
+import { assertWorkbookReadable, friendlyWorkbookError } from './file-safety';
 
 export type InspectSheet = {
   name: string;
@@ -153,19 +154,10 @@ export function inspectStatementFile(
     };
   }
 
-  let workbook: XLSX.WorkBook;
+  const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   try {
-    if (format === 'csv' || format === 'tsv') {
-      const text = Buffer.from(bytes).toString('utf8').replace(/^\uFEFF/, '');
-      workbook = XLSX.read(text, {
-        type: 'string',
-        raw: false,
-        FS: format === 'tsv' ? '\t' : undefined,
-      });
-    } else {
-      workbook = XLSX.read(bytes, { type: 'buffer', cellDates: true, raw: false });
-    }
-  } catch {
+    assertWorkbookReadable(buf, fileName);
+  } catch (e) {
     return {
       fileName,
       format,
@@ -175,7 +167,38 @@ export function inspectStatementFile(
       detectedAccountHints: [],
       detectedCurrency: null,
       warnings: [
-        'We could not read this file. It may be password-protected or damaged. Download a new statement from your bank.',
+        e instanceof Error
+          ? e.message
+          : 'We could not read this file. It may be password-protected or damaged.',
+      ],
+    };
+  }
+
+  let workbook: XLSX.WorkBook;
+  try {
+    if (format === 'csv' || format === 'tsv') {
+      const text = Buffer.from(buf).toString('utf8').replace(/^\uFEFF/, '');
+      workbook = XLSX.read(text, {
+        type: 'string',
+        raw: false,
+        FS: format === 'tsv' ? '\t' : undefined,
+      });
+    } else {
+      workbook = XLSX.read(buf, { type: 'buffer', cellDates: true, raw: false });
+    }
+  } catch (e) {
+    const friendly = friendlyWorkbookError(e, fileName);
+    return {
+      fileName,
+      format,
+      sheetNames: [],
+      sheets: [],
+      bestSheetName: null,
+      detectedAccountHints: [],
+      detectedCurrency: null,
+      warnings: [
+        friendly ??
+          'We could not read this file. It may be password-protected or damaged. Download a new statement from your bank.',
       ],
     };
   }

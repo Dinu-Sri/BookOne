@@ -2,6 +2,7 @@
 
 > **Status:** **Final default** bank import path for cashbook (`/cashbook/import`)  
 > **Last updated:** 2026-07-31  
+> **Status note:** Studio path BIS-0…7 complete (import → match → create + hardening)  
 > **External research source:** `bookone_smart_bank_import_studio_spec.md`  
 > **Legacy SI notes:** `docs/STATEMENT_IMPORT_ARCHITECTURE.md`  
 > **Feature flag:** none — always on
@@ -98,7 +99,8 @@ Unknown money labels are **blocking errors**.
 | **BIS-4.2** | Issue-by-issue unknown label wizard (Out/In/Skip) | **Done** |
 | **BIS-5** | Reconciliation passes 1–3 UI (match after import) | **Done** |
 | **BIS-6** | Cashbook create rail for unmatched (explicit confirm) | **Done** |
-| **BIS-7+** | Overlap detection, advanced rules F, AI suggest only | Later |
+| **BIS-7** | Hardening: overlap, password Excel, continuity, more presets | **Done** |
+| **Later** | Advanced rule builder (mode F), AI suggest-only assist | Optional |
 
 ### BIS-5 Match UI
 
@@ -123,13 +125,29 @@ Unknown money labels are **blocking errors**.
 3. Browser confirm → posts via `recordEntry` only  
 4. **Undo creates** reverses journals from this import  
 
-### Remaining roadmap
+### BIS-7 Hardening (complete)
 
-1. **Hardening**  
-   File overlap / multi-statement continuity, password Excel, more SL presets from real exports.
+| Item | Behaviour |
+|------|-----------|
+| **Password Excel** | Detect OLE-encrypted `.xlsx`; clear “export without password” message |
+| **Fingerprint overlap** | Same bank line already imported → status `duplicate`, not re-staged as new |
+| **Period overlap / gap** | Warnings when new file overlaps or leaves a gap after prior import |
+| **Running balance** | Balance column continuity → warning issues (`balance_break`) |
+| **SL presets** | Extra banks: Pan Asia, Union, Amana, Cargills, HDFC, SDB (+ existing majors) |
+| **Exact file hash** | Same file+bank returns existing draft / blocks double-commit |
 
-2. **Not in studio / match / create**  
-   AI must not finalize debit/credit or auto-post without confirm.
+### Complete product path
+
+```text
+Upload → map → resolve labels → review (hardening warnings)
+  → save bank lines → match (exact / fuzzy / leftover)
+  → create unmatched (confirm) → undo if needed
+```
+
+### Optional later
+
+- Advanced amount rule builder (mode F)  
+- AI **suggest** mappings only (never finalize DR/CR or post journals)
 
 ## 9. AI policy
 

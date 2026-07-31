@@ -7932,3 +7932,27 @@ textarea.input {
 @media (max-width: 420px) {
   .bis-create-cats { grid-template-columns: 1fr; }
 }
+
+/* Hardening warnings (overlap / continuity) */
+.bis-harden-warn {
+  border: 1.5px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.bis-harden-warn ul {
+  margin: 4px 0 0;
+  padding: 0 0 0 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  line-height: 1.4;
+}
+.bis-done-notes {
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-align: left;
+}

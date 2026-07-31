@@ -64,3 +64,15 @@ export {
   type UnknownLabelIssue,
   type UnknownLabelLine,
 } from './unknown-labels';
+export {
+  assertWorkbookReadable,
+  looksPasswordProtectedExcel,
+  friendlyWorkbookError,
+} from './file-safety';
+export {
+  dateRangesOverlap,
+  gapDaysBetween,
+  buildOverlapReport,
+  type DateRange,
+  type OverlapReport,
+} from './overlap';

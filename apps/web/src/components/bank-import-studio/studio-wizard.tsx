@@ -25,6 +25,7 @@ import {
   type StudioPreviewPayload,
 } from '@/app/actions/bank-import-studio';
 import type { LiquidAccount } from '@/app/actions/cashbook-banks';
+// Client-safe entry only — main package pulls node:crypto (breaks next build)
 import {
   collectUnknownMoneyLabels,
   type AmountMode,
@@ -32,7 +33,7 @@ import {
   type StudioLine,
   type StudioMapping,
   type UnknownLabelIssue,
-} from '@bookone/statement-import';
+} from '@bookone/statement-import/client';
 import { SheetGrid, type SheetHighlight } from './sheet-grid';
 import { StudioShell, type StudioStepId } from './studio-shell';
 

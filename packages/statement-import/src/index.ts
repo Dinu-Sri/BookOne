@@ -53,11 +53,14 @@ export {
   loadWorkbookMatrix,
   suggestStudioMapping,
   transformStudioMatrix,
-  collectUnknownMoneyLabels,
   listColumns,
   columnSamples,
   type StudioMapping,
   type StudioLine,
   type StudioTransformResult,
-  type UnknownLabelIssue,
 } from './studio-transform';
+export {
+  collectUnknownMoneyLabels,
+  type UnknownLabelIssue,
+  type UnknownLabelLine,
+} from './unknown-labels';

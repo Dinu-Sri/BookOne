@@ -30,7 +30,7 @@ import {
   type StatementLineView,
 } from '@/app/actions/statement-import';
 import type { LiquidAccount } from '@/app/actions/cashbook-banks';
-import type { ColumnMap, ParseProfile, SignConvention } from '@bookone/statement-import';
+import type { ColumnMap, ParseProfile, SignConvention } from '@bookone/statement-import/client';
 
 function formatRs(n: number) {
   const sign = n < 0 ? '-' : '';

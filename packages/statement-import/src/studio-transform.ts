@@ -1,5 +1,6 @@
 /**
  * Studio transform: matrix + mapping → normalized bank lines + validation.
+ * Server-only (uses node:crypto + xlsx). UI should import from `./studio-client`.
  */
 import * as XLSX from 'xlsx';
 import { createHash } from 'node:crypto';
@@ -8,66 +9,13 @@ import { interpretAmount, type AmountRules, suggestAmountModeFromHeaders } from 
 import { checkStatementBalance, totalsFromSignedAmounts } from './validate-balance';
 import { detectHeaderAndMap } from './templates';
 import { lineFingerprint } from './fingerprint';
+import type { StudioLine, StudioMapping, StudioTransformResult } from './studio-transform-types';
 
-export type StudioMapping = {
-  sheetName?: string;
-  headerRowIndex: number;
-  dateCol: number;
-  descriptionCol: number;
-  /** Optional second description columns joined with " | " */
-  descriptionExtraCols?: number[];
-  balanceCol?: number | null;
-  amountRules: AmountRules;
-  /** Opening/closing if user/system set */
-  openingBalance?: number | null;
-  closingBalance?: number | null;
-  /** Prefer DD/MM when ambiguous */
-  dayFirst?: boolean;
-};
-
-export type StudioLine = {
-  rowNumber: number;
-  date: string;
-  dateConfidence: number;
-  description: string;
-  signedAmount: number;
-  debitAmount: number;
-  creditAmount: number;
-  direction: 'in' | 'out' | 'unknown';
-  balanceAfter?: number;
-  fingerprint: string;
-  sourceRowHash: string;
-  validationStatus: 'valid' | 'warning' | 'error' | 'excluded';
-  validationMessages: string[];
-  raw: Record<string, unknown>;
-  unknownLabel?: string;
-};
-
-export type StudioTransformResult = {
-  lines: StudioLine[];
-  headers: string[];
-  headerRowIndex: number;
-  totals: {
-    totalMoneyIn: number;
-    totalMoneyOut: number;
-    transactionCount: number;
-    periodFrom: string | null;
-    periodTo: string | null;
-  };
-  balanceCheck: ReturnType<typeof checkStatementBalance>;
-  issues: {
-    type: string;
-    severity: 'error' | 'warning';
-    title: string;
-    count: number;
-    sample?: string;
-  }[];
-  readyCount: number;
-  errorCount: number;
-  warningCount: number;
-  excludedCount: number;
-  samplePreview: StudioLine[];
-};
+export type {
+  StudioLine,
+  StudioMapping,
+  StudioTransformResult,
+} from './studio-transform-types';
 
 function cellStr(v: unknown): string {
   if (v == null) return '';
@@ -388,37 +336,10 @@ export function transformStudioMatrix(
   };
 }
 
-/** Unique unknown money labels for the issue-by-issue resolve wizard. */
-export type UnknownLabelIssue = {
-  label: string;
-  count: number;
-  sampleRows: number[];
-  sampleDescriptions: string[];
-};
-
-export function collectUnknownMoneyLabels(lines: StudioLine[]): UnknownLabelIssue[] {
-  const map = new Map<string, UnknownLabelIssue>();
-  for (const l of lines) {
-    if (l.validationStatus !== 'error' || !l.unknownLabel) continue;
-    const key = l.unknownLabel;
-    const cur = map.get(key);
-    if (cur) {
-      cur.count += 1;
-      if (cur.sampleRows.length < 4) cur.sampleRows.push(l.rowNumber);
-      if (cur.sampleDescriptions.length < 3 && l.description) {
-        cur.sampleDescriptions.push(l.description.slice(0, 80));
-      }
-    } else {
-      map.set(key, {
-        label: key,
-        count: 1,
-        sampleRows: [l.rowNumber],
-        sampleDescriptions: l.description ? [l.description.slice(0, 80)] : [],
-      });
-    }
-  }
-  return [...map.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-}
+export {
+  collectUnknownMoneyLabels,
+  type UnknownLabelIssue,
+} from './unknown-labels';
 
 export function columnSamples(matrix: unknown[][], headerRowIndex: number, col: number, n = 5): string[] {
   const out: string[] = [];

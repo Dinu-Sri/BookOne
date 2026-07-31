@@ -107,9 +107,15 @@ function groupForMatch(lines: StatementLineView[]) {
 export function BankMatchWizard({
   importId,
   onDone,
+  /** Back to imports list (cashbook or ERP) */
+  hubHref = '/cashbook/bank-imports',
+  /** Home after finish */
+  homeHref = '/cashbook',
 }: {
   importId: string;
   onDone?: () => void;
+  hubHref?: string;
+  homeHref?: string;
 }) {
   const [view, setView] = useState<StatementImportView | null>(null);
   const [pass, setPass] = useState<Pass>('loading');
@@ -906,11 +912,11 @@ export function BankMatchWizard({
       ) : null}
       {info ? <p className="bis-match-info">{info}</p> : null}
       <div className="bis-done-actions">
-        <a className="bis-btn primary" href="/cashbook">
-          Back to cashbook
+        <a className="bis-btn primary" href={homeHref}>
+          {homeHref.includes('cashbook') ? 'Back to cashbook' : 'Back to dashboard'}
         </a>
-        <a className="bis-btn secondary" href="/reconciliation">
-          Full reconciliation
+        <a className="bis-btn secondary" href={hubHref}>
+          All bank imports
         </a>
         <a className="bis-btn secondary" href="/cashbook/import">
           Import another

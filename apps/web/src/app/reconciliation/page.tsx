@@ -1,109 +1,93 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getDashboardData, getTenantInfo } from '@/app/actions/workspace';
-import { getReconciliationForPeriod } from '@/app/actions/reconciliation';
+import { getTenantInfo } from '@/app/actions/workspace';
+import { listBankImportsForHub } from '@/app/actions/statement-import';
+import { BankImportsHub } from '@/components/bank-import-studio/bank-imports-hub';
+import { BankMatchWizard } from '@/components/bank-import-studio/match-wizard';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { BankReconciliationWizard } from '@/components/reconciliation/bank-reconciliation-wizard';
-import { PeriodCloseControls } from '@/components/reconciliation/period-close-controls';
-import { Badge, Card } from '@/components/ui/bookone-ui';
-import { CircleAlert, ShieldCheck } from 'lucide-react';
 
-interface SearchParams { period?: string }
-
-export default async function ReconciliationPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const params = await searchParams;
+/**
+ * Full ERP bank reconciliation = same engine as cashbook:
+ * Bank Imports hub + Match/Create workbench (BankMatchWizard).
+ * No legacy StatementImportWizard. No period-lock clutter.
+ */
+export default async function ReconciliationPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ importId?: string; period?: string }> | { importId?: string; period?: string };
+}) {
   let tenant;
-  let data;
-  let reconciliation;
   try {
-    [tenant, data] = await Promise.all([getTenantInfo(), getDashboardData(params?.period)]);
-  } catch (err) {
+    tenant = await getTenantInfo();
+  } catch {
     redirect('/login');
   }
 
-  const period = {
-    selected: data.selectedPeriod,
-    available: data.availablePeriods,
-    from: data.periodFrom,
-    to: data.periodTo,
-    label: data.periodLabel,
-  };
-  // Period locks / recon still key by calendar month — use range start month
-  const reconciliationPeriod =
-    data.periodFrom?.slice(0, 7) ?? new Date().toISOString().slice(0, 7);
-  try {
-    reconciliation = await getReconciliationForPeriod(reconciliationPeriod);
-  } catch (err) {
-    redirect('/login');
-  }
-  const periodLabel = data.periodLabel || 'All time';
+  const params = searchParams instanceof Promise ? await searchParams : searchParams;
+  const importId = params?.importId;
 
-  return (
-    <BookOneShell active="Reconciliation" tenant={tenant} period={period}>
-      <div className="workspace">
-        <div className="grid two">
-          <Card>
-            <div className="card-header">
-              <div>
-                <p className="eyebrow">Period close checklist</p>
-                <h2 className="card-title" style={{ marginTop: 4 }}>Before you close {periodLabel}</h2>
-              </div>
-              <Badge tone={data.lowConfidenceCount > 0 ? 'warning' : 'success'}>
-                {data.lowConfidenceCount > 0 ? `${data.lowConfidenceCount} pending` : 'All clear'}
-              </Badge>
+  if (importId) {
+    return (
+      <BookOneShell active="Reconciliation" tenant={tenant}>
+        <div className="workspace bih-erp-workspace">
+          <div className="bih-erp-head">
+            <div>
+              <p className="eyebrow">Bank reconciliation</p>
+              <h1 className="page-title" style={{ margin: '4px 0 0' }}>
+                Match to books
+              </h1>
             </div>
-            <div className="card-body">
-              <div style={{ display: 'grid', gap: 10 }}>
-                <ChecklistItem
-                  ok={data.lowConfidenceCount === 0}
-                  title="All categories reviewed"
-                  detail={data.lowConfidenceCount === 0 ? 'No low-confidence categories need attention.' : `${data.lowConfidenceCount} categor${data.lowConfidenceCount === 1 ? 'y' : 'ies'} below 70% confidence.`}
-                />
-                <ChecklistItem
-                  ok={data.recentTransactions.length > 0}
-                  title="At least one transaction posted"
-                  detail={data.recentTransactions.length === 0 ? 'Record an entry to validate the engine.' : `${data.recentTransactions.length} recent entries posted.`}
-                />
-                <ChecklistItem
-                  ok
-                  title="Backups up to date"
-                  detail="Daily Postgres backups enabled (configurable in DEPLOYMENT_WORKFLOW.md)."
-                />
-                <ChecklistItem
-                  ok
-                  title="Audit log enabled"
-                  detail="All mutations are recorded in audit_log with full new_values."
-                />
-              </div>
-            </div>
-          </Card>
-
-          <BankReconciliationWizard
-            period={reconciliationPeriod}
-            initialImport={reconciliation.importSummary}
-          />
-          <PeriodCloseControls
-            period={reconciliationPeriod}
-            lock={reconciliation.lock}
-            importSummary={reconciliation.importSummary}
+            <Link href="/reconciliation" className="bis-btn secondary">
+              ← All imports
+            </Link>
+          </div>
+          <BankMatchWizard
+            importId={importId}
+            hubHref="/reconciliation"
+            homeHref="/dashboard"
           />
         </div>
+      </BookOneShell>
+    );
+  }
+
+  let items: Awaited<ReturnType<typeof listBankImportsForHub>> = [];
+  try {
+    items = await listBankImportsForHub(40);
+  } catch {
+    items = [];
+  }
+
+  // ERP workbench links stay on /reconciliation so shell stays ERP
+  const erpItems = items.map((i) => ({
+    ...i,
+    workbenchPath: `/reconciliation?importId=${i.id}`,
+  }));
+
+  return (
+    <BookOneShell active="Reconciliation" tenant={tenant}>
+      <div className="workspace bih-erp-workspace">
+        <div className="bih-erp-head">
+          <div>
+            <p className="eyebrow">Bank reconciliation</p>
+            <h1 className="page-title" style={{ margin: '4px 0 0' }}>
+              Bank imports
+            </h1>
+            <p className="card-subtitle" style={{ marginTop: 6, maxWidth: 52 * 8 }}>
+              Same engine as cashbook: import → match existing books → optionally create new
+              entries. Staging only until you confirm.
+            </p>
+          </div>
+          <Link href="/reconciliation/import" className="bis-btn primary">
+            Import bank file
+          </Link>
+        </div>
+        <BankImportsHub
+          items={erpItems}
+          importHref="/reconciliation/import"
+          workbenchBase="/reconciliation"
+        />
       </div>
     </BookOneShell>
-  );
-}
-
-function ChecklistItem({ ok, title, detail }: { ok: boolean; title: string; detail: string }) {
-  return (
-    <div className="balance-row" style={{ padding: '12px 14px' }}>
-      <div>
-        <strong>{title}</strong>
-        <span>{detail}</span>
-      </div>
-      {ok ? (
-        <Badge tone="success"><ShieldCheck size={12} /> OK</Badge>
-      ) : (
-        <Badge tone="warning"><CircleAlert size={12} /> Pending</Badge>
-      )}
-    </div>
   );
 }

@@ -8035,6 +8035,160 @@ textarea.input {
   .bis-create-cats { grid-template-columns: 1fr; }
 }
 
+/* Bank Imports hub (cashbook + ERP) */
+.bih-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bih-lead {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.4;
+  max-width: 52ch;
+}
+.bih-hub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bih-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  border-radius: 14px;
+  border: 1.5px dashed #cbd5e1;
+  background: #f8fafc;
+  text-align: center;
+  color: #64748b;
+}
+.bih-empty strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+.bih-empty p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 36ch;
+  line-height: 1.4;
+}
+.bih-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bih-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.bih-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+.bih-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bih-file {
+  font-size: 14px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.bih-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+}
+.bih-badge.need {
+  background: #fef3c7;
+  color: #92400e;
+}
+.bih-badge.warn {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.bih-badge.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+.bih-badge.muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.bih-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.bih-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+.bih-counts strong {
+  font-weight: 800;
+  color: #0f172a;
+}
+.bih-counts .ok strong { color: #15803d; }
+.bih-counts .warn strong { color: #b45309; }
+.bih-counts .info strong { color: #1d4ed8; }
+.bih-cta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #2563eb;
+}
+.bih-erp-workspace {
+  max-width: 720px;
+}
+.bih-erp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.bih-erp-head .page-title {
+  font-size: 22px;
+  font-weight: 800;
+}
+
 /* Hardening warnings (overlap / continuity) */
 .bis-harden-warn {
   border: 1.5px solid #fde68a;

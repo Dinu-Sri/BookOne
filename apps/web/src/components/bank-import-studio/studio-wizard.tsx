@@ -170,6 +170,10 @@ export function BankImportStudioWizard({
   si?: boolean;
   initialDraft?: StudioDraftView | null;
 }) {
+  const isErp = source === 'erp_recon';
+  const hubAfterImport = isErp ? '/reconciliation' : '/cashbook/bank-imports';
+  const matchBase = isErp ? '/reconciliation' : '/cashbook/match';
+  const homeAfterImport = isErp ? '/dashboard' : '/cashbook';
   const bankOnly = useMemo(
     () => banks.filter((b) => b.kind === 'bank' || b.kind === 'card' || b.code === '1000'),
     [banks],
@@ -1541,13 +1545,16 @@ export function BankImportStudioWizard({
           <a
             className="bis-btn primary"
             href={
-              importedId ? `/cashbook/match?importId=${importedId}` : '/cashbook/match'
+              importedId ? `${matchBase}?importId=${importedId}` : hubAfterImport
             }
           >
             Match to books
           </a>
-          <a className="bis-btn secondary" href="/cashbook">
-            Back to cashbook
+          <a className="bis-btn secondary" href={hubAfterImport}>
+            All bank imports
+          </a>
+          <a className="bis-btn secondary" href={homeAfterImport}>
+            {isErp ? 'Dashboard' : 'Back to cashbook'}
           </a>
           <button type="button" className="bis-btn secondary" onClick={() => window.location.reload()}>
             Import another file

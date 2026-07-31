@@ -750,6 +750,12 @@ export function CashbookHomeClient({
               {si ? 'බැංකු Excel' : 'Import bank'}
             </span>
           </Link>
+          <Link href="/cashbook/bank-imports" className="cb-secondary-tile">
+            <Landmark size={18} />
+            <span className={si ? 'si-text' : undefined}>
+              {si ? 'බැංකු ආයාත' : 'Bank imports'}
+            </span>
+          </Link>
         </div>
       </div>
 

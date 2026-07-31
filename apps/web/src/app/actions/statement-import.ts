@@ -1388,16 +1388,102 @@ export async function listRecentStatementImports(limit = 10): Promise<
     createdAt: string;
   }[]
 > {
+  const hub = await listBankImportsForHub(limit);
+  return hub.map((r) => ({
+    id: r.id,
+    fileName: r.fileName,
+    period: r.periodLabel,
+    status: r.displayStatus,
+    bankName: r.bankName,
+    rowCount: r.rowCount,
+    createdAt: r.createdAt,
+  }));
+}
+
+/** Plain-language hub status for bank imports (cashbook + ERP). */
+export type BankImportHubStatus =
+  | 'draft'
+  | 'needs_match'
+  | 'in_progress'
+  | 'ready_to_create'
+  | 'done';
+
+export type BankImportHubItem = {
+  id: string;
+  fileName: string;
+  periodLabel: string;
+  periodFrom: string | null;
+  periodTo: string | null;
+  period: string;
+  bankName: string | null;
+  bankCode: string | null;
+  source: string | null;
+  wizardStatus: string | null;
+  status: string;
+  displayStatus: BankImportHubStatus;
+  displayLabel: string;
+  rowCount: number;
+  linkedCount: number;
+  openCount: number;
+  createdCount: number;
+  duplicateCount: number;
+  createdAt: string;
+  /** Workbench URL path (same engine both shells) */
+  workbenchPath: string;
+};
+
+function hubDisplayStatus(input: {
+  wizardStatus: string | null;
+  status: string;
+  openCount: number;
+  linkedCount: number;
+  createdCount: number;
+  rowCount: number;
+}): { displayStatus: BankImportHubStatus; displayLabel: string } {
+  const wiz = input.wizardStatus ?? '';
+  if (wiz === 'draft' || input.status === 'draft' || input.status === 'open') {
+    return { displayStatus: 'draft', displayLabel: 'Draft' };
+  }
+  if (input.rowCount <= 0) {
+    return { displayStatus: 'needs_match', displayLabel: 'Needs match' };
+  }
+  if (input.openCount <= 0) {
+    return { displayStatus: 'done', displayLabel: 'Done' };
+  }
+  if (input.linkedCount > 0 || input.createdCount > 0) {
+    // Still open lines after some progress
+    if (input.openCount > 0 && input.linkedCount + input.createdCount > 0) {
+      // Prefer create if most open look unmatched with no candidates — we can't know easily; use in_progress
+      return { displayStatus: 'in_progress', displayLabel: 'In progress' };
+    }
+  }
+  if (input.linkedCount === 0 && input.createdCount === 0) {
+    return { displayStatus: 'needs_match', displayLabel: 'Needs match' };
+  }
+  return { displayStatus: 'in_progress', displayLabel: 'In progress' };
+}
+
+/**
+ * Bank Imports hub: every file for this company with link/create progress.
+ * Used by cashbook and full ERP recon — one list, one match engine.
+ */
+export async function listBankImportsForHub(limit = 40): Promise<BankImportHubItem[]> {
   const user = await requireTenantContext();
+  const cap = Math.min(Math.max(limit, 1), 80);
+
   return withTenantContext(user.tenantId, async () => {
     const rows = await db()
       .select({
         id: bankStatementImports.id,
         fileName: bankStatementImports.fileName,
         period: bankStatementImports.period,
+        periodFrom: bankStatementImports.periodFrom,
+        periodTo: bankStatementImports.periodTo,
         status: bankStatementImports.status,
+        wizardStatus: bankStatementImports.wizardStatus,
         bankAccountId: bankStatementImports.bankAccountId,
         rowCount: bankStatementImports.rowCount,
+        source: bankStatementImports.source,
         createdAt: bankStatementImports.createdAt,
         metadata: bankStatementImports.metadata,
       })
@@ -1409,18 +1495,112 @@ export async function listRecentStatementImports(limit = 10): Promise<
         ),
       )
       .orderBy(desc(bankStatementImports.createdAt))
-      .limit(limit);
+      .limit(cap);
+
+    if (rows.length === 0) return [];
+
+    const importIds = rows.map((r) => r.id);
+    const lineRows = await db()
+      .select({
+        importId: bankStatementLines.importId,
+        status: bankStatementLines.status,
+      })
+      .from(bankStatementLines)
+      .where(
+        and(
+          eq(bankStatementLines.tenantId, user.tenantId),
+          isNull(bankStatementLines.voidedAt),
+          inArray(bankStatementLines.importId, importIds),
+        ),
+      );
+
+    const counts = new Map<
+      string,
+      { linked: number; open: number; created: number; duplicate: number; total: number }
+    >();
+    for (const id of importIds) {
+      counts.set(id, { linked: 0, open: 0, created: 0, duplicate: 0, total: 0 });
+    }
+    for (const ln of lineRows) {
+      const c = counts.get(ln.importId);
+      if (!c) continue;
+      c.total += 1;
+      const st = ln.status ?? '';
+      if (st === 'reconciled' || st === 'matched') c.linked += 1;
+      else if (st === 'created') c.created += 1;
+      else if (st === 'duplicate' || st === 'skipped') c.duplicate += 1;
+      else c.open += 1; // imported, review, unmatched, etc.
+    }
+
+    const bankIds = [
+      ...new Set(rows.map((r) => r.bankAccountId).filter((id): id is string => Boolean(id))),
+    ];
+    const bankMap = new Map<string, { name: string; code: string }>();
+    if (bankIds.length > 0) {
+      const banks = await db()
+        .select({ id: accounts.id, name: accounts.name, code: accounts.code })
+        .from(accounts)
+        .where(
+          and(
+            eq(accounts.tenantId, user.tenantId),
+            inArray(accounts.id, bankIds),
+            isNull(accounts.voidedAt),
+          ),
+        );
+      for (const b of banks) bankMap.set(b.id, { name: b.name, code: b.code });
+    }
 
     return rows.map((r) => {
+      const c = counts.get(r.id) ?? {
+        linked: 0,
+        open: 0,
+        created: 0,
+        duplicate: 0,
+        total: Number(r.rowCount) || 0,
+      };
       const meta = (r.metadata ?? {}) as { bankName?: string };
+      const bank = r.bankAccountId ? bankMap.get(r.bankAccountId) : null;
+      const { displayStatus, displayLabel } = hubDisplayStatus({
+        wizardStatus: r.wizardStatus,
+        status: r.status,
+        openCount: c.open,
+        linkedCount: c.linked,
+        createdCount: c.created,
+        rowCount: c.total || Number(r.rowCount) || 0,
+      });
+      // Refine: open lines only, some created/linked → if all remaining look creatable still "in progress"
+      // If linked+created > 0 and open > 0 and linked+created covers most work as "ready to create" when linked done?
+      // Use: if open > 0 && linked + created > 0 && no "matched" pending → ready_to_create when status unmatched heavy
+      // Keep simple in_progress for partial.
+
+      const periodLabel =
+        r.periodFrom && r.periodTo
+          ? r.periodFrom === r.periodTo
+            ? r.periodFrom
+            : `${r.periodFrom} → ${r.periodTo}`
+          : r.period;
+
       return {
         id: r.id,
         fileName: r.fileName,
+        periodLabel,
+        periodFrom: r.periodFrom,
+        periodTo: r.periodTo,
         period: r.period,
+        bankName: bank?.name ?? meta.bankName ?? null,
+        bankCode: bank?.code ?? null,
+        source: r.source,
+        wizardStatus: r.wizardStatus,
         status: r.status,
-        bankName: meta.bankName ?? null,
-        rowCount: Number(r.rowCount),
+        displayStatus,
+        displayLabel,
+        rowCount: c.total || Number(r.rowCount) || 0,
+        linkedCount: c.linked,
+        openCount: c.open,
+        createdCount: c.created,
+        duplicateCount: c.duplicate,
         createdAt: r.createdAt.toISOString(),
+        workbenchPath: `/cashbook/match?importId=${r.id}`,
       };
     });
   });
@@ -1511,6 +1691,7 @@ export async function confirmStatementLinks(input: {
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
     revalidatePath('/cashbook/match');
+    revalidatePath('/cashbook/bank-imports');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     return { ok: true, linked };
@@ -1595,6 +1776,7 @@ export async function manualLinkStatementLine(input: {
 
     revalidatePath('/cashbook/import');
     revalidatePath('/cashbook/match');
+    revalidatePath('/cashbook/bank-imports');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     return { ok: true };
@@ -1841,6 +2023,7 @@ export async function confirmStatementCreates(input: {
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
     revalidatePath('/cashbook/match');
+    revalidatePath('/cashbook/bank-imports');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     revalidatePath('/');
@@ -2298,6 +2481,7 @@ export async function runStatementMatchPass(importId: string): Promise<
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
     revalidatePath('/cashbook/match');
+    revalidatePath('/cashbook/bank-imports');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     return { ok: true, view: result.view, stats: result.stats };
@@ -2471,6 +2655,7 @@ export async function markLinesUnmatched(input: {
     });
 
     revalidatePath('/cashbook/match');
+    revalidatePath('/cashbook/bank-imports');
     revalidatePath('/reconciliation');
     return { ok: true, count };
   } catch (e) {

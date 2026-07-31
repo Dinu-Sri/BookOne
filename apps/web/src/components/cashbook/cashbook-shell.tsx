@@ -2,7 +2,14 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Languages, LogOut, MoreHorizontal, ExternalLink, FileSpreadsheet } from 'lucide-react';
+import {
+  Languages,
+  LogOut,
+  MoreHorizontal,
+  ExternalLink,
+  FileSpreadsheet,
+  Landmark,
+} from 'lucide-react';
 import { BrandLockup } from '@/components/ui/bookone-ui';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
@@ -77,6 +84,15 @@ export function CashbookShell({
               >
                 <FileSpreadsheet size={16} />
                 <span>{si ? 'බැංකු Excel' : 'Import bank'}</span>
+              </Link>
+              <Link
+                href="/cashbook/bank-imports"
+                className="cashbook-menu-item"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+              >
+                <Landmark size={16} />
+                <span>{si ? 'බැංකු ආයාත' : 'Bank imports'}</span>
               </Link>
               {showFullErpLink ? (
                 <Link

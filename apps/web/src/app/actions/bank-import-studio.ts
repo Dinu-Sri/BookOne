@@ -930,6 +930,7 @@ export async function commitStudioImport(formData: FormData): Promise<
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
     revalidatePath('/cashbook/match');
+    revalidatePath('/cashbook/bank-imports');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     return {

@@ -81,9 +81,10 @@ Unknown money labels are **blocking errors**.
 | Schema | Migration `023_bank_import_studio.sql` + `packages/db/src/schema/reconciliation.ts` |
 | Server actions | `apps/web/src/app/actions/bank-import-studio.ts` |
 | Wizard UI | `apps/web/src/components/bank-import-studio/*` |
-| Cashbook route | `/cashbook/import` (always) |
-| Match after import | `/cashbook/match?importId=` |
-| ERP | `/reconciliation` + shared `statement-import` engine |
+| Cashbook import | `/cashbook/import` (studio) |
+| Bank imports hub | `/cashbook/bank-imports` (personal/sole) · `/reconciliation` (full ERP) |
+| Workbench | `/cashbook/match?importId=` or `/reconciliation?importId=` → same `BankMatchWizard` |
+| Engine | One path: studio → match → create (no legacy ERP uploader) |
 | Flag | none |
 
 ## 8. Phases
@@ -140,9 +141,17 @@ Unknown money labels are **blocking errors**.
 
 ```text
 Upload → map → resolve labels → review (hardening warnings)
-  → save bank lines → match (exact / fuzzy / leftover)
-  → create unmatched (confirm) → undo if needed
+  → save bank lines → Bank imports hub
+  → match (exact / fuzzy / leftover) → create unmatched (confirm)
 ```
+
+### Where to find imports
+
+| Who | Open | Then |
+|-----|------|------|
+| Personal / sole prop | Cashbook → **Bank imports** (home tile or ⋮ menu) | Continue → match workbench |
+| Full ERP | Sidebar **Reconciliation** | Same hub + same match engine |
+| After import | **Match to books** or **All bank imports** | Same |
 
 ### Optional later
 

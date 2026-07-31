@@ -1,49 +1,21 @@
 import Link from 'next/link';
 import { listBankImportsForHub } from '@/app/actions/statement-import';
 import { BankImportsHub } from '@/components/bank-import-studio/bank-imports-hub';
-import { BankMatchWizard } from '@/components/bank-import-studio/match-wizard';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { canAccessFullErp } from '@/lib/entity-kind';
 import { requireEntityTenant } from '@/lib/require-entity-shell';
 
 /**
- * Workbench for one bank import (match → create).
- * Without importId, shows the same hub as /cashbook/bank-imports.
+ * Bank Imports inbox (personal / sole prop).
+ * Staging files → open workbench at /cashbook/match?importId=
  */
-export default async function CashbookMatchPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ importId?: string }> | { importId?: string };
-}) {
+export default async function CashbookBankImportsPage() {
   const tenant = await requireEntityTenant({
     requirePersonalShell: true,
-    loginFrom: '/cashbook/match',
+    loginFrom: '/cashbook/bank-imports',
   });
 
-  const params = searchParams instanceof Promise ? await searchParams : searchParams;
-  const importId = params?.importId;
   const fullErp = canAccessFullErp(tenant.entityKind, tenant.capabilityTier);
-
-  if (importId) {
-    return (
-      <CashbookShell
-        title={`${tenant.name} · Match bank`}
-        active="home"
-        showFullErpLink={fullErp}
-      >
-        <div className="cashbook-import-page">
-          <div className="cashbook-import-head">
-            <h1 className="cashbook-import-title">Match to books</h1>
-            <Link href="/cashbook/bank-imports" className="cashbook-import-back">
-              ← Bank imports
-            </Link>
-          </div>
-          <BankMatchWizard importId={importId} />
-        </div>
-      </CashbookShell>
-    );
-  }
-
   let items: Awaited<ReturnType<typeof listBankImportsForHub>> = [];
   try {
     items = await listBankImportsForHub(40);
@@ -64,6 +36,10 @@ export default async function CashbookMatchPage({
             ← Cashbook
           </Link>
         </div>
+        <p className="bih-lead">
+          Files you imported stay here until you match them to cashbook entries or create new ones.
+          Your cashbook list only shows real books — not raw bank rows.
+        </p>
         <BankImportsHub
           items={items}
           importHref="/cashbook/import"

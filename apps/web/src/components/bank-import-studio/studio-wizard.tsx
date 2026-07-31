@@ -113,6 +113,7 @@ export function BankImportStudioWizard({
   const [closingBalance, setClosingBalance] = useState('');
   const [saveProfile, setSaveProfile] = useState(true);
   const [importedCount, setImportedCount] = useState(0);
+  const [importedId, setImportedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   /** One-by-one unknown-label queue (issue wizard) */
@@ -603,6 +604,7 @@ export function BankImportStudioWizard({
           return;
         }
         setImportedCount(res.lineCount);
+        setImportedId(res.importId);
         setPhase('done');
       });
     });
@@ -1272,14 +1274,22 @@ export function BankImportStudioWizard({
       >
         <div className="bis-done-card">
           <strong>{importedCount} lines</strong>
-          <p>Stored as bank statement data only. Your cashbook entries were not changed.</p>
+          <p>
+            Stored as bank statement data only. Next: match to existing cashbook entries (no new
+            journals yet).
+          </p>
         </div>
         <div className="bis-done-actions">
-          <a className="bis-btn primary" href="/cashbook">
-            Back to cashbook
-          </a>
-          <a className="bis-btn secondary" href="/reconciliation">
+          <a
+            className="bis-btn primary"
+            href={
+              importedId ? `/cashbook/match?importId=${importedId}` : '/cashbook/match'
+            }
+          >
             Match to books
+          </a>
+          <a className="bis-btn secondary" href="/cashbook">
+            Back to cashbook
           </a>
           <button type="button" className="bis-btn secondary" onClick={() => window.location.reload()}>
             Import another file

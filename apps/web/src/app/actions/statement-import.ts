@@ -13,6 +13,7 @@ import {
   listPresetsForUi,
   suggestPresetFromBankName,
   type BookCandidate,
+  type CanonicalStatementLine,
   type MatchResult,
   type ParseProfile,
   type ProposedAction,
@@ -52,6 +53,14 @@ const ALLOWED_EXT = /\.(xlsx|xls|csv|txt)$/i;
 
 const sourceSchema = z.enum(['cashbook', 'erp_recon']);
 
+export type MatchCandidateView = {
+  id: string;
+  score: number;
+  date?: string;
+  description?: string;
+  amountSigned?: number;
+};
+
 export type StatementLineView = {
   id: string;
   rowNumber: number;
@@ -68,10 +77,18 @@ export type StatementLineView = {
   confidence: number | null;
   fingerprint: string | null;
   externalRef: string | null;
-  candidates: { id: string; score: number }[];
+  candidates: MatchCandidateView[];
   /** SI-4 flags e.g. BALANCE_BREAK */
   flags: string[];
   month: string;
+};
+
+export type MatchPassStats = {
+  link: number;
+  review: number;
+  create: number;
+  leftAlone: number;
+  total: number;
 };
 
 export type StatementImportView = {
@@ -283,29 +300,42 @@ function extractFlags(raw: unknown, notes: string | null | undefined): string[] 
   return flags;
 }
 
-function toLineView(row: {
-  id: string;
-  rowNumber: string | number;
-  transactionDate: string;
-  description: string;
-  amount: string | number;
-  direction: string | null;
-  status: string;
-  proposedAction: string | null;
-  matchScore: string | number | null;
-  matchMethod: string | null;
-  matchedTransactionId: string | null;
-  createdTransactionId: string | null;
-  confidence: string | number | null;
-  fingerprint: string | null;
-  externalRef: string | null;
-  matchCandidates: unknown;
-  raw?: unknown;
-  notes?: string | null;
-}): StatementLineView {
-  const candidates = Array.isArray(row.matchCandidates)
+function toLineView(
+  row: {
+    id: string;
+    rowNumber: string | number;
+    transactionDate: string;
+    description: string;
+    amount: string | number;
+    direction: string | null;
+    status: string;
+    proposedAction: string | null;
+    matchScore: string | number | null;
+    matchMethod: string | null;
+    matchedTransactionId: string | null;
+    createdTransactionId: string | null;
+    confidence: string | number | null;
+    fingerprint: string | null;
+    externalRef: string | null;
+    matchCandidates: unknown;
+    raw?: unknown;
+    notes?: string | null;
+  },
+  bookById?: Map<string, { date: string; description: string; amountSigned: number }>,
+): StatementLineView {
+  const rawCandidates = Array.isArray(row.matchCandidates)
     ? (row.matchCandidates as { id: string; score: number }[])
     : [];
+  const candidates: MatchCandidateView[] = rawCandidates.map((c) => {
+    const book = bookById?.get(c.id);
+    return {
+      id: c.id,
+      score: c.score,
+      date: book?.date,
+      description: book?.description,
+      amountSigned: book?.amountSigned,
+    };
+  });
   const flags = extractFlags(row.raw, row.notes);
   return {
     id: row.id,
@@ -589,7 +619,58 @@ async function loadImportView(
     )
     .orderBy(bankStatementLines.rowNumber);
 
-  const lines = lineRows.map(toLineView);
+  // Hydrate match candidates with book entry details for match UI
+  const candidateIds = new Set<string>();
+  for (const row of lineRows) {
+    if (row.matchedTransactionId) candidateIds.add(row.matchedTransactionId);
+    if (Array.isArray(row.matchCandidates)) {
+      for (const c of row.matchCandidates as { id?: string }[]) {
+        if (c?.id) candidateIds.add(c.id);
+      }
+    }
+  }
+  const bookById = new Map<string, { date: string; description: string; amountSigned: number }>();
+  if (candidateIds.size > 0 && imp.bankAccountId) {
+    const ids = [...candidateIds];
+    for (let i = 0; i < ids.length; i += 400) {
+      const chunk = ids.slice(i, i + 400);
+      const txs = await db()
+        .select({
+          id: transactions.id,
+          date: transactions.date,
+          description: transactions.description,
+          amount: transactions.amount,
+          direction: transactions.direction,
+          paymentAccountId: transactions.paymentAccountId,
+          transferSourceAccountId: transactions.transferSourceAccountId,
+        })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.tenantId, tenantId),
+            isNull(transactions.voidedAt),
+            inArray(transactions.id, chunk),
+          ),
+        );
+      for (const t of txs) {
+        const signed =
+          bookSignedAmount(
+            t.direction,
+            Number(t.amount),
+            t.paymentAccountId,
+            t.transferSourceAccountId,
+            imp.bankAccountId,
+          ) ?? (t.direction === 'money_out' ? -Number(t.amount) : Number(t.amount));
+        bookById.set(t.id, {
+          date: t.date,
+          description: t.description,
+          amountSigned: signed,
+        });
+      }
+    }
+  }
+
+  const lines = lineRows.map((row) => toLineView(row, bookById));
   const meta = (imp.metadata ?? {}) as {
     warnings?: string[];
     multiMonth?: boolean;
@@ -1429,6 +1510,7 @@ export async function confirmStatementLinks(input: {
 
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
+    revalidatePath('/cashbook/match');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     return { ok: true, linked };
@@ -1512,6 +1594,7 @@ export async function manualLinkStatementLine(input: {
     });
 
     revalidatePath('/cashbook/import');
+    revalidatePath('/cashbook/match');
     revalidatePath('/reconciliation');
     revalidatePath('/transactions');
     return { ok: true };
@@ -1953,4 +2036,404 @@ export async function voidStatementImport(importId: string): Promise<
 /** Re-export period for clients that only need summary after reload */
 export async function getStatementImportSummary(importId: string) {
   return getStatementImport(importId);
+}
+
+/**
+ * BIS-5: Run (or re-run) match engine on a committed studio/legacy import.
+ * Staging only — no journals. Proposes link / review / create.
+ * Skips lines already reconciled / created / skipped / duplicate.
+ */
+export async function runStatementMatchPass(importId: string): Promise<
+  | { ok: true; view: StatementImportView; stats: MatchPassStats }
+  | { ok: false; error: string }
+> {
+  try {
+    const id = z.string().uuid().parse(importId);
+    const user = await requireTenantContext();
+
+    const result = await withTenantContext(user.tenantId, async () => {
+      const [imp] = await db()
+        .select({
+          id: bankStatementImports.id,
+          bankAccountId: bankStatementImports.bankAccountId,
+          bookDomain: bankStatementImports.bookDomain,
+          periodFrom: bankStatementImports.periodFrom,
+          periodTo: bankStatementImports.periodTo,
+          wizardStatus: bankStatementImports.wizardStatus,
+          status: bankStatementImports.status,
+        })
+        .from(bankStatementImports)
+        .where(
+          and(
+            eq(bankStatementImports.id, id),
+            eq(bankStatementImports.tenantId, user.tenantId),
+            isNull(bankStatementImports.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!imp) throw new Error('Import not found.');
+      if (!imp.bankAccountId) throw new Error('Import has no bank account.');
+
+      const lineRows = await db()
+        .select({
+          id: bankStatementLines.id,
+          rowNumber: bankStatementLines.rowNumber,
+          transactionDate: bankStatementLines.transactionDate,
+          description: bankStatementLines.description,
+          amount: bankStatementLines.amount,
+          direction: bankStatementLines.direction,
+          status: bankStatementLines.status,
+          fingerprint: bankStatementLines.fingerprint,
+          externalRef: bankStatementLines.externalRef,
+          confidence: bankStatementLines.confidence,
+          balanceAfter: bankStatementLines.balanceAfter,
+          raw: bankStatementLines.raw,
+          matchedTransactionId: bankStatementLines.matchedTransactionId,
+        })
+        .from(bankStatementLines)
+        .where(
+          and(
+            eq(bankStatementLines.importId, id),
+            eq(bankStatementLines.tenantId, user.tenantId),
+            isNull(bankStatementLines.voidedAt),
+          ),
+        )
+        .orderBy(bankStatementLines.rowNumber);
+
+      const finalized = new Set(['reconciled', 'created', 'skipped', 'duplicate']);
+      const open = lineRows.filter((l) => !finalized.has(l.status));
+      if (open.length === 0) {
+        const view = await loadImportView(user.tenantId, id);
+        if (!view) throw new Error('Import not found.');
+        return {
+          view,
+          stats: {
+            link: 0,
+            review: 0,
+            create: 0,
+            leftAlone: lineRows.length,
+            total: lineRows.length,
+          } satisfies MatchPassStats,
+        };
+      }
+
+      // Books already claimed by finalized lines in this import
+      const claimed = new Set<string>();
+      for (const l of lineRows) {
+        if (finalized.has(l.status) && l.matchedTransactionId) {
+          claimed.add(l.matchedTransactionId);
+        }
+      }
+
+      const periodFrom =
+        imp.periodFrom ??
+        open.reduce((min, l) => (l.transactionDate < min ? l.transactionDate : min), open[0]!.transactionDate);
+      const periodTo =
+        imp.periodTo ??
+        open.reduce((max, l) => (l.transactionDate > max ? l.transactionDate : max), open[0]!.transactionDate);
+
+      const books = await loadBookCandidates(
+        user.tenantId,
+        imp.bankAccountId,
+        periodFrom,
+        periodTo,
+        imp.bookDomain,
+      );
+      const freeBooks = books.filter((b) => !claimed.has(b.id));
+
+      const canonical: CanonicalStatementLine[] = open.map((l) => {
+        const amountSigned = Number(l.amount);
+        const direction =
+          l.direction === 'in' || l.direction === 'out' || l.direction === 'unknown'
+            ? l.direction
+            : amountSigned > 0
+              ? 'in'
+              : amountSigned < 0
+                ? 'out'
+                : 'unknown';
+        return {
+          rowNumber: Number(l.rowNumber),
+          date: l.transactionDate,
+          description: l.description,
+          amountSigned,
+          direction,
+          balanceAfter: l.balanceAfter != null ? Number(l.balanceAfter) : undefined,
+          externalRef: l.externalRef ?? undefined,
+          fingerprint: l.fingerprint ?? `row-${l.id}`,
+          dateConfidence: l.confidence != null ? Number(l.confidence) : 0.9,
+          raw: (l.raw as Record<string, unknown>) ?? {},
+        };
+      });
+
+      const matches = matchAll(canonical, freeBooks);
+      const byRow = new Map(matches.map((m) => [m.line.rowNumber, m]));
+
+      let link = 0;
+      let review = 0;
+      let create = 0;
+
+      for (const line of open) {
+        const m = byRow.get(Number(line.rowNumber));
+        if (!m) continue;
+        let action = m.proposedAction;
+        // Balance flag from raw
+        const flags = extractFlags(line.raw, null);
+        if (flags.includes('BALANCE_BREAK') && action === 'link') {
+          action = 'review';
+        }
+        let status = mapActionToStatus(action, Boolean(m.matchedTransactionId));
+        // Studio leftover status "imported" becomes proper staging status
+        if (status === 'matched') link += 1;
+        else if (status === 'review') review += 1;
+        else {
+          create += 1;
+          status = 'unmatched';
+        }
+
+        await db()
+          .update(bankStatementLines)
+          .set({
+            status,
+            proposedAction: action,
+            matchScore: m.matchScore.toFixed(4),
+            matchMethod: m.matchMethod,
+            matchCandidates: m.candidates,
+            matchedTransactionId: action === 'link' ? m.matchedTransactionId : null,
+            confidence: m.confidence.toFixed(4),
+            reconciliationStatus:
+              action === 'link' ? 'suggested' : action === 'review' ? 'review' : 'unmatched',
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(bankStatementLines.id, line.id),
+              eq(bankStatementLines.tenantId, user.tenantId),
+            ),
+          );
+      }
+
+      await db().insert(bankStatementImportEvents).values({
+        tenantId: user.tenantId,
+        importId: id,
+        userId: user.id,
+        action: 'match_pass',
+        detail: {
+          open: open.length,
+          link,
+          review,
+          create,
+          bookCandidates: freeBooks.length,
+        },
+      });
+
+      await refreshImportCounts(id, user.tenantId);
+      // Keep studio committed imports usable after match
+      await db()
+        .update(bankStatementImports)
+        .set({
+          wizardStep: 'match',
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(bankStatementImports.id, id),
+            eq(bankStatementImports.tenantId, user.tenantId),
+          ),
+        );
+
+      const view = await loadImportView(user.tenantId, id);
+      if (!view) throw new Error('Import not found after match.');
+      return {
+        view,
+        stats: {
+          link,
+          review,
+          create,
+          leftAlone: lineRows.length - open.length,
+          total: lineRows.length,
+        } satisfies MatchPassStats,
+      };
+    });
+
+    revalidatePath('/cashbook');
+    revalidatePath('/cashbook/import');
+    revalidatePath('/cashbook/match');
+    revalidatePath('/reconciliation');
+    revalidatePath('/transactions');
+    return { ok: true, view: result.view, stats: result.stats };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Could not match bank lines to books.',
+    };
+  }
+}
+
+/**
+ * Search book entries for manual match (pass 3).
+ */
+export async function searchBookCandidatesForMatch(input: {
+  importId: string;
+  lineId?: string;
+  query?: string;
+  limit?: number;
+}): Promise<{ ok: true; candidates: MatchCandidateView[] } | { ok: false; error: string }> {
+  try {
+    const importId = z.string().uuid().parse(input.importId);
+    const user = await requireTenantContext();
+    const limit = Math.min(Math.max(input.limit ?? 12, 1), 40);
+
+    const candidates = await withTenantContext(user.tenantId, async () => {
+      const [imp] = await db()
+        .select({
+          bankAccountId: bankStatementImports.bankAccountId,
+          bookDomain: bankStatementImports.bookDomain,
+          periodFrom: bankStatementImports.periodFrom,
+          periodTo: bankStatementImports.periodTo,
+        })
+        .from(bankStatementImports)
+        .where(
+          and(
+            eq(bankStatementImports.id, importId),
+            eq(bankStatementImports.tenantId, user.tenantId),
+            isNull(bankStatementImports.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!imp?.bankAccountId) throw new Error('Import not found.');
+
+      let periodFrom = imp.periodFrom;
+      let periodTo = imp.periodTo;
+      let amountHint: number | null = null;
+      if (input.lineId && z.string().uuid().safeParse(input.lineId).success) {
+        const [line] = await db()
+          .select({
+            date: bankStatementLines.transactionDate,
+            amount: bankStatementLines.amount,
+          })
+          .from(bankStatementLines)
+          .where(
+            and(
+              eq(bankStatementLines.id, input.lineId),
+              eq(bankStatementLines.tenantId, user.tenantId),
+            ),
+          )
+          .limit(1);
+        if (line) {
+          periodFrom = line.date;
+          periodTo = line.date;
+          amountHint = Number(line.amount);
+        }
+      }
+
+      const books = await loadBookCandidates(
+        user.tenantId,
+        imp.bankAccountId,
+        periodFrom,
+        periodTo,
+        imp.bookDomain,
+      );
+
+      const q = (input.query ?? '').trim().toLowerCase();
+      let list = books;
+      if (amountHint != null && Number.isFinite(amountHint)) {
+        const abs = Math.abs(amountHint);
+        list = list.filter((b) => Math.abs(Math.abs(b.amountSigned) - abs) < 0.02);
+      }
+      if (q) {
+        list = list.filter(
+          (b) =>
+            b.description.toLowerCase().includes(q) ||
+            b.date.includes(q) ||
+            String(b.amountSigned).includes(q),
+        );
+      }
+      // Prefer closer amounts if no query
+      if (amountHint != null) {
+        const abs = Math.abs(amountHint);
+        list = [...list].sort(
+          (a, b) =>
+            Math.abs(Math.abs(a.amountSigned) - abs) - Math.abs(Math.abs(b.amountSigned) - abs),
+        );
+      }
+
+      return list.slice(0, limit).map((b) => ({
+        id: b.id,
+        score: 0,
+        date: b.date,
+        description: b.description,
+        amountSigned: b.amountSigned,
+      }));
+    });
+
+    return { ok: true, candidates };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Could not search book entries.',
+    };
+  }
+}
+
+/**
+ * Mark open review/create lines as unmatched skip (stay unmatched for later create).
+ * Does not write journals.
+ */
+export async function markLinesUnmatched(input: {
+  importId: string;
+  lineIds: string[];
+}): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  try {
+    const importId = z.string().uuid().parse(input.importId);
+    const lineIds = input.lineIds.filter((id) => z.string().uuid().safeParse(id).success);
+    if (lineIds.length === 0) return { ok: true, count: 0 };
+    const user = await requireTenantContext();
+
+    const count = await withTenantContext(user.tenantId, async () => {
+      let n = 0;
+      for (const lineId of lineIds) {
+        const [line] = await db()
+          .select({ id: bankStatementLines.id, status: bankStatementLines.status })
+          .from(bankStatementLines)
+          .where(
+            and(
+              eq(bankStatementLines.id, lineId),
+              eq(bankStatementLines.importId, importId),
+              eq(bankStatementLines.tenantId, user.tenantId),
+              isNull(bankStatementLines.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (!line) continue;
+        if (['reconciled', 'created', 'skipped', 'duplicate'].includes(line.status)) continue;
+        await db()
+          .update(bankStatementLines)
+          .set({
+            status: 'unmatched',
+            proposedAction: 'create',
+            matchedTransactionId: null,
+            matchMethod: 'none',
+            reconciliationStatus: 'unmatched',
+            reviewedByUserId: user.id,
+            reviewedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(bankStatementLines.id, lineId),
+              eq(bankStatementLines.tenantId, user.tenantId),
+            ),
+          );
+        n += 1;
+      }
+      await refreshImportCounts(importId, user.tenantId);
+      return n;
+    });
+
+    revalidatePath('/cashbook/match');
+    revalidatePath('/reconciliation');
+    return { ok: true, count };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not update lines.' };
+  }
 }

@@ -81,7 +81,8 @@ Unknown money labels are **blocking errors**.
 | Server actions | `apps/web/src/app/actions/bank-import-studio.ts` |
 | Wizard UI | `apps/web/src/components/bank-import-studio/*` |
 | Cashbook route | `/cashbook/import` (always) |
-| ERP | `/reconciliation` consumes committed batches |
+| Match after import | `/cashbook/match?importId=` |
+| ERP | `/reconciliation` + shared `statement-import` engine |
 | Flag | none |
 
 ## 8. Phases
@@ -95,22 +96,32 @@ Unknown money labels are **blocking errors**.
 | **BIS-4** | Bank-only commit + profile versions + fixtures | **Done** |
 | **BIS-4.1** | Coach UI, sheet grid, fix-problems, viewport fit | **Done** |
 | **BIS-4.2** | Issue-by-issue unknown label wizard (Out/In/Skip) | **Done** |
-| **BIS-5** | Reconciliation passes 1–3 UI (match after import) | **Next** |
-| **BIS-6** | Cashbook create rail for unmatched (explicit confirm) | After BIS-5 |
+| **BIS-5** | Reconciliation passes 1–3 UI (match after import) | **Done** |
+| **BIS-6** | Cashbook create rail for unmatched (explicit confirm) | **Next** |
 | **BIS-7+** | Overlap detection, advanced rules F, AI suggest only | Later |
 
-### Remaining roadmap (post-studio)
+### BIS-5 Match UI
 
-1. **BIS-5 — Match UI**  
-   After import, walk bank lines vs cashbook: exact → fuzzy → manual. No journal writes.
+| Pass | What | Writes journals? |
+|------|------|------------------|
+| 1 Exact | Auto-proposed links (score ≥ ~0.9) → Confirm all | **No** (link only) |
+| 2 Fuzzy | One-by-one pick from candidates / search | **No** |
+| 3 Leftover | Unmatched bank lines listed for later create | **No** |
 
-2. **BIS-6 — Create unmatched**  
+- Route: `/cashbook/match?importId=…` (also list recent imports)
+- Engine: `runStatementMatchPass` → `matchAll` vs cashbook book candidates
+- Studio **Done** primary CTA → Match to books
+- Confirm links: `confirmStatementLinks` / `manualLinkStatementLine`
+
+### Remaining roadmap
+
+1. **BIS-6 — Create unmatched**  
    Optional “create cashbook entry” for leftover bank lines via `recordEntry` only with user confirm.
 
-3. **Hardening**  
+2. **Hardening**  
    File overlap / multi-statement continuity, password Excel, more SL presets from real exports.
 
-4. **Not in studio**  
+3. **Not in studio / match**  
    AI must not finalize debit/credit or post journals.
 
 ## 9. AI policy

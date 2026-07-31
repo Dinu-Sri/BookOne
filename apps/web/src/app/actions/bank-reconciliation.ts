@@ -688,10 +688,16 @@ async function rebuildSessionSuggestionsInternal(
     }
   }
 
+  // Scope bank lines to the session period (multi-year files are capped to one month)
+  const inPeriod = lines.filter(
+    (l) => l.date >= session.periodFrom && l.date <= session.periodTo,
+  );
+  const workLines = inPeriod.length > 0 ? inPeriod : lines;
+
   // Already reconciled / created lines (from prior match wizard) → seed confirmed cases
   // Do NOT drop bank lines with status reconciled/created from the open pool when they
   // have no usable book link — that left 0 bank-side cases and a book-only flood.
-  for (const l of lines) {
+  for (const l of workLines) {
     if (lockedBankLines.has(l.id)) continue;
     if (['duplicate', 'skipped'].includes(l.status ?? '')) {
       if (l.status === 'duplicate') {
@@ -763,8 +769,8 @@ async function rebuildSessionSuggestionsInternal(
     }
   }
 
-  // Every non-duplicate bank line that is not already a confirmed case stays open
-  const openBankLines = lines.filter(
+  // Every non-duplicate bank line in period that is not already a confirmed case stays open
+  const openBankLines = workLines.filter(
     (l) =>
       !lockedBankLines.has(l.id) &&
       !['duplicate', 'skipped'].includes(l.status ?? ''),
@@ -962,12 +968,15 @@ async function rebuildSessionSuggestionsInternal(
     });
   }
 
-  // Update bank line count + book balance snapshot
+  // Update bank line count + book balance snapshot (count period-scoped lines)
   const bookClose = await bookBalanceThrough(tenantId, session.bankAccountId, session.periodTo);
+  const periodBankCount = workLines.filter(
+    (l) => !['duplicate', 'skipped'].includes(l.status ?? ''),
+  ).length;
   await db()
     .update(bankReconciliationSessions)
     .set({
-      bankLineCount: lines.filter((l) => !['duplicate', 'skipped'].includes(l.status ?? '')).length,
+      bankLineCount: periodBankCount,
       bookClosingBalanceSnapshot: bookClose.toFixed(2),
       sourceFileCount: importIds.length,
       version: sql`${bankReconciliationSessions.version} + 1`,
@@ -976,7 +985,16 @@ async function rebuildSessionSuggestionsInternal(
     .where(eq(bankReconciliationSessions.id, sessionId));
 
   await refreshSessionCounts(tenantId, sessionId);
-  await logEvent(tenantId, sessionId, userId, 'suggestions_rebuilt');
+  await logEvent(tenantId, sessionId, userId, 'suggestions_rebuilt', {
+    after: {
+      totalLines: lines.length,
+      workLines: workLines.length,
+      openBank: openBankLines.length,
+      freeBooks: freeBooks.length,
+      periodFrom: session.periodFrom,
+      periodTo: session.periodTo,
+    },
+  });
 }
 
 export async function rebuildSessionSuggestions(
@@ -1140,14 +1158,18 @@ export async function openReconciliationSession(
             ]),
           ),
         );
+      // Reseed when empty, multi-year period noise, or bank lines far outnumber bank-side cases
+      // (legacy bug: only a few confirmed matches + book-only flood, zero create_entry)
+      const multiYear =
+        session.periodFrom.slice(0, 7) !== session.periodTo.slice(0, 7) &&
+        (Number(session.periodTo.slice(0, 4)) - Number(session.periodFrom.slice(0, 4))) * 12 +
+          (Number(session.periodTo.slice(5, 7)) - Number(session.periodFrom.slice(5, 7))) >
+          2;
       const needsRebuild =
         Number(totalC) === 0 ||
+        multiYear ||
         (session.bankLineCount > 0 && Number(bankC) === 0) ||
-        // Multi-year session periods need period heal + reseed
-        (session.periodFrom.slice(0, 7) !== session.periodTo.slice(0, 7) &&
-          (Number(session.periodTo.slice(0, 4)) - Number(session.periodFrom.slice(0, 4))) * 12 +
-            (Number(session.periodTo.slice(5, 7)) - Number(session.periodFrom.slice(5, 7))) >
-            2);
+        (session.bankLineCount > 20 && Number(bankC) < Math.floor(session.bankLineCount * 0.5));
       if (needsRebuild) {
         await rebuildSessionSuggestionsInternal(user.tenantId, user.id, id);
         [session] = await db()

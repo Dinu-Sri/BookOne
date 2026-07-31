@@ -122,6 +122,15 @@ export function BankImportStudioWizard({
     [],
   );
 
+  const errorRowNumbers = useMemo(() => {
+    if (!preview?.transform?.lines) return [] as number[];
+    // StudioLine.rowNumber is 1-based spreadsheet style (header+data offset)
+    // Convert to 0-based abs index: rowNumber - 1
+    return preview.transform.lines
+      .filter((l) => l.validationStatus === 'error')
+      .map((l) => l.rowNumber - 1);
+  }, [preview]);
+
   const highlight: SheetHighlight = useMemo(() => {
     if (!mapping || !preview) return { clickMode: 'none' };
     const roles: SheetHighlight['colRoles'] = {};
@@ -219,6 +228,7 @@ export function BankImportStudioWizard({
       return {
         cols,
         rows,
+        errorRows: phase === 'review' ? errorRowNumbers : undefined,
         colRoles: roles,
         dimAboveRow: mapping.headerRowIndex,
         clickMode: phase === 'money' ? 'column' : 'none',
@@ -239,7 +249,7 @@ export function BankImportStudioWizard({
     }
 
     return { clickMode: 'none' };
-  }, [mapping, preview, phase, moneyPick, file, bankId, sheetName, runPreview]);
+  }, [mapping, preview, phase, moneyPick, file, bankId, sheetName, runPreview, errorRowNumbers]);
 
   function upload(chosen: File) {
     setError(null);
@@ -377,37 +387,60 @@ export function BankImportStudioWizard({
     });
   }
 
-  function importBlockReason(): string | null {
+  function importBlockReason(opts?: { allowSkipErrors?: boolean }): string | null {
     const t = preview?.transform;
     if (!t) return 'Still reading the file…';
-    if (t.readyCount <= 0) return 'No valid lines yet — check date & money columns.';
-    if (t.errorCount > 0) {
+    if (t.readyCount <= 0) return 'No valid lines yet — fix date or money columns below.';
+    if (t.errorCount > 0 && !opts?.allowSkipErrors) {
       const top = t.issues.find((i) => i.severity === 'error');
       return top
-        ? `${t.errorCount} problem(s): ${top.title}`
-        : `${t.errorCount} problem(s) — go Back and fix columns.`;
+        ? `${t.errorCount} problem line(s): ${top.title}`
+        : `${t.errorCount} problem line(s) — use Fix below or save good lines only.`;
     }
-    // Only hard-block balance when both open & close were entered
     if (
       !t.balanceCheck.ok &&
       openingBalance.trim() !== '' &&
       closingBalance.trim() !== ''
     ) {
-      return 'Opening/closing balance do not match. Fix or clear those fields.';
+      return 'Opening/closing balance do not match. Clear those fields or fix lines.';
     }
     return null;
   }
 
-  function doCommit() {
+  /** Map issue type → which step to open for fixing */
+  function stepForIssue(type: string): Phase {
+    if (type === 'invalid_date' || type === 'ambiguous_date') return 'date';
+    if (type === 'unknown_label' || type === 'both_in_out' || type === 'unknown_direction' || type === 'money_setup' || type === 'empty_amount')
+      return 'money';
+    if (type === 'repeated_header' || type === 'excluded_summary') return 'table';
+    if (type === 'balance_mismatch') return 'review';
+    return 'money';
+  }
+
+  function goFixIssue(type: string) {
+    setError(null);
+    const next = stepForIssue(type);
+    if (next === 'money') {
+      const m = mapping?.amountRules.mode;
+      setMoneyPick(m === 'debit_credit' ? 'out' : 'amount');
+    }
+    setPhase(next);
+  }
+
+  function doCommit(opts?: { skipErrorLines?: boolean }) {
     if (!draft || !file || !bankId || !mapping || !sheetName) return;
-    const block = importBlockReason();
+    const block = importBlockReason({ allowSkipErrors: opts?.skipErrorLines });
     if (block) {
       setError(block);
       return;
     }
-    if (!window.confirm('Save bank lines only? Your cashbook stays the same until you match later.')) {
-      return;
-    }
+    const t = preview?.transform;
+    const good = t ? t.readyCount + t.warningCount : 0;
+    const bad = t?.errorCount ?? 0;
+    const msg = opts?.skipErrorLines && bad > 0
+      ? `Save ${good} good line(s) and skip ${bad} problem line(s)? Cashbook stays unchanged.`
+      : 'Save bank lines only? Your cashbook stays the same until you match later.';
+    if (!window.confirm(msg)) return;
 
     const fd = new FormData();
     fd.set('importId', draft.id);
@@ -416,6 +449,7 @@ export function BankImportStudioWizard({
     fd.set('sheetName', sheetName);
     fd.set('mappingJson', JSON.stringify(mapping));
     fd.set('saveProfile', saveProfile ? '1' : '0');
+    fd.set('skipErrorLines', opts?.skipErrorLines ? '1' : '0');
     fd.set(
       'profileName',
       `${bankOnly.find((b) => b.id === bankId)?.shortName ?? 'Bank'} layout`,
@@ -804,7 +838,11 @@ export function BankImportStudioWizard({
   if (phase === 'review' && preview?.transform && mapping) {
     const t = preview.transform;
     const block = importBlockReason();
-    const canImport = !block;
+    const canImportAll = !block;
+    const canImportGoodOnly = t.readyCount > 0;
+    const errorIssues = t.issues.filter((i) => i.severity === 'error');
+    const problemLines = t.lines.filter((l) => l.validationStatus === 'error').slice(0, 8);
+
     return (
       <StudioShell
         step={meta.step}
@@ -816,14 +854,14 @@ export function BankImportStudioWizard({
         sheet={sheetPane}
         pending={pending}
         onBack={() => setPhase('money')}
-        onContinue={doCommit}
+        onContinue={() => doCommit()}
         continueLabel="Save bank lines"
-        continueDisabled={!canImport || pending}
-        continueHint={block}
+        continueDisabled={!canImportAll || pending}
+        continueHint={canImportAll ? null : block}
       >
         <div className="bis-review-hero">
           <div className="bis-hero-card">
-            <span>Lines</span>
+            <span>Good</span>
             <strong>{t.readyCount + t.warningCount}</strong>
           </div>
           <div className="bis-hero-card in">
@@ -836,30 +874,60 @@ export function BankImportStudioWizard({
           </div>
         </div>
 
-        {canImport ? (
+        {t.errorCount > 0 ? (
+          <div className="bis-fix-panel">
+            <div className="bis-fix-head">
+              <strong>{t.errorCount} problem line(s)</strong>
+              <span>Red rows on the sheet · fix mapping or skip them</span>
+            </div>
+            <ul className="bis-fix-list">
+              {errorIssues.map((i) => (
+                <li key={i.type}>
+                  <div className="bis-fix-text">
+                    <strong>
+                      {i.count}× {i.title}
+                    </strong>
+                    {i.sample ? <span>{i.sample}</span> : null}
+                  </div>
+                  <button type="button" className="bis-fix-btn" onClick={() => goFixIssue(i.type)}>
+                    Fix
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {problemLines.length > 0 ? (
+              <div className="bis-problem-lines">
+                <p className="bis-money-label">Problem rows (on sheet)</p>
+                {problemLines.map((l) => (
+                  <div key={l.rowNumber} className="bis-sample-row err">
+                    <span className="d">R{l.rowNumber}</span>
+                    <span className="t" title={l.validationMessages.join('; ')}>
+                      {l.description || l.validationMessages[0] || '—'}
+                    </span>
+                    <span className="neg">{l.validationMessages[0]?.slice(0, 24) ?? 'error'}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {canImportGoodOnly ? (
+              <button
+                type="button"
+                className="bis-btn secondary bis-btn-block"
+                disabled={pending}
+                onClick={() => doCommit({ skipErrorLines: true })}
+              >
+                Save {t.readyCount + t.warningCount} good lines only
+              </button>
+            ) : null}
+          </div>
+        ) : (
           <div className="bis-status-ok">
             <CheckCircle2 size={16} />
             Looks good · cashbook not changed yet
           </div>
-        ) : (
-          <div className="bis-status-bad">{block}</div>
         )}
 
-        {t.issues.filter((i) => i.severity === 'error').length > 0 ? (
-          <ul className="bis-issue-list">
-            {t.issues
-              .filter((i) => i.severity === 'error')
-              .slice(0, 4)
-              .map((i) => (
-                <li key={i.type}>
-                  {i.count}× {i.title}
-                  {i.sample ? ` · ${i.sample}` : ''}
-                </li>
-              ))}
-          </ul>
-        ) : null}
-
-        <p className="bis-money-label">Sample lines</p>
+        <p className="bis-money-label">Sample good lines</p>
         <div className="bis-sample-list">
           {t.samplePreview.slice(0, 5).map((l) => (
             <div key={l.rowNumber} className="bis-sample-row">
@@ -892,29 +960,6 @@ export function BankImportStudioWizard({
               />
             </label>
           </div>
-          {(openingBalance || closingBalance) && file && bankId && sheetName ? (
-            <button
-              type="button"
-              className="bis-link"
-              onClick={() => {
-                startTransition(() => {
-                  runPreview(
-                    file,
-                    bankId,
-                    sheetName,
-                    mapping,
-                    openingBalance,
-                    closingBalance,
-                  ).then((res) => {
-                    if (res.ok) setPreview(res.preview);
-                    else setError(res.error);
-                  });
-                });
-              }}
-            >
-              Recheck totals
-            </button>
-          ) : null}
         </details>
 
         <label className="bis-check">

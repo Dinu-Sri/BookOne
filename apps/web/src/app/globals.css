@@ -7283,3 +7283,128 @@ textarea.input {
   flex: 1 1 auto;
   max-height: none;
 }
+
+/* Kill empty void between table and footer — pack sheet content to top */
+.bis-pane-sheet {
+  justify-content: flex-start !important;
+  background: #eef2f7 !important;
+}
+.bis-excel {
+  flex: 0 1 auto !important;
+  height: auto !important;
+  max-height: 100% !important;
+  width: 100%;
+  display: flex !important;
+  flex-direction: column !important;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.bis-excel-scroll {
+  flex: 0 1 auto !important;
+  overflow: auto !important;
+  max-height: min(52dvh, 420px) !important;
+}
+.bis-pane-step {
+  justify-content: flex-start !important;
+}
+.bis-step-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+/* Don't force workspace to stretch empty middle */
+.bis-workspace.split {
+  align-items: stretch !important;
+}
+
+.bis-excel-table tr.row-err td {
+  background: #fef2f2 !important;
+  box-shadow: inset 3px 0 0 #ef4444;
+}
+.bis-excel-table tr.row-err .bis-excel-rowhead {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+}
+
+.bis-fix-panel {
+  border: 1.5px solid #fca5a5;
+  background: #fef2f2;
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bis-fix-head strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  color: #991b1b;
+}
+.bis-fix-head span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+.bis-fix-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bis-fix-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #fecaca;
+}
+.bis-fix-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.bis-fix-text strong {
+  font-size: 12px;
+  font-weight: 800;
+  color: #7f1d1d;
+}
+.bis-fix-text span {
+  font-size: 11px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bis-fix-btn {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #f87171;
+  background: #fee2e2;
+  color: #991b1b;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.bis-problem-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bis-sample-row.err {
+  background: #fff1f2;
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+.bis-btn-block {
+  width: 100%;
+  justify-content: center;
+}

@@ -516,10 +516,11 @@ export async function commitStudioImport(formData: FormData): Promise<
       bankAccountId,
     });
 
-    if (transform.errorCount > 0) {
+    const skipErrorLines = formData.get('skipErrorLines') === '1';
+    if (transform.errorCount > 0 && !skipErrorLines) {
       return {
         ok: false,
-        error: `Fix ${transform.errorCount} problem(s) before import. ${transform.issues
+        error: `Fix ${transform.errorCount} problem(s), or choose “Save good lines only”. ${transform.issues
           .filter((i) => i.severity === 'error')
           .map((i) => i.title)
           .slice(0, 2)

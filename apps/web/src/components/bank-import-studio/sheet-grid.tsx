@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 export type SheetHighlight = {
   rows?: number[];
   cols?: number[];
+  /** Absolute workbook rows marked as errors (red) */
+  errorRows?: number[];
   colRoles?: Record<
     number,
     'date' | 'desc' | 'out' | 'in' | 'amount' | 'type' | 'balance' | 'active'
@@ -36,19 +38,20 @@ export function SheetGrid({
 }) {
   const colCount = grid[0]?.length ?? 0;
   const rowSet = new Set(highlight.rows ?? []);
+  const errorSet = new Set(highlight.errorRows ?? []);
   const colSet = new Set(highlight.cols ?? []);
   const roles = highlight.colRoles ?? {};
 
-  // Prefer showing the header row in view when highlighted
-  const focusRow = highlight.rows?.[0] ?? startRow;
+  // Prefer showing header or first error row in view
+  const focusRow = highlight.errorRows?.[0] ?? highlight.rows?.[0] ?? startRow;
   const initialPage = Math.max(0, Math.floor((focusRow - startRow) / PAGE_SIZE));
   const [page, setPage] = useState(initialPage);
 
   useEffect(() => {
-    const fr = highlight.rows?.[0];
+    const fr = highlight.errorRows?.[0] ?? highlight.rows?.[0];
     if (fr == null) return;
     setPage(Math.max(0, Math.floor((fr - startRow) / PAGE_SIZE)));
-  }, [highlight.rows, startRow, grid.length]);
+  }, [highlight.rows, highlight.errorRows, startRow, grid.length]);
 
   const totalPages = Math.max(1, Math.ceil(grid.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
@@ -94,11 +97,12 @@ export function SheetGrid({
           <tbody>
             {pageRows.map(({ abs, cells }) => {
               const isHeader = rowSet.has(abs);
+              const isError = errorSet.has(abs);
               const dim = highlight.dimAboveRow != null && abs < highlight.dimAboveRow;
               return (
                 <tr
                   key={abs}
-                  className={`${isHeader ? 'row-hl' : ''} ${dim ? 'row-dim' : ''}`}
+                  className={`${isHeader ? 'row-hl' : ''} ${isError ? 'row-err' : ''} ${dim ? 'row-dim' : ''}`}
                   onClick={() => {
                     if (highlight.clickMode === 'row') highlight.onRowClick?.(abs);
                   }}

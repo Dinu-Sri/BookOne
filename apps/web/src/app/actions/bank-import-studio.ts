@@ -548,6 +548,7 @@ export async function commitStudioImport(formData: FormData): Promise<
   | {
       ok: true;
       importId: string;
+      sessionId?: string;
       lineCount: number;
       duplicateCount: number;
       warnings: string[];

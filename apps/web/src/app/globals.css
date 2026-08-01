@@ -8035,48 +8035,46 @@ textarea.input {
   .bis-create-cats { grid-template-columns: 1fr; }
 }
 
-/* Bank Imports hub (cashbook + ERP) */
+/* Bank Imports hub (cashbook + ERP) — aligned to BookOne .card / .button */
 .bih-hub {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 .bih-lead {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0 0 4px;
+  font-size: 14px;
   font-weight: 600;
-  color: #64748b;
-  line-height: 1.4;
+  color: var(--ink-muted, #64748b);
+  line-height: 1.45;
   max-width: 52ch;
 }
 .bih-hub-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 .bih-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 28px 16px;
-  border-radius: 14px;
-  border: 1.5px dashed #cbd5e1;
-  background: #f8fafc;
+  gap: 10px;
+  padding: 32px 18px;
   text-align: center;
-  color: #64748b;
+  color: var(--ink-muted, #64748b);
 }
 .bih-empty strong {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ink, #0f172a);
 }
 .bih-empty p {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   max-width: 36ch;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .bih-list {
   list-style: none;
@@ -8084,23 +8082,26 @@ textarea.input {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .bih-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1.5px solid #e2e8f0;
-  background: #fff;
+  gap: 10px;
+  padding: 14px 16px;
   text-decoration: none;
   color: inherit;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
-.bih-card:hover {
-  border-color: #93c5fd;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+a.bih-card:hover {
+  border-color: var(--brand, #2563eb);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.07);
+}
+/* Full-width block buttons in recon drawers */
+.button.button-block,
+.button-block {
+  width: 100%;
+  justify-content: center;
 }
 .bih-card-top {
   display: flex;
@@ -8118,27 +8119,22 @@ textarea.input {
 }
 .bih-badge {
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 800;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #475569;
+  /* rest from .badge design system */
 }
 .bih-badge.need {
-  background: #fef3c7;
+  background: var(--warning-soft, #fef3c7);
   color: #92400e;
 }
 .bih-badge.warn {
-  background: #dbeafe;
+  background: var(--info-soft, #dbeafe);
   color: #1d4ed8;
 }
 .bih-badge.ok {
-  background: #dcfce7;
+  background: var(--success-soft, #dcfce7);
   color: #166534;
 }
 .bih-badge.muted {
-  background: #f1f5f9;
+  background: var(--surface-2, #f1f5f9);
   color: #64748b;
 }
 .bih-meta {
@@ -8189,14 +8185,22 @@ textarea.input {
   font-weight: 800;
 }
 
-/* Reconciliation workbench */
+/* Reconciliation workbench — match cashbook density + BookOne tokens */
 .brw-workspace { max-width: 1100px; }
 .brw {
   display: flex;
   flex-direction: column;
   gap: 14px;
   position: relative;
-  padding-bottom: 24px;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+}
+/* Hide duplicate secondary tab strip when chips already filter (desktop still has chips) */
+.brw-tabs {
+  display: none !important;
+}
+@media (max-width: 720px) {
+  /* On phone, chips scroll; keep short tabs optional off */
+  .brw-tabs { display: none !important; }
 }
 .brw-loading {
   display: flex;
@@ -8257,23 +8261,28 @@ textarea.input {
   .brw-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .brw-card {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1.5px solid #e2e8f0;
-  background: #fff;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--line, #e2e8f0);
+  background: var(--surface, #fff);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 64px;
+  gap: 6px;
+  min-height: 68px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .brw-card span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  color: var(--ink-muted, #64748b);
+  letter-spacing: 0.01em;
 }
-.brw-card strong { font-size: 15px; font-weight: 800; color: #0f172a; }
+.brw-card strong {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink, #0f172a);
+  font-variant-numeric: tabular-nums;
+}
 .brw-card.emphasize { border-width: 2px; }
 .brw-card.emphasize.ok { border-color: #86efac; background: #f0fdf4; }
 .brw-card.emphasize.ok strong { color: #15803d; }
@@ -8426,16 +8435,23 @@ textarea.input {
 .brw-table-wrap { overflow: auto; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff; }
 .brw-table { width: 100%; margin: 0; }
 .brw-table th {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #64748b;
-  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-muted, #64748b);
+  background: var(--surface-2, #f8fafc);
   position: sticky;
   top: 0;
   z-index: 1;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 12px;
 }
-.brw-table td { vertical-align: top; font-size: 13px; padding: 10px 12px; }
+.brw-table td {
+  vertical-align: top;
+  font-size: 14px;
+  padding: 12px;
+  line-height: 1.4;
+}
 .brw-table tr { cursor: pointer; }
 .brw-table tr.selected { background: #eff6ff; }
 .brw-table tr:hover { background: #f8fafc; }

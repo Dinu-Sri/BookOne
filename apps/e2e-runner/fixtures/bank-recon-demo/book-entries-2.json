@@ -1,0 +1,26 @@
+{
+  "period": "2026-08",
+  "entries": [
+    {
+      "date": "2026-08-03",
+      "direction": "money_in",
+      "party": "Demo Client B",
+      "description": "Demo Client B payment",
+      "amount": 18000
+    },
+    {
+      "date": "2026-08-05",
+      "direction": "money_out",
+      "party": "ISP Co",
+      "description": "Internet bill August",
+      "amount": 3500
+    },
+    {
+      "date": "2026-08-12",
+      "direction": "money_in",
+      "party": "Walk-in sales",
+      "description": "Walk-in sales deposit",
+      "amount": 32000
+    }
+  ]
+}

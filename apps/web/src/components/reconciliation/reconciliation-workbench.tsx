@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState, useTransition } from 'react';
@@ -45,7 +45,7 @@ import {
 import { listLiquidAccounts, type LiquidAccount } from '@/app/actions/cashbook-banks';
 
 function formatRs(n: number | null | undefined) {
-  if (n == null || Number.isNaN(n)) return '—';
+  if (n == null || Number.isNaN(n)) return 'â€”';
   const sign = n < 0 ? '-' : '';
   return `${sign}Rs. ${Math.abs(n).toLocaleString('en-LK', {
     minimumFractionDigits: 2,
@@ -54,7 +54,7 @@ function formatRs(n: number | null | undefined) {
 }
 
 function formatDate(iso: string | null | undefined) {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
   try {
     return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -173,10 +173,10 @@ export function ReconciliationWorkbench({
         const s = res.stats;
         if (s) {
           setInfo(
-            `Suggestions updated · bank lines ${s.workLines} (open ${s.openBank}) · ` +
-              `matched ${s.createdMatch} · add ${s.createdAdd} · waiting ${s.createdWait}` +
+            `Suggestions updated Â· bank lines ${s.workLines} (open ${s.openBank}) Â· ` +
+              `matched ${s.createdMatch} Â· add ${s.createdAdd} Â· waiting ${s.createdWait}` +
               (s.statusSample && Object.keys(s.statusSample).length
-                ? ` · statuses ${JSON.stringify(s.statusSample)}`
+                ? ` Â· statuses ${JSON.stringify(s.statusSample)}`
                 : ''),
           );
         } else {
@@ -277,7 +277,7 @@ export function ReconciliationWorkbench({
           setError(res.error);
           return;
         }
-        setInfo('Reconciliation finished — bank and BookOne agree.');
+        setInfo('Reconciliation finished â€” bank and BookOne agree.');
         setReviewOpen(false);
         load(tab, page, q);
       });
@@ -292,7 +292,7 @@ export function ReconciliationWorkbench({
           setError(res.error);
           return;
         }
-        setInfo('Reopened — you can continue matching.');
+        setInfo('Reopened â€” you can continue matching.');
         load('auto', 1, q);
       });
     });
@@ -403,7 +403,7 @@ export function ReconciliationWorkbench({
           setError(res.error);
           return;
         }
-        setInfo('Marked as normal entry — use Add to BookOne.');
+        setInfo('Marked as normal entry â€” use Add to BookOne.');
         setSelected(null);
         load(tab, page, q);
       });
@@ -484,7 +484,7 @@ export function ReconciliationWorkbench({
     return (
       <div className="brw-loading">
         <Loader2 className="spin" size={22} />
-        Loading reconciliation…
+        Loading reconciliationâ€¦
       </div>
     );
   }
@@ -492,7 +492,7 @@ export function ReconciliationWorkbench({
     return (
       <div className="brw-loading">
         {error ?? 'Session not found.'}
-        <Link href={inboxHref} className="bis-btn secondary" style={{ marginTop: 12 }}>
+        <Link href={inboxHref} className="button secondary" style={{ marginTop: 12 }}>
           Back
         </Link>
       </div>
@@ -531,8 +531,8 @@ export function ReconciliationWorkbench({
     .reduce((a, b) => a + b, 0);
 
   function rowActions(row: ReconCaseRow, block = false) {
-    const cls = block ? 'bis-btn primary bis-btn-block' : 'bis-btn primary';
-    const clsSec = block ? 'bis-btn secondary bis-btn-block' : 'bis-btn secondary';
+    const cls = block ? 'button primary button-block' : 'button primary';
+    const clsSec = block ? 'button secondary button-block' : 'button secondary';
     return (
       <>
         {row.caseType === 'match_1_1' && row.state !== 'confirmed' ? (
@@ -574,7 +574,7 @@ export function ReconciliationWorkbench({
             }}
           >
             <ArrowRightLeft size={14} />
-            Transfer…
+            Transferâ€¦
           </button>
         ) : null}
         {row.state !== 'confirmed' && row.state !== 'excluded' ? (
@@ -610,7 +610,7 @@ export function ReconciliationWorkbench({
       <>
         <div className="brw-cell-date">{formatDate(side.date)}</div>
         <div className="brw-cell-desc" title={side.description ?? undefined}>
-          {side.description || '—'}
+          {side.description || 'â€”'}
         </div>
         <div className={(side.amount ?? 0) < 0 ? 'brw-amt out' : 'brw-amt in'}>
           {formatRs(side.amount)}
@@ -624,33 +624,33 @@ export function ReconciliationWorkbench({
       <header className="brw-head">
         <div>
           <Link href={inboxHref} className="brw-back">
-            ← Bank reconciliations
+            â† Bank reconciliations
           </Link>
           <h1 className="brw-title">
             {s.bankName}
-            {s.bankCode ? ` · ${s.bankCode}` : ''}
+            {s.bankCode ? ` Â· ${s.bankCode}` : ''}
           </h1>
           <p className="brw-sub">
             <span className="brw-period-pill">{s.periodLabel}</span>
             {s.sourceFileCount > 0 ? (
               <span>
                 {' '}
-                · {s.sourceFileCount} file{s.sourceFileCount === 1 ? '' : 's'}
-                {s.sourceFiles[0] ? ` · ${s.sourceFiles.map((f) => f.fileName).join(', ')}` : ''}
+                Â· {s.sourceFileCount} file{s.sourceFileCount === 1 ? '' : 's'}
+                {s.sourceFiles[0] ? ` Â· ${s.sourceFiles.map((f) => f.fileName).join(', ')}` : ''}
               </span>
             ) : null}
           </p>
         </div>
         <div className="brw-head-actions">
-          <Link href={guidedHref} className="bis-btn secondary">
+          <Link href={guidedHref} className="button secondary">
             <ListOrdered size={14} />
             Fix one by one
           </Link>
-          <Link href={reportHref} className="bis-btn secondary" target="_blank">
+          <Link href={reportHref} className="button secondary" target="_blank">
             <FileText size={14} />
             Report
           </Link>
-          <button type="button" className="bis-btn secondary" disabled={pending} onClick={doRebuild}>
+          <button type="button" className="button secondary" disabled={pending} onClick={doRebuild}>
             <RefreshCw size={14} className={pending ? 'spin' : undefined} />
             Refresh
           </button>
@@ -676,7 +676,7 @@ export function ReconciliationWorkbench({
         </div>
       </div>
 
-      {/* Spec: summary first — what needs attention */}
+      {/* Spec: summary first â€” what needs attention */}
       <div className="brw-attention" aria-label="What needs attention">
         <button
           type="button"
@@ -737,16 +737,16 @@ export function ReconciliationWorkbench({
             {s.resolvedCaseCount} of{' '}
             {Math.max(s.resolvedCaseCount + s.openCaseCount, s.bankLineCount, 1)} resolved
             {workLeft > 0 ? (
-              <span className="brw-work-left"> · {workLeft} still need a look</span>
+              <span className="brw-work-left"> Â· {workLeft} still need a look</span>
             ) : (
-              <span className="brw-work-done"> · All clear</span>
+              <span className="brw-work-done"> Â· All clear</span>
             )}
           </strong>
           <div className="brw-progress-actions">
             {readyN > 0 ? (
               <button
                 type="button"
-                className="bis-btn primary"
+                className="button primary"
                 disabled={pending}
                 onClick={doBulkStrong}
               >
@@ -756,23 +756,23 @@ export function ReconciliationWorkbench({
             ) : null}
             <button
               type="button"
-              className="bis-btn secondary"
+              className="button secondary"
               disabled={pending}
               onClick={openManyToOne}
             >
               <Layers size={14} />
-              Many bank → 1 book
+              Many bank â†’ 1 book
             </button>
             <button
               type="button"
-              className="bis-btn secondary"
+              className="button secondary"
               disabled={pending}
               onClick={() => setReviewOpen((v) => !v)}
             >
               <ClipboardCheck size={14} />
               Review & finish
             </button>
-            <button type="button" className="bis-btn secondary" disabled={pending} onClick={doExport}>
+            <button type="button" className="button secondary" disabled={pending} onClick={doExport}>
               <Download size={14} />
               Export JSON
             </button>
@@ -780,7 +780,7 @@ export function ReconciliationWorkbench({
               s.status === 'reconciled' ? (
                 <button
                   type="button"
-                  className="bis-btn secondary"
+                  className="button secondary"
                   disabled={pending}
                   onClick={doReopen}
                 >
@@ -829,7 +829,7 @@ export function ReconciliationWorkbench({
       <div className="brw-toolbar">
         <input
           className="brw-search"
-          placeholder="Search description…"
+          placeholder="Search descriptionâ€¦"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -841,7 +841,7 @@ export function ReconciliationWorkbench({
         />
         <button
           type="button"
-          className="bis-btn secondary"
+          className="button secondary"
           disabled={pending}
           onClick={() => {
             setPage(1);
@@ -859,7 +859,7 @@ export function ReconciliationWorkbench({
         <section className="brw-review" aria-label="Final review">
           <h2 className="brw-review-title">Review reconciliation</h2>
           <p className="brw-muted">
-            {s.bankName} · {s.periodLabel}
+            {s.bankName} Â· {s.periodLabel}
           </p>
           <ul className="brw-review-stats">
             <li>
@@ -899,23 +899,23 @@ export function ReconciliationWorkbench({
             </div>
           </div>
           {review.finishBlockers.length > 0 ? (
-            <p className="bis-error">Still open: {review.finishBlockers.join(' · ')}</p>
+            <p className="bis-error">Still open: {review.finishBlockers.join(' Â· ')}</p>
           ) : (
             <p className="bis-match-info">
-              All clear — difference is zero and nothing needs attention.
+              All clear â€” difference is zero and nothing needs attention.
             </p>
           )}
           <div className="brw-review-actions">
             <button
               type="button"
-              className="bis-btn secondary"
+              className="button secondary"
               onClick={() => setReviewOpen(false)}
             >
               Back to workbench
             </button>
             <button
               type="button"
-              className="bis-btn primary"
+              className="button primary"
               disabled={pending || !review.canFinish}
               onClick={doFinish}
             >
@@ -942,7 +942,7 @@ export function ReconciliationWorkbench({
             {detail.cases.length === 0 ? (
               <tr>
                 <td colSpan={5} className="brw-empty-cell">
-                  {pending ? 'Loading…' : emptyTabMessage(tab)}
+                  {pending ? 'Loadingâ€¦' : emptyTabMessage(tab)}
                 </td>
               </tr>
             ) : (
@@ -957,17 +957,17 @@ export function ReconciliationWorkbench({
                   </td>
                   <td className="brw-conn" aria-hidden>
                     {row.connection === 'match'
-                      ? '↔'
+                      ? 'â†”'
                       : row.connection === 'bank_only'
-                        ? '→'
-                        : '←'}
+                        ? 'â†’'
+                        : 'â†'}
                   </td>
                   <td>
                     <SideCell side={row.book} empty="No BookOne record" />
                   </td>
                   <td>
                     <span className={`brw-result tone-${resultTone(row)}`}>
-                      {row.resultLabel ?? row.userLabel ?? '—'}
+                      {row.resultLabel ?? row.userLabel ?? 'â€”'}
                     </span>
                   </td>
                   <td className="brw-row-actions" onClick={(e) => e.stopPropagation()}>
@@ -983,7 +983,7 @@ export function ReconciliationWorkbench({
       {/* Mobile cards */}
       <div className="brw-cards-list brw-mobile-only">
         {detail.cases.length === 0 ? (
-          <div className="brw-empty-cell">{pending ? 'Loading…' : emptyTabMessage(tab)}</div>
+          <div className="brw-empty-cell">{pending ? 'Loadingâ€¦' : emptyTabMessage(tab)}</div>
         ) : (
           detail.cases.map((row) => (
             <article
@@ -993,7 +993,7 @@ export function ReconciliationWorkbench({
             >
               <div className="brw-case-card-head">
                 <span className={`brw-result tone-${resultTone(row)}`}>
-                  {row.resultLabel ?? row.userLabel ?? '—'}
+                  {row.resultLabel ?? row.userLabel ?? 'â€”'}
                 </span>
                 <span className="brw-case-conn" aria-hidden>
                   {row.connection === 'match'
@@ -1006,11 +1006,11 @@ export function ReconciliationWorkbench({
               <div className="brw-case-sides">
                 <div className="brw-case-side">
                   <span className="brw-case-side-label">Bank</span>
-                  <SideCell side={row.bank} empty="—" />
+                  <SideCell side={row.bank} empty="â€”" />
                 </div>
                 <div className="brw-case-side">
                   <span className="brw-case-side-label">BookOne</span>
-                  <SideCell side={row.book} empty="—" />
+                  <SideCell side={row.book} empty="â€”" />
                 </div>
               </div>
               <div className="brw-row-actions" onClick={(e) => e.stopPropagation()}>
@@ -1023,12 +1023,12 @@ export function ReconciliationWorkbench({
 
       <div className="brw-pager">
         <span>
-          {detail.totalCases} total · page {page} of {totalPages}
+          {detail.totalCases} total Â· page {page} of {totalPages}
         </span>
         <div className="brw-pager-btns">
           <button
             type="button"
-            className="bis-btn secondary"
+            className="button secondary"
             disabled={pending || page <= 1}
             onClick={() => {
               const p = page - 1;
@@ -1040,7 +1040,7 @@ export function ReconciliationWorkbench({
           </button>
           <button
             type="button"
-            className="bis-btn secondary"
+            className="button secondary"
             disabled={pending || page >= totalPages}
             onClick={() => {
               const p = page + 1;
@@ -1057,11 +1057,11 @@ export function ReconciliationWorkbench({
         <aside className="brw-drawer" aria-label="Case detail">
           <div className="brw-drawer-head">
             <strong>{selected.userLabel ?? selected.resultLabel ?? 'Details'}</strong>
-            <button type="button" className="bis-btn secondary" onClick={() => setSelected(null)}>
+            <button type="button" className="button secondary" onClick={() => setSelected(null)}>
               Close
             </button>
           </div>
-          <p className="brw-explain">{selected.explanation ?? '—'}</p>
+          <p className="brw-explain">{selected.explanation ?? 'â€”'}</p>
           {selected.reasonCodes.length > 0 ? (
             <p className="brw-muted">Why: {selected.reasonCodes.join(', ')}</p>
           ) : null}
@@ -1078,15 +1078,15 @@ export function ReconciliationWorkbench({
           {selected.caseType === 'transfer' && selected.state !== 'confirmed' ? (
             <div className="brw-xfer-panel">
               <p className="brw-explain">
-                If this is money moved between your own accounts, post it as a transfer — not
+                If this is money moved between your own accounts, post it as a transfer â€” not
                 income or expense. Optional fee: when money leaves this bank, fee is posted as bank
-                charge and the transfer is the remainder (e.g. 100,000 out → 99,500 transfer + 500
+                charge and the transfer is the remainder (e.g. 100,000 out â†’ 99,500 transfer + 500
                 fee).
               </p>
               <label className="brw-field">
                 <span>Other account</span>
                 <select value={xferTo} onChange={(e) => setXferTo(e.target.value)}>
-                  <option value="">Select…</option>
+                  <option value="">Selectâ€¦</option>
                   {otherBanks.map((a) => (
                     <option key={a.id} value={a.code}>
                       {a.shortName} ({a.code})
@@ -1109,14 +1109,14 @@ export function ReconciliationWorkbench({
               {(selected.bank.amount ?? 0) < 0 && Number(xferFee) > 0 ? (
                 <p className="brw-muted">
                   Transfer{' '}
-                  {formatRs(Math.abs(selected.bank.amount ?? 0) - Number(xferFee || 0))} · Fee{' '}
+                  {formatRs(Math.abs(selected.bank.amount ?? 0) - Number(xferFee || 0))} Â· Fee{' '}
                   {formatRs(Number(xferFee))}
                 </p>
               ) : null}
               <div className="brw-drawer-actions">
                 <button
                   type="button"
-                  className="bis-btn primary bis-btn-block"
+                  className="button primary button-block"
                   disabled={pending || !xferTo}
                   onClick={() => doTransferConfirm(selected.id)}
                 >
@@ -1126,7 +1126,7 @@ export function ReconciliationWorkbench({
                 </button>
                 <button
                   type="button"
-                  className="bis-btn secondary bis-btn-block"
+                  className="button secondary button-block"
                   disabled={pending}
                   onClick={() => doTransferReject(selected.id)}
                 >
@@ -1148,7 +1148,7 @@ export function ReconciliationWorkbench({
               <div className="brw-toolbar">
                 <input
                   className="brw-search"
-                  placeholder="Search BookOne…"
+                  placeholder="Search BookOneâ€¦"
                   value={groupQ}
                   onChange={(e) => setGroupQ(e.target.value)}
                   onKeyDown={(e) => {
@@ -1157,7 +1157,7 @@ export function ReconciliationWorkbench({
                 />
                 <button
                   type="button"
-                  className="bis-btn secondary"
+                  className="button secondary"
                   disabled={pending}
                   onClick={() => loadGroupCandidates(selected.id, groupQ)}
                 >
@@ -1166,7 +1166,7 @@ export function ReconciliationWorkbench({
               </div>
               {groupBankAmt != null ? (
                 <p className="brw-muted">
-                  Bank {formatRs(groupBankAmt)} · selected{' '}
+                  Bank {formatRs(groupBankAmt)} Â· selected{' '}
                   {formatRs(
                     groupCands
                       .filter((c) => groupSelected.includes(c.id))
@@ -1201,7 +1201,7 @@ export function ReconciliationWorkbench({
               {groupSelected.length > 0 ? (
                 <button
                   type="button"
-                  className="bis-btn primary bis-btn-block"
+                  className="button primary button-block"
                   disabled={pending}
                   onClick={() => doGroupConfirm(selected.id)}
                 >
@@ -1218,8 +1218,8 @@ export function ReconciliationWorkbench({
       {manyOpen ? (
         <aside className="brw-drawer brw-many-panel" aria-label="Many bank to one book">
           <div className="brw-drawer-head">
-            <strong>Many bank lines → one BookOne</strong>
-            <button type="button" className="bis-btn secondary" onClick={() => setManyOpen(false)}>
+            <strong>Many bank lines â†’ one BookOne</strong>
+            <button type="button" className="button secondary" onClick={() => setManyOpen(false)}>
               Close
             </button>
           </div>
@@ -1259,7 +1259,7 @@ export function ReconciliationWorkbench({
           <div className="brw-toolbar">
             <input
               className="brw-search"
-              placeholder="Search BookOne record…"
+              placeholder="Search BookOne recordâ€¦"
               value={manyQ}
               onChange={(e) => setManyQ(e.target.value)}
               onKeyDown={(e) => {
@@ -1268,7 +1268,7 @@ export function ReconciliationWorkbench({
             />
             <button
               type="button"
-              className="bis-btn secondary"
+              className="button secondary"
               disabled={pending || manySelectedLines.length < 2}
               onClick={searchManyBooks}
             >
@@ -1296,11 +1296,11 @@ export function ReconciliationWorkbench({
           </ul>
           <button
             type="button"
-            className="bis-btn primary bis-btn-block"
+            className="button primary button-block"
             disabled={pending || manySelectedLines.length < 2 || !manyBookId}
             onClick={doManyToOne}
           >
-            Confirm {manySelectedLines.length} bank → 1 BookOne
+            Confirm {manySelectedLines.length} bank â†’ 1 BookOne
           </button>
         </aside>
       ) : null}
@@ -1328,3 +1328,5 @@ function emptyTabMessage(tab: string) {
       return 'Nothing in this tab.';
   }
 }
+
+

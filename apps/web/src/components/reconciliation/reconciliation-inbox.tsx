@@ -39,21 +39,21 @@ export function ReconciliationInbox({
     <div className="bih-hub">
       {showImportButton && sessions.length > 0 ? (
         <div className="bih-hub-actions">
-          <Link href={importHref} className="bis-btn primary">
+          <Link href={importHref} className="button primary">
             Import bank file
           </Link>
         </div>
       ) : null}
 
       {sessions.length === 0 ? (
-        <div className="bih-empty">
+        <div className="card pad bih-empty">
           <Landmark size={28} />
           <strong>No reconciliations yet</strong>
           <p>
             Import a bank Excel or CSV. BookOne groups it by bank account and statement period so you
             can match safely.
           </p>
-          <Link href={importHref} className="bis-btn primary">
+          <Link href={importHref} className="button primary">
             Import bank file
           </Link>
         </div>
@@ -64,13 +64,13 @@ export function ReconciliationInbox({
             const cta = open > 0 ? 'Continue' : s.status === 'reconciled' ? 'View' : 'Open';
             return (
               <li key={s.id}>
-                <Link href={`${sessionBase}/${s.id}`} className="bih-card">
+                <Link href={`${sessionBase}/${s.id}`} className="card bih-card">
                   <div className="bih-card-top">
                     <strong className="bih-file">
                       {s.bankName}
                       {s.bankCode ? ` · ${s.bankCode}` : ''}
                     </strong>
-                    <span className={`bih-badge ${tone(s.status)}`}>{s.statusLabel}</span>
+                    <span className={`badge bih-badge ${tone(s.status)}`}>{s.statusLabel}</span>
                   </div>
                   <div className="bih-meta">
                     <span className="bih-period">{s.periodLabel}</span>

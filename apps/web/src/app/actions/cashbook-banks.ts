@@ -58,7 +58,11 @@ export async function listLiquidAccounts(): Promise<LiquidAccount[]> {
         id: r.id,
         code: r.code,
         name: r.name,
-        shortName: r.name.replace(/^Bank\s*[·\-–:]?\s*/i, '').trim() || r.name,
+        // Keep "Bank" for default 1100 so pay tiles stay clear (not stripped to "Account")
+        shortName:
+          r.code === '1100'
+            ? 'Bank'
+            : r.name.replace(/^Bank\s*[·\-–:]?\s*/i, '').trim() || r.name,
         kind: classify(r.code),
       }));
   });

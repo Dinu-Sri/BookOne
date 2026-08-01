@@ -41,11 +41,15 @@ export interface ReversalResult {
   error?: string;
 }
 
-async function resolveAccountId(code: string): Promise<string> {
+async function resolveAccountId(code: string, tenantId?: string): Promise<string> {
   const [account] = await db()
     .select({ id: accounts.id })
     .from(accounts)
-    .where(eq(accounts.code, code))
+    .where(
+      tenantId
+        ? and(eq(accounts.code, code), eq(accounts.tenantId, tenantId), isNull(accounts.voidedAt))
+        : and(eq(accounts.code, code), isNull(accounts.voidedAt)),
+    )
     .limit(1);
 
   if (!account) {
@@ -143,17 +147,26 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
 
     const { transaction, journal } = inferTransaction(engineEntry);
 
-    // Resolve account codes to DB IDs for journal line inserts
+    // Resolve account codes to DB IDs for journal line inserts (scoped to this tenant)
     const accountIdMap = new Map<string, string>();
     for (const line of journal.lines) {
       if (!accountIdMap.has(line.account.code)) {
-        accountIdMap.set(line.account.code, await resolveAccountId(line.account.code));
+        accountIdMap.set(
+          line.account.code,
+          await resolveAccountId(line.account.code, user.tenantId),
+        );
       }
     }
-    const paymentAccountId = await resolveAccountId(transaction.paymentAccount.code);
+    const paymentAccountId = await resolveAccountId(
+      transaction.paymentAccount.code,
+      user.tenantId,
+    );
     let transferSourceAccountId: string | null = null;
     if (transaction.transferSourceAccount) {
-      transferSourceAccountId = await resolveAccountId(transaction.transferSourceAccount.code);
+      transferSourceAccountId = await resolveAccountId(
+        transaction.transferSourceAccount.code,
+        user.tenantId,
+      );
     }
 
     // Execute everything in one DB transaction

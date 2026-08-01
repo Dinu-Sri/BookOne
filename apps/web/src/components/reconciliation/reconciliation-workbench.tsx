@@ -144,10 +144,11 @@ export function ReconciliationWorkbench({
   const load = useCallback(
     (t = tab, p = page, query = q) => {
       startTransition(() => {
-        openReconciliationSession(sessionId, { tab: t, page: p, pageSize: 20, q: query }).then(
-          (res) => {
+        openReconciliationSession(sessionId, { tab: t, page: p, pageSize: 20, q: query })
+          .then((res) => {
             if (!res.ok) {
               setError(res.error);
+              pushStatusToast({ kind: 'error', message: res.error });
               return;
             }
             setDetail(res.detail);
@@ -155,8 +156,12 @@ export function ReconciliationWorkbench({
               setTab(res.detail.activeTab);
             }
             setError(null);
-          },
-        );
+          })
+          .catch((e) => {
+            const msg = e instanceof Error ? e.message : 'Could not load reconciliation.';
+            setError(msg);
+            pushStatusToast({ kind: 'error', message: msg });
+          });
       });
     },
     [sessionId, tab, page, q],

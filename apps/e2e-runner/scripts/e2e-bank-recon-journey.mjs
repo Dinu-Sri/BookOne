@@ -472,7 +472,13 @@ async function importBank(page, filePath, tag) {
 }
 
 async function workOpenSession(page, tag) {
-  await page.waitForTimeout(2000);
+  // Wait for workbench (not stuck on loading spinner)
+  await page
+    .locator('.brw-title, .brw-chip, .brw-cards, .bis-error')
+    .first()
+    .waitFor({ state: 'visible', timeout: 60_000 })
+    .catch(() => {});
+  await page.waitForTimeout(1500);
   await shot(page, `${tag}-workbench`);
   audit.urls.workbench = page.url();
   note(`${tag}-workbench-ui`, 'CHECK', page.url(), [

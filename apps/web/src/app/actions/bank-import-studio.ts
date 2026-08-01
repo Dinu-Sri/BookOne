@@ -927,6 +927,16 @@ export async function commitStudioImport(formData: FormData): Promise<
       };
     });
 
+    // Attach to recon session immediately so inbox shows the bank+period card
+    let sessionId: string | undefined;
+    try {
+      const { getOrCreateSessionFromImport } = await import('@/app/actions/bank-reconciliation');
+      const sessionRes = await getOrCreateSessionFromImport(importId);
+      if (sessionRes.ok) sessionId = sessionRes.sessionId;
+    } catch {
+      /* non-fatal — listReconciliationSessions will retry later */
+    }
+
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/import');
     revalidatePath('/cashbook/match');
@@ -936,6 +946,7 @@ export async function commitStudioImport(formData: FormData): Promise<
     return {
       ok: true,
       importId,
+      sessionId,
       lineCount: lineCount.lineCount,
       duplicateCount: lineCount.duplicateCount,
       warnings: lineCount.warnings,

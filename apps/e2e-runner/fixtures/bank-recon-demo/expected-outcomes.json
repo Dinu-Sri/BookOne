@@ -1,0 +1,23 @@
+{
+  "period": "2026-07",
+  "expectedAfterRefresh": {
+    "readyOrDecisionMin": 4,
+    "addMin": 1,
+    "waitingMin": 1,
+    "notes": [
+      "At least 4 strong/decision matches from the 5 aligned book+bank pairs",
+      "ATM SERVICE CHARGE should appear under Add to BookOne",
+      "Cheque to vendor should appear under Waiting to clear"
+    ]
+  },
+  "happyPath": [
+    "Post 6 book entries via cashbook",
+    "Import bank-statement.csv via studio and commit",
+    "Open Bank reconciliation session",
+    "Refresh suggestions",
+    "Confirm safe matches",
+    "Add ATM fee to BookOne",
+    "Mark cheque as still waiting",
+    "Open report page"
+  ]
+}

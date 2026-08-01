@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Statement">
+  <Table>
+<Row><Cell><Data ss:Type="String">Date</Data></Cell><Cell><Data ss:Type="String">Description</Data></Cell><Cell><Data ss:Type="String">Debit</Data></Cell><Cell><Data ss:Type="String">Credit</Data></Cell><Cell><Data ss:Type="String">Balance</Data></Cell></Row>
+<Row><Cell><Data ss:Type="String">2026-07-01</Data></Cell><Cell><Data ss:Type="String">OPENING BALANCE</Data></Cell><Cell><Data ss:Type="String"></Data></Cell><Cell><Data ss:Type="String"></Data></Cell><Cell><Data ss:Type="String">100000.00</Data></Cell></Row>
+<Row><Cell><Data ss:Type="String">2026-07-05</Data></Cell><Cell><Data ss:Type="String">Demo Client A payment</Data></Cell><Cell><Data ss:Type="String"></Data></Cell><Cell><Data ss:Type="String">25000.00</Data></Cell><Cell><Data ss:Type="String">125000.00</Data></Cell></Row>
+<Row><Cell><Data ss:Type="String">2026-07-08</Data></Cell><Cell><Data ss:Type="String">Office rent July</Data></Cell><Cell><Data ss:Type="String">15000.00</Data></Cell><Cell><Data ss:Type="String"></Data></Cell><Cell><Data ss:Type="String">110000.00</Data></Cell></Row>
+<Row><Cell><Data ss:Type="String">2026-07-12</Data></Cell><Cell><Data ss:Type="String">Supplier ABC payment</Data></Cell><Cell><Data ss:Type="String">8500.00</Data></Cell><Cell><Data ss:Type="String"></Data></Cell><Cell><Data ss:Type="String">101500.00</Data></Cell></Row>
+<Row><Cell><Data ss:Type="String">2026-07-15</Data></Cell><Cell><Data ss:Type="String">Daily sales deposit</Data></Cell><Cell><Data ss:Type="String"></Data></Cell><Cell><Data ss:Type="String">42000.00</Data></Cell><Cell><Data ss:Type="String">143500.00</Data></Cell></Row>
+<Row><Cell><Data ss:Type="String">2026-07-18</Data></Cell><Cell><Data ss:Type="String">ATM SERVICE CHARGE</Data></Cell><Cell><Data ss:Type="String">150.00</Data></Cell><Cell><Data ss:Type="String"></Data></Cell><Cell><Data ss:Type="String">143350.00</Data></Cell></Row>
+<Row><Cell><Data ss:Type="String">2026-07-20</Data></Cell><Cell><Data ss:Type="String">Owner contribution</Data></Cell><Cell><Data ss:Type="String"></Data></Cell><Cell><Data ss:Type="String">10000.00</Data></Cell><Cell><Data ss:Type="String">153350.00</Data></Cell></Row>
+  </Table>
+ </Worksheet>
+</Workbook>

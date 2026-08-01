@@ -8,6 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "ui-audit:cashbook": "node scripts/ui-audit-cashbook.mjs",
+    "demo:bank-recon": "node scripts/e2e-bank-recon-demo.mjs",
+    "demo:bank-recon:xlsx": "node fixtures/bank-recon-demo/generate-xlsx.mjs",
     "test:e2e": "node scripts/run-suite.mjs core",
     "test:smoke": "node scripts/run-suite.mjs smoke",
     "test:p0": "node scripts/run-suite.mjs p0",

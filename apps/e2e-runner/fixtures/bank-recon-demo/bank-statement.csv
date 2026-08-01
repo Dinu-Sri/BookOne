@@ -1,0 +1,8 @@
+Date,Description,Debit,Credit,Balance
+2026-07-01,OPENING BALANCE,,,100000.00
+2026-07-05,Demo Client A payment,,25000.00,125000.00
+2026-07-08,Office rent July,15000.00,,110000.00
+2026-07-12,Supplier ABC payment,8500.00,,101500.00
+2026-07-15,Daily sales deposit,,42000.00,143500.00
+2026-07-18,ATM SERVICE CHARGE,150.00,,143350.00
+2026-07-20,Owner contribution,,10000.00,153350.00

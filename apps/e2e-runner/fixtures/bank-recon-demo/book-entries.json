@@ -1,0 +1,72 @@
+{
+  "period": "2026-07",
+  "periodLabel": "July 2026",
+  "bankCodeHint": "1100",
+  "description": "Demo book entries to post in Cashbook before importing the bank statement. Amounts and descriptions intentionally align with bank-statement.csv for exact matches.",
+  "entries": [
+    {
+      "id": "book-1",
+      "date": "2026-07-05",
+      "direction": "money_in",
+      "moneyInType": "new_sale",
+      "party": "Demo Client A",
+      "description": "Demo Client A payment",
+      "amount": 25000,
+      "category": "4000",
+      "expect": "match"
+    },
+    {
+      "id": "book-2",
+      "date": "2026-07-08",
+      "direction": "money_out",
+      "party": "Landlord Co",
+      "description": "Office rent July",
+      "amount": 15000,
+      "category": "6000",
+      "expect": "match"
+    },
+    {
+      "id": "book-3",
+      "date": "2026-07-12",
+      "direction": "money_out",
+      "party": "Supplier ABC",
+      "description": "Supplier ABC payment",
+      "amount": 8500,
+      "category": "6000",
+      "expect": "match"
+    },
+    {
+      "id": "book-4",
+      "date": "2026-07-15",
+      "direction": "money_in",
+      "moneyInType": "new_sale",
+      "party": "Walk-in sales",
+      "description": "Daily sales deposit",
+      "amount": 42000,
+      "category": "4000",
+      "expect": "match"
+    },
+    {
+      "id": "book-5",
+      "date": "2026-07-20",
+      "direction": "money_in",
+      "moneyInType": "owner_contribution",
+      "party": "Owner",
+      "description": "Owner contribution",
+      "amount": 10000,
+      "category": "4000",
+      "expect": "match"
+    },
+    {
+      "id": "book-6",
+      "date": "2026-07-28",
+      "direction": "money_out",
+      "party": "Vendor XYZ",
+      "description": "Cheque to vendor (not cleared)",
+      "amount": 5000,
+      "category": "6000",
+      "expect": "waiting_to_clear",
+      "note": "Intentionally missing from bank statement so recon shows Waiting to clear"
+    }
+  ]
+}

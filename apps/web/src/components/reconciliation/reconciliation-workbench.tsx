@@ -15,25 +15,32 @@ import {
   Ban,
   ClipboardCheck,
   Download,
+  ListOrdered,
+  FileText,
+  Layers,
 } from 'lucide-react';
 import {
   bulkConfirmStrongMatches,
   confirmCaseMatch,
   confirmGroupMatch,
+  confirmManyBanksOneBook,
   confirmTransferCase,
   createCaseEntry,
   excludeCase,
   exportReconciliationSummary,
   finishReconciliationSession,
+  listUnmatchedBankLinesForSession,
   markCaseOutstanding,
   openReconciliationSession,
   rebuildSessionSuggestions,
   rejectTransferCase,
   reopenReconciliationSession,
+  searchBookForSession,
   searchGroupBookCandidates,
   undoCaseMatch,
   type ReconCaseRow,
   type ReconSessionDetail,
+  type UnmatchedBankLineOption,
 } from '@/app/actions/bank-reconciliation';
 import { listLiquidAccounts, type LiquidAccount } from '@/app/actions/cashbook-banks';
 
@@ -111,6 +118,15 @@ export function ReconciliationWorkbench({
   const [groupBankAmt, setGroupBankAmt] = useState<number | null>(null);
   const [groupSelected, setGroupSelected] = useState<string[]>([]);
   const [groupQ, setGroupQ] = useState('');
+  const [xferFee, setXferFee] = useState('');
+  const [manyOpen, setManyOpen] = useState(false);
+  const [manyBanks, setManyBanks] = useState<UnmatchedBankLineOption[]>([]);
+  const [manySelectedLines, setManySelectedLines] = useState<string[]>([]);
+  const [manyBooks, setManyBooks] = useState<
+    { id: string; date: string; description: string; amountSigned: number }[]
+  >([]);
+  const [manyBookId, setManyBookId] = useState('');
+  const [manyQ, setManyQ] = useState('');
 
   const load = useCallback(
     (t = tab, p = page, query = q) => {
@@ -287,15 +303,94 @@ export function ReconciliationWorkbench({
       setError('Choose the other account for this transfer.');
       return;
     }
-    if (!window.confirm('Post this as a transfer (move money) between your accounts?')) return;
+    const fee = Math.max(0, Number(xferFee) || 0);
+    const feeNote =
+      fee > 0
+        ? ` Transfer Rs. net of fee, plus bank fee Rs. ${fee.toFixed(2)}.`
+        : '';
+    if (
+      !window.confirm(
+        `Post this as a transfer (move money) between your accounts?${feeNote}`,
+      )
+    )
+      return;
     startTransition(() => {
-      confirmTransferCase({ caseId, counterpartyAccountCode: xferTo }).then((res) => {
+      confirmTransferCase({
+        caseId,
+        counterpartyAccountCode: xferTo,
+        feeAmount: fee > 0 ? fee : undefined,
+      }).then((res) => {
         if (!res.ok) {
           setError(res.error);
           return;
         }
-        setInfo('Transfer posted.');
+        setInfo(
+          fee > 0
+            ? `Transfer posted with fee Rs. ${fee.toFixed(2)}.`
+            : 'Transfer posted.',
+        );
         setSelected(null);
+        setXferFee('');
+        load(tab, page, q);
+      });
+    });
+  }
+
+  function openManyToOne() {
+    setManyOpen(true);
+    setManySelectedLines([]);
+    setManyBookId('');
+    startTransition(() => {
+      listUnmatchedBankLinesForSession(sessionId).then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setManyBanks(res.lines);
+      });
+    });
+  }
+
+  function searchManyBooks() {
+    const target = manySelectedLines
+      .map((id) => manyBanks.find((b) => b.lineId === id)?.amount ?? 0)
+      .reduce((a, b) => a + b, 0);
+    startTransition(() => {
+      searchBookForSession({
+        sessionId,
+        q: manyQ,
+        targetAmount: target || undefined,
+      }).then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setManyBooks(res.candidates);
+      });
+    });
+  }
+
+  function doManyToOne() {
+    if (manySelectedLines.length < 2) {
+      setError('Select at least two bank lines.');
+      return;
+    }
+    if (!manyBookId) {
+      setError('Select one BookOne record.');
+      return;
+    }
+    startTransition(() => {
+      confirmManyBanksOneBook({
+        sessionId,
+        bankLineIds: manySelectedLines,
+        transactionId: manyBookId,
+      }).then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setInfo(`Matched ${manySelectedLines.length} bank lines to one BookOne record.`);
+        setManyOpen(false);
         load(tab, page, q);
       });
     });
@@ -424,6 +519,16 @@ export function ReconciliationWorkbench({
   const otherBanks = liquid.filter(
     (a) => a.code !== s.bankCode && (a.kind === 'bank' || a.kind === 'cash' || a.kind === 'card'),
   );
+  const isCashbook = inboxHref.includes('/cashbook');
+  const guidedHref = isCashbook
+    ? `/cashbook/recon/${sessionId}/guided`
+    : `/reconciliation/session/${sessionId}/guided`;
+  const reportHref = isCashbook
+    ? `/cashbook/recon/${sessionId}/report`
+    : `/reconciliation/session/${sessionId}/report`;
+  const manyBankSum = manySelectedLines
+    .map((id) => manyBanks.find((b) => b.lineId === id)?.amount ?? 0)
+    .reduce((a, b) => a + b, 0);
 
   function rowActions(row: ReconCaseRow, block = false) {
     const cls = block ? 'bis-btn primary bis-btn-block' : 'bis-btn primary';
@@ -537,6 +642,14 @@ export function ReconciliationWorkbench({
           </p>
         </div>
         <div className="brw-head-actions">
+          <Link href={guidedHref} className="bis-btn secondary">
+            <ListOrdered size={14} />
+            Fix one by one
+          </Link>
+          <Link href={reportHref} className="bis-btn secondary" target="_blank">
+            <FileText size={14} />
+            Report
+          </Link>
           <button type="button" className="bis-btn secondary" disabled={pending} onClick={doRebuild}>
             <RefreshCw size={14} className={pending ? 'spin' : undefined} />
             Refresh
@@ -645,6 +758,15 @@ export function ReconciliationWorkbench({
               type="button"
               className="bis-btn secondary"
               disabled={pending}
+              onClick={openManyToOne}
+            >
+              <Layers size={14} />
+              Many bank → 1 book
+            </button>
+            <button
+              type="button"
+              className="bis-btn secondary"
+              disabled={pending}
               onClick={() => setReviewOpen((v) => !v)}
             >
               <ClipboardCheck size={14} />
@@ -652,7 +774,7 @@ export function ReconciliationWorkbench({
             </button>
             <button type="button" className="bis-btn secondary" disabled={pending} onClick={doExport}>
               <Download size={14} />
-              Export
+              Export JSON
             </button>
             {s.status === 'reconciled' || s.status === 'reopened' ? (
               s.status === 'reconciled' ? (
@@ -957,7 +1079,9 @@ export function ReconciliationWorkbench({
             <div className="brw-xfer-panel">
               <p className="brw-explain">
                 If this is money moved between your own accounts, post it as a transfer — not
-                income or expense.
+                income or expense. Optional fee: when money leaves this bank, fee is posted as bank
+                charge and the transfer is the remainder (e.g. 100,000 out → 99,500 transfer + 500
+                fee).
               </p>
               <label className="brw-field">
                 <span>Other account</span>
@@ -970,6 +1094,25 @@ export function ReconciliationWorkbench({
                   ))}
                 </select>
               </label>
+              <label className="brw-field">
+                <span>Bank fee / adjustment (optional, Rs.)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="brw-search"
+                  placeholder="0.00"
+                  value={xferFee}
+                  onChange={(e) => setXferFee(e.target.value)}
+                />
+              </label>
+              {(selected.bank.amount ?? 0) < 0 && Number(xferFee) > 0 ? (
+                <p className="brw-muted">
+                  Transfer{' '}
+                  {formatRs(Math.abs(selected.bank.amount ?? 0) - Number(xferFee || 0))} · Fee{' '}
+                  {formatRs(Number(xferFee))}
+                </p>
+              ) : null}
               <div className="brw-drawer-actions">
                 <button
                   type="button"
@@ -979,6 +1122,7 @@ export function ReconciliationWorkbench({
                 >
                   <ArrowRightLeft size={14} />
                   Yes, post transfer
+                  {Number(xferFee) > 0 ? ' + fee' : ''}
                 </button>
                 <button
                   type="button"
@@ -1068,6 +1212,96 @@ export function ReconciliationWorkbench({
           ) : null}
 
           <div className="brw-drawer-actions">{rowActions(selected, true)}</div>
+        </aside>
+      ) : null}
+
+      {manyOpen ? (
+        <aside className="brw-drawer brw-many-panel" aria-label="Many bank to one book">
+          <div className="brw-drawer-head">
+            <strong>Many bank lines → one BookOne</strong>
+            <button type="button" className="bis-btn secondary" onClick={() => setManyOpen(false)}>
+              Close
+            </button>
+          </div>
+          <p className="brw-muted">
+            Select 2+ bank lines that make up one BookOne entry (e.g. split deposits). Sum must
+            match.
+          </p>
+          <p className="brw-cell-date">Selected bank total: {formatRs(manyBankSum)}</p>
+          <ul className="brw-group-list">
+            {manyBanks.length === 0 ? (
+              <li className="brw-muted">No open bank lines to group.</li>
+            ) : (
+              manyBanks.map((l) => (
+                <li key={l.lineId}>
+                  <label className="brw-group-row">
+                    <input
+                      type="checkbox"
+                      checked={manySelectedLines.includes(l.lineId)}
+                      onChange={() => {
+                        setManySelectedLines((prev) =>
+                          prev.includes(l.lineId)
+                            ? prev.filter((x) => x !== l.lineId)
+                            : [...prev, l.lineId],
+                        );
+                      }}
+                    />
+                    <span className="brw-cell-date">{formatDate(l.date)}</span>
+                    <span className="brw-cell-desc">{l.description}</span>
+                    <span className={l.amount < 0 ? 'brw-amt out' : 'brw-amt in'}>
+                      {formatRs(l.amount)}
+                    </span>
+                  </label>
+                </li>
+              ))
+            )}
+          </ul>
+          <div className="brw-toolbar">
+            <input
+              className="brw-search"
+              placeholder="Search BookOne record…"
+              value={manyQ}
+              onChange={(e) => setManyQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') searchManyBooks();
+              }}
+            />
+            <button
+              type="button"
+              className="bis-btn secondary"
+              disabled={pending || manySelectedLines.length < 2}
+              onClick={searchManyBooks}
+            >
+              Find BookOne
+            </button>
+          </div>
+          <ul className="brw-group-list">
+            {manyBooks.map((b) => (
+              <li key={b.id}>
+                <label className="brw-group-row">
+                  <input
+                    type="radio"
+                    name="many-book"
+                    checked={manyBookId === b.id}
+                    onChange={() => setManyBookId(b.id)}
+                  />
+                  <span className="brw-cell-date">{formatDate(b.date)}</span>
+                  <span className="brw-cell-desc">{b.description}</span>
+                  <span className={b.amountSigned < 0 ? 'brw-amt out' : 'brw-amt in'}>
+                    {formatRs(b.amountSigned)}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="bis-btn primary bis-btn-block"
+            disabled={pending || manySelectedLines.length < 2 || !manyBookId}
+            onClick={doManyToOne}
+          >
+            Confirm {manySelectedLines.length} bank → 1 BookOne
+          </button>
         </aside>
       ) : null}
     </div>

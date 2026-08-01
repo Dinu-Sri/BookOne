@@ -256,38 +256,44 @@ async function postEntry(page, entry, period) {
   const catBtn = catTiles.locator('button.cashbook-tile').first();
   if (await catBtn.count()) await catBtn.click().catch(() => {});
 
-  // Account: LiquidTiles under "Account" — MUST be Bank (1100), not Cash
-  const accountField = page.locator('.cb-field').filter({ hasText: /Account|ගිණුම/i });
-  const liquidBtns = accountField.locator('button.cashbook-tile, .cb-liquid-tiles button');
-  let bankPicked = false;
-  const ln = await liquidBtns.count();
-  for (let i = 0; i < ln; i++) {
-    const t = (await liquidBtns.nth(i).innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
-    if (/^Cash$/i.test(t)) continue;
-    if (/Bank|1100|HNB|BOC|Sampath/i.test(t)) {
-      await liquidBtns.nth(i).click();
-      bankPicked = true;
-      break;
+  // Account liquid tiles — scope ONLY to cb-liquid-tiles (not category pay tiles)
+  async function pickBankAccount() {
+    await page.waitForTimeout(400);
+    const liquid = page.locator('.cb-sheet .cb-liquid-tiles button.cashbook-tile');
+    const ln = await liquid.count();
+    for (let i = 0; i < ln; i++) {
+      const t = (await liquid.nth(i).innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+      if (/^Cash$/i.test(t)) continue;
+      if (/Bank|1100|HNB|BOC|Sampath|Commercial/i.test(t)) {
+        await liquid.nth(i).click({ force: true });
+        return t;
+      }
     }
+    if (ln > 1) {
+      await liquid.nth(1).click({ force: true });
+      return (await liquid.nth(1).innerText()).trim();
+    }
+    return null;
   }
-  if (!bankPicked && ln > 1) {
-    // Second liquid tile is usually Bank when first is Cash
-    await liquidBtns.nth(1).click().catch(() => {});
-    bankPicked = true;
-  }
-  if (!bankPicked) {
-    // Global fallback: any Bank tile in sheet
-    const anyBank = page
-      .locator('.cb-sheet button.cashbook-tile')
-      .filter({ hasText: /^Bank$|Bank Account|1100/i })
-      .first();
-    if (await anyBank.count()) {
-      await anyBank.click();
-      bankPicked = true;
+  let bankLabel = await pickBankAccount();
+  if (!bankLabel) {
+    // Absolute last resort: second cashbook-tile in sheet that is not Cash category
+    const tiles = page.locator('.cb-sheet button.cashbook-tile.pay');
+    const tn = await tiles.count();
+    for (let i = 0; i < tn; i++) {
+      const t = (await tiles.nth(i).innerText()).replace(/\s+/g, ' ').trim();
+      if (t === 'Bank' || /^Bank /i.test(t) || t.includes('1100')) {
+        await tiles.nth(i).click({ force: true });
+        bankLabel = t;
+        break;
+      }
     }
   }
 
-  const more = page.locator('.cb-sheet button.cb-details-toggle, .cb-sheet button').filter({ hasText: /More details|date, note|▼/i }).first();
+  const more = page
+    .locator('.cb-sheet button.cb-details-toggle, .cb-sheet button')
+    .filter({ hasText: /More details|date, note|▼/i })
+    .first();
   if (await more.count()) await more.click();
   await page.waitForTimeout(200);
 
@@ -297,18 +303,20 @@ async function postEntry(page, entry, period) {
   if (await desc.count()) await desc.fill(entry.description);
   await pickDateField(page, entry.date);
 
-  // Re-assert Bank after other clicks (some flows reset pay method)
-  const reBank = page
-    .locator('.cb-field')
-    .filter({ hasText: /Account|ගිණුම/i })
-    .locator('button.cashbook-tile')
-    .filter({ hasText: /Bank|1100/i })
-    .first();
-  if (await reBank.count()) await reBank.click().catch(() => {});
+  // Re-assert Bank right before save (openMode / last-pay can leave Cash selected)
+  bankLabel = (await pickBankAccount()) || bankLabel;
 
   await page.locator('.cb-sheet button.cashbook-save, .cb-sheet button.cb-sheet-save').first().click();
   await page.waitForTimeout(1200);
-  await page.locator('.cb-saved-toast, .cb-sheet').filter({ hasText: /Saved/i }).first().waitFor({ state: 'visible', timeout: 4000 }).catch(() => {});
+  await page
+    .locator('.cb-saved-toast, .cb-sheet')
+    .filter({ hasText: /Saved/i })
+    .first()
+    .waitFor({ state: 'visible', timeout: 4000 })
+    .catch(() => {});
+  if (entry.id === 'book-1' || entry.id === 'book-entries-2-1') {
+    note('post-bank-account', bankLabel ? 'OK' : 'WARN', bankLabel || 'Bank account tile not clicked');
+  }
 }
 
 async function postBooks(page, entries, period, tag) {

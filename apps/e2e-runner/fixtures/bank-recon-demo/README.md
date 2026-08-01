@@ -24,19 +24,33 @@ End-to-end demo data for BookOne bank recon (July 2026).
 | 6 | Cheque −5,000 | *missing* | **Waiting to clear** |
 | 7 | — | ATM fee −150 | **Add to BookOne** |
 
-## Run E2E
+## Run full journey E2E (recommended)
 
-From `apps/e2e-runner`:
+Creates a **new account via normal Sign Up UI**, posts books, imports bank files, reconciles.
+
+From `apps/e2e-runner` — **no env vars needed**:
+
+```bash
+node scripts/e2e-bank-recon-journey.mjs
+```
+
+Or:
+
+```bash
+npm run demo:bank-recon-journey
+```
+
+Screenshots + `PROCESS_AUDIT.md` land in `ui-audit/bank-recon-journey-<timestamp>/`.
+
+Optional: `E2E_BASE_URL` (default `https://bookone.clossyan.com`), or `E2E_EMAIL` to reuse an existing login instead of Sign Up.
+
+## Legacy demo (login-only)
 
 ```bash
 # optional: regenerate xlsx
 node fixtures/bank-recon-demo/generate-xlsx.mjs
 
-set E2E_BASE_URL=https://bookone.clossyan.com
 set E2E_EMAIL=info@clossyan.com
 set E2E_PASSWORD=...
-set E2E_CREATE_COMPANY=1
 node scripts/e2e-bank-recon-demo.mjs
 ```
-
-Screenshots and a `result.json` land in `ui-audit/bank-recon-demo-<timestamp>/`.

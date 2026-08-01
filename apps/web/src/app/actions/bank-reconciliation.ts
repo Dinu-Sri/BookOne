@@ -1868,6 +1868,291 @@ export async function markCaseOutstanding(input: {
   }
 }
 
+/**
+ * Phase 4: Create a BookOne entry for a bank-only case (explicit confirm).
+ * Uses the same recordEntry path as BIS-6.
+ */
+export async function createCaseEntry(input: {
+  caseId: string;
+  expenseCode?: string;
+  incomeCode?: string;
+}): Promise<{ ok: true; transactionId: string } | { ok: false; error: string }> {
+  try {
+    const caseId = z.string().uuid().parse(input.caseId);
+    const expenseCode = (input.expenseCode ?? '6000').slice(0, 20);
+    const incomeCode = (input.incomeCode ?? '4000').slice(0, 20);
+    const user = await requireTenantContext();
+
+    const prepared = await withTenantContext(user.tenantId, async () => {
+      const [c] = await db()
+        .select()
+        .from(bankReconciliationCases)
+        .where(
+          and(
+            eq(bankReconciliationCases.id, caseId),
+            eq(bankReconciliationCases.tenantId, user.tenantId),
+            isNull(bankReconciliationCases.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!c) throw new Error('Case not found.');
+      if (c.caseType !== 'create_entry') throw new Error('This item is not an Add-to-BookOne case.');
+      if (c.state === 'confirmed') throw new Error('Already added.');
+
+      const [session] = await db()
+        .select()
+        .from(bankReconciliationSessions)
+        .where(eq(bankReconciliationSessions.id, c.sessionId))
+        .limit(1);
+      if (!session) throw new Error('Session not found.');
+
+      const [bankJoin] = await db()
+        .select({
+          bankLineId: bankReconciliationCaseBankLines.bankLineId,
+          date: bankStatementLines.transactionDate,
+          description: bankStatementLines.description,
+          amount: bankStatementLines.amount,
+          fingerprint: bankStatementLines.fingerprint,
+        })
+        .from(bankReconciliationCaseBankLines)
+        .innerJoin(
+          bankStatementLines,
+          eq(bankStatementLines.id, bankReconciliationCaseBankLines.bankLineId),
+        )
+        .where(
+          and(
+            eq(bankReconciliationCaseBankLines.caseId, caseId),
+            isNull(bankReconciliationCaseBankLines.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!bankJoin) throw new Error('No bank transaction on this case.');
+
+      const [bank] = await db()
+        .select({ id: accounts.id, code: accounts.code })
+        .from(accounts)
+        .where(eq(accounts.id, session.bankAccountId))
+        .limit(1);
+      if (!bank) throw new Error('Bank account not found.');
+
+      return {
+        caseRow: c,
+        session,
+        bankJoin,
+        bankCode: bank.code,
+        bookDomain: session.bookDomain,
+      };
+    });
+
+    const signed = Number(prepared.bankJoin.amount);
+    const abs = Math.abs(signed);
+    if (abs < 0.005) throw new Error('Zero amount cannot be posted.');
+
+    const isIn = signed > 0;
+    const desc = (prepared.bankJoin.description || 'Bank statement').slice(0, 1000);
+    const party = isIn ? 'Bank deposit' : 'Bank payment';
+    const catCode = isIn ? incomeCode : expenseCode;
+    const payMethod =
+      prepared.bankCode === '1000'
+        ? 'Cash'
+        : prepared.bankCode.startsWith('12')
+          ? 'Card'
+          : 'Bank';
+    const bookDomain =
+      prepared.bookDomain === 'personal' || prepared.bookDomain === 'business'
+        ? prepared.bookDomain
+        : undefined;
+
+    const { recordEntry } = await import('@/app/actions/record-entry');
+    const entryResult = isIn
+      ? await recordEntry({
+          direction: 'money_in',
+          moneyInType: 'new_sale',
+          party,
+          description: desc,
+          amount: abs,
+          currency: 'LKR',
+          paymentMethod: payMethod as 'Cash' | 'Bank' | 'Card',
+          paymentAccount: { kind: 'code', value: prepared.bankCode },
+          date: prepared.bankJoin.date,
+          bookDomain,
+          categoryOverride: catCode,
+          forceDuplicate: true,
+          receiptRef: `recon:${prepared.bankJoin.fingerprint?.slice(0, 16) ?? prepared.bankJoin.bankLineId.slice(0, 8)}`,
+        })
+      : await recordEntry({
+          direction: 'money_out',
+          party,
+          description: desc,
+          amount: abs,
+          currency: 'LKR',
+          paymentMethod: payMethod as 'Cash' | 'Bank' | 'Card',
+          paymentAccount: { kind: 'code', value: prepared.bankCode },
+          date: prepared.bankJoin.date,
+          bookDomain,
+          categoryOverride: catCode,
+          forceDuplicate: true,
+          receiptRef: `recon:${prepared.bankJoin.fingerprint?.slice(0, 16) ?? prepared.bankJoin.bankLineId.slice(0, 8)}`,
+        });
+
+    if (!entryResult.success || !entryResult.transactionId) {
+      return { ok: false, error: entryResult.error ?? 'Could not create BookOne entry.' };
+    }
+
+    await withTenantContext(user.tenantId, async () => {
+      await db()
+        .update(bankStatementLines)
+        .set({
+          status: 'created',
+          proposedAction: 'create',
+          createdTransactionId: entryResult.transactionId,
+          matchedTransactionId: entryResult.transactionId,
+          reconciliationStatus: 'created',
+          reviewedByUserId: user.id,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(bankStatementLines.id, prepared.bankJoin.bankLineId));
+
+      // Attach book side to case
+      await db().insert(bankReconciliationCaseBookTransactions).values({
+        tenantId: user.tenantId,
+        caseId,
+        transactionId: entryResult.transactionId!,
+        allocatedAmount: prepared.bankJoin.amount,
+        role: 'primary',
+      });
+
+      await db()
+        .update(bankReconciliationCases)
+        .set({
+          state: 'confirmed',
+          resultLabel: 'Added to BookOne',
+          userLabel: 'Added',
+          createdTransactionId: entryResult.transactionId,
+          confirmedBy: user.id,
+          confirmedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(bankReconciliationCases.id, caseId));
+
+      await logEvent(user.tenantId, prepared.caseRow.sessionId, user.id, 'entry_created', {
+        caseId,
+        after: {
+          transactionId: entryResult.transactionId,
+          bankLineId: prepared.bankJoin.bankLineId,
+          category: catCode,
+        },
+      });
+      await refreshSessionCounts(user.tenantId, prepared.caseRow.sessionId);
+    });
+
+    revalidateRecon();
+    return { ok: true, transactionId: entryResult.transactionId };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not create entry.' };
+  }
+}
+
+/**
+ * Phase 5: Finish reconciliation when difference is explained (≈0) and no open work remains.
+ */
+export async function finishReconciliationSession(
+  sessionId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const id = z.string().uuid().parse(sessionId);
+    const user = await requireTenantContext();
+
+    await withTenantContext(user.tenantId, async () => {
+      const [session] = await db()
+        .select()
+        .from(bankReconciliationSessions)
+        .where(
+          and(
+            eq(bankReconciliationSessions.id, id),
+            eq(bankReconciliationSessions.tenantId, user.tenantId),
+            isNull(bankReconciliationSessions.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!session) throw new Error('Session not found.');
+
+      const openCases = await db()
+        .select({ id: bankReconciliationCases.id, caseType: bankReconciliationCases.caseType })
+        .from(bankReconciliationCases)
+        .where(
+          and(
+            eq(bankReconciliationCases.sessionId, id),
+            isNull(bankReconciliationCases.voidedAt),
+            inArray(bankReconciliationCases.state, [
+              'suggested',
+              'needs_review',
+              'deferred',
+              'reopened',
+            ]),
+          ),
+        );
+
+      // Allow outstanding_book to remain only if already confirmed as waiting
+      const blocking = openCases.filter((c) => c.caseType !== 'outstanding_book');
+      // Any open non-waiting work blocks finish
+      if (blocking.length > 0) {
+        throw new Error(
+          `${blocking.length} item${blocking.length === 1 ? '' : 's'} still need a decision. Finish those first.`,
+        );
+      }
+      // Open waiting items must be marked Still waiting first
+      const openWait = openCases.filter((c) => c.caseType === 'outstanding_book');
+      if (openWait.length > 0) {
+        throw new Error(
+          `${openWait.length} waiting item${openWait.length === 1 ? '' : 's'} still open — mark them as still waiting, or match them.`,
+        );
+      }
+
+      const bankClose =
+        session.statementClosingBalance != null
+          ? Number(session.statementClosingBalance)
+          : null;
+      const bookClose =
+        session.bookClosingBalanceSnapshot != null
+          ? Number(session.bookClosingBalanceSnapshot)
+          : null;
+      const outstandingNet = Number(session.outstandingNet);
+      const diff =
+        bankClose != null && bookClose != null
+          ? Math.round((bankClose - bookClose - outstandingNet) * 100) / 100
+          : Number(session.differenceAmount);
+      const tol = Number(session.toleranceAmount ?? 0.01);
+      if (Math.abs(diff) > tol) {
+        throw new Error(
+          `Difference left is Rs. ${diff.toFixed(2)}. It must be near zero (within ${tol}) before finish.`,
+        );
+      }
+
+      await db()
+        .update(bankReconciliationSessions)
+        .set({
+          status: 'reconciled',
+          differenceAmount: diff.toFixed(2),
+          reconciledBy: user.id,
+          reconciledAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(bankReconciliationSessions.id, id));
+
+      await logEvent(user.tenantId, id, user.id, 'session_reconciled', {
+        after: { difference: diff, bankClose, bookClose, outstandingNet },
+      });
+    });
+
+    revalidateRecon();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not finish reconciliation.' };
+  }
+}
+
 /** Compat: import id → session id (for redirects). */
 export async function resolveImportToSession(
   importId: string,

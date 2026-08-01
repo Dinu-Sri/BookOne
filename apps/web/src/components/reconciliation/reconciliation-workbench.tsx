@@ -15,6 +15,8 @@ import {
 import {
   bulkConfirmStrongMatches,
   confirmCaseMatch,
+  createCaseEntry,
+  finishReconciliationSession,
   markCaseOutstanding,
   openReconciliationSession,
   rebuildSessionSuggestions,
@@ -200,6 +202,47 @@ export function ReconciliationWorkbench({
     });
   }
 
+  function doCreate(caseId: string) {
+    if (
+      !window.confirm(
+        'Add this bank transaction to BookOne? It posts a real cashbook entry (Other expense / Other income by default).',
+      )
+    ) {
+      return;
+    }
+    startTransition(() => {
+      createCaseEntry({ caseId }).then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setInfo('Added to BookOne.');
+        setSelected(null);
+        load(tab, page, q);
+      });
+    });
+  }
+
+  function doFinish() {
+    if (
+      !window.confirm(
+        'Mark this period as reconciled? Only when difference is zero and open items are done.',
+      )
+    ) {
+      return;
+    }
+    startTransition(() => {
+      finishReconciliationSession(sessionId).then((res) => {
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setInfo('Reconciliation finished — bank and BookOne agree.');
+        load(tab, page, q);
+      });
+    });
+  }
+
   if (!detail && pending) {
     return (
       <div className="brw-loading">
@@ -258,11 +301,11 @@ export function ReconciliationWorkbench({
             Still waiting
           </button>
         ) : null}
-        {row.caseType === 'create_entry' && createHref ? (
-          <Link href={createHref} className={clsSec}>
+        {row.caseType === 'create_entry' && row.state !== 'confirmed' ? (
+          <button type="button" className={cls} disabled={pending} onClick={() => doCreate(row.id)}>
             <Plus size={14} />
-            Add…
-          </Link>
+            Add to BookOne
+          </button>
         ) : null}
         {row.state === 'confirmed' || row.state === 'excluded' ? (
           <CheckCircle2 size={16} className="brw-done-icon" aria-label="Done" />
@@ -413,6 +456,20 @@ export function ReconciliationWorkbench({
                 <Link2 size={14} />
                 Confirm safe matches ({readyN})
               </button>
+            ) : null}
+            {workLeft === 0 && Math.abs(diff) < 0.02 && s.status !== 'reconciled' ? (
+              <button
+                type="button"
+                className="bis-btn primary"
+                disabled={pending}
+                onClick={doFinish}
+              >
+                <CheckCircle2 size={14} />
+                Finish reconciliation
+              </button>
+            ) : null}
+            {s.status === 'reconciled' ? (
+              <span className="brw-work-done">Reconciled</span>
             ) : null}
           </div>
         </div>

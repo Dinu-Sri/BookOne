@@ -8604,6 +8604,118 @@ textarea.input {
   }
 }
 
+/* Phase 6–7: review, transfer, group match */
+.brw-review {
+  border: 1.5px solid #bfdbfe;
+  background: #f8fbff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.brw-review-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+.brw-review-stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+.brw-review-stats strong {
+  float: right;
+  color: #0f172a;
+  font-weight: 800;
+}
+.brw-review-balances {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.brw-review-balances > div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.brw-review-balances strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+.brw-review-balances .ok strong { color: #15803d; }
+.brw-review-balances .warn strong { color: #b45309; }
+.brw-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.brw-xfer-panel,
+.brw-group-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #bfdbfe;
+}
+.brw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+.brw-field select {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 600;
+  color: #0f172a;
+  background: #fff;
+}
+.brw-group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.brw-group-row {
+  display: grid;
+  grid-template-columns: auto 72px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.brw-group-row:hover { border-color: #93c5fd; }
+
 /* Hardening warnings (overlap / continuity) */
 .bis-harden-warn {
   border: 1.5px solid #fde68a;

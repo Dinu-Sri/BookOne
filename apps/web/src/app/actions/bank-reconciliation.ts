@@ -141,12 +141,13 @@ function formatPeriodLabel(from: string, to: string) {
   }
 }
 
-/** Prefer real bank-line dates; cap absurd multi-year spans to the statement-end month. */
+/** Prefer real bank-line dates; for long spans pick the densest calendar month (most lines). */
 function normalizePeriodFromDates(
   minD: string | null | undefined,
   maxD: string | null | undefined,
   fallbackFrom?: string | null,
   fallbackTo?: string | null,
+  allDates?: string[],
 ): { periodFrom: string; periodTo: string } {
   let periodFrom =
     minD || fallbackFrom || new Date().toISOString().slice(0, 10);
@@ -156,7 +157,23 @@ function normalizePeriodFromDates(
       (Number(periodTo.slice(0, 4)) - Number(periodFrom.slice(0, 4))) * 12 +
       (Number(periodTo.slice(5, 7)) - Number(periodFrom.slice(5, 7)));
     if (months > 2) {
-      const ym = periodTo.slice(0, 7);
+      // Prefer month with the most bank lines — end month is often nearly empty
+      let ym = periodTo.slice(0, 7);
+      if (allDates && allDates.length > 0) {
+        const counts = new Map<string, number>();
+        for (const d of allDates) {
+          if (!d || d.length < 7) continue;
+          const k = d.slice(0, 7);
+          counts.set(k, (counts.get(k) ?? 0) + 1);
+        }
+        let bestN = -1;
+        for (const [k, n] of counts) {
+          if (n > bestN) {
+            bestN = n;
+            ym = k;
+          }
+        }
+      }
       const [y, m] = ym.split('-').map(Number);
       const last = new Date(y!, m!, 0).getDate();
       periodFrom = `${ym}-01`;
@@ -431,11 +448,22 @@ export async function getOrCreateSessionFromImport(
             isNull(bankStatementLines.voidedAt),
           ),
         );
+      const dateList = await db()
+        .select({ d: bankStatementLines.transactionDate })
+        .from(bankStatementLines)
+        .where(
+          and(
+            eq(bankStatementLines.importId, id),
+            eq(bankStatementLines.tenantId, user.tenantId),
+            isNull(bankStatementLines.voidedAt),
+          ),
+        );
       const { periodFrom, periodTo } = normalizePeriodFromDates(
         dateSpan[0]?.minD,
         dateSpan[0]?.maxD,
         imp.periodFrom || (imp.period ? `${imp.period}-01` : null),
         imp.periodTo || null,
+        dateList.map((r) => r.d),
       );
 
       // Find session for same bank + period
@@ -628,7 +656,7 @@ async function rebuildSessionSuggestionsInternal(
       ),
     );
 
-  // Heal multi-year / wrong session periods from actual bank lines
+  // Heal multi-year / wrong session periods from actual bank lines (densest month)
   const liveDates = lines
     .filter((l) => !['duplicate', 'skipped'].includes(l.status ?? ''))
     .map((l) => l.date)
@@ -640,18 +668,49 @@ async function rebuildSessionSuggestionsInternal(
       liveDates[liveDates.length - 1],
       session.periodFrom,
       session.periodTo,
+      liveDates,
     );
-    if (healed.periodFrom !== session.periodFrom || healed.periodTo !== session.periodTo) {
-      await db()
-        .update(bankReconciliationSessions)
-        .set({
-          periodFrom: healed.periodFrom,
-          periodTo: healed.periodTo,
-          updatedAt: new Date(),
-        })
-        .where(eq(bankReconciliationSessions.id, sessionId));
-      session.periodFrom = healed.periodFrom;
-      session.periodTo = healed.periodTo;
+    // Also re-heal if current period has almost no lines vs the file
+    const inCurrent = liveDates.filter(
+      (d) => d >= session.periodFrom && d <= session.periodTo,
+    ).length;
+    const periodTooThin =
+      liveDates.length > 20 && inCurrent < Math.max(5, Math.floor(liveDates.length * 0.15));
+    if (
+      healed.periodFrom !== session.periodFrom ||
+      healed.periodTo !== session.periodTo ||
+      periodTooThin
+    ) {
+      const target = periodTooThin
+        ? normalizePeriodFromDates(liveDates[0], liveDates[liveDates.length - 1], null, null, liveDates)
+        : healed;
+      // Avoid unique-index clash with an existing session for the densest month
+      const [clash] = await db()
+        .select({ id: bankReconciliationSessions.id })
+        .from(bankReconciliationSessions)
+        .where(
+          and(
+            eq(bankReconciliationSessions.tenantId, tenantId),
+            eq(bankReconciliationSessions.bankAccountId, session.bankAccountId),
+            eq(bankReconciliationSessions.periodFrom, target.periodFrom),
+            eq(bankReconciliationSessions.periodTo, target.periodTo),
+            isNull(bankReconciliationSessions.voidedAt),
+            sql`${bankReconciliationSessions.id} <> ${sessionId}`,
+          ),
+        )
+        .limit(1);
+      if (!clash) {
+        await db()
+          .update(bankReconciliationSessions)
+          .set({
+            periodFrom: target.periodFrom,
+            periodTo: target.periodTo,
+            updatedAt: new Date(),
+          })
+          .where(eq(bankReconciliationSessions.id, sessionId));
+        session.periodFrom = target.periodFrom;
+        session.periodTo = target.periodTo;
+      }
     }
   }
 
@@ -1165,9 +1224,53 @@ export async function openReconciliationSession(
         (Number(session.periodTo.slice(0, 4)) - Number(session.periodFrom.slice(0, 4))) * 12 +
           (Number(session.periodTo.slice(5, 7)) - Number(session.periodFrom.slice(5, 7))) >
           2;
+      // Live import lines vs period-scoped coverage (detect thin wrong period / missing bank cases)
+      const importLinks = await db()
+        .select({ importId: bankReconciliationSessionImports.importId })
+        .from(bankReconciliationSessionImports)
+        .where(eq(bankReconciliationSessionImports.sessionId, id));
+      let liveLineCount = 0;
+      let inPeriodLineCount = 0;
+      if (importLinks.length > 0) {
+        const ids = importLinks.map((l) => l.importId);
+        const [{ n }] = await db()
+          .select({ n: sql<number>`count(*)::int` })
+          .from(bankStatementLines)
+          .where(
+            and(
+              eq(bankStatementLines.tenantId, user.tenantId),
+              isNull(bankStatementLines.voidedAt),
+              inArray(bankStatementLines.importId, ids),
+              sql`coalesce(${bankStatementLines.status}, '') not in ('duplicate', 'skipped')`,
+            ),
+          );
+        liveLineCount = Number(n) || 0;
+        const [{ p }] = await db()
+          .select({ p: sql<number>`count(*)::int` })
+          .from(bankStatementLines)
+          .where(
+            and(
+              eq(bankStatementLines.tenantId, user.tenantId),
+              isNull(bankStatementLines.voidedAt),
+              inArray(bankStatementLines.importId, ids),
+              sql`coalesce(${bankStatementLines.status}, '') not in ('duplicate', 'skipped')`,
+              gte(bankStatementLines.transactionDate, session.periodFrom),
+              lte(bankStatementLines.transactionDate, session.periodTo),
+            ),
+          );
+        inPeriodLineCount = Number(p) || 0;
+      }
+      const periodTooThin =
+        liveLineCount > 20 &&
+        inPeriodLineCount < Math.max(5, Math.floor(liveLineCount * 0.15));
+      const bankCasesLag =
+        inPeriodLineCount > 10 &&
+        Number(bankC) < Math.floor(inPeriodLineCount * 0.5);
       const needsRebuild =
         Number(totalC) === 0 ||
         multiYear ||
+        periodTooThin ||
+        bankCasesLag ||
         (session.bankLineCount > 0 && Number(bankC) === 0) ||
         (session.bankLineCount > 20 && Number(bankC) < Math.floor(session.bankLineCount * 0.5));
       if (needsRebuild) {

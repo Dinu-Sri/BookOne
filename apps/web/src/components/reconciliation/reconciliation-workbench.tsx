@@ -128,7 +128,18 @@ export function ReconciliationWorkbench({
           setError(res.error);
           return;
         }
-        setInfo('Suggestions updated.');
+        const s = res.stats;
+        if (s) {
+          setInfo(
+            `Suggestions updated · bank lines ${s.workLines} (open ${s.openBank}) · ` +
+              `matched ${s.createdMatch} · add ${s.createdAdd} · waiting ${s.createdWait}` +
+              (s.statusSample && Object.keys(s.statusSample).length
+                ? ` · statuses ${JSON.stringify(s.statusSample)}`
+                : ''),
+          );
+        } else {
+          setInfo('Suggestions updated.');
+        }
         load(tab === 'auto' ? 'auto' : tab, 1, q);
       });
     });

@@ -534,11 +534,25 @@ export async function getOrCreateSessionFromImport(
 /**
  * Rebuild match suggestions for a session (idempotent for confirmed cases).
  */
+type RebuildSeedStats = {
+  lines: number;
+  workLines: number;
+  openBank: number;
+  lockedBank: number;
+  freeBooks: number;
+  createdMatch: number;
+  createdAdd: number;
+  createdWait: number;
+  statusSample: Record<string, number>;
+  periodFrom: string;
+  periodTo: string;
+};
+
 async function rebuildSessionSuggestionsInternal(
   tenantId: string,
   userId: string,
   sessionId: string,
-) {
+): Promise<RebuildSeedStats> {
   const [session] = await db()
     .select()
     .from(bankReconciliationSessions)
@@ -628,7 +642,19 @@ async function rebuildSessionSuggestionsInternal(
   const importIds = links.map((l) => l.importId);
   if (importIds.length === 0) {
     await refreshSessionCounts(tenantId, sessionId);
-    return;
+    return {
+      lines: 0,
+      workLines: 0,
+      openBank: 0,
+      lockedBank: lockedBankLines.size,
+      freeBooks: 0,
+      createdMatch: 0,
+      createdAdd: 0,
+      createdWait: 0,
+      statusSample: {},
+      periodFrom: session.periodFrom,
+      periodTo: session.periodTo,
+    };
   }
 
   const lines = await db()
@@ -828,11 +854,19 @@ async function rebuildSessionSuggestionsInternal(
     }
   }
 
+  // Status histogram for diagnostics
+  const statusSample: Record<string, number> = {};
+  for (const l of workLines) {
+    const st = l.status ?? '(null)';
+    statusSample[st] = (statusSample[st] ?? 0) + 1;
+  }
+
   // Every non-duplicate bank line in period that is not already a confirmed case stays open
+  // Include reconciled/created/matched without a locked prior link (legacy match-wizard residue)
   const openBankLines = workLines.filter(
     (l) =>
       !lockedBankLines.has(l.id) &&
-      !['duplicate', 'skipped'].includes(l.status ?? ''),
+      !['duplicate', 'skipped'].includes(String(l.status ?? '').toLowerCase()),
   );
   const books = await loadBookCandidates(
     tenantId,
@@ -843,115 +877,127 @@ async function rebuildSessionSuggestionsInternal(
   );
   const freeBooks = books.filter((b) => !lockedBooks.has(b.id));
 
-  // Pair by array index (matchAll preserves input order) — avoid rowNumber key collisions
-  const canonical: CanonicalStatementLine[] = openBankLines.map((l, idx) => {
-    const amountSigned = Number(l.amount);
-    return {
-      rowNumber: Number.isFinite(Number(l.rowNumber)) ? Number(l.rowNumber) : idx + 1,
-      date: l.date,
-      description: l.description ?? '',
-      amountSigned,
-      direction:
-        l.direction === 'in' || l.direction === 'out'
-          ? l.direction
-          : amountSigned > 0
-            ? 'in'
-            : amountSigned < 0
-              ? 'out'
-              : 'unknown',
-      fingerprint: l.fingerprint ?? l.id,
-      dateConfidence: l.confidence != null ? Number(l.confidence) : 0.9,
-      raw: {},
-    };
-  });
-
-  const matches = matchAll(canonical, freeBooks);
+  let createdMatch = 0;
+  let createdAdd = 0;
+  let createdWait = 0;
   const usedBooks = new Set<string>();
 
-  for (let i = 0; i < openBankLines.length; i++) {
-    const line = openBankLines[i]!;
-    const m = matches[i];
-    if (!m) continue;
+  // Pair by array index (matchAll preserves input order) — avoid rowNumber key collisions
+  try {
+    const canonical: CanonicalStatementLine[] = openBankLines.map((l, idx) => {
+      const amountSigned = Number(l.amount);
+      return {
+        rowNumber: Number.isFinite(Number(l.rowNumber)) ? Number(l.rowNumber) : idx + 1,
+        date: String(l.date ?? '').slice(0, 10),
+        description: l.description ?? '',
+        amountSigned: Number.isFinite(amountSigned) ? amountSigned : 0,
+        direction:
+          l.direction === 'in' || l.direction === 'out'
+            ? l.direction
+            : amountSigned > 0
+              ? 'in'
+              : amountSigned < 0
+                ? 'out'
+                : 'unknown',
+        fingerprint: l.fingerprint ?? l.id,
+        dateConfidence: l.confidence != null ? Number(l.confidence) : 0.9,
+        raw: {},
+      };
+    });
 
-    if (m.proposedAction === 'link' && m.matchedTransactionId && !usedBooks.has(m.matchedTransactionId)) {
-      usedBooks.add(m.matchedTransactionId);
-      lockedBooks.add(m.matchedTransactionId);
-      const [c] = await db()
-        .insert(bankReconciliationCases)
-        .values({
-          tenantId,
-          sessionId,
-          caseType: 'match_1_1',
-          confidence: m.matchMethod === 'exact' || m.matchScore >= 0.95 ? 'strong' : 'review',
-          state: m.matchScore >= 0.9 ? 'suggested' : 'needs_review',
-          matchScore: m.matchScore.toFixed(4),
-          matchMethod: m.matchMethod,
-          explanation:
-            m.matchScore >= 0.9
-              ? 'Same amount and similar date as a BookOne entry.'
-              : 'Possible match — please check.',
-          reasonCodes: m.matchScore >= 0.9 ? ['amount_date'] : ['fuzzy'],
-          userLabel: m.matchScore >= 0.9 ? 'Strong match' : 'Check match',
-          resultLabel: m.matchScore >= 0.9 ? 'Ready to confirm' : 'Needs decision',
-          sortDate: line.date,
-          sortAmount: line.amount,
-        })
-        .returning({ id: bankReconciliationCases.id });
-      await db().insert(bankReconciliationCaseBankLines).values({
-        tenantId,
-        caseId: c.id,
-        bankLineId: line.id,
-        allocatedAmount: line.amount,
-      });
-      await db().insert(bankReconciliationCaseBookTransactions).values({
-        tenantId,
-        caseId: c.id,
-        transactionId: m.matchedTransactionId,
-        allocatedAmount: line.amount,
-      });
-      continue;
-    }
+    const matches = matchAll(canonical, freeBooks);
 
-    if (m.proposedAction === 'review' && m.candidates.length > 0) {
-      const best = m.candidates[0]!;
-      if (!usedBooks.has(best.id)) {
-        usedBooks.add(best.id);
+    for (let i = 0; i < openBankLines.length; i++) {
+      const line = openBankLines[i]!;
+      const m = matches[i];
+      if (!m) continue;
+      const amt = Number(line.amount);
+      const amtStr = Number.isFinite(amt) ? amt.toFixed(2) : '0.00';
+
+      if (m.proposedAction === 'link' && m.matchedTransactionId && !usedBooks.has(m.matchedTransactionId)) {
+        usedBooks.add(m.matchedTransactionId);
+        lockedBooks.add(m.matchedTransactionId);
         const [c] = await db()
           .insert(bankReconciliationCases)
           .values({
             tenantId,
             sessionId,
             caseType: 'match_1_1',
-            confidence: 'review',
-            state: 'needs_review',
+            confidence: m.matchMethod === 'exact' || m.matchScore >= 0.95 ? 'strong' : 'review',
+            state: m.matchScore >= 0.9 ? 'suggested' : 'needs_review',
             matchScore: m.matchScore.toFixed(4),
-            matchMethod: 'fuzzy',
-            explanation: 'More than one possible BookOne entry, or the match is unclear.',
-            reasonCodes: ['ambiguous'],
-            userLabel: 'Needs decision',
-            resultLabel: 'Review',
+            matchMethod: m.matchMethod,
+            explanation:
+              m.matchScore >= 0.9
+                ? 'Same amount and similar date as a BookOne entry.'
+                : 'Possible match — please check.',
+            reasonCodes: m.matchScore >= 0.9 ? ['amount_date'] : ['fuzzy'],
+            userLabel: m.matchScore >= 0.9 ? 'Strong match' : 'Check match',
+            resultLabel: m.matchScore >= 0.9 ? 'Ready to confirm' : 'Needs decision',
             sortDate: line.date,
-            sortAmount: line.amount,
+            sortAmount: amtStr,
           })
           .returning({ id: bankReconciliationCases.id });
         await db().insert(bankReconciliationCaseBankLines).values({
           tenantId,
           caseId: c.id,
           bankLineId: line.id,
-          allocatedAmount: line.amount,
+          allocatedAmount: amtStr,
         });
         await db().insert(bankReconciliationCaseBookTransactions).values({
           tenantId,
           caseId: c.id,
-          transactionId: best.id,
-          allocatedAmount: line.amount,
-          role: 'suggested',
+          transactionId: m.matchedTransactionId,
+          allocatedAmount: amtStr,
         });
+        lockedBankLines.add(line.id);
+        createdMatch += 1;
         continue;
       }
-    }
 
-    // Bank-only handled in second pass below (always with line join)
+      if (m.proposedAction === 'review' && m.candidates.length > 0) {
+        const best = m.candidates[0]!;
+        if (!usedBooks.has(best.id)) {
+          usedBooks.add(best.id);
+          const [c] = await db()
+            .insert(bankReconciliationCases)
+            .values({
+              tenantId,
+              sessionId,
+              caseType: 'match_1_1',
+              confidence: 'review',
+              state: 'needs_review',
+              matchScore: m.matchScore.toFixed(4),
+              matchMethod: 'fuzzy',
+              explanation: 'More than one possible BookOne entry, or the match is unclear.',
+              reasonCodes: ['ambiguous'],
+              userLabel: 'Needs decision',
+              resultLabel: 'Review',
+              sortDate: line.date,
+              sortAmount: amtStr,
+            })
+            .returning({ id: bankReconciliationCases.id });
+          await db().insert(bankReconciliationCaseBankLines).values({
+            tenantId,
+            caseId: c.id,
+            bankLineId: line.id,
+            allocatedAmount: amtStr,
+          });
+          await db().insert(bankReconciliationCaseBookTransactions).values({
+            tenantId,
+            caseId: c.id,
+            transactionId: best.id,
+            allocatedAmount: amtStr,
+            role: 'suggested',
+          });
+          lockedBankLines.add(line.id);
+          createdMatch += 1;
+          continue;
+        }
+      }
+    }
+  } catch {
+    // Matching is best-effort; still seed bank-only create_entry below
   }
 
   const casedBank = await db()
@@ -970,30 +1016,39 @@ async function rebuildSessionSuggestionsInternal(
     );
   const casedSet = new Set(casedBank.map((x) => x.bankLineId));
 
+  // Seed Add-to-BookOne for every uncased bank line in the work set
   for (const line of openBankLines) {
     if (casedSet.has(line.id) || lockedBankLines.has(line.id)) continue;
-    const [c] = await db()
-      .insert(bankReconciliationCases)
-      .values({
+    const amt = Number(line.amount);
+    const amtStr = Number.isFinite(amt) ? amt.toFixed(2) : '0.00';
+    try {
+      const [c] = await db()
+        .insert(bankReconciliationCases)
+        .values({
+          tenantId,
+          sessionId,
+          caseType: 'create_entry',
+          confidence: 'none',
+          state: 'needs_review',
+          explanation: 'No matching BookOne entry found for this bank transaction.',
+          reasonCodes: ['bank_only'],
+          userLabel: 'Add to BookOne',
+          resultLabel: 'Add entry',
+          sortDate: line.date,
+          sortAmount: amtStr,
+        })
+        .returning({ id: bankReconciliationCases.id });
+      await db().insert(bankReconciliationCaseBankLines).values({
         tenantId,
-        sessionId,
-        caseType: 'create_entry',
-        confidence: 'none',
-        state: 'needs_review',
-        explanation: 'No matching BookOne entry found for this bank transaction.',
-        reasonCodes: ['bank_only'],
-        userLabel: 'Add to BookOne',
-        resultLabel: 'Add entry',
-        sortDate: line.date,
-        sortAmount: line.amount,
-      })
-      .returning({ id: bankReconciliationCases.id });
-    await db().insert(bankReconciliationCaseBankLines).values({
-      tenantId,
-      caseId: c.id,
-      bankLineId: line.id,
-      allocatedAmount: line.amount,
-    });
+        caseId: c.id,
+        bankLineId: line.id,
+        allocatedAmount: amtStr,
+      });
+      casedSet.add(line.id);
+      createdAdd += 1;
+    } catch {
+      // skip bad line; continue seeding others
+    }
   }
 
   // Book-only “waiting to clear” — limited, period-bounded, not a flood of every ledger row
@@ -1025,12 +1080,13 @@ async function rebuildSessionSuggestionsInternal(
       transactionId: b.id,
       allocatedAmount: b.amountSigned.toFixed(2),
     });
+    createdWait += 1;
   }
 
   // Update bank line count + book balance snapshot (count period-scoped lines)
   const bookClose = await bookBalanceThrough(tenantId, session.bankAccountId, session.periodTo);
   const periodBankCount = workLines.filter(
-    (l) => !['duplicate', 'skipped'].includes(l.status ?? ''),
+    (l) => !['duplicate', 'skipped'].includes(String(l.status ?? '').toLowerCase()),
   ).length;
   await db()
     .update(bankReconciliationSessions)
@@ -1043,30 +1099,38 @@ async function rebuildSessionSuggestionsInternal(
     })
     .where(eq(bankReconciliationSessions.id, sessionId));
 
+  const stats: RebuildSeedStats = {
+    lines: lines.length,
+    workLines: workLines.length,
+    openBank: openBankLines.length,
+    lockedBank: lockedBankLines.size,
+    freeBooks: freeBooks.length,
+    createdMatch,
+    createdAdd,
+    createdWait,
+    statusSample,
+    periodFrom: session.periodFrom,
+    periodTo: session.periodTo,
+  };
+
   await refreshSessionCounts(tenantId, sessionId);
   await logEvent(tenantId, sessionId, userId, 'suggestions_rebuilt', {
-    after: {
-      totalLines: lines.length,
-      workLines: workLines.length,
-      openBank: openBankLines.length,
-      freeBooks: freeBooks.length,
-      periodFrom: session.periodFrom,
-      periodTo: session.periodTo,
-    },
+    after: stats as unknown as Record<string, unknown>,
   });
+  return stats;
 }
 
 export async function rebuildSessionSuggestions(
   sessionId: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; stats?: RebuildSeedStats } | { ok: false; error: string }> {
   try {
     const id = z.string().uuid().parse(sessionId);
     const user = await requireTenantContext();
-    await withTenantContext(user.tenantId, () =>
+    const stats = await withTenantContext(user.tenantId, () =>
       rebuildSessionSuggestionsInternal(user.tenantId, user.id, id),
     );
     revalidateRecon();
-    return { ok: true };
+    return { ok: true, stats };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not rebuild.' };
   }

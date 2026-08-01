@@ -202,6 +202,7 @@ export function BankImportStudioWizard({
   const [saveProfile, setSaveProfile] = useState(true);
   const [importedCount, setImportedCount] = useState(0);
   const [importedId, setImportedId] = useState<string | null>(null);
+  const [importedSessionId, setImportedSessionId] = useState<string | null>(null);
   const [importNotes, setImportNotes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -707,6 +708,7 @@ export function BankImportStudioWizard({
         }
         setImportedCount(res.lineCount);
         setImportedId(res.importId);
+        setImportedSessionId(res.sessionId ?? null);
         setImportNotes(
           [
             res.duplicateCount > 0
@@ -1572,11 +1574,15 @@ export function BankImportStudioWizard({
           <a
             className="bis-btn primary"
             href={
-              importedId
+              importedSessionId
                 ? isErp
-                  ? `/reconciliation/from-import?importId=${importedId}`
-                  : `/cashbook/match?importId=${importedId}`
-                : hubAfterImport
+                  ? `/reconciliation/session/${importedSessionId}`
+                  : `/cashbook/recon/${importedSessionId}`
+                : importedId
+                  ? isErp
+                    ? `/reconciliation/from-import?importId=${importedId}`
+                    : `/cashbook/match?importId=${importedId}`
+                  : hubAfterImport
             }
           >
             Reconcile now

@@ -465,7 +465,11 @@ export async function getOrCreateSessionFromImport(
         )
         .limit(1);
       if (existingLink) {
-        await rebuildSessionSuggestionsInternal(user.tenantId, user.id, existingLink.sessionId);
+        try {
+          await rebuildSessionSuggestionsInternal(user.tenantId, user.id, existingLink.sessionId);
+        } catch {
+          /* non-fatal — user can Refresh on workbench */
+        }
         return existingLink.sessionId;
       }
 
@@ -555,7 +559,11 @@ export async function getOrCreateSessionFromImport(
         after: { importId: id },
       });
 
-      await rebuildSessionSuggestionsInternal(user.tenantId, user.id, session.id);
+      try {
+        await rebuildSessionSuggestionsInternal(user.tenantId, user.id, session.id);
+      } catch {
+        /* Session is still usable; suggestions can rebuild via Refresh */
+      }
       return session.id;
     });
 

@@ -312,6 +312,20 @@ async function clickStudioNext(page) {
   return false;
 }
 
+/** Click standard BookOne ConfirmDialog primary action if open. */
+async function clickModalConfirm(page, labelRe = /Confirm|Save|Delete|Yes|Add to BookOne/i) {
+  const modal = page.locator('.modal-panel, [role="dialog"]').first();
+  if (!(await modal.count())) return false;
+  if (!(await modal.isVisible().catch(() => false))) return false;
+  const btn = modal.locator('button').filter({ hasText: labelRe }).last();
+  if (await btn.count()) {
+    await btn.click().catch(() => {});
+    await page.waitForTimeout(600);
+    return true;
+  }
+  return false;
+}
+
 async function importBank(page, filePath, tag) {
   await page.goto(`${baseURL}/cashbook/import`, { waitUntil: 'domcontentloaded', timeout: 90_000 });
   await page.waitForTimeout(1000);
@@ -383,14 +397,27 @@ async function importBank(page, filePath, tag) {
       const reconNow = page.locator('a').filter({ hasText: /Reconcile now/i }).first();
       if (await reconNow.count()) {
         await reconNow.click();
-        await page.waitForTimeout(4000);
+        await page.waitForTimeout(5000);
         await shot(page, `${tag}-after-reconcile-now`);
         if (page.url().includes('/recon/') || page.url().includes('/session/')) {
           note(`${tag}-open-session`, 'OK', page.url());
           audit.urls.workbench = page.url();
-          // Run light recon work on this session
           await workOpenSession(page, tag);
           return true;
+        }
+        // Match compat may land on inbox if resolve races — open first Continue row
+        const cont = page
+          .locator('table.table tbody tr a[href*="/recon/"], table.table tbody tr a[href*="/session/"]')
+          .first();
+        if (await cont.count()) {
+          await cont.click();
+          await page.waitForTimeout(5000);
+          if (page.url().includes('/recon/') || page.url().includes('/session/')) {
+            note(`${tag}-open-session`, 'OK', `via inbox Continue ${page.url()}`);
+            audit.urls.workbench = page.url();
+            await workOpenSession(page, tag);
+            return true;
+          }
         }
       }
       const hub = page.locator('a').filter({ hasText: /Bank reconciliation/i }).first();
@@ -427,8 +454,9 @@ async function workOpenSession(page, tag) {
 
   const bulk = page.getByRole('button', { name: /Confirm safe matches/i });
   if ((await bulk.count()) && !(await bulk.isDisabled())) {
-    page.once('dialog', (d) => d.accept());
+    page.once('dialog', (d) => d.accept().catch(() => {}));
     await bulk.click();
+    await clickModalConfirm(page, /Confirm matches|Confirm/i);
     await page.waitForTimeout(3000);
     note(`${tag}-bulk-confirm`, 'OK');
     await shot(page, `${tag}-after-bulk`);
@@ -441,8 +469,9 @@ async function workOpenSession(page, tag) {
     await shot(page, `${tag}-tab-add`);
     const addBtn = page.locator('button').filter({ hasText: /Add to BookOne/i }).first();
     if (await addBtn.count()) {
-      page.once('dialog', (d) => d.accept());
+      page.once('dialog', (d) => d.accept().catch(() => {}));
       await addBtn.click();
+      await clickModalConfirm(page, /Add to BookOne|Confirm/i);
       await page.waitForTimeout(2000);
       note(`${tag}-add-one`, 'OK');
     }
@@ -489,30 +518,53 @@ async function openNewestDemoSession(page, preferPeriodRe) {
   await page.waitForTimeout(2500);
   await shot(page, 'recon-inbox');
 
-  // UI issues for inbox
-  const hasBis = await page.locator('.bis-btn, .button.primary').count();
-  note('recon-inbox-ui', 'CHECK', 'inbox loaded', [
-    'Session cards use custom bih-* styles; align badges with BookOne Badge tones',
-    'Primary CTA should use design-system .button.primary (green) consistently with cashbook',
-    'Page title hierarchy should match cashbook-import-title / page-title scale',
-    'Too little visual hierarchy vs Import Studio coach cards',
+  // Session rows only (exclude "Imported bank files" delete table)
+  const sessionRows = page
+    .locator('table.table tbody tr')
+    .filter({ has: page.locator('a[href*="/recon/"], a[href*="/session/"]') });
+  const cards = page.locator('a.bih-card');
+  const tableN = await sessionRows.count();
+  const cardN = await cards.count();
+  const usesTable = tableN > 0;
+  note('recon-inbox-ui', 'CHECK', usesTable ? 'table inbox' : cardN ? 'legacy cards' : 'empty', [
+    usesTable
+      ? 'Inbox uses system table + pagination (party pattern)'
+      : 'Prefer table.table like parties/products when deployed',
   ]);
 
-  const cards = page.locator('a.bih-card');
-  const n = await cards.count();
-  if (!n) {
-    note('recon-open-session', 'FAIL', 'no session cards');
+  // Imported bank files delete UI
+  const importsHeading = page.getByText(/Imported bank files/i);
+  if (await importsHeading.count()) {
+    note('recon-imports-table', 'OK', 'delete-import section present');
+    // Exercise delete on the first import via ConfirmDialog (then reload sessions stay)
+    const delBtn = page.locator('table.table tbody tr button').filter({ hasText: /Delete/i }).first();
+    if (await delBtn.count()) {
+      // Don't delete during dual-import journey — only verify button exists
+      note('recon-delete-import-ui', 'OK', 'Delete button available');
+    }
+  } else {
+    note('recon-imports-table', 'WARN', 'Imported bank files section not visible');
+  }
+
+  if (!usesTable && !cardN) {
+    note('recon-open-session', 'FAIL', 'no session rows or cards');
+    audit.errors.push('recon-open-session: no sessions in inbox');
     return false;
   }
+
   let best = 0;
   let bestScore = -1e9;
   const texts = [];
+  const n = usesTable ? tableN : cardN;
   for (let i = 0; i < n; i++) {
-    const t = (await cards.nth(i).innerText()).replace(/\s+/g, ' ');
-    texts.push(t.slice(0, 120));
+    const t = (
+      await (usesTable ? sessionRows.nth(i) : cards.nth(i)).innerText()
+    ).replace(/\s+/g, ' ');
+    texts.push(t.slice(0, 140));
     let s = Math.max(0, 15 - i * 2);
     if (preferPeriodRe && preferPeriodRe.test(t)) s += 1000;
-    const lm = t.match(/(\d+)\s+bank lines/i);
+    // "1 file · 6 lines" style meta
+    const lm = t.match(/(\d+)\s+lines?/i) || t.match(/(\d+)\s+bank lines/i);
     const nl = lm ? Number(lm[1]) : 0;
     if (nl >= 5 && nl <= 15) s += 300;
     if (nl > 40) s -= 600;
@@ -523,22 +575,32 @@ async function openNewestDemoSession(page, preferPeriodRe) {
     }
   }
   audit.sessionCards = texts;
-  note('recon-open-session', 'OK', `card#${best} score=${bestScore} ${texts[best]?.slice(0, 80)}`);
-  await cards.nth(best).click();
+  note(
+    'recon-open-session',
+    'OK',
+    `${usesTable ? 'row' : 'card'}#${best} score=${bestScore} ${texts[best]?.slice(0, 80)}`,
+  );
+  if (usesTable) {
+    const rowLink = sessionRows
+      .nth(best)
+      .locator('a[href*="/recon/"], a[href*="/session/"]')
+      .first();
+    await rowLink.click();
+  } else {
+    await cards.nth(best).click();
+  }
   await page.waitForTimeout(8000);
   await shot(page, 'recon-workbench');
   audit.urls.workbench = page.url();
 
-  // Workbench UI notes
   note('recon-workbench-ui', 'CHECK', page.url(), [
-    'Workbench mixes bis-btn with custom brw-* chips — should use BookOne .button + .badge',
-    'Metric cards (Bank closing etc.) should match .metric-card / cashbook-summary style',
-    'Chip row + tab row duplicate the same filters — confusing; collapse to one control',
-    'Table header uppercase tiny text is hard for older users; use 13–14px BookOne table styles',
-    'Cashbook bottom nav overlaps long workbench content on mobile',
-    'Transfer/Add actions use solid green pills that fight with primary Save in cashbook',
-    'Empty bank closing shows dash — should guide user to set statement closing balance',
+    'Workbench should use .button + Card + table + right sidebar',
+    'Filter chips only (no duplicate tab strip)',
+    'Confirm actions via standard modal, not window.confirm',
   ]);
+
+  const hasSidebar = await page.locator('.brw-side, .brw-side-empty').count();
+  note('recon-sidebar', hasSidebar ? 'OK' : 'WARN', hasSidebar ? 'right panel present' : 'no brw-side');
 
   const refresh = page.getByRole('button', { name: /Refresh/i });
   if (await refresh.count()) {
@@ -551,11 +613,12 @@ async function openNewestDemoSession(page, preferPeriodRe) {
   audit.chips[preferPeriodRe?.toString() || 'default'] = chipText;
   note('recon-refresh', 'OK', chipText.join(' | ') || '(no chips)');
 
-  // Try bulk confirm
+  // Try bulk confirm (ConfirmDialog or browser dialog)
   const bulk = page.getByRole('button', { name: /Confirm safe matches/i });
   if ((await bulk.count()) && !(await bulk.isDisabled())) {
-    page.once('dialog', (d) => d.accept());
+    page.once('dialog', (d) => d.accept().catch(() => {}));
     await bulk.click();
+    await clickModalConfirm(page, /Confirm matches|Confirm/i);
     await page.waitForTimeout(3000);
     note('recon-bulk-confirm', 'OK', 'confirmed safe matches');
     await shot(page, 'recon-after-bulk');
@@ -571,8 +634,9 @@ async function openNewestDemoSession(page, preferPeriodRe) {
     await shot(page, 'recon-tab-add');
     const addBtn = page.locator('button').filter({ hasText: /Add to BookOne/i }).first();
     if (await addBtn.count()) {
-      page.once('dialog', (d) => d.accept());
+      page.once('dialog', (d) => d.accept().catch(() => {}));
       await addBtn.click();
+      await clickModalConfirm(page, /Add to BookOne|Confirm/i);
       await page.waitForTimeout(2000);
       note('recon-add-one', 'OK', 'posted one bank-only line');
     } else note('recon-add-one', 'WARN', 'no Add button on tab');

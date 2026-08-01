@@ -1,24 +1,15 @@
 /**
- * Full bank recon journey (what the product owner asked for):
+ * Full bank recon journey — creates a fresh account via the normal Sign Up UI,
+ * then posts books, imports bank files, reconciles, and audits.
  *
- *  A) Create NEW account (Sign Up) OR login with E2E_EMAIL
- *  B) Onboarding → cashbook
- *  C) Enter transactions manually (set 1)
- *  D) Import excel/csv sheet 1 → reconcile
- *  E) Enter more transactions (set 2) + import sheet 2 → reconcile
- *  F) Open reports / review finish
- *  G) PROCESS_AUDIT.md + screenshots each step
+ * No env vars required. Just run from apps/e2e-runner:
  *
- * Usage (apps/e2e-runner):
- *   set E2E_BASE_URL=https://bookone.clossyan.com
- *   set E2E_SIGNUP=1
- *   set E2E_PASSWORD=DemoPass123!
  *   node scripts/e2e-bank-recon-journey.mjs
  *
- * Or reuse existing account:
- *   set E2E_EMAIL=...
- *   set E2E_PASSWORD=...
- *   set E2E_SIGNUP=0
+ * Optional overrides (only if you need them):
+ *   E2E_BASE_URL   — default https://bookone.clossyan.com
+ *   E2E_EMAIL      — reuse an existing user (skips Sign Up)
+ *   E2E_PASSWORD   — default DemoPass123!
  */
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -28,9 +19,20 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 const fixtures = path.join(root, 'fixtures', 'bank-recon-demo');
+
+/** Default prod URL; no env needed for normal runs. */
 const baseURL = (process.env.E2E_BASE_URL || 'https://bookone.clossyan.com').replace(/\/$/, '');
-const doSignup = process.env.E2E_SIGNUP !== '0';
+/** Built-in password for auto-created demo accounts (same as UI signup). */
 const password = process.env.E2E_PASSWORD || 'DemoPass123!';
+/**
+ * Always create a new account via Sign Up UI unless E2E_EMAIL is set
+ * (then login only — useful to debug one tenant).
+ */
+const reuseEmail = (process.env.E2E_EMAIL || '').trim();
+const doSignup = !reuseEmail;
+const email =
+  reuseEmail || `recon.demo.${Date.now().toString(36)}@clossyan-demo.test`;
+
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const outRoot = path.resolve(
   root,
@@ -41,10 +43,6 @@ const books1 = JSON.parse(fs.readFileSync(path.join(fixtures, 'book-entries.json
 const books2 = JSON.parse(fs.readFileSync(path.join(fixtures, 'book-entries-2.json'), 'utf8')).entries;
 const bank1 = path.join(fixtures, 'bank-statement.csv');
 const bank2 = path.join(fixtures, 'bank-statement-2.csv');
-
-const email =
-  process.env.E2E_EMAIL ||
-  `recon.demo.${Date.now().toString(36)}@clossyan-demo.test`;
 
 const audit = {
   startedAt: new Date().toISOString(),
@@ -733,15 +731,16 @@ async function openNewestDemoSession(page, preferPeriodRe) {
 
 async function main() {
   fs.mkdirSync(outRoot, { recursive: true });
-  console.log(`Base: ${baseURL}`);
-  console.log(`User: ${email}`);
-  console.log(`Out:  ${outRoot}`);
+  console.log(`Base:    ${baseURL}`);
+  console.log(`Account: ${doSignup ? 'Sign Up (new) → ' + email : 'Login → ' + email}`);
+  console.log(`Out:     ${outRoot}`);
+  console.log('(No env vars required — signup uses normal UI with a generated demo email.)\n');
 
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
 
   try {
-    // A — account
+    // A — create account via Sign Up UI (or login if E2E_EMAIL was set)
     await signupOrLogin(page);
 
     // B — onboarding

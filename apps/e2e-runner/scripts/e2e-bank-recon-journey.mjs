@@ -260,19 +260,39 @@ async function postEntry(page, entry, period) {
   if (await desc.count()) await desc.fill(entry.description);
   await pickDateField(page, entry.date);
 
-  const cat = page.locator('.cb-sheet .cashbook-tile, .cb-sheet button.cashbook-tile').first();
+  // Category tiles (not pay method)
+  const cat = page
+    .locator('.cb-sheet .cashbook-tile, .cb-sheet button.cashbook-tile')
+    .filter({ hasNotText: /^(Cash|Bank|Card)/i })
+    .first();
   if (await cat.count()) await cat.click().catch(() => {});
 
-  const payTiles = page.locator('.cb-sheet .cashbook-tile, .cb-sheet .cashbook-pay-tiles button');
+  // Force Bank as payment method (must not fall back to Cash — recon matches by bank account)
+  let bankPicked = false;
+  const payTiles = page.locator(
+    '.cb-sheet .cashbook-pay-tiles button, .cb-sheet button[data-pay], .cb-sheet .cb-pay-tile, .cb-sheet .cashbook-tile',
+  );
   const n = await payTiles.count();
   for (let i = 0; i < n; i++) {
-    const t = await payTiles.nth(i).innerText().catch(() => '');
-    if (/Bank|HNB|BOC|110/i.test(t) && !/^Cash$/i.test(t.trim())) {
+    const t = (await payTiles.nth(i).innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+    if (/^Cash$/i.test(t)) continue;
+    if (/Bank|HNB|BOC|1100|Sampath|Commercial/i.test(t)) {
       await payTiles.nth(i).click().catch(() => {});
+      bankPicked = true;
       break;
     }
   }
-  if (n > 1) await payTiles.nth(Math.min(1, n - 1)).click().catch(() => {});
+  if (!bankPicked) {
+    // Prefer second pay tile when first is Cash
+    for (let i = 0; i < n; i++) {
+      const t = (await payTiles.nth(i).innerText().catch(() => '')).trim();
+      if (!/^Cash$/i.test(t) && t.length > 0) {
+        await payTiles.nth(i).click().catch(() => {});
+        bankPicked = true;
+        break;
+      }
+    }
+  }
 
   await page.locator('.cb-sheet button.cashbook-save, .cb-sheet button.cb-sheet-save').first().click();
   await page.waitForTimeout(1200);

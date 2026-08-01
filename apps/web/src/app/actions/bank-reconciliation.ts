@@ -3573,6 +3573,160 @@ export async function getReconciliationReportData(
   }
 }
 
+/**
+ * Soft-delete (void) a bank import sheet and detach it from recon sessions.
+ * Does not reverse already-posted cashbook journals.
+ */
+export async function voidBankImport(
+  importId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const id = z.string().uuid().parse(importId);
+    const user = await requireTenantContext();
+
+    await withTenantContext(user.tenantId, async () => {
+      const [imp] = await db()
+        .select({ id: bankStatementImports.id })
+        .from(bankStatementImports)
+        .where(
+          and(
+            eq(bankStatementImports.id, id),
+            eq(bankStatementImports.tenantId, user.tenantId),
+            isNull(bankStatementImports.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!imp) throw new Error('Import not found.');
+
+      const now = new Date();
+
+      // Void lines
+      await db()
+        .update(bankStatementLines)
+        .set({ voidedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(bankStatementLines.importId, id),
+            eq(bankStatementLines.tenantId, user.tenantId),
+            isNull(bankStatementLines.voidedAt),
+          ),
+        );
+
+      // Detach from sessions
+      const links = await db()
+        .select({
+          id: bankReconciliationSessionImports.id,
+          sessionId: bankReconciliationSessionImports.sessionId,
+        })
+        .from(bankReconciliationSessionImports)
+        .where(
+          and(
+            eq(bankReconciliationSessionImports.importId, id),
+            eq(bankReconciliationSessionImports.tenantId, user.tenantId),
+          ),
+        );
+
+      if (links.length) {
+        await db()
+          .delete(bankReconciliationSessionImports)
+          .where(
+            and(
+              eq(bankReconciliationSessionImports.importId, id),
+              eq(bankReconciliationSessionImports.tenantId, user.tenantId),
+            ),
+          );
+      }
+
+      await db()
+        .update(bankStatementImports)
+        .set({
+          voidedAt: now,
+          wizardStatus: 'voided',
+          status: 'voided',
+          updatedAt: now,
+        })
+        .where(eq(bankStatementImports.id, id));
+
+      // Rebuild attached sessions so cases drop voided lines
+      for (const link of links) {
+        try {
+          await rebuildSessionSuggestionsInternal(user.tenantId, user.id, link.sessionId);
+        } catch {
+          /* session may be empty */
+        }
+      }
+    });
+
+    revalidateRecon();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not delete import.' };
+  }
+}
+
+/** List committed imports for a tenant (for delete UI). */
+export async function listBankImports(): Promise<
+  {
+    id: string;
+    fileName: string;
+    periodLabel: string;
+    bankName: string;
+    lineCount: number;
+    status: string;
+    createdAt: string;
+  }[]
+> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const rows = await db()
+      .select({
+        id: bankStatementImports.id,
+        fileName: bankStatementImports.fileName,
+        periodFrom: bankStatementImports.periodFrom,
+        periodTo: bankStatementImports.periodTo,
+        period: bankStatementImports.period,
+        bankAccountId: bankStatementImports.bankAccountId,
+        status: bankStatementImports.wizardStatus,
+        rowCount: bankStatementImports.rowCount,
+        createdAt: bankStatementImports.createdAt,
+      })
+      .from(bankStatementImports)
+      .where(
+        and(
+          eq(bankStatementImports.tenantId, user.tenantId),
+          isNull(bankStatementImports.voidedAt),
+        ),
+      )
+      .orderBy(desc(bankStatementImports.createdAt))
+      .limit(50);
+
+    const bankIds = [
+      ...new Set(rows.map((r) => r.bankAccountId).filter(Boolean) as string[]),
+    ];
+    const bankMap = new Map<string, string>();
+    if (bankIds.length) {
+      const banks = await db()
+        .select({ id: accounts.id, name: accounts.name, code: accounts.code })
+        .from(accounts)
+        .where(and(eq(accounts.tenantId, user.tenantId), inArray(accounts.id, bankIds)));
+      for (const b of banks) bankMap.set(b.id, `${b.name} · ${b.code}`);
+    }
+
+    return rows.map((r) => ({
+      id: r.id,
+      fileName: r.fileName,
+      periodLabel:
+        r.periodFrom && r.periodTo
+          ? formatPeriodLabel(r.periodFrom, r.periodTo)
+          : r.period || '—',
+      bankName: r.bankAccountId ? bankMap.get(r.bankAccountId) ?? 'Bank' : 'Unassigned',
+      lineCount: Number(r.rowCount || 0),
+      status: r.status ?? 'open',
+      createdAt: r.createdAt.toISOString(),
+    }));
+  });
+}
+
 /** Compat: import id → session id (for redirects). */
 export async function resolveImportToSession(
   importId: string,

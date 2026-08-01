@@ -36,6 +36,8 @@ import {
 } from '@bookone/statement-import/client';
 import { SheetGrid, type SheetHighlight } from './sheet-grid';
 import { StudioShell, type StudioStepId } from './studio-shell';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { pushStatusToast } from '@/components/layout/status-toast';
 
 type Phase =
   | 'upload'
@@ -208,6 +210,9 @@ export function BankImportStudioWizard({
   const [resolveIdx, setResolveIdx] = useState(0);
   /** Full problems + fix steps modal on review */
   const [problemsOpen, setProblemsOpen] = useState(false);
+  const [commitConfirm, setCommitConfirm] = useState<null | { skipErrorLines?: boolean; message: string }>(
+    null,
+  );
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const idempotencyRef = useRef(`studio-${Date.now()}`);
@@ -664,10 +669,17 @@ export function BankImportStudioWizard({
     const t = preview?.transform;
     const good = t ? t.readyCount + t.warningCount : 0;
     const bad = t?.errorCount ?? 0;
-    const msg = opts?.skipErrorLines && bad > 0
-      ? `Save ${good} good line(s) and skip ${bad} problem line(s)? Cashbook stays unchanged.`
-      : 'Save bank lines only? Your cashbook stays the same until you match later.';
-    if (!window.confirm(msg)) return;
+    const message =
+      opts?.skipErrorLines && bad > 0
+        ? `Save ${good} good line(s) and skip ${bad} problem line(s)? Cashbook stays unchanged.`
+        : 'Save bank lines only? Your cashbook stays the same until you match later.';
+    setCommitConfirm({ skipErrorLines: opts?.skipErrorLines, message });
+  }
+
+  function runCommit() {
+    if (!draft || !file || !bankId || !mapping || !sheetName || !commitConfirm) return;
+    const opts = { skipErrorLines: commitConfirm.skipErrorLines };
+    setCommitConfirm(null);
 
     const fd = new FormData();
     fd.set('importId', draft.id);
@@ -676,7 +688,7 @@ export function BankImportStudioWizard({
     fd.set('sheetName', sheetName);
     fd.set('mappingJson', JSON.stringify(mapping));
     fd.set('saveProfile', saveProfile ? '1' : '0');
-    fd.set('skipErrorLines', opts?.skipErrorLines ? '1' : '0');
+    fd.set('skipErrorLines', opts.skipErrorLines ? '1' : '0');
     fd.set(
       'profileName',
       `${bankOnly.find((b) => b.id === bankId)?.shortName ?? 'Bank'} layout`,
@@ -690,6 +702,7 @@ export function BankImportStudioWizard({
       commitStudioImport(fd).then((res) => {
         if (!res.ok) {
           setError(res.error);
+          pushStatusToast({ kind: 'error', message: res.error });
           return;
         }
         setImportedCount(res.lineCount);
@@ -703,6 +716,10 @@ export function BankImportStudioWizard({
           ].filter(Boolean),
         );
         setPhase('done');
+        pushStatusToast({
+          kind: 'success',
+          message: `Bank file saved · ${res.lineCount} line${res.lineCount === 1 ? '' : 's'}`,
+        });
       });
     });
   }
@@ -1510,6 +1527,17 @@ export function BankImportStudioWizard({
             </div>
           </div>
         ) : null}
+
+        <ConfirmDialog
+          open={!!commitConfirm}
+          title="Save bank lines?"
+          message={commitConfirm?.message}
+          confirmLabel="Save bank lines"
+          tone="primary"
+          busy={pending}
+          onCancel={() => setCommitConfirm(null)}
+          onConfirm={runCommit}
+        />
       </>
     );
   }

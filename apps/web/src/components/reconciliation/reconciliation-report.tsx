@@ -1,7 +1,7 @@
 import type { ReconReportData } from '@/app/actions/bank-reconciliation';
 
 function formatRs(n: number | null | undefined) {
-  if (n == null || Number.isNaN(n)) return '—';
+  if (n == null || Number.isNaN(n)) return '-';
   const sign = n < 0 ? '-' : '';
   return `${sign}Rs. ${Math.abs(n).toLocaleString('en-LK', {
     minimumFractionDigits: 2,
@@ -10,7 +10,7 @@ function formatRs(n: number | null | undefined) {
 }
 
 function formatDate(iso: string | null | undefined) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   try {
     return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -23,7 +23,7 @@ function formatDate(iso: string | null | undefined) {
 }
 
 /**
- * Formal printable bank reconciliation report (print → PDF from browser).
+ * Formal printable bank reconciliation report (print -> PDF from browser).
  */
 export function ReconciliationReportView({
   data,
@@ -207,7 +207,7 @@ function ReportBlock({
                     <div className="num">{formatRs(r.bankAmount)}</div>
                   </>
                 ) : (
-                  '—'
+                  '-'
                 )}
               </td>
               <td>
@@ -218,7 +218,7 @@ function ReportBlock({
                     <div className="num">{formatRs(r.bookAmount)}</div>
                   </>
                 ) : (
-                  '—'
+                  '-'
                 )}
               </td>
               <td>{r.resultLabel ?? r.state}</td>

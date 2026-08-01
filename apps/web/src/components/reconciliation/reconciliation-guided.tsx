@@ -21,9 +21,11 @@ import {
   type ReconCaseRow,
   type ReconSessionListItem,
 } from '@/app/actions/bank-reconciliation';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { pushStatusToast } from '@/components/layout/status-toast';
 
 function formatRs(n: number | null | undefined) {
-  if (n == null || Number.isNaN(n)) return '—';
+  if (n == null || Number.isNaN(n)) return '-';
   const sign = n < 0 ? '-' : '';
   return `${sign}Rs. ${Math.abs(n).toLocaleString('en-LK', {
     minimumFractionDigits: 2,
@@ -32,7 +34,7 @@ function formatRs(n: number | null | undefined) {
 }
 
 function formatDate(iso: string | null | undefined) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   try {
     return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -62,6 +64,7 @@ export function ReconciliationGuided({
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [createConfirmId, setCreateConfirmId] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     startTransition(() => {
@@ -108,9 +111,11 @@ export function ReconciliationGuided({
       fn().then((res) => {
         if (!res.ok) {
           setError(res.error);
+          pushStatusToast({ kind: 'error', message: res.error });
           return;
         }
         setInfo(okMsg);
+        pushStatusToast({ kind: 'success', message: okMsg });
         afterAction();
       });
     });
@@ -120,7 +125,7 @@ export function ReconciliationGuided({
     return (
       <div className="brw-loading">
         <Loader2 className="spin" size={22} />
-        Loading guided queue…
+        Loading guided queue...
       </div>
     );
   }
@@ -173,7 +178,7 @@ export function ReconciliationGuided({
             <span className={`brw-result tone-${tone(current)}`}>
               {current.resultLabel ?? current.userLabel ?? current.caseType}
             </span>
-            <p className="brw-explain">{current.explanation ?? '—'}</p>
+            <p className="brw-explain">{current.explanation ?? '-'}</p>
 
             <div className="brg-sides">
               <div>
@@ -235,17 +240,7 @@ export function ReconciliationGuided({
                   type="button"
                   className="bis-btn primary bis-btn-block"
                   disabled={pending}
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        'Add this bank transaction to BookOne? Posts a cashbook entry.',
-                      )
-                    )
-                      return;
-                    act(() => createCaseEntry({ caseId: current.id }).then((r) =>
-                      r.ok ? { ok: true as const } : r,
-                    ), 'Added to BookOne.');
-                  }}
+                  onClick={() => setCreateConfirmId(current.id)}
                 >
                   <Plus size={14} /> Add to BookOne
                 </button>
@@ -266,7 +261,7 @@ export function ReconciliationGuided({
                     onClick={() =>
                       act(
                         () => rejectTransferCase({ caseId: current.id }),
-                        'Not a transfer — will appear under Add.',
+                        'Not a transfer - will appear under Add.',
                       )
                     }
                   >
@@ -315,6 +310,28 @@ export function ReconciliationGuided({
 
       {error ? <p className="bis-error">{error}</p> : null}
       {info ? <p className="bis-match-info">{info}</p> : null}
+
+      <ConfirmDialog
+        open={!!createConfirmId}
+        title="Add to BookOne?"
+        message="Add this bank transaction to BookOne? It posts a cashbook entry (Other expense / Other income by default)."
+        confirmLabel="Add to BookOne"
+        tone="primary"
+        busy={pending}
+        onCancel={() => setCreateConfirmId(null)}
+        onConfirm={() => {
+          const id = createConfirmId;
+          setCreateConfirmId(null);
+          if (!id) return;
+          act(
+            () =>
+              createCaseEntry({ caseId: id }).then((r) =>
+                r.ok ? { ok: true as const } : r,
+              ),
+            'Added to BookOne.',
+          );
+        }}
+      />
     </div>
   );
 }

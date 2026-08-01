@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTenantInfo } from '@/app/actions/workspace';
-import { listReconciliationSessions } from '@/app/actions/bank-reconciliation';
+import {
+  listBankImports,
+  listReconciliationSessions,
+} from '@/app/actions/bank-reconciliation';
 import { ReconciliationInbox } from '@/components/reconciliation/reconciliation-inbox';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 
@@ -18,10 +21,16 @@ export default async function ReconciliationPage() {
   }
 
   let sessions: Awaited<ReturnType<typeof listReconciliationSessions>> = [];
+  let imports: Awaited<ReturnType<typeof listBankImports>> = [];
   try {
     sessions = await listReconciliationSessions();
   } catch {
     sessions = [];
+  }
+  try {
+    imports = await listBankImports();
+  } catch {
+    imports = [];
   }
 
   return (
@@ -33,17 +42,18 @@ export default async function ReconciliationPage() {
             <h1 className="page-title" style={{ margin: '4px 0 0' }}>
               Bank reconciliation
             </h1>
-            <p className="card-subtitle" style={{ marginTop: 6, maxWidth: 48 * 8 }}>
+            <p className="card-subtitle" style={{ marginTop: 6, maxWidth: 56 * 8 }}>
               Match bank statements to BookOne by account and period. Nothing posts until you
               confirm.
             </p>
           </div>
-          <Link href="/reconciliation/import" className="bis-btn primary">
+          <Link href="/reconciliation/import" className="button primary">
             Import bank file
           </Link>
         </div>
         <ReconciliationInbox
           sessions={sessions}
+          initialImports={imports}
           importHref="/reconciliation/import"
           sessionBase="/reconciliation/session"
           showImportButton={false}

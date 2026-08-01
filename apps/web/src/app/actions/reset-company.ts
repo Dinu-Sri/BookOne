@@ -5,6 +5,16 @@ import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/c
 import { requireTenantContext } from '@bookone/auth';
 import {
   auditLog,
+  bankImportIssues,
+  bankReconciliationCaseBankLines,
+  bankReconciliationCaseBookTransactions,
+  bankReconciliationCases,
+  bankReconciliationEvents,
+  bankReconciliationOutstandingItems,
+  bankReconciliationSessionImports,
+  bankReconciliationSessions,
+  bankReconciliationSnapshots,
+  bankStatementImportEvents,
   bankStatementImports,
   bankStatementLines,
   businessDocumentLines,
@@ -157,7 +167,51 @@ async function wipeOperationalData(tenantId: string, userId: string): Promise<nu
         tables += 1;
       };
 
-      // Bank / recon
+      // Bank / recon — children first (FK order)
+      await del('bank_reconciliation_case_bank_lines', () =>
+        tx
+          .delete(bankReconciliationCaseBankLines)
+          .where(eq(bankReconciliationCaseBankLines.tenantId, tenantId)),
+      );
+      await del('bank_reconciliation_case_book_transactions', () =>
+        tx
+          .delete(bankReconciliationCaseBookTransactions)
+          .where(eq(bankReconciliationCaseBookTransactions.tenantId, tenantId)),
+      );
+      await del('bank_reconciliation_outstanding_items', () =>
+        tx
+          .delete(bankReconciliationOutstandingItems)
+          .where(eq(bankReconciliationOutstandingItems.tenantId, tenantId)),
+      );
+      await del('bank_reconciliation_events', () =>
+        tx.delete(bankReconciliationEvents).where(eq(bankReconciliationEvents.tenantId, tenantId)),
+      );
+      await del('bank_reconciliation_snapshots', () =>
+        tx
+          .delete(bankReconciliationSnapshots)
+          .where(eq(bankReconciliationSnapshots.tenantId, tenantId)),
+      );
+      await del('bank_reconciliation_cases', () =>
+        tx.delete(bankReconciliationCases).where(eq(bankReconciliationCases.tenantId, tenantId)),
+      );
+      await del('bank_reconciliation_session_imports', () =>
+        tx
+          .delete(bankReconciliationSessionImports)
+          .where(eq(bankReconciliationSessionImports.tenantId, tenantId)),
+      );
+      await del('bank_reconciliation_sessions', () =>
+        tx
+          .delete(bankReconciliationSessions)
+          .where(eq(bankReconciliationSessions.tenantId, tenantId)),
+      );
+      await del('bank_import_issues', () =>
+        tx.delete(bankImportIssues).where(eq(bankImportIssues.tenantId, tenantId)),
+      );
+      await del('bank_statement_import_events', () =>
+        tx
+          .delete(bankStatementImportEvents)
+          .where(eq(bankStatementImportEvents.tenantId, tenantId)),
+      );
       await del('bank_statement_lines', () =>
         tx.delete(bankStatementLines).where(eq(bankStatementLines.tenantId, tenantId)),
       );

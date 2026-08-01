@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState, useTransition } from 'react';
@@ -43,9 +43,20 @@ import {
   type UnmatchedBankLineOption,
 } from '@/app/actions/bank-reconciliation';
 import { listLiquidAccounts, type LiquidAccount } from '@/app/actions/cashbook-banks';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { pushStatusToast } from '@/components/layout/status-toast';
+import { Card } from '@/components/ui/bookone-ui';
+
+type ConfirmAction =
+  | { kind: 'bulk' }
+  | { kind: 'create'; caseId: string }
+  | { kind: 'finish' }
+  | { kind: 'reopen' }
+  | { kind: 'transfer'; caseId: string; feeNote: string }
+  | { kind: 'exclude'; caseId: string };
 
 function formatRs(n: number | null | undefined) {
-  if (n == null || Number.isNaN(n)) return 'â€”';
+  if (n == null || Number.isNaN(n)) return '-';
   const sign = n < 0 ? '-' : '';
   return `${sign}Rs. ${Math.abs(n).toLocaleString('en-LK', {
     minimumFractionDigits: 2,
@@ -54,7 +65,7 @@ function formatRs(n: number | null | undefined) {
 }
 
 function formatDate(iso: string | null | undefined) {
-  if (!iso) return 'â€”';
+  if (!iso) return '-';
   try {
     return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -127,6 +138,8 @@ export function ReconciliationWorkbench({
   >([]);
   const [manyBookId, setManyBookId] = useState('');
   const [manyQ, setManyQ] = useState('');
+  const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
+  const [excludeReason, setExcludeReason] = useState('not_relevant');
 
   const load = useCallback(
     (t = tab, p = page, query = q) => {
@@ -162,25 +175,32 @@ export function ReconciliationWorkbench({
     load(t, 1, q);
   }
 
+  function toastOk(message: string) {
+    setInfo(message);
+    pushStatusToast({ kind: 'success', message });
+  }
+
+  function toastErr(message: string) {
+    setError(message);
+    pushStatusToast({ kind: 'error', message });
+  }
+
   function doRebuild() {
     setInfo(null);
     startTransition(() => {
       rebuildSessionSuggestions(sessionId).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        const s = res.stats;
-        if (s) {
-          setInfo(
-            `Suggestions updated Â· bank lines ${s.workLines} (open ${s.openBank}) Â· ` +
-              `matched ${s.createdMatch} Â· add ${s.createdAdd} Â· waiting ${s.createdWait}` +
-              (s.statusSample && Object.keys(s.statusSample).length
-                ? ` Â· statuses ${JSON.stringify(s.statusSample)}`
-                : ''),
+        const st = res.stats;
+        if (st) {
+          toastOk(
+            `Suggestions updated · bank lines ${st.workLines} (open ${st.openBank}) · ` +
+              `matched ${st.createdMatch} · add ${st.createdAdd} · waiting ${st.createdWait}`,
           );
         } else {
-          setInfo('Suggestions updated.');
+          toastOk('Suggestions updated.');
         }
         load(tab === 'auto' ? 'auto' : tab, 1, q);
       });
@@ -188,16 +208,18 @@ export function ReconciliationWorkbench({
   }
 
   function doBulkStrong() {
-    if (!window.confirm('Confirm all strong matches? BookOne will only link existing entries.')) {
-      return;
-    }
+    setConfirm({ kind: 'bulk' });
+  }
+
+  function runBulkStrong() {
+    setConfirm(null);
     startTransition(() => {
       bulkConfirmStrongMatches(sessionId).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo(`Confirmed ${res.confirmed} match${res.confirmed === 1 ? '' : 'es'}.`);
+        toastOk(`Confirmed ${res.confirmed} match${res.confirmed === 1 ? '' : 'es'}.`);
         load(tab, page, q);
       });
     });
@@ -207,9 +229,10 @@ export function ReconciliationWorkbench({
     startTransition(() => {
       confirmCaseMatch({ caseId }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
+        toastOk('Match confirmed.');
         setSelected(null);
         load(tab, page, q);
       });
@@ -220,9 +243,10 @@ export function ReconciliationWorkbench({
     startTransition(() => {
       undoCaseMatch({ caseId }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
+        toastOk('Unlinked.');
         setSelected(null);
         load(tab, page, q);
       });
@@ -233,9 +257,10 @@ export function ReconciliationWorkbench({
     startTransition(() => {
       markCaseOutstanding({ caseId }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
+        toastOk('Marked as waiting to clear.');
         setSelected(null);
         load(tab, page, q);
       });
@@ -243,20 +268,18 @@ export function ReconciliationWorkbench({
   }
 
   function doCreate(caseId: string) {
-    if (
-      !window.confirm(
-        'Add this bank transaction to BookOne? It posts a real cashbook entry (Other expense / Other income by default).',
-      )
-    ) {
-      return;
-    }
+    setConfirm({ kind: 'create', caseId });
+  }
+
+  function runCreate(caseId: string) {
+    setConfirm(null);
     startTransition(() => {
       createCaseEntry({ caseId }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo('Added to BookOne.');
+        toastOk('Added to BookOne.');
         setSelected(null);
         load(tab, page, q);
       });
@@ -264,20 +287,18 @@ export function ReconciliationWorkbench({
   }
 
   function doFinish() {
-    if (
-      !window.confirm(
-        'Mark this period as reconciled? Only when difference is zero and open items are done. This does not close the accounting period.',
-      )
-    ) {
-      return;
-    }
+    setConfirm({ kind: 'finish' });
+  }
+
+  function runFinish() {
+    setConfirm(null);
     startTransition(() => {
       finishReconciliationSession(sessionId).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo('Reconciliation finished â€” bank and BookOne agree.');
+        toastOk('Reconciliation finished — bank and BookOne agree.');
         setReviewOpen(false);
         load(tab, page, q);
       });
@@ -285,14 +306,18 @@ export function ReconciliationWorkbench({
   }
 
   function doReopen() {
-    if (!window.confirm('Reopen this reconciliation for more work?')) return;
+    setConfirm({ kind: 'reopen' });
+  }
+
+  function runReopen() {
+    setConfirm(null);
     startTransition(() => {
       reopenReconciliationSession(sessionId).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo('Reopened â€” you can continue matching.');
+        toastOk('Reopened — you can continue matching.');
         load('auto', 1, q);
       });
     });
@@ -300,20 +325,20 @@ export function ReconciliationWorkbench({
 
   function doTransferConfirm(caseId: string) {
     if (!xferTo) {
-      setError('Choose the other account for this transfer.');
+      toastErr('Choose the other account for this transfer.');
       return;
     }
     const fee = Math.max(0, Number(xferFee) || 0);
     const feeNote =
       fee > 0
-        ? ` Transfer Rs. net of fee, plus bank fee Rs. ${fee.toFixed(2)}.`
+        ? ` Transfer will be net of fee, plus bank fee Rs. ${fee.toFixed(2)}.`
         : '';
-    if (
-      !window.confirm(
-        `Post this as a transfer (move money) between your accounts?${feeNote}`,
-      )
-    )
-      return;
+    setConfirm({ kind: 'transfer', caseId, feeNote });
+  }
+
+  function runTransfer(caseId: string) {
+    setConfirm(null);
+    const fee = Math.max(0, Number(xferFee) || 0);
     startTransition(() => {
       confirmTransferCase({
         caseId,
@@ -321,10 +346,10 @@ export function ReconciliationWorkbench({
         feeAmount: fee > 0 ? fee : undefined,
       }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo(
+        toastOk(
           fee > 0
             ? `Transfer posted with fee Rs. ${fee.toFixed(2)}.`
             : 'Transfer posted.',
@@ -372,11 +397,11 @@ export function ReconciliationWorkbench({
 
   function doManyToOne() {
     if (manySelectedLines.length < 2) {
-      setError('Select at least two bank lines.');
+      toastErr('Select at least two bank lines.');
       return;
     }
     if (!manyBookId) {
-      setError('Select one BookOne record.');
+      toastErr('Select one BookOne record.');
       return;
     }
     startTransition(() => {
@@ -386,10 +411,10 @@ export function ReconciliationWorkbench({
         transactionId: manyBookId,
       }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo(`Matched ${manySelectedLines.length} bank lines to one BookOne record.`);
+        toastOk(`Matched ${manySelectedLines.length} bank lines to one BookOne record.`);
         setManyOpen(false);
         load(tab, page, q);
       });
@@ -400,10 +425,10 @@ export function ReconciliationWorkbench({
     startTransition(() => {
       rejectTransferCase({ caseId }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo('Marked as normal entry â€” use Add to BookOne.');
+        toastOk('Marked as normal entry — use Add to BookOne.');
         setSelected(null);
         load(tab, page, q);
       });
@@ -411,15 +436,20 @@ export function ReconciliationWorkbench({
   }
 
   function doExclude(caseId: string) {
-    const reason = window.prompt('Why exclude this item?', 'not_relevant') ?? '';
-    if (!reason.trim()) return;
+    setExcludeReason('not_relevant');
+    setConfirm({ kind: 'exclude', caseId });
+  }
+
+  function runExclude(caseId: string) {
+    const reason = excludeReason.trim() || 'not_relevant';
+    setConfirm(null);
     startTransition(() => {
-      excludeCase({ caseId, reason: reason.trim() }).then((res) => {
+      excludeCase({ caseId, reason }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo('Excluded.');
+        toastOk('Excluded.');
         setSelected(null);
         load(tab, page, q);
       });
@@ -442,16 +472,16 @@ export function ReconciliationWorkbench({
 
   function doGroupConfirm(caseId: string) {
     if (groupSelected.length === 0) {
-      setError('Select at least one BookOne record.');
+      toastErr('Select at least one BookOne record.');
       return;
     }
     startTransition(() => {
       confirmGroupMatch({ caseId, transactionIds: groupSelected }).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
-        setInfo('Grouped match confirmed.');
+        toastOk('Grouped match confirmed.');
         setSelected(null);
         setGroupCands([]);
         load(tab, page, q);
@@ -463,7 +493,7 @@ export function ReconciliationWorkbench({
     startTransition(() => {
       exportReconciliationSummary(sessionId).then((res) => {
         if (!res.ok) {
-          setError(res.error);
+          toastErr(res.error);
           return;
         }
         const blob = new Blob([JSON.stringify(res.summary, null, 2)], {
@@ -475,16 +505,40 @@ export function ReconciliationWorkbench({
         a.download = `recon-${sessionId.slice(0, 8)}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        setInfo('Summary downloaded.');
+        toastOk('Summary downloaded.');
       });
     });
+  }
+
+  function runConfirmAction() {
+    if (!confirm) return;
+    switch (confirm.kind) {
+      case 'bulk':
+        runBulkStrong();
+        break;
+      case 'create':
+        runCreate(confirm.caseId);
+        break;
+      case 'finish':
+        runFinish();
+        break;
+      case 'reopen':
+        runReopen();
+        break;
+      case 'transfer':
+        runTransfer(confirm.caseId);
+        break;
+      case 'exclude':
+        runExclude(confirm.caseId);
+        break;
+    }
   }
 
   if (!detail && pending) {
     return (
       <div className="brw-loading">
         <Loader2 className="spin" size={22} />
-        Loading reconciliationâ€¦
+        Loading reconciliation...
       </div>
     );
   }
@@ -574,7 +628,7 @@ export function ReconciliationWorkbench({
             }}
           >
             <ArrowRightLeft size={14} />
-            Transferâ€¦
+            Transfer...
           </button>
         ) : null}
         {row.state !== 'confirmed' && row.state !== 'excluded' ? (
@@ -610,7 +664,7 @@ export function ReconciliationWorkbench({
       <>
         <div className="brw-cell-date">{formatDate(side.date)}</div>
         <div className="brw-cell-desc" title={side.description ?? undefined}>
-          {side.description || 'â€”'}
+          {side.description || '-'}
         </div>
         <div className={(side.amount ?? 0) < 0 ? 'brw-amt out' : 'brw-amt in'}>
           {formatRs(side.amount)}
@@ -619,24 +673,80 @@ export function ReconciliationWorkbench({
     );
   }
 
+  const confirmCopy = (() => {
+    if (!confirm) return { title: '', message: '', label: 'Confirm', tone: 'primary' as const };
+    switch (confirm.kind) {
+      case 'bulk':
+        return {
+          title: 'Confirm safe matches?',
+          message: 'BookOne will only link existing entries that are strong matches. Nothing new is posted.',
+          label: 'Confirm matches',
+          tone: 'primary' as const,
+        };
+      case 'create':
+        return {
+          title: 'Add to BookOne?',
+          message:
+            'This posts a real cashbook entry (Other expense / Other income by default). You can edit the entry later.',
+          label: 'Add to BookOne',
+          tone: 'primary' as const,
+        };
+      case 'finish':
+        return {
+          title: 'Finish reconciliation?',
+          message:
+            'Mark this period as reconciled only when difference is zero and open items are done. This does not close the accounting period.',
+          label: 'Finish reconciliation',
+          tone: 'primary' as const,
+        };
+      case 'reopen':
+        return {
+          title: 'Reopen reconciliation?',
+          message: 'You can continue matching after reopening this period.',
+          label: 'Reopen',
+          tone: 'primary' as const,
+        };
+      case 'transfer':
+        return {
+          title: 'Post transfer?',
+          message: `Post this as a transfer (move money) between your accounts?${confirm.feeNote}`,
+          label: 'Post transfer',
+          tone: 'primary' as const,
+        };
+      case 'exclude':
+        return {
+          title: 'Exclude this item?',
+          message: 'Excluded items are skipped for this reconciliation. Cashbook is not changed.',
+          label: 'Exclude',
+          tone: 'danger' as const,
+        };
+    }
+  })();
+
+  function connLabel(connection: string) {
+    if (connection === 'match') return '↔';
+    if (connection === 'bank_only') return '→';
+    return '←';
+  }
+
   return (
-    <div className="brw">
+    <div className="brw workspace party-workspace">
       <header className="brw-head">
         <div>
           <Link href={inboxHref} className="brw-back">
-            â† Bank reconciliations
+            ← Bank reconciliations
           </Link>
           <h1 className="brw-title">
             {s.bankName}
-            {s.bankCode ? ` Â· ${s.bankCode}` : ''}
+            {s.bankCode ? ` · ${s.bankCode}` : ''}
           </h1>
           <p className="brw-sub">
             <span className="brw-period-pill">{s.periodLabel}</span>
             {s.sourceFileCount > 0 ? (
               <span>
                 {' '}
-                Â· {s.sourceFileCount} file{s.sourceFileCount === 1 ? '' : 's'}
-                {s.sourceFiles[0] ? ` Â· ${s.sourceFiles.map((f) => f.fileName).join(', ')}` : ''}
+                · {s.sourceFileCount} file{s.sourceFileCount === 1 ? '' : 's'}
+                {s.sourceFiles[0] ? ` · ${s.sourceFiles.map((f) => f.fileName).join(', ')}` : ''}
               </span>
             ) : null}
           </p>
@@ -676,7 +786,6 @@ export function ReconciliationWorkbench({
         </div>
       </div>
 
-      {/* Spec: summary first â€” what needs attention */}
       <div className="brw-attention" aria-label="What needs attention">
         <button
           type="button"
@@ -737,9 +846,9 @@ export function ReconciliationWorkbench({
             {s.resolvedCaseCount} of{' '}
             {Math.max(s.resolvedCaseCount + s.openCaseCount, s.bankLineCount, 1)} resolved
             {workLeft > 0 ? (
-              <span className="brw-work-left"> Â· {workLeft} still need a look</span>
+              <span className="brw-work-left"> · {workLeft} still need a look</span>
             ) : (
-              <span className="brw-work-done"> Â· All clear</span>
+              <span className="brw-work-done"> · All clear</span>
             )}
           </strong>
           <div className="brw-progress-actions">
@@ -761,7 +870,7 @@ export function ReconciliationWorkbench({
               onClick={openManyToOne}
             >
               <Layers size={14} />
-              Many bank â†’ 1 book
+              Many bank → 1 book
             </button>
             <button
               type="button"
@@ -774,19 +883,17 @@ export function ReconciliationWorkbench({
             </button>
             <button type="button" className="button secondary" disabled={pending} onClick={doExport}>
               <Download size={14} />
-              Export JSON
+              Export
             </button>
-            {s.status === 'reconciled' || s.status === 'reopened' ? (
-              s.status === 'reconciled' ? (
-                <button
-                  type="button"
-                  className="button secondary"
-                  disabled={pending}
-                  onClick={doReopen}
-                >
-                  Reopen
-                </button>
-              ) : null
+            {s.status === 'reconciled' ? (
+              <button
+                type="button"
+                className="button secondary"
+                disabled={pending}
+                onClick={doReopen}
+              >
+                Reopen
+              </button>
             ) : null}
             {s.status === 'reconciled' ? (
               <span className="brw-work-done">Reconciled</span>
@@ -798,60 +905,6 @@ export function ReconciliationWorkbench({
         </div>
       </div>
 
-      <div className="brw-tabs" role="tablist">
-        {TABS.map((t) => {
-          const n = counts[t.id] ?? 0;
-          // Hide empty secondary tabs to reduce noise
-          if (
-            (t.id === 'duplicates' || t.id === 'completed' || t.id === 'transfers') &&
-            n === 0 &&
-            tab !== t.id
-          ) {
-            return null;
-          }
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              className={`brw-tab ${tab === t.id ? 'active' : ''}`}
-              onClick={() => changeTab(t.id)}
-            >
-              <span className="brw-tab-full">{t.label}</span>
-              <span className="brw-tab-short">{t.short}</span>
-              <em>{n}</em>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="brw-toolbar">
-        <input
-          className="brw-search"
-          placeholder="Search descriptionâ€¦"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              setPage(1);
-              load(tab, 1, q);
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="button secondary"
-          disabled={pending}
-          onClick={() => {
-            setPage(1);
-            load(tab, 1, q);
-          }}
-        >
-          Search
-        </button>
-      </div>
-
       {error ? <p className="bis-error">{error}</p> : null}
       {info ? <p className="bis-match-info">{info}</p> : null}
 
@@ -859,7 +912,7 @@ export function ReconciliationWorkbench({
         <section className="brw-review" aria-label="Final review">
           <h2 className="brw-review-title">Review reconciliation</h2>
           <p className="brw-muted">
-            {s.bankName} Â· {s.periodLabel}
+            {s.bankName} · {s.periodLabel}
           </p>
           <ul className="brw-review-stats">
             <li>
@@ -899,10 +952,10 @@ export function ReconciliationWorkbench({
             </div>
           </div>
           {review.finishBlockers.length > 0 ? (
-            <p className="bis-error">Still open: {review.finishBlockers.join(' Â· ')}</p>
+            <p className="bis-error">Still open: {review.finishBlockers.join(' · ')}</p>
           ) : (
             <p className="bis-match-info">
-              All clear â€” difference is zero and nothing needs attention.
+              All clear — difference is zero and nothing needs attention.
             </p>
           )}
           <div className="brw-review-actions">
@@ -926,384 +979,443 @@ export function ReconciliationWorkbench({
         </section>
       ) : null}
 
-      {/* Desktop table */}
-      <div className="brw-table-wrap table-wrap brw-desktop-only">
-        <table className="table brw-table">
-          <thead>
-            <tr>
-              <th>Bank transaction</th>
-              <th className="brw-conn"> </th>
-              <th>BookOne record</th>
-              <th>Result</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {detail.cases.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="brw-empty-cell">
-                  {pending ? 'Loadingâ€¦' : emptyTabMessage(tab)}
-                </td>
-              </tr>
-            ) : (
-              detail.cases.map((row) => (
-                <tr
-                  key={row.id}
-                  className={selected?.id === row.id ? 'selected' : ''}
-                  onClick={() => setSelected(row)}
-                >
-                  <td>
-                    <SideCell side={row.bank} empty="No bank transaction" />
-                  </td>
-                  <td className="brw-conn" aria-hidden>
-                    {row.connection === 'match'
-                      ? 'â†”'
-                      : row.connection === 'bank_only'
-                        ? 'â†’'
-                        : 'â†'}
-                  </td>
-                  <td>
-                    <SideCell side={row.book} empty="No BookOne record" />
-                  </td>
-                  <td>
-                    <span className={`brw-result tone-${resultTone(row)}`}>
-                      {row.resultLabel ?? row.userLabel ?? 'â€”'}
-                    </span>
-                  </td>
-                  <td className="brw-row-actions" onClick={(e) => e.stopPropagation()}>
-                    {rowActions(row)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile cards */}
-      <div className="brw-cards-list brw-mobile-only">
-        {detail.cases.length === 0 ? (
-          <div className="brw-empty-cell">{pending ? 'Loadingâ€¦' : emptyTabMessage(tab)}</div>
-        ) : (
-          detail.cases.map((row) => (
-            <article
-              key={row.id}
-              className={`brw-case-card ${selected?.id === row.id ? 'selected' : ''}`}
-              onClick={() => setSelected(row)}
+      <div className="brw-shell">
+        <div className="brw-main">
+          <div className="brw-toolbar party-toolbar">
+            <input
+              className="input party-search brw-search"
+              placeholder="Search description…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setPage(1);
+                  load(tab, 1, q);
+                }
+              }}
+              aria-label="Search cases"
+            />
+            <button
+              type="button"
+              className="button secondary"
+              disabled={pending}
+              onClick={() => {
+                setPage(1);
+                load(tab, 1, q);
+              }}
             >
-              <div className="brw-case-card-head">
-                <span className={`brw-result tone-${resultTone(row)}`}>
-                  {row.resultLabel ?? row.userLabel ?? 'â€”'}
-                </span>
-                <span className="brw-case-conn" aria-hidden>
-                  {row.connection === 'match'
-                    ? 'Match'
-                    : row.connection === 'bank_only'
-                      ? 'Bank only'
-                      : 'Book only'}
-                </span>
-              </div>
-              <div className="brw-case-sides">
-                <div className="brw-case-side">
-                  <span className="brw-case-side-label">Bank</span>
-                  <SideCell side={row.bank} empty="â€”" />
-                </div>
-                <div className="brw-case-side">
-                  <span className="brw-case-side-label">BookOne</span>
-                  <SideCell side={row.book} empty="â€”" />
-                </div>
-              </div>
-              <div className="brw-row-actions" onClick={(e) => e.stopPropagation()}>
-                {rowActions(row)}
-              </div>
-            </article>
-          ))
-        )}
-      </div>
-
-      <div className="brw-pager">
-        <span>
-          {detail.totalCases} total Â· page {page} of {totalPages}
-        </span>
-        <div className="brw-pager-btns">
-          <button
-            type="button"
-            className="button secondary"
-            disabled={pending || page <= 1}
-            onClick={() => {
-              const p = page - 1;
-              setPage(p);
-              load(tab, p, q);
-            }}
-          >
-            <ChevronLeft size={14} /> Previous
-          </button>
-          <button
-            type="button"
-            className="button secondary"
-            disabled={pending || page >= totalPages}
-            onClick={() => {
-              const p = page + 1;
-              setPage(p);
-              load(tab, p, q);
-            }}
-          >
-            Next <ChevronRight size={14} />
-          </button>
-        </div>
-      </div>
-
-      {selected ? (
-        <aside className="brw-drawer" aria-label="Case detail">
-          <div className="brw-drawer-head">
-            <strong>{selected.userLabel ?? selected.resultLabel ?? 'Details'}</strong>
-            <button type="button" className="button secondary" onClick={() => setSelected(null)}>
-              Close
+              Search
             </button>
           </div>
-          <p className="brw-explain">{selected.explanation ?? 'â€”'}</p>
-          {selected.reasonCodes.length > 0 ? (
-            <p className="brw-muted">Why: {selected.reasonCodes.join(', ')}</p>
-          ) : null}
-          <div className="brw-drawer-sides">
-            <div>
-              <span className="brw-case-side-label">Bank</span>
-              <SideCell side={selected.bank} empty="No bank transaction" />
-            </div>
-            <div>
-              <span className="brw-case-side-label">BookOne</span>
-              <SideCell side={selected.book} empty="No BookOne record" />
-            </div>
-          </div>
-          {selected.caseType === 'transfer' && selected.state !== 'confirmed' ? (
-            <div className="brw-xfer-panel">
-              <p className="brw-explain">
-                If this is money moved between your own accounts, post it as a transfer â€” not
-                income or expense. Optional fee: when money leaves this bank, fee is posted as bank
-                charge and the transfer is the remainder (e.g. 100,000 out â†’ 99,500 transfer + 500
-                fee).
-              </p>
-              <label className="brw-field">
-                <span>Other account</span>
-                <select value={xferTo} onChange={(e) => setXferTo(e.target.value)}>
-                  <option value="">Selectâ€¦</option>
-                  {otherBanks.map((a) => (
-                    <option key={a.id} value={a.code}>
-                      {a.shortName} ({a.code})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="brw-field">
-                <span>Bank fee / adjustment (optional, Rs.)</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="brw-search"
-                  placeholder="0.00"
-                  value={xferFee}
-                  onChange={(e) => setXferFee(e.target.value)}
-                />
-              </label>
-              {(selected.bank.amount ?? 0) < 0 && Number(xferFee) > 0 ? (
-                <p className="brw-muted">
-                  Transfer{' '}
-                  {formatRs(Math.abs(selected.bank.amount ?? 0) - Number(xferFee || 0))} Â· Fee{' '}
-                  {formatRs(Number(xferFee))}
-                </p>
-              ) : null}
-              <div className="brw-drawer-actions">
-                <button
-                  type="button"
-                  className="button primary button-block"
-                  disabled={pending || !xferTo}
-                  onClick={() => doTransferConfirm(selected.id)}
-                >
-                  <ArrowRightLeft size={14} />
-                  Yes, post transfer
-                  {Number(xferFee) > 0 ? ' + fee' : ''}
-                </button>
-                <button
-                  type="button"
-                  className="button secondary button-block"
-                  disabled={pending}
-                  onClick={() => doTransferReject(selected.id)}
-                >
-                  Not a transfer
-                </button>
+
+          <Card>
+            <div className="card-body" style={{ padding: 0 }}>
+              <div className="table-wrap table-wrap-actions brw-table-scroll brw-desktop-only">
+                <table className="table brw-table">
+                  <thead>
+                    <tr>
+                      <th>Bank transaction</th>
+                      <th className="brw-conn"> </th>
+                      <th>BookOne record</th>
+                      <th>Result</th>
+                      <th className="th-actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.cases.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="brw-empty-cell">
+                          {pending ? 'Loading…' : emptyTabMessage(tab)}
+                        </td>
+                      </tr>
+                    ) : (
+                      detail.cases.map((row) => (
+                        <tr
+                          key={row.id}
+                          className={selected?.id === row.id ? 'selected' : ''}
+                          onClick={() => setSelected(row)}
+                        >
+                          <td>
+                            <SideCell side={row.bank} empty="No bank transaction" />
+                          </td>
+                          <td className="brw-conn" aria-hidden>
+                            {connLabel(row.connection)}
+                          </td>
+                          <td>
+                            <SideCell side={row.book} empty="No BookOne record" />
+                          </td>
+                          <td>
+                            <span className={`brw-result tone-${resultTone(row)}`}>
+                              {row.resultLabel ?? row.userLabel ?? '—'}
+                            </span>
+                          </td>
+                          <td className="td-actions brw-row-actions" onClick={(e) => e.stopPropagation()}>
+                            {rowActions(row)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="brw-cards-list brw-mobile-only">
+                {detail.cases.length === 0 ? (
+                  <div className="brw-empty-cell">
+                    {pending ? 'Loading…' : emptyTabMessage(tab)}
+                  </div>
+                ) : (
+                  detail.cases.map((row) => (
+                    <article
+                      key={row.id}
+                      className={`brw-case-card ${selected?.id === row.id ? 'selected' : ''}`}
+                      onClick={() => setSelected(row)}
+                    >
+                      <div className="brw-case-card-head">
+                        <span className={`brw-result tone-${resultTone(row)}`}>
+                          {row.resultLabel ?? row.userLabel ?? '—'}
+                        </span>
+                        <span className="brw-case-conn" aria-hidden>
+                          {connLabel(row.connection)}
+                        </span>
+                      </div>
+                      <div className="brw-case-sides">
+                        <div className="brw-case-side">
+                          <span className="brw-case-side-label">Bank</span>
+                          <SideCell side={row.bank} empty="—" />
+                        </div>
+                        <div className="brw-case-side">
+                          <span className="brw-case-side-label">BookOne</span>
+                          <SideCell side={row.book} empty="—" />
+                        </div>
+                      </div>
+                      <div className="brw-row-actions" onClick={(e) => e.stopPropagation()}>
+                        {rowActions(row)}
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+
+              <div className="party-pagination brw-pager">
+                <span>
+                  {detail.totalCases} total · page {page} of {totalPages}
+                </span>
+                <div className="party-pagination-actions brw-pager-btns">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={pending || page <= 1}
+                    onClick={() => {
+                      const p = page - 1;
+                      setPage(p);
+                      load(tab, p, q);
+                    }}
+                  >
+                    <ChevronLeft size={14} /> Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={pending || page >= totalPages}
+                    onClick={() => {
+                      const p = page + 1;
+                      setPage(p);
+                      load(tab, p, q);
+                    }}
+                  >
+                    Next <ChevronRight size={14} />
+                  </button>
+                </div>
               </div>
             </div>
-          ) : null}
+          </Card>
+        </div>
 
-          {(selected.caseType === 'create_entry' ||
-            selected.caseType === 'group_match' ||
-            selected.caseType === 'match_1_1') &&
-          selected.state !== 'confirmed' &&
-          selected.bank.lineId ? (
-            <div className="brw-group-panel">
+        <aside className="brw-side" aria-label="Case detail">
+          {manyOpen ? (
+            <div className="brw-drawer brw-many-panel">
+              <div className="brw-drawer-head">
+                <strong>Many bank lines → one BookOne</strong>
+                <button type="button" className="button secondary" onClick={() => setManyOpen(false)}>
+                  Close
+                </button>
+              </div>
               <p className="brw-muted">
-                Or match this bank line to one or more BookOne records (sum must match).
+                Select 2+ bank lines that make up one BookOne entry (e.g. split deposits). Sum must
+                match.
               </p>
+              <p className="brw-cell-date">Selected bank total: {formatRs(manyBankSum)}</p>
+              <ul className="brw-group-list">
+                {manyBanks.length === 0 ? (
+                  <li className="brw-muted">No open bank lines to group.</li>
+                ) : (
+                  manyBanks.map((l) => (
+                    <li key={l.lineId}>
+                      <label className="brw-group-row">
+                        <input
+                          type="checkbox"
+                          checked={manySelectedLines.includes(l.lineId)}
+                          onChange={() => {
+                            setManySelectedLines((prev) =>
+                              prev.includes(l.lineId)
+                                ? prev.filter((x) => x !== l.lineId)
+                                : [...prev, l.lineId],
+                            );
+                          }}
+                        />
+                        <span className="brw-cell-date">{formatDate(l.date)}</span>
+                        <span className="brw-cell-desc">{l.description}</span>
+                        <span className={l.amount < 0 ? 'brw-amt out' : 'brw-amt in'}>
+                          {formatRs(l.amount)}
+                        </span>
+                      </label>
+                    </li>
+                  ))
+                )}
+              </ul>
               <div className="brw-toolbar">
                 <input
                   className="brw-search"
-                  placeholder="Search BookOneâ€¦"
-                  value={groupQ}
-                  onChange={(e) => setGroupQ(e.target.value)}
+                  placeholder="Search BookOne record…"
+                  value={manyQ}
+                  onChange={(e) => setManyQ(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') loadGroupCandidates(selected.id, groupQ);
+                    if (e.key === 'Enter') searchManyBooks();
                   }}
                 />
                 <button
                   type="button"
                   className="button secondary"
-                  disabled={pending}
-                  onClick={() => loadGroupCandidates(selected.id, groupQ)}
+                  disabled={pending || manySelectedLines.length < 2}
+                  onClick={searchManyBooks}
                 >
-                  Find
+                  Find BookOne
                 </button>
               </div>
-              {groupBankAmt != null ? (
-                <p className="brw-muted">
-                  Bank {formatRs(groupBankAmt)} Â· selected{' '}
-                  {formatRs(
-                    groupCands
-                      .filter((c) => groupSelected.includes(c.id))
-                      .reduce((s, c) => s + c.amountSigned, 0),
-                  )}
-                </p>
-              ) : null}
               <ul className="brw-group-list">
-                {groupCands.map((c) => (
-                  <li key={c.id}>
+                {manyBooks.map((b) => (
+                  <li key={b.id}>
                     <label className="brw-group-row">
                       <input
-                        type="checkbox"
-                        checked={groupSelected.includes(c.id)}
-                        onChange={() => {
-                          setGroupSelected((prev) =>
-                            prev.includes(c.id)
-                              ? prev.filter((x) => x !== c.id)
-                              : [...prev, c.id],
-                          );
-                        }}
+                        type="radio"
+                        name="many-book"
+                        checked={manyBookId === b.id}
+                        onChange={() => setManyBookId(b.id)}
                       />
-                      <span className="brw-cell-date">{formatDate(c.date)}</span>
-                      <span className="brw-cell-desc">{c.description}</span>
-                      <span className={c.amountSigned < 0 ? 'brw-amt out' : 'brw-amt in'}>
-                        {formatRs(c.amountSigned)}
+                      <span className="brw-cell-date">{formatDate(b.date)}</span>
+                      <span className="brw-cell-desc">{b.description}</span>
+                      <span className={b.amountSigned < 0 ? 'brw-amt out' : 'brw-amt in'}>
+                        {formatRs(b.amountSigned)}
                       </span>
                     </label>
                   </li>
                 ))}
               </ul>
-              {groupSelected.length > 0 ? (
-                <button
-                  type="button"
-                  className="button primary button-block"
-                  disabled={pending}
-                  onClick={() => doGroupConfirm(selected.id)}
-                >
-                  Confirm group match ({groupSelected.length})
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="button primary button-block"
+                disabled={pending || manySelectedLines.length < 2 || !manyBookId}
+                onClick={doManyToOne}
+              >
+                Confirm {manySelectedLines.length} bank → 1 BookOne
+              </button>
             </div>
-          ) : null}
-
-          <div className="brw-drawer-actions">{rowActions(selected, true)}</div>
-        </aside>
-      ) : null}
-
-      {manyOpen ? (
-        <aside className="brw-drawer brw-many-panel" aria-label="Many bank to one book">
-          <div className="brw-drawer-head">
-            <strong>Many bank lines â†’ one BookOne</strong>
-            <button type="button" className="button secondary" onClick={() => setManyOpen(false)}>
-              Close
-            </button>
-          </div>
-          <p className="brw-muted">
-            Select 2+ bank lines that make up one BookOne entry (e.g. split deposits). Sum must
-            match.
-          </p>
-          <p className="brw-cell-date">Selected bank total: {formatRs(manyBankSum)}</p>
-          <ul className="brw-group-list">
-            {manyBanks.length === 0 ? (
-              <li className="brw-muted">No open bank lines to group.</li>
-            ) : (
-              manyBanks.map((l) => (
-                <li key={l.lineId}>
-                  <label className="brw-group-row">
+          ) : selected ? (
+            <div className="brw-drawer">
+              <div className="brw-drawer-head">
+                <strong>{selected.userLabel ?? selected.resultLabel ?? 'Details'}</strong>
+                <button type="button" className="button secondary" onClick={() => setSelected(null)}>
+                  Close
+                </button>
+              </div>
+              <p className="brw-explain">{selected.explanation ?? '—'}</p>
+              {selected.reasonCodes.length > 0 ? (
+                <p className="brw-muted">Why: {selected.reasonCodes.join(', ')}</p>
+              ) : null}
+              <div className="brw-drawer-sides">
+                <div>
+                  <span className="brw-case-side-label">Bank</span>
+                  <SideCell side={selected.bank} empty="No bank transaction" />
+                </div>
+                <div>
+                  <span className="brw-case-side-label">BookOne</span>
+                  <SideCell side={selected.book} empty="No BookOne record" />
+                </div>
+              </div>
+              {selected.caseType === 'transfer' && selected.state !== 'confirmed' ? (
+                <div className="brw-xfer-panel">
+                  <p className="brw-explain">
+                    If this is money moved between your own accounts, post it as a transfer — not
+                    income or expense. Optional fee: when money leaves this bank, fee is posted as
+                    bank charge and the transfer is the remainder (e.g. 100,000 out → 99,500
+                    transfer + 500 fee).
+                  </p>
+                  <label className="brw-field">
+                    <span>Other account</span>
+                    <select value={xferTo} onChange={(e) => setXferTo(e.target.value)}>
+                      <option value="">Select…</option>
+                      {otherBanks.map((a) => (
+                        <option key={a.id} value={a.code}>
+                          {a.shortName} ({a.code})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="brw-field">
+                    <span>Bank fee / adjustment (optional, Rs.)</span>
                     <input
-                      type="checkbox"
-                      checked={manySelectedLines.includes(l.lineId)}
-                      onChange={() => {
-                        setManySelectedLines((prev) =>
-                          prev.includes(l.lineId)
-                            ? prev.filter((x) => x !== l.lineId)
-                            : [...prev, l.lineId],
-                        );
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="brw-search"
+                      placeholder="0.00"
+                      value={xferFee}
+                      onChange={(e) => setXferFee(e.target.value)}
+                    />
+                  </label>
+                  {(selected.bank.amount ?? 0) < 0 && Number(xferFee) > 0 ? (
+                    <p className="brw-muted">
+                      Transfer{' '}
+                      {formatRs(Math.abs(selected.bank.amount ?? 0) - Number(xferFee || 0))} · Fee{' '}
+                      {formatRs(Number(xferFee))}
+                    </p>
+                  ) : null}
+                  <div className="brw-drawer-actions">
+                    <button
+                      type="button"
+                      className="button primary button-block"
+                      disabled={pending || !xferTo}
+                      onClick={() => doTransferConfirm(selected.id)}
+                    >
+                      <ArrowRightLeft size={14} />
+                      Yes, post transfer
+                      {Number(xferFee) > 0 ? ' + fee' : ''}
+                    </button>
+                    <button
+                      type="button"
+                      className="button secondary button-block"
+                      disabled={pending}
+                      onClick={() => doTransferReject(selected.id)}
+                    >
+                      Not a transfer
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {(selected.caseType === 'create_entry' ||
+                selected.caseType === 'group_match' ||
+                selected.caseType === 'match_1_1') &&
+              selected.state !== 'confirmed' &&
+              selected.bank.lineId ? (
+                <div className="brw-group-panel">
+                  <p className="brw-muted">
+                    Or match this bank line to one or more BookOne records (sum must match).
+                  </p>
+                  <div className="brw-toolbar">
+                    <input
+                      className="brw-search"
+                      placeholder="Search BookOne…"
+                      value={groupQ}
+                      onChange={(e) => setGroupQ(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') loadGroupCandidates(selected.id, groupQ);
                       }}
                     />
-                    <span className="brw-cell-date">{formatDate(l.date)}</span>
-                    <span className="brw-cell-desc">{l.description}</span>
-                    <span className={l.amount < 0 ? 'brw-amt out' : 'brw-amt in'}>
-                      {formatRs(l.amount)}
-                    </span>
-                  </label>
-                </li>
-              ))
-            )}
-          </ul>
-          <div className="brw-toolbar">
-            <input
-              className="brw-search"
-              placeholder="Search BookOne recordâ€¦"
-              value={manyQ}
-              onChange={(e) => setManyQ(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') searchManyBooks();
-              }}
-            />
-            <button
-              type="button"
-              className="button secondary"
-              disabled={pending || manySelectedLines.length < 2}
-              onClick={searchManyBooks}
-            >
-              Find BookOne
-            </button>
-          </div>
-          <ul className="brw-group-list">
-            {manyBooks.map((b) => (
-              <li key={b.id}>
-                <label className="brw-group-row">
-                  <input
-                    type="radio"
-                    name="many-book"
-                    checked={manyBookId === b.id}
-                    onChange={() => setManyBookId(b.id)}
-                  />
-                  <span className="brw-cell-date">{formatDate(b.date)}</span>
-                  <span className="brw-cell-desc">{b.description}</span>
-                  <span className={b.amountSigned < 0 ? 'brw-amt out' : 'brw-amt in'}>
-                    {formatRs(b.amountSigned)}
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            className="button primary button-block"
-            disabled={pending || manySelectedLines.length < 2 || !manyBookId}
-            onClick={doManyToOne}
-          >
-            Confirm {manySelectedLines.length} bank â†’ 1 BookOne
-          </button>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={pending}
+                      onClick={() => loadGroupCandidates(selected.id, groupQ)}
+                    >
+                      Find
+                    </button>
+                  </div>
+                  {groupBankAmt != null ? (
+                    <p className="brw-muted">
+                      Bank {formatRs(groupBankAmt)} · selected{' '}
+                      {formatRs(
+                        groupCands
+                          .filter((c) => groupSelected.includes(c.id))
+                          .reduce((sum, c) => sum + c.amountSigned, 0),
+                      )}
+                    </p>
+                  ) : null}
+                  <ul className="brw-group-list">
+                    {groupCands.map((c) => (
+                      <li key={c.id}>
+                        <label className="brw-group-row">
+                          <input
+                            type="checkbox"
+                            checked={groupSelected.includes(c.id)}
+                            onChange={() => {
+                              setGroupSelected((prev) =>
+                                prev.includes(c.id)
+                                  ? prev.filter((x) => x !== c.id)
+                                  : [...prev, c.id],
+                              );
+                            }}
+                          />
+                          <span className="brw-cell-date">{formatDate(c.date)}</span>
+                          <span className="brw-cell-desc">{c.description}</span>
+                          <span className={c.amountSigned < 0 ? 'brw-amt out' : 'brw-amt in'}>
+                            {formatRs(c.amountSigned)}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  {groupSelected.length > 0 ? (
+                    <button
+                      type="button"
+                      className="button primary button-block"
+                      disabled={pending}
+                      onClick={() => doGroupConfirm(selected.id)}
+                    >
+                      Confirm group match ({groupSelected.length})
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="brw-drawer-actions">{rowActions(selected, true)}</div>
+            </div>
+          ) : (
+            <div className="brw-side-empty">
+              Select a row to see details and actions here. Use the chips above to focus work —
+              Confirm safe matches when ready, then Review & finish.
+            </div>
+          )}
         </aside>
-      ) : null}
+      </div>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirmCopy.title}
+        message={confirm?.kind === 'exclude' ? undefined : confirmCopy.message}
+        confirmLabel={confirmCopy.label}
+        tone={confirmCopy.tone}
+        busy={pending}
+        onCancel={() => setConfirm(null)}
+        onConfirm={runConfirmAction}
+      >
+        {confirm?.kind === 'exclude' ? (
+          <>
+            <p className="modal-message">{confirmCopy.message}</p>
+            <label className="brw-field" style={{ display: 'block', marginTop: 8 }}>
+              <span>Reason</span>
+              <input
+                className="input"
+                value={excludeReason}
+                onChange={(e) => setExcludeReason(e.target.value)}
+                placeholder="not_relevant"
+                style={{ width: '100%', marginTop: 4 }}
+              />
+            </label>
+          </>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

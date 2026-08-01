@@ -346,7 +346,17 @@ async function importBank(page, filePath, tag) {
       note(`${tag}-import-ui`, 'OK', 'import studio ready', [
         'Import studio uses bis-* design — recon inbox/workbench should feel as polished as this, not a separate grey system',
       ]);
+      // Accept browser confirm if still present; prefer standard modal ConfirmDialog
+      page.once('dialog', (d) => d.accept().catch(() => {}));
       await commit.click();
+      // Standard BookOne ConfirmDialog
+      const modalConfirm = page
+        .locator('.modal-panel button, [role="dialog"] button')
+        .filter({ hasText: /Save bank lines|Confirm|Yes/i })
+        .first();
+      if (await modalConfirm.count()) {
+        await modalConfirm.click().catch(() => {});
+      }
       // Wait for success title (not still "Ready to save")
       const ok = await page
         .getByText(/Bank file saved|lines saved|Reconcile now/i)

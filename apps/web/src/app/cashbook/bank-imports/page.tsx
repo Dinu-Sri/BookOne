@@ -1,5 +1,8 @@
 import Link from 'next/link';
-import { listReconciliationSessions } from '@/app/actions/bank-reconciliation';
+import {
+  listBankImports,
+  listReconciliationSessions,
+} from '@/app/actions/bank-reconciliation';
 import { ReconciliationInbox } from '@/components/reconciliation/reconciliation-inbox';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { canAccessFullErp } from '@/lib/entity-kind';
@@ -16,10 +19,16 @@ export default async function CashbookBankImportsPage() {
 
   const fullErp = canAccessFullErp(tenant.entityKind, tenant.capabilityTier);
   let sessions: Awaited<ReturnType<typeof listReconciliationSessions>> = [];
+  let imports: Awaited<ReturnType<typeof listBankImports>> = [];
   try {
     sessions = await listReconciliationSessions();
   } catch {
     sessions = [];
+  }
+  try {
+    imports = await listBankImports();
+  } catch {
+    imports = [];
   }
 
   return (
@@ -35,12 +44,9 @@ export default async function CashbookBankImportsPage() {
             ← Cashbook
           </Link>
         </div>
-        <p className="bih-lead">
-          Each card is a bank account and statement period. Import files are attached as evidence —
-          match them to cashbook entries here.
-        </p>
         <ReconciliationInbox
           sessions={sessions}
+          initialImports={imports}
           importHref="/cashbook/import"
           sessionBase="/cashbook/recon"
         />

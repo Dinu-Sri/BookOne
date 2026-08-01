@@ -196,8 +196,13 @@ export function CashbookHomeClient({
         setLiquid(rows);
         if (rows.length) {
           const cash = rows.find((r) => r.code === '1000')?.code ?? rows[0]!.code;
-          const bank = rows.find((r) => r.kind === 'bank')?.code ?? rows.find((r) => r.code !== cash)?.code ?? cash;
-          setPayCodeSelected((c) => (rows.some((r) => r.code === c) ? c : cash));
+          const bank =
+            rows.find((r) => r.kind === 'bank')?.code ??
+            rows.find((r) => r.code !== cash)?.code ??
+            cash;
+          // Prefer bank as default liquid account when present (better bank recon match rate)
+          const preferred = bank || cash;
+          setPayCodeSelected((c) => (rows.some((r) => r.code === c) ? c : preferred));
           setFromCode((c) => (rows.some((r) => r.code === c) ? c : cash));
           setToCode((c) => (rows.some((r) => r.code === c) ? c : bank));
         }
@@ -295,9 +300,14 @@ export function CashbookHomeClient({
     }
     const lastPay = readLastPayMethod();
     const cash = liquid.find((a) => a.code === '1000')?.code ?? liquid[0]?.code ?? '1000';
-    const bank = liquid.find((a) => a.kind === 'bank')?.code ?? liquid.find((a) => a.code !== cash)?.code ?? '1100';
+    const bank =
+      liquid.find((a) => a.kind === 'bank')?.code ??
+      liquid.find((a) => a.code !== cash)?.code ??
+      '1100';
+    // Prefer last used; otherwise Bank when available (bank recon matches payment account)
     if (lastPay === 'Cash') setPayCodeSelected(cash);
     else if (lastPay === 'Bank') setPayCodeSelected(bank);
+    else if (liquid.some((a) => a.kind === 'bank' || a.code === bank)) setPayCodeSelected(bank);
     else setPayCodeSelected(cash);
     setFromCode(cash);
     setToCode(bank);

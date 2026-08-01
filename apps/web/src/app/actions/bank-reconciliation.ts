@@ -291,7 +291,15 @@ async function loadBookCandidates(
 
   const out: (BookCandidate & { paymentAccountId: string })[] = [];
   for (const r of rows) {
-    if (bookDomain && r.bookDomain && r.bookDomain !== bookDomain) continue;
+    // Only filter domain when both sides are set and disagree (null = any domain)
+    if (
+      bookDomain &&
+      r.bookDomain &&
+      bookDomain !== r.bookDomain &&
+      bookDomain !== 'all'
+    ) {
+      continue;
+    }
     const signed = bookSignedAmount(
       r.direction,
       Number(r.amount),

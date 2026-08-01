@@ -242,15 +242,52 @@ async function postEntry(page, entry, period) {
   await page.waitForTimeout(600);
   const isIn = entry.direction === 'money_in';
   await page.locator(isIn ? 'button.cb-primary-tile.in' : 'button.cb-primary-tile.out').click();
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(600);
 
-  const party = page.locator('.cb-sheet-body input:not([type="date"]):not(.cb-amount-input)').first();
+  const sheet = page.locator('.cb-sheet, .cb-sheet-body').first();
+  const party = sheet.locator('input:not([type="date"]):not(.cb-amount-input)').first();
   if (await party.count()) await party.fill(entry.party);
 
   const amount = page.locator('.cb-amount-input').first();
   await amount.fill(String(entry.amount));
 
-  const more = page.locator('.cb-sheet button').filter({ hasText: /More details|date, note|▼/i }).first();
+  // Category first (Where from / Category) — not Account liquid tiles
+  const catTiles = page.locator('.cb-field').filter({ hasText: /Where from|Category|මුදල්|ප්‍රවර්ගය/i });
+  const catBtn = catTiles.locator('button.cashbook-tile').first();
+  if (await catBtn.count()) await catBtn.click().catch(() => {});
+
+  // Account: LiquidTiles under "Account" — MUST be Bank (1100), not Cash
+  const accountField = page.locator('.cb-field').filter({ hasText: /Account|ගිණුම/i });
+  const liquidBtns = accountField.locator('button.cashbook-tile, .cb-liquid-tiles button');
+  let bankPicked = false;
+  const ln = await liquidBtns.count();
+  for (let i = 0; i < ln; i++) {
+    const t = (await liquidBtns.nth(i).innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+    if (/^Cash$/i.test(t)) continue;
+    if (/Bank|1100|HNB|BOC|Sampath/i.test(t)) {
+      await liquidBtns.nth(i).click();
+      bankPicked = true;
+      break;
+    }
+  }
+  if (!bankPicked && ln > 1) {
+    // Second liquid tile is usually Bank when first is Cash
+    await liquidBtns.nth(1).click().catch(() => {});
+    bankPicked = true;
+  }
+  if (!bankPicked) {
+    // Global fallback: any Bank tile in sheet
+    const anyBank = page
+      .locator('.cb-sheet button.cashbook-tile')
+      .filter({ hasText: /^Bank$|Bank Account|1100/i })
+      .first();
+    if (await anyBank.count()) {
+      await anyBank.click();
+      bankPicked = true;
+    }
+  }
+
+  const more = page.locator('.cb-sheet button.cb-details-toggle, .cb-sheet button').filter({ hasText: /More details|date, note|▼/i }).first();
   if (await more.count()) await more.click();
   await page.waitForTimeout(200);
 
@@ -260,43 +297,18 @@ async function postEntry(page, entry, period) {
   if (await desc.count()) await desc.fill(entry.description);
   await pickDateField(page, entry.date);
 
-  // Category tiles (not pay method)
-  const cat = page
-    .locator('.cb-sheet .cashbook-tile, .cb-sheet button.cashbook-tile')
-    .filter({ hasNotText: /^(Cash|Bank|Card)/i })
+  // Re-assert Bank after other clicks (some flows reset pay method)
+  const reBank = page
+    .locator('.cb-field')
+    .filter({ hasText: /Account|ගිණුම/i })
+    .locator('button.cashbook-tile')
+    .filter({ hasText: /Bank|1100/i })
     .first();
-  if (await cat.count()) await cat.click().catch(() => {});
-
-  // Force Bank as payment method (must not fall back to Cash — recon matches by bank account)
-  let bankPicked = false;
-  const payTiles = page.locator(
-    '.cb-sheet .cashbook-pay-tiles button, .cb-sheet button[data-pay], .cb-sheet .cb-pay-tile, .cb-sheet .cashbook-tile',
-  );
-  const n = await payTiles.count();
-  for (let i = 0; i < n; i++) {
-    const t = (await payTiles.nth(i).innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
-    if (/^Cash$/i.test(t)) continue;
-    if (/Bank|HNB|BOC|1100|Sampath|Commercial/i.test(t)) {
-      await payTiles.nth(i).click().catch(() => {});
-      bankPicked = true;
-      break;
-    }
-  }
-  if (!bankPicked) {
-    // Prefer second pay tile when first is Cash
-    for (let i = 0; i < n; i++) {
-      const t = (await payTiles.nth(i).innerText().catch(() => '')).trim();
-      if (!/^Cash$/i.test(t) && t.length > 0) {
-        await payTiles.nth(i).click().catch(() => {});
-        bankPicked = true;
-        break;
-      }
-    }
-  }
+  if (await reBank.count()) await reBank.click().catch(() => {});
 
   await page.locator('.cb-sheet button.cashbook-save, .cb-sheet button.cb-sheet-save').first().click();
   await page.waitForTimeout(1200);
-  await page.locator('.cb-saved-toast').waitFor({ state: 'visible', timeout: 4000 }).catch(() => {});
+  await page.locator('.cb-saved-toast, .cb-sheet').filter({ hasText: /Saved/i }).first().waitFor({ state: 'visible', timeout: 4000 }).catch(() => {});
 }
 
 async function postBooks(page, entries, period, tag) {

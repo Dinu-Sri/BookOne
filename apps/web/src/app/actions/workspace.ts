@@ -42,6 +42,7 @@ export interface TenantInfo {
     purchase: boolean;
     inventory: boolean;
     pos: boolean;
+    rental: boolean;
     hr: boolean;
   };
   userEmail?: string;

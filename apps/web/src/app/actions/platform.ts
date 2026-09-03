@@ -22,6 +22,7 @@ import {
 } from '@bookone/db';
 import {
   modulesForPlan,
+  modulesFromForm,
   normalizeModules,
   type TenantModules,
   type PlanId,
@@ -358,12 +359,7 @@ export async function createPlatformCompanyFromForm(formData: FormData): Promise
   if (!name) throw new Error('Company name is required.');
   if (!ownerEmail || !ownerEmail.includes('@')) throw new Error('Owner email is required.');
 
-  const modules = modulesForPlan(plan);
-  // Allow form overrides for modules
-  for (const key of ['sales', 'purchase', 'inventory', 'pos', 'hr'] as const) {
-    const v = formData.get(`module_${key}`);
-    if (v !== null) modules[key] = v === 'on' || v === 'true' || v === '1';
-  }
+  const modules = modulesFromForm(formData, plan);
 
   const slug = await uniqueTenantSlug(slugInput || name);
 
@@ -481,16 +477,7 @@ export async function updatePlatformCompanyFromForm(formData: FormData): Promise
 
   if (!name) throw new Error('Company name is required.');
 
-  const modules = modulesForPlan(plan);
-  for (const key of ['sales', 'purchase', 'inventory', 'pos', 'hr'] as const) {
-    const v = formData.get(`module_${key}`);
-    // Checkboxes: absent = false when form includes module_touch sentinel
-    if (formData.get('module_touch') === '1') {
-      modules[key] = v === 'on' || v === 'true' || v === '1';
-    } else if (v !== null) {
-      modules[key] = v === 'on' || v === 'true' || v === '1';
-    }
-  }
+  const modules = modulesFromForm(formData, plan);
 
   const [before] = await db()
     .select({

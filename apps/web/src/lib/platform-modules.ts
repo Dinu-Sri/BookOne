@@ -68,6 +68,20 @@ export function modulesForPlan(plan: string): TenantModules {
   return { sales: true, purchase: true, inventory: false, pos: false, rental: false, hr: false };
 }
 
+export function modulesFromForm(formData: FormData, plan: string): TenantModules {
+  const modules = modulesForPlan(plan);
+  const touched = formData.get('module_touch') === '1';
+  for (const key of MODULE_KEYS) {
+    const v = formData.get(`module_${key}`);
+    if (touched) {
+      modules[key] = v === 'on' || v === 'true' || v === '1';
+    } else if (v !== null) {
+      modules[key] = v === 'on' || v === 'true' || v === '1';
+    }
+  }
+  return modules;
+}
+
 export function normalizeModules(raw: unknown, plan = 'starter'): TenantModules {
   const base = modulesForPlan(plan);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return base;

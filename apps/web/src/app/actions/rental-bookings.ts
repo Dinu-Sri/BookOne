@@ -16,33 +16,10 @@ import {
   sql,
   withTenantContext,
 } from '@bookone/db';
-import { getRentalSettings, type OverlapPolicy } from '@/app/actions/rental-settings';
+import { getRentalSettings } from '@/app/actions/rental-settings';
+import { resolveHireWindow, type OverlapPolicy, type RentalEventInput } from '@/lib/rental-core';
 
 const ACTIVE_STATUSES = ['hold', 'reserved', 'dispatched'] as const;
-
-export type RentalEventInput = {
-  eventDate?: string | null;
-  hireFrom?: string | null;
-  hireTo?: string | null;
-  venue?: string | null;
-  guestCount?: number | null;
-  deliverAt?: string | null;
-  collectAt?: string | null;
-  packingNotes?: string | null;
-  confirmOverlap?: boolean;
-  overlapOverrideReason?: string | null;
-};
-
-function isDate(v?: string | null): v is string {
-  return Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
-}
-
-export function resolveHireWindow(input: RentalEventInput): { hireFrom: string; hireTo: string } | null {
-  const from = input.hireFrom || input.deliverAt || input.eventDate || '';
-  const to = input.hireTo || input.collectAt || input.eventDate || from;
-  if (!isDate(from) || !isDate(to)) return null;
-  return from <= to ? { hireFrom: from, hireTo: to } : { hireFrom: to, hireTo: from };
-}
 
 function bookingStatusForDoc(documentType: string): string {
   if (documentType === 'quotation') return 'hold';
@@ -414,8 +391,9 @@ export async function listRentalCalendar(input: {
   }[];
 }> {
   const user = await requireTenantContext();
-  const from = isDate(input.from) ? input.from : new Date().toISOString().slice(0, 8) + '01';
-  const to = isDate(input.to) ? input.to : from;
+  const isYmd = (v?: string | null) => Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
+  const from = isYmd(input.from) ? input.from : new Date().toISOString().slice(0, 8) + '01';
+  const to = isYmd(input.to) ? input.to : from;
   const { businessDocuments, parties } = await import('@bookone/db');
 
   return withTenantContext(user.tenantId, async () => {

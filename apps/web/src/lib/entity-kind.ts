@@ -12,6 +12,7 @@ export type TenantModulesShape = {
   purchase: boolean;
   inventory: boolean;
   pos: boolean;
+  rental: boolean;
   hr: boolean;
 };
 
@@ -33,11 +34,11 @@ export function modulesForEntityKind(
   },
 ): TenantModulesShape {
   if (entityKind === 'personal' || entityKind === 'pending') {
-    return { sales: false, purchase: false, inventory: false, pos: false, hr: false };
+    return { sales: false, purchase: false, inventory: false, pos: false, rental: false, hr: false };
   }
   if (entityKind === 'sole_prop') {
     if (capability === 'full') {
-      return { sales: true, purchase: true, inventory: true, pos: true, hr: false };
+      return { sales: true, purchase: true, inventory: true, pos: true, rental: true, hr: false };
     }
     // lite: sales/purchase on; inventory/pos only if preserving view after downgrade
     return {
@@ -45,14 +46,15 @@ export function modulesForEntityKind(
       purchase: true,
       inventory: !!opts?.preserveAdvancedView,
       pos: !!opts?.preserveAdvancedView,
+      rental: false,
       hr: false,
     };
   }
   // company — starter-like defaults
-  return { sales: true, purchase: true, inventory: false, pos: false, hr: false };
+  return { sales: true, purchase: true, inventory: false, pos: false, rental: false, hr: false };
 }
 
-export type ModuleWriteKey = 'sales' | 'purchase' | 'inventory' | 'pos' | 'hr';
+export type ModuleWriteKey = 'sales' | 'purchase' | 'inventory' | 'pos' | 'rental' | 'hr';
 
 /**
  * May open the module in the nav (including read-only after downgrade).

@@ -51,9 +51,8 @@ import {
   checkRentalAvailability,
   loadRentalEventForDocument,
   persistRentalBookings,
-  resolveHireWindow,
-  type RentalEventInput,
 } from '@/app/actions/rental-bookings';
+import { resolveHireWindow, type RentalEventInput } from '@/lib/rental-core';
 
 export type CommercialDocType =
   | 'quotation'

@@ -31,6 +31,8 @@ export function ProductForm({
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const isPhysical = productType === 'physical' || productType === 'stocked';
+  const isRental = productType === 'rental';
+  const tracksQty = isPhysical || isRental;
   const typeLocked = Boolean(product?.typeLocked);
 
   function applyFile(file: File | null | undefined) {
@@ -75,7 +77,7 @@ export function ProductForm({
         </Link>
         <div className="party-tabs" role="tablist">
           {TABS.map((t) => {
-            if (t.id === 'stock' && !isPhysical) return null;
+            if (t.id === 'stock' && !tracksQty) return null;
             return (
               <button
                 key={t.id}
@@ -164,6 +166,7 @@ export function ProductForm({
                 <option value="physical">Physical (stocked goods)</option>
                 <option value="digital">Digital (non-stock)</option>
                 <option value="service">Service</option>
+                <option value="rental">Rental (hire fleet — comes back)</option>
               </select>
               {typeLocked ? (
                 <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
@@ -224,9 +227,49 @@ export function ProductForm({
               <input className="input" name="unitCost" inputMode="decimal" defaultValue={product?.unitCost ?? 0} />
             </div>
             <div className="field">
-              <label>Sell price *</label>
+              <label>{isRental ? 'Hire rate *' : 'Sell price *'}</label>
               <input className="input" name="sellPrice" inputMode="decimal" defaultValue={product?.sellPrice ?? 0} />
             </div>
+            {isRental ? (
+              <>
+                <div className="field">
+                  <label>Hire unit</label>
+                  <select className="input" name="hireUnit" defaultValue={product?.hireUnit ?? 'event'}>
+                    <option value="event">Per event</option>
+                    <option value="day">Per day</option>
+                    <option value="hour">Per hour</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Turnaround hours</label>
+                  <input
+                    className="input"
+                    name="turnaroundHours"
+                    inputMode="numeric"
+                    defaultValue={product?.turnaroundHours ?? ''}
+                    placeholder="Tenant default"
+                  />
+                </div>
+                <div className="field">
+                  <label>Item deposit</label>
+                  <input
+                    className="input"
+                    name="depositAmount"
+                    inputMode="decimal"
+                    defaultValue={product?.depositAmount ?? ''}
+                  />
+                </div>
+                <div className="field">
+                  <label>Replacement price</label>
+                  <input
+                    className="input"
+                    name="replacementPrice"
+                    inputMode="decimal"
+                    defaultValue={product?.replacementPrice ?? ''}
+                  />
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -234,7 +277,11 @@ export function ProductForm({
           <div className="party-tab-grid">
             <div className="field">
               <label>Revenue account</label>
-              <input className="input" name="revenueAccountCode" defaultValue={product?.revenueAccountCode ?? '4000'} />
+              <input
+                className="input"
+                name="revenueAccountCode"
+                defaultValue={product?.revenueAccountCode ?? (isRental ? '4400' : '4000')}
+              />
             </div>
             {isPhysical ? (
               <>
@@ -251,6 +298,15 @@ export function ProductForm({
                   />
                 </div>
               </>
+            ) : isRental ? (
+              <div className="field">
+                <label>Fleet inventory account</label>
+                <input
+                  className="input"
+                  name="inventoryAccountCode"
+                  defaultValue={product?.inventoryAccountCode ?? '5100'}
+                />
+              </div>
             ) : (
               <div className="field">
                 <label>Expense / cost account</label>
@@ -260,7 +316,7 @@ export function ProductForm({
           </div>
         </div>
 
-        {isPhysical ? (
+        {tracksQty ? (
           <div className="party-tab-panel" hidden={tab !== 'stock'}>
             <div className="party-tab-grid">
               {mode === 'create' ? (

@@ -1,5 +1,5 @@
 /** Sellable / nav modules (accounting + company are always on). */
-export const MODULE_KEYS = ['sales', 'purchase', 'inventory', 'pos', 'hr'] as const;
+export const MODULE_KEYS = ['sales', 'purchase', 'inventory', 'pos', 'rental', 'hr'] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
 export type TenantModules = Record<ModuleKey, boolean>;
@@ -46,6 +46,11 @@ export const MODULE_CATALOG: {
     summary: 'Terminal, shifts, POS history.',
   },
   {
+    key: 'rental',
+    name: 'Rental',
+    summary: 'Event hire, calendar, deposits, dispatch and returns.',
+  },
+  {
     key: 'hr',
     name: 'HR',
     summary: 'Employees and payroll (coming soon).',
@@ -55,12 +60,12 @@ export const MODULE_CATALOG: {
 export function modulesForPlan(plan: string): TenantModules {
   const p = (plan || 'starter').toLowerCase();
   if (p === 'pro') {
-    return { sales: true, purchase: true, inventory: true, pos: true, hr: false };
+    return { sales: true, purchase: true, inventory: true, pos: true, rental: true, hr: false };
   }
   if (p === 'growth') {
-    return { sales: true, purchase: true, inventory: true, pos: false, hr: false };
+    return { sales: true, purchase: true, inventory: true, pos: false, rental: false, hr: false };
   }
-  return { sales: true, purchase: true, inventory: false, pos: false, hr: false };
+  return { sales: true, purchase: true, inventory: false, pos: false, rental: false, hr: false };
 }
 
 export function normalizeModules(raw: unknown, plan = 'starter'): TenantModules {
@@ -72,7 +77,7 @@ export function normalizeModules(raw: unknown, plan = 'starter'): TenantModules 
   const hasAny = MODULE_KEYS.some((k) => k in obj);
   if (!hasAny) {
     // Legacy tenants with no flags: keep everything sellable on (except HR).
-    return { sales: true, purchase: true, inventory: true, pos: true, hr: false };
+    return { sales: true, purchase: true, inventory: true, pos: true, rental: false, hr: false };
   }
   const out = { ...base };
   for (const key of MODULE_KEYS) {
@@ -91,4 +96,8 @@ export function suiteModuleKey(suiteId: string): ModuleKey | null {
 
 export function isPosNavItem(label: string): boolean {
   return label === 'POS' || label === 'POS History';
+}
+
+export function isRentalNavItem(label: string): boolean {
+  return label === 'Rental Settings' || label === 'Rental calendar' || label === 'On rent';
 }

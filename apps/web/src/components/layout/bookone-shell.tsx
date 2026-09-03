@@ -36,6 +36,7 @@ import { StatusToast } from '@/components/layout/status-toast';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
 import {
   isPosNavItem,
+  isRentalNavItem,
   normalizeModules,
   suiteModuleKey,
   type TenantModules,
@@ -137,6 +138,8 @@ const navSuites: NavSuite[] = [
       { label: 'Stock Ledger', icon: BookOpenCheck, href: '/inventory/ledger' },
       { label: 'Stock Transfers', icon: ClipboardList, href: '/inventory/transfers' },
       { label: 'Stock Adjustments', icon: SlidersHorizontal, href: '/inventory/adjustments' },
+      { label: 'Rental calendar', icon: CalendarDays, href: '/inventory/calendar' },
+      { label: 'On rent', icon: CalendarDays, href: '/inventory/levels?fleet=on_rent' },
     ],
   },
   {
@@ -149,6 +152,7 @@ const navSuites: NavSuite[] = [
       { label: 'Sales Settings', icon: ReceiptText, href: '/company/sales' },
       { label: 'Purchase Settings', icon: ShoppingCart, href: '/company/purchase' },
       { label: 'Inventory Settings', icon: Package, href: '/company/inventory' },
+      { label: 'Rental Settings', icon: CalendarDays, href: '/company/rental' },
       { label: 'Brands', icon: Package, href: '/company/brands' },
       { label: 'Locations', icon: Landmark, href: '/company/locations' },
       { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },
@@ -337,6 +341,9 @@ export function BookOneShell({
         // POS nav items require the pos module (sales suite may still show).
         if (suite.id === 'sales' && !modules.pos) {
           items = items.filter((item) => !isPosNavItem(item.label));
+        }
+        if ((suite.id === 'company' || suite.id === 'inventory') && !modules.rental) {
+          items = items.filter((item) => !isRentalNavItem(item.label));
         }
         // Sole: always link Cashbook (Personal | Business domains) from ERP
         if (suite.id === 'accounting' && soleNeedsCashbook) {

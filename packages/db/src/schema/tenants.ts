@@ -6,6 +6,7 @@ export type TenantModulesJson = {
   purchase?: boolean;
   inventory?: boolean;
   pos?: boolean;
+  rental?: boolean;
   hr?: boolean;
 };
 

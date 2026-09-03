@@ -17,6 +17,16 @@ export function isPhysicalProduct(type?: string | null): boolean {
   return type === 'physical' || type === 'stocked';
 }
 
+/** Hire fleet — stays on the books; invoice must not COGS or consume qty. */
+export function isRentalProduct(type?: string | null): boolean {
+  return type === 'rental';
+}
+
+/** Qty-tracked products: sold goods and rental fleet. */
+export function tracksStockQty(type?: string | null): boolean {
+  return isPhysicalProduct(type) || isRentalProduct(type);
+}
+
 export interface SaleLineInput {
   description: string;
   quantity: number;

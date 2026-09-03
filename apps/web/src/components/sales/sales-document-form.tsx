@@ -19,6 +19,7 @@ import {
   type BrandOption,
   type LocationOption,
 } from '@/components/module/brand-location-fields';
+import { EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
 
 type PartyOpt = {
@@ -211,6 +212,7 @@ export function SalesDocumentForm({
             </div>
           ) : null}
           <BrandLocationFields brands={brands} locations={locations} />
+          {documentType === 'sales_order' || documentType === 'sales_invoice' ? <EventHireFields /> : null}
         </div>
 
         <DocumentLinesEditor

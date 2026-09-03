@@ -21,6 +21,7 @@ export type ProductPick = {
   unitCost: number;
   barcode?: string | null;
   imageUrl?: string | null;
+  productType?: string;
 };
 
 function money(n: number) {

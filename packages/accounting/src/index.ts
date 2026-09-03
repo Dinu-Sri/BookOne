@@ -10,6 +10,8 @@ export { inferTransaction } from './engine/posting';
 export type { EngineResult } from './engine/posting';
 export {
   isPhysicalProduct,
+  isRentalProduct,
+  tracksStockQty,
   buildSalesInvoicePosting,
   buildSalesReturnPosting,
   buildVendorBillPosting,
@@ -27,3 +29,4 @@ export type {
   PurchaseLineBucket,
 } from './engine/document-posting';
 export { amountInWordsLkr, formatDateMmDdYyyy } from './amount-in-words';
+export { datesOverlap, padHireTo, availableQty } from './rental-availability';

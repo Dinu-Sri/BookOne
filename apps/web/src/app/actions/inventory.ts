@@ -6,6 +6,7 @@ import {
   buildOpeningStockPosting,
   buildStockAdjustmentPosting,
   isPhysicalProduct,
+  tracksStockQty,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -35,7 +36,7 @@ import {
 } from '@bookone/db';
 import { assertModuleWrite } from '@/lib/module-access';
 
-const productTypeSchema = z.enum(['physical', 'digital', 'service', 'stocked']);
+const productTypeSchema = z.enum(['physical', 'digital', 'service', 'stocked', 'rental']);
 
 const productInputSchema = z.object({
   sku: z.string().min(1).max(80),
@@ -59,6 +60,10 @@ const productInputSchema = z.object({
   expenseAccountCode: z.string().max(20).default('6800'),
   notes: z.string().max(2000).optional(),
   isActive: z.boolean().default(true),
+  hireUnit: z.enum(['event', 'day', 'hour']).optional().nullable(),
+  turnaroundHours: z.number().int().min(0).max(24 * 30).optional().nullable(),
+  depositAmount: z.number().min(0).optional().nullable(),
+  replacementPrice: z.number().min(0).optional().nullable(),
 });
 
 export type ProductInput = z.infer<typeof productInputSchema>;
@@ -94,6 +99,10 @@ export interface ProductRow {
   canDelete: boolean;
   deleteReasons: string[];
   typeLocked: boolean;
+  hireUnit: string | null;
+  turnaroundHours: number | null;
+  depositAmount: number | null;
+  replacementPrice: number | null;
 }
 
 export interface StockLevelRow {
@@ -104,6 +113,10 @@ export interface StockLevelRow {
   locationId: string | null;
   locationName: string;
   qtyOnHand: number;
+  qtyOnRent: number;
+  qtyInRepair: number;
+  qtyAvailable: number;
+  productType: string;
   unitCost: number;
   stockValue: number;
   reorderLevel: number | null;
@@ -141,9 +154,10 @@ function clean(v?: string | null) {
   return t ? t : null;
 }
 
-function normalizeType(t: string): 'physical' | 'digital' | 'service' {
+function normalizeType(t: string): 'physical' | 'digital' | 'service' | 'rental' {
   if (t === 'stocked' || t === 'physical') return 'physical';
   if (t === 'digital') return 'digital';
+  if (t === 'rental') return 'rental';
   return 'service';
 }
 
@@ -283,6 +297,10 @@ function mapProduct(
     canDelete: extras.canDelete ?? false,
     deleteReasons: extras.deleteReasons ?? [],
     typeLocked: extras.typeLocked ?? false,
+    hireUnit: (row.hireUnit as string | null) ?? null,
+    turnaroundHours: row.turnaroundHours != null && row.turnaroundHours !== '' ? Number(row.turnaroundHours) : null,
+    depositAmount: row.depositAmount != null ? Number(row.depositAmount) : null,
+    replacementPrice: row.replacementPrice != null ? Number(row.replacementPrice) : null,
   };
 }
 
@@ -456,6 +474,18 @@ function formToProductInput(formData: FormData): ProductInput {
     expenseAccountCode: String(formData.get('expenseAccountCode') ?? '6800') || '6800',
     notes: String(formData.get('notes') ?? ''),
     isActive: formData.get('isActive') !== '0' && formData.get('status') !== 'inactive',
+    hireUnit: (['event', 'day', 'hour'].includes(String(formData.get('hireUnit') ?? ''))
+      ? (String(formData.get('hireUnit')) as 'event' | 'day' | 'hour')
+      : null),
+    turnaroundHours: String(formData.get('turnaroundHours') ?? '')
+      ? parseInt(String(formData.get('turnaroundHours')), 10)
+      : null,
+    depositAmount: String(formData.get('depositAmount') ?? '')
+      ? Number(String(formData.get('depositAmount')).replace(/[^0-9.-]/g, ''))
+      : null,
+    replacementPrice: String(formData.get('replacementPrice') ?? '')
+      ? Number(String(formData.get('replacementPrice')).replace(/[^0-9.-]/g, ''))
+      : null,
   };
 }
 
@@ -475,14 +505,23 @@ function toProductValues(tenantId: string, parsed: ProductInput) {
     sellable: parsed.sellable ? '1' : '0',
     purchasable: parsed.purchasable ? '1' : '0',
     taxStatus: parsed.taxStatus,
-    reorderLevel: type === 'physical' && parsed.reorderLevel != null ? parsed.reorderLevel.toFixed(4) : null,
-    reorderQty: type === 'physical' && parsed.reorderQty != null ? parsed.reorderQty.toFixed(4) : null,
-    revenueAccountCode: parsed.revenueAccountCode || '4000',
+    reorderLevel:
+      tracksStockQty(type) && parsed.reorderLevel != null ? parsed.reorderLevel.toFixed(4) : null,
+    reorderQty: tracksStockQty(type) && parsed.reorderQty != null ? parsed.reorderQty.toFixed(4) : null,
+    revenueAccountCode:
+      type === 'rental' ? parsed.revenueAccountCode || '4400' : parsed.revenueAccountCode || '4000',
     cogsAccountCode: parsed.cogsAccountCode || '5000',
     inventoryAccountCode: parsed.inventoryAccountCode || '5100',
     expenseAccountCode: parsed.expenseAccountCode || '6800',
     notes: clean(parsed.notes),
     isActive: parsed.isActive ? '1' : '0',
+    hireUnit: type === 'rental' ? parsed.hireUnit || 'event' : null,
+    turnaroundHours:
+      type === 'rental' && parsed.turnaroundHours != null ? String(parsed.turnaroundHours) : null,
+    depositAmount:
+      type === 'rental' && parsed.depositAmount != null ? parsed.depositAmount.toFixed(2) : null,
+    replacementPrice:
+      type === 'rental' && parsed.replacementPrice != null ? parsed.replacementPrice.toFixed(2) : null,
     updatedAt: new Date(),
   };
 }
@@ -493,7 +532,7 @@ function toProductValues(tenantId: string, parsed: ProductInput) {
  */
 export async function createQuickProduct(input: {
   name: string;
-  productType?: 'physical' | 'digital' | 'service';
+  productType?: 'physical' | 'digital' | 'service' | 'rental';
   sellPrice?: number;
   unitCost?: number;
 }): Promise<{
@@ -561,11 +600,11 @@ export async function createQuickProduct(input: {
             category: type === 'service' ? 'Services' : type === 'digital' ? 'Digital' : 'General',
             barcode: '',
             sellable: true,
-            purchasable: type === 'physical',
+            purchasable: type === 'physical' || type === 'rental',
             taxStatus: 'standard',
             reorderLevel: null,
             reorderQty: null,
-            revenueAccountCode: '4000',
+            revenueAccountCode: type === 'rental' ? '4400' : '4000',
             cogsAccountCode: '5000',
             inventoryAccountCode: '5100',
             expenseAccountCode: '6800',
@@ -582,7 +621,7 @@ export async function createQuickProduct(input: {
           productType: inventoryProducts.productType,
         });
 
-      if (type === 'physical') {
+      if (tracksStockQty(type)) {
         await db().insert(inventoryStockLevels).values({
           tenantId: user.tenantId,
           productId: created.id,
@@ -667,7 +706,7 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
         .where(eq(inventoryProducts.id, product.id));
     }
 
-    if (type === 'physical') {
+    if (tracksStockQty(type)) {
       await db().insert(inventoryStockLevels).values({
         tenantId: user.tenantId,
         productId: product.id,
@@ -902,6 +941,7 @@ export async function deleteProductFromForm(formData: FormData): Promise<void> {
 export async function listStockLevels(filter?: { q?: string }): Promise<StockLevelRow[]> {
   const user = await requireTenantContext();
   const q = filter?.q?.trim().toLowerCase() ?? '';
+  const today = new Date().toISOString().slice(0, 10);
   return withTenantContext(user.tenantId, async () => {
     const rows = await db()
       .select({
@@ -911,6 +951,7 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
         name: inventoryProducts.name,
         locationId: inventoryStockLevels.locationId,
         locationName: locations.name,
+        locationType: locations.locationType,
         qtyOnHand: inventoryStockLevels.qtyOnHand,
         unitCost: inventoryProducts.unitCost,
         reorderLevel: inventoryProducts.reorderLevel,
@@ -923,12 +964,30 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
         and(
           eq(inventoryStockLevels.tenantId, user.tenantId),
           isNull(inventoryProducts.voidedAt),
-          or(eq(inventoryProducts.productType, 'physical'), eq(inventoryProducts.productType, 'stocked')),
+          or(
+            eq(inventoryProducts.productType, 'physical'),
+            eq(inventoryProducts.productType, 'stocked'),
+            eq(inventoryProducts.productType, 'rental'),
+          ),
         ),
       )
       .orderBy(asc(inventoryProducts.name));
 
+    const { currentlyOnRentQty } = await import('@/app/actions/rental-bookings');
+    const rentalIds = [...new Set(rows.filter((r) => r.productType === 'rental').map((r) => r.productId))];
+    const onRentMap = new Map<string, number>();
+    for (const id of rentalIds) {
+      onRentMap.set(id, await currentlyOnRentQty(user.tenantId, id, today));
+    }
+    const repairByProduct = new Map<string, number>();
+    for (const r of rows) {
+      if (r.locationType === 'repair') {
+        repairByProduct.set(r.productId, (repairByProduct.get(r.productId) ?? 0) + Number(r.qtyOnHand));
+      }
+    }
+
     return rows
+      .filter((r) => r.locationType !== 'on_rent' && r.locationType !== 'repair' && r.locationType !== 'wash')
       .filter((r) => {
         if (!q) return true;
         return (
@@ -941,6 +1000,9 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
         const qty = Number(r.qtyOnHand);
         const cost = Number(r.unitCost);
         const reorder = r.reorderLevel != null ? Number(r.reorderLevel) : null;
+        const onRent = r.productType === 'rental' ? onRentMap.get(r.productId) ?? 0 : 0;
+        const inRepair = r.productType === 'rental' ? repairByProduct.get(r.productId) ?? 0 : 0;
+        const available = Math.round((qty - onRent - inRepair) * 10000) / 10000;
         return {
           id: r.id,
           productId: r.productId,
@@ -949,6 +1011,10 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
           locationId: r.locationId,
           locationName: r.locationName ?? 'Default',
           qtyOnHand: qty,
+          qtyOnRent: onRent,
+          qtyInRepair: inRepair,
+          qtyAvailable: available,
+          productType: r.productType,
           unitCost: cost,
           stockValue: Math.round(qty * cost * 100) / 100,
           reorderLevel: reorder,

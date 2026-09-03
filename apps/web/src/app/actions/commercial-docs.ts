@@ -10,6 +10,7 @@ import {
   buildPurchaseReturnPosting,
   buildGrnPosting,
   isPhysicalProduct,
+  isRentalProduct,
   amountInWordsLkr,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
@@ -46,6 +47,13 @@ import { ensureParty } from '@/app/actions/parties';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { getInventorySettings } from '@/app/actions/inventory-settings';
 import { resolveDimensions } from '@/lib/dimensions';
+import {
+  checkRentalAvailability,
+  loadRentalEventForDocument,
+  persistRentalBookings,
+  resolveHireWindow,
+  type RentalEventInput,
+} from '@/app/actions/rental-bookings';
 
 export type CommercialDocType =
   | 'quotation'
@@ -119,6 +127,16 @@ const createSchema = z.object({
   locationId: z.string().uuid().optional().nullable(),
   /** Brand dimension for reporting / analysis */
   brandId: z.string().uuid().optional().nullable(),
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+  hireFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+  hireTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+  venue: z.string().max(255).optional(),
+  guestCount: z.number().int().min(0).optional().nullable(),
+  deliverAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+  collectAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+  packingNotes: z.string().max(2000).optional(),
+  confirmOverlap: z.boolean().optional(),
+  overlapOverrideReason: z.string().max(500).optional(),
   lines: z.array(lineSchema).min(1),
 });
 
@@ -818,6 +836,9 @@ export async function createCommercialDocument(
         const lineGross = line.quantity * line.unitPrice;
         const discountAmount = line.discountAmount ?? 0;
         const lineTotal = Math.max(0, lineGross - discountAmount);
+        if (productType === 'rental' && (revenueAccountCode === '4000' || revenueAccountCode === '4200')) {
+          revenueAccountCode = '4400';
+        }
         enriched.push({
           ...line,
           description,
@@ -828,6 +849,39 @@ export async function createCommercialDocument(
           revenueAccountCode,
           cogsAccountCode,
           inventoryAccountCode,
+        });
+      }
+
+      const rentalPreview = enriched.filter((l) => l.productId && isRentalProduct(l.productType));
+      const rentalEvent: RentalEventInput = {
+        eventDate: parsed.eventDate || null,
+        hireFrom: parsed.hireFrom || null,
+        hireTo: parsed.hireTo || null,
+        venue: parsed.venue || null,
+        guestCount: parsed.guestCount ?? null,
+        deliverAt: parsed.deliverAt || parsed.deliveryDate || null,
+        collectAt: parsed.collectAt || null,
+        packingNotes: parsed.packingNotes || null,
+        confirmOverlap: Boolean(parsed.confirmOverlap),
+        overlapOverrideReason: parsed.overlapOverrideReason || null,
+      };
+      if (
+        rentalPreview.length > 0 &&
+        ['quotation', 'sales_order', 'sales_invoice', 'pos_sale'].includes(parsed.documentType)
+      ) {
+        const window = resolveHireWindow(rentalEvent);
+        if (!window) {
+          throw new Error('Set hire from/to (or event date) when the document includes rental products.');
+        }
+        await checkRentalAvailability({
+          tenantId: user.tenantId,
+          userRole: user.role,
+          hireFrom: window.hireFrom,
+          hireTo: window.hireTo,
+          lines: rentalPreview.map((l) => ({ productId: l.productId!, quantity: l.quantity })),
+          excludeDocumentId: parsed.sourceDocumentId ?? null,
+          confirmOverlap: Boolean(parsed.confirmOverlap),
+          overlapOverrideReason: parsed.overlapOverrideReason,
         });
       }
 
@@ -1373,6 +1427,13 @@ export async function createCommercialDocument(
         }
       }
 
+      const insertedRentalLines: {
+        documentLineId: string;
+        productId: string | null;
+        productType: string;
+        quantity: number;
+      }[] = [];
+
       for (const line of enriched) {
         let accountId: string | null = null;
         const code = line.accountCode || (isSales ? '4000' : '6800');
@@ -1383,18 +1444,27 @@ export async function createCommercialDocument(
           accountId = null;
         }
 
-        await db().insert(businessDocumentLines).values({
-          tenantId: user.tenantId,
-          documentId: document.id,
+        const [docLine] = await db()
+          .insert(businessDocumentLines)
+          .values({
+            tenantId: user.tenantId,
+            documentId: document.id,
+            productId: line.productId ?? null,
+            accountId,
+            description: line.description,
+            quantity: line.quantity.toFixed(4),
+            unitPrice: line.unitPrice.toFixed(2),
+            unitCost: line.unitCost.toFixed(2),
+            discountPercent: '0',
+            discountAmount: line.discountAmount.toFixed(2),
+            lineTotal: line.lineTotal.toFixed(2),
+          })
+          .returning({ id: businessDocumentLines.id });
+        insertedRentalLines.push({
+          documentLineId: docLine.id,
           productId: line.productId ?? null,
-          accountId,
-          description: line.description,
-          quantity: line.quantity.toFixed(4),
-          unitPrice: line.unitPrice.toFixed(2),
-          unitCost: line.unitCost.toFixed(2),
-          discountPercent: '0',
-          discountAmount: line.discountAmount.toFixed(2),
-          lineTotal: line.lineTotal.toFixed(2),
+          productType: line.productType,
+          quantity: line.quantity,
         });
 
         // Stock qty for physical products: sales/returns, GRN, purchases (respect GRN match)
@@ -1501,6 +1571,21 @@ export async function createCommercialDocument(
               );
           }
         }
+      }
+
+      if (insertedRentalLines.some((l) => l.productId && isRentalProduct(l.productType))) {
+        await persistRentalBookings({
+          tenantId: user.tenantId,
+          userId: user.id,
+          userRole: user.role,
+          documentId: document.id,
+          documentType: parsed.documentType,
+          sourceDocumentId: parsed.sourceDocumentId ?? null,
+          locationId: dimensions.locationId,
+          event: rentalEvent,
+          lines: insertedRentalLines,
+          skipAvailabilityCheck: true,
+        });
       }
 
       // Mark source converted only for true conversions (not returns / credits)
@@ -1614,6 +1699,8 @@ export async function createCommercialDocument(
     revalidatePath('/journal');
     revalidatePath('/reports');
     revalidatePath('/inventory/products');
+    revalidatePath('/inventory/levels');
+    revalidatePath('/inventory/calendar');
     return { ok: true, id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not create document.';
@@ -1695,6 +1782,19 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     purchaserAddress: String(formData.get('purchaserAddress') ?? ''),
     brandId: String(formData.get('brandId') ?? '') || null,
     locationId: String(formData.get('locationId') ?? '') || null,
+    eventDate: String(formData.get('eventDate') ?? ''),
+    hireFrom: String(formData.get('hireFrom') ?? ''),
+    hireTo: String(formData.get('hireTo') ?? ''),
+    venue: String(formData.get('venue') ?? ''),
+    guestCount: (() => {
+      const n = parseInt(String(formData.get('guestCount') ?? ''), 10);
+      return Number.isFinite(n) ? n : null;
+    })(),
+    deliverAt: String(formData.get('deliverAt') ?? ''),
+    collectAt: String(formData.get('collectAt') ?? ''),
+    packingNotes: String(formData.get('packingNotes') ?? ''),
+    confirmOverlap: formData.get('confirmOverlap') === 'on',
+    overlapOverrideReason: String(formData.get('overlapOverrideReason') ?? ''),
     lines,
   });
 
@@ -1935,6 +2035,8 @@ export async function convertDocument(
       convertLines = convertLines.filter((l) => l.quantity > 0);
       if (convertLines.length === 0) throw new Error('No remaining quantity to convert.');
 
+      const rentalFrom = await loadRentalEventForDocument(user.tenantId, sourceId);
+
       // Create without auto-marking full converted when partial — createCommercialDocument always marks converted.
       // We'll recompute PO status after.
       const result = await createCommercialDocument({
@@ -1950,6 +2052,14 @@ export async function convertDocument(
         deliveryDate: source.deliveryDate ?? undefined,
         brandId: source.brandId ?? null,
         locationId: source.locationId ?? null,
+        eventDate: rentalFrom?.eventDate || undefined,
+        hireFrom: rentalFrom?.hireFrom || undefined,
+        hireTo: rentalFrom?.hireTo || undefined,
+        venue: rentalFrom?.venue || undefined,
+        guestCount: rentalFrom?.guestCount ?? undefined,
+        deliverAt: rentalFrom?.deliverAt || undefined,
+        collectAt: rentalFrom?.collectAt || undefined,
+        packingNotes: rentalFrom?.packingNotes || undefined,
         lines: convertLines,
       });
 

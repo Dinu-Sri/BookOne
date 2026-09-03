@@ -10,6 +10,7 @@ import { parties } from './parties';
  * - physical (legacy: stocked) — qty tracked, COGS + inventory on sale
  * - digital — non-stock sellable (licenses etc.), no inventory asset
  * - service — labour/fees, no inventory asset
+ * - rental — hire fleet; qty tracked, NO COGS on invoice
  */
 export const inventoryProducts = pgTable('inventory_products', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -36,6 +37,12 @@ export const inventoryProducts = pgTable('inventory_products', {
   notes: text('notes'),
   /** S3 key or public path (/products/...) for 400x400 WebP product photo */
   imageKey: varchar('image_key', { length: 500 }),
+  /** event | day | hour — used when productType = rental */
+  hireUnit: varchar('hire_unit', { length: 20 }),
+  /** Hours after return before this SKU is bookable; null = tenant default */
+  turnaroundHours: varchar('turnaround_hours', { length: 10 }),
+  depositAmount: numeric('deposit_amount', { precision: 18, scale: 2 }),
+  replacementPrice: numeric('replacement_price', { precision: 18, scale: 2 }),
   isActive: varchar('is_active', { length: 1 }).notNull().default('1'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

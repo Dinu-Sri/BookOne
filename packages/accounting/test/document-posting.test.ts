@@ -56,8 +56,8 @@ describe('sales invoice posting', () => {
     expect(legacy.cogsTotal).toBe(4);
   });
 
-  it('does not post COGS for digital or service lines', () => {
-    for (const productType of ['digital', 'service'] as const) {
+  it('does not post COGS for digital, service, or rental lines', () => {
+    for (const productType of ['digital', 'service', 'rental'] as const) {
       const result = buildSalesInvoicePosting({
         lines: [{ description: 'Item', quantity: 2, unitPrice: 150, unitCost: 100, productType }],
       });

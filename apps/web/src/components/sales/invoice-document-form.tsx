@@ -15,6 +15,7 @@ import {
   type BrandOption,
   type LocationOption,
 } from '@/components/module/brand-location-fields';
+import { EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
 
 type PartyOpt = { id: string; name: string; code: string | null };
@@ -156,6 +157,7 @@ export function InvoiceDocumentForm({
             <input className="input" name="dueDate" type="date" />
           </div>
           <BrandLocationFields brands={brands} locations={locations} />
+          <EventHireFields />
           <div className="field">
             <label>Mode of payment</label>
             <select className="input" name="paymentMode" defaultValue="Credit">

@@ -55,6 +55,7 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
       unitCost: p.unitCost,
       barcode: p.barcode,
       imageUrl: p.imageUrl ?? null,
+      productType: p.productType,
     })),
     discounts,
     paymentAccounts: options.paymentAccounts,
@@ -68,11 +69,13 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
       name: b.name,
       code: b.code,
     })),
-    locations: (company?.locations ?? []).map((l) => ({
-      id: l.id,
-      name: l.name,
-      code: l.code,
-      brandId: l.brandId ?? null,
-    })),
+    locations: (company?.locations ?? [])
+      .filter((l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash')
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+        code: l.code,
+        brandId: l.brandId ?? null,
+      })),
   };
 }

@@ -20,7 +20,7 @@ export type DocLineState = {
   sku?: string;
   isManual?: boolean;
   /** Pending save-as-product type before linking */
-  saveAsType?: 'physical' | 'digital' | 'service';
+  saveAsType?: 'physical' | 'digital' | 'service' | 'rental';
 };
 
 function money(n: number) {
@@ -205,7 +205,7 @@ export function DocumentLinesEditor({
                         value={line.saveAsType ?? 'service'}
                         onChange={(e) =>
                           updateLine(line.key, {
-                            saveAsType: e.target.value as 'physical' | 'digital' | 'service',
+                            saveAsType: e.target.value as 'physical' | 'digital' | 'service' | 'rental',
                           })
                         }
                         aria-label="Product type"
@@ -213,6 +213,7 @@ export function DocumentLinesEditor({
                         <option value="service">Service</option>
                         <option value="physical">Physical</option>
                         <option value="digital">Digital</option>
+                        <option value="rental">Rental</option>
                       </select>
                       <button
                         type="button"

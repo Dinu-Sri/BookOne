@@ -38,16 +38,21 @@ export async function resolveDimensions(
       .where(and(eq(brands.tenantId, tenantId), isNull(brands.voidedAt)));
 
     const locationRows = await db()
-      .select({ id: locations.id, brandId: locations.brandId })
+      .select({ id: locations.id, brandId: locations.brandId, locationType: locations.locationType })
       .from(locations)
       .where(and(eq(locations.tenantId, tenantId), isNull(locations.voidedAt)));
+    const operationalLocationRows = locationRows.filter(
+      (l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash',
+    );
 
     let resolvedBrand = brandId || null;
     let resolvedLocation = locationId || null;
 
     // Single master → always fill (forms + POS)
     if (!resolvedBrand && brandRows.length === 1) resolvedBrand = brandRows[0]!.id;
-    if (!resolvedLocation && locationRows.length === 1) resolvedLocation = locationRows[0]!.id;
+    if (!resolvedLocation && operationalLocationRows.length === 1) {
+      resolvedLocation = operationalLocationRows[0]!.id;
+    }
 
     // Infer brand from location
     if (resolvedLocation) {
@@ -58,8 +63,8 @@ export async function resolveDimensions(
 
     // POS / health-check: never block on missing UI field when masters exist
     if (opts?.auto) {
-      if (!resolvedLocation && locationRows.length > 0) {
-        resolvedLocation = locationRows[0]!.id;
+      if (!resolvedLocation && operationalLocationRows.length > 0) {
+        resolvedLocation = operationalLocationRows[0]!.id;
       }
       if (resolvedLocation && !resolvedBrand) {
         const loc = locationRows.find((l) => l.id === resolvedLocation);
@@ -75,7 +80,7 @@ export async function resolveDimensions(
         'Select a brand for this entry. (POS: set a Location on the register and link that location to a Brand under Company.)',
       );
     }
-    if (locationRows.length > 0 && !resolvedLocation) {
+    if (operationalLocationRows.length > 0 && !resolvedLocation) {
       throw new Error(
         'Select a location for this entry. (POS: assign a Location to the register under Company → Sales Settings.)',
       );

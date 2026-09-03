@@ -9,12 +9,13 @@ import { Button, Card } from '@/components/ui/bookone-ui';
 
 const PAGE_SIZE = 10;
 
-type SortKey = 'sku' | 'name' | 'qtyOnHand' | 'unitCost' | 'stockValue';
+type SortKey = 'sku' | 'name' | 'qtyOnHand' | 'qtyOnRent' | 'qtyAvailable' | 'unitCost' | 'stockValue';
 
 export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const lowOnly = searchParams.get('low') === '1';
+  const fleet = searchParams.get('fleet'); // on_rent | repair | available
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>('name');
@@ -30,6 +31,9 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
     const q = query.trim().toLowerCase();
     let list = rows;
     if (lowOnly) list = list.filter((r) => r.belowReorder);
+    if (fleet === 'on_rent') list = list.filter((r) => r.qtyOnRent > 0);
+    if (fleet === 'repair') list = list.filter((r) => r.qtyInRepair > 0);
+    if (fleet === 'available') list = list.filter((r) => r.productType === 'rental' && r.qtyAvailable > 0);
     if (q) {
       list = list.filter((r) =>
         [r.sku, r.name, r.locationName].join(' ').toLowerCase().includes(q),
@@ -86,6 +90,16 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
         >
           Low stock{lowCount > 0 ? ` (${lowCount})` : ''}
         </Button>
+        <Link href="/inventory/levels?fleet=on_rent">
+          <Button variant={fleet === 'on_rent' ? 'primary' : 'secondary'} type="button">
+            On rent
+          </Button>
+        </Link>
+        <Link href="/inventory/levels?fleet=repair">
+          <Button variant={fleet === 'repair' ? 'primary' : 'secondary'} type="button">
+            In repair
+          </Button>
+        </Link>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
           Stock value {formatLKR(totalValue)}
         </span>
@@ -107,11 +121,19 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
         <div className="card-body" style={{ padding: 0 }}>
           {pageRows.length === 0 ? (
             <div className="empty-state" style={{ padding: 28 }}>
-              <h3>{lowOnly ? 'No low-stock items' : 'No physical stock yet'}</h3>
+              <h3>
+                {lowOnly
+                  ? 'No low-stock items'
+                  : fleet === 'on_rent'
+                    ? 'Nothing on rent'
+                    : fleet === 'repair'
+                      ? 'Nothing in repair'
+                      : 'No stocked or hire products yet'}
+              </h3>
               <p>
                 {lowOnly
                   ? 'All physical products are above reorder level.'
-                  : 'Create a physical product or post a purchase to build levels.'}
+                  : 'Create a physical or rental product, or post a purchase to build levels.'}
               </p>
             </div>
           ) : (
@@ -136,7 +158,26 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
                         className="th-sort-btn"
                         onClick={() => toggleSort('qtyOnHand')}
                       >
-                        Qty
+                        On hand
+                      </button>
+                    </th>
+                    <th>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => toggleSort('qtyOnRent')}
+                      >
+                        On rent
+                      </button>
+                    </th>
+                    <th>Repair</th>
+                    <th>
+                      <button
+                        type="button"
+                        className="th-sort-btn"
+                        onClick={() => toggleSort('qtyAvailable')}
+                      >
+                        Available
                       </button>
                     </th>
                     <th>
@@ -185,6 +226,9 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
                       >
                         {r.qtyOnHand}
                       </td>
+                      <td>{r.qtyOnRent || '—'}</td>
+                      <td>{r.qtyInRepair || '—'}</td>
+                      <td>{r.productType === 'rental' ? r.qtyAvailable : r.qtyOnHand}</td>
                       <td>
                         {formatLKR(r.unitCost)}
                         <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>last purchase</div>

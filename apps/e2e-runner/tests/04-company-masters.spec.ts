@@ -309,4 +309,20 @@ test.describe('Company masters catalog §4 @company @brand @location @p0', () =>
       await page.waitForTimeout(1000);
     }
   });
+  test('S-rental calendar page loads', async ({ authedPage: page }) => {
+    await go(page, '/inventory/calendar');
+    await expect(page.locator('.workspace, table, .card-body').first()).toBeVisible();
+  });
+
+  test('S-rental settings page loads and saves', async ({ authedPage: page }) => {
+    await go(page, '/company/rental');
+    await expect(page.locator('form, .workspace').first()).toBeVisible();
+    const overlap = page.locator('select[name="overlapPolicy"]');
+    if (await overlap.isVisible().catch(() => false)) {
+      await overlap.selectOption('override');
+      await clickPrimary(page, /Save rental settings/i);
+      await page.waitForTimeout(800);
+      await expect(page.locator('form, .workspace').first()).toBeVisible();
+    }
+  });
 });

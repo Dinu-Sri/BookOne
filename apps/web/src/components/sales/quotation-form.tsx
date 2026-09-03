@@ -15,6 +15,7 @@ import {
   type BrandOption,
   type LocationOption,
 } from '@/components/module/brand-location-fields';
+import { EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
 
 type PartyOpt = {
@@ -197,6 +198,7 @@ export function QuotationForm({
             </select>
           </div>
           <BrandLocationFields brands={brands} locations={locations} />
+          <EventHireFields />
           {discounts.length > 0 ? (
             <div className="field">
               <label>Discount scheme</label>

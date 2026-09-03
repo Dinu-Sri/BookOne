@@ -19,6 +19,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Account[] = [
   { code: '2150', name: 'Goods Received Not Invoiced', type: 'liability', normalSide: 'credit' },
   { code: '2200', name: 'Output VAT', type: 'liability', normalSide: 'credit' },
   { code: '2300', name: 'Input VAT', type: 'asset', normalSide: 'debit' },
+  { code: '2400', name: 'Customer deposits', type: 'liability', normalSide: 'credit' },
   /** Personal / household loans payable (took a loan) */
   { code: '2500', name: 'Personal Loans Payable', type: 'liability', normalSide: 'credit' },
   { code: '3000', name: 'Owner Equity', type: 'equity', normalSide: 'credit' },
@@ -28,8 +29,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Account[] = [
   /** Personal employment / other income (cashbook personal shell) */
   { code: '4200', name: 'Salary & Employment Income', type: 'revenue', normalSide: 'credit' },
   { code: '4300', name: 'Other Income', type: 'revenue', normalSide: 'credit' },
+  { code: '4400', name: 'Rental income', type: 'revenue', normalSide: 'credit' },
+  { code: '4450', name: 'Damage and hire charges', type: 'revenue', normalSide: 'credit' },
   { code: '5000', name: 'Cost of Goods Sold', type: 'expense', normalSide: 'debit' },
   { code: '5100', name: 'Inventory', type: 'asset', normalSide: 'debit' },
+  { code: '5150', name: 'Rental fleet write-off', type: 'expense', normalSide: 'debit' },
   { code: '6000', name: 'Marketing Expense', type: 'expense', normalSide: 'debit' },
   { code: '6100', name: 'Rent Expense', type: 'expense', normalSide: 'debit' },
   { code: '6200', name: 'Utilities Expense', type: 'expense', normalSide: 'debit' },

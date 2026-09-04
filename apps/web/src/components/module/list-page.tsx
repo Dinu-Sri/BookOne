@@ -38,11 +38,19 @@ export function StatusBadge({ status }: { status: string }) {
     status === 'accepted' ||
     status === 'confirmed' ||
     status === 'active' ||
+    status === 'returned' ||
     status === 'refunded'
       ? 'success'
-      : status === 'void' || status === 'cancelled' || status === 'inactive'
+      : status === 'void' ||
+          status === 'cancelled' ||
+          status === 'inactive' ||
+          status === 'overdue'
         ? 'danger'
-        : status === 'draft' || status === 'open' || status === 'sent'
+        : status === 'draft' ||
+            status === 'open' ||
+            status === 'sent' ||
+            status === 'reserved' ||
+            status === 'dispatched'
           ? 'info'
           : status === 'converted' ||
               status === 'partial' ||

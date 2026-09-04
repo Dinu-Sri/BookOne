@@ -353,11 +353,12 @@ CoA 2400 / 4400 / 4450 / 5150 is seeded for existing tenants in migration `021_r
 - Calendar at `/inventory/calendar` (month + product bars).  
 - Quote → order / invoice convert copies hire period and cancels the source hold.
 
-### Phase 3 — Dispatch / return / damage (2 weeks)
+### Phase 3 — Dispatch / return / damage (started 2026-09-04)
 
-- Dispatch/return wizards.  
-- Condition counts, photos, charges, repair location.  
-- Overdue list.
+- Dispatch/return wizards at `/inventory/on-rent` and on the sales invoice.  
+- Condition counts: good → warehouse, damaged → Repair, missing → write off qty.  
+- Overdue flag on dispatched lines past hire-to.  
+- Photos + customer damage invoice (4450) still Phase 4 with deposits.
 
 ### Phase 4 — Deposits & late fees (1 week)
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition, type FormEvent } from 'react';
 import {
   adminSetTenantEntityTierFromForm,
   applyPlanModulesFromForm,
@@ -254,6 +254,16 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
   const [pending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState<null | 'suspend' | 'restore'>(null);
 
+  // Re-bind when opening a different company. Do not sync on every RSC refresh —
+  // React 19 form actions reset to the first-render defaults and would uncheck
+  // modules that were just saved.
+  useEffect(() => {
+    setPlan(company.plan);
+    setModules(company.modules);
+    setEntityKind(company.entityKind || 'company');
+    setCapabilityTier(company.capabilityTier === 'full' ? 'full' : 'lite');
+  }, [company.id]);
+
   const statusLabel = useMemo(
     () => (company.status === 'suspended' ? 'suspended' : 'active'),
     [company.status],
@@ -321,7 +331,9 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
 
       <form
         className="party-form-body"
-        action={(fd) => {
+        onSubmit={(e: FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
           startTransition(async () => {
             try {
               fd.set('id', company.id);
@@ -332,14 +344,15 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
               }
               await updatePlatformCompanyFromForm(fd);
               pushStatusToast({ kind: 'success', message: 'Company saved' });
-            } catch (e) {
+            } catch (err) {
               pushStatusToast({
                 kind: 'error',
-                message: e instanceof Error ? e.message : 'Save failed',
+                message: err instanceof Error ? err.message : 'Save failed',
               });
             }
           });
         }}
+        onReset={(e) => e.preventDefault()}
       >
         <input type="hidden" name="id" value={company.id} />
         <input type="hidden" name="module_touch" value="1" />

@@ -113,5 +113,10 @@ export function isPosNavItem(label: string): boolean {
 }
 
 export function isRentalNavItem(label: string): boolean {
-  return label === 'Rental Settings' || label === 'Rental calendar' || label === 'On rent';
+  return (
+    label === 'Rental Settings' ||
+    label === 'Rental calendar' ||
+    label === 'Dispatch / returns' ||
+    label === 'On rent'
+  );
 }

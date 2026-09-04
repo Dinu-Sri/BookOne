@@ -2,8 +2,21 @@
 
 import { todayString } from '@/components/module/list-page';
 
+export function documentHasRentalLines(
+  lines: { productId?: string; saveAsType?: string }[],
+  products: { id: string; productType?: string }[],
+): boolean {
+  return lines.some((line) => {
+    if (line.saveAsType === 'rental') return true;
+    if (!line.productId) return false;
+    const product = products.find((p) => p.id === line.productId);
+    return product?.productType === 'rental';
+  });
+}
+
 export function EventHireFields({
   defaults,
+  visible = true,
 }: {
   defaults?: {
     eventDate?: string | null;
@@ -12,8 +25,10 @@ export function EventHireFields({
     venue?: string | null;
     guestCount?: number | null;
   };
+  visible?: boolean;
 }) {
   const today = todayString();
+  if (!visible) return null;
   return (
     <>
       <div className="field">

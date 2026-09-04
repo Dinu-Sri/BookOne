@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { getCommercialDocument } from '@/app/actions/commercial-docs';
+import { listRentalJobs, type RentalJobLine } from '@/app/actions/rental-bookings';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { RentalOpsPanel } from '@/components/inventory/rental-ops-panel';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
 
@@ -8,8 +10,10 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   let tenant;
   let doc;
+  let hireLines: RentalJobLine[] = [];
   try {
     [tenant, doc] = await Promise.all([getTenantInfo(), getCommercialDocument(id)]);
+    hireLines = doc ? await listRentalJobs({ documentId: doc.id }) : [];
   } catch {
     redirect('/login');
   }
@@ -31,6 +35,11 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             : null
         }
         payLabel="Receive payment"
+        extraPanel={
+          hireLines.length > 0 ? (
+            <RentalOpsPanel rows={hireLines} title="Event hire" compact />
+          ) : null
+        }
       />
     </BookOneShell>
   );

@@ -519,7 +519,6 @@ export async function updatePlatformCompanyFromForm(formData: FormData): Promise
 
   revalidatePath('/control-room');
   revalidatePath('/control-room/companies');
-  revalidatePath(`/control-room/companies/${id}`);
   revalidatePath('/control-room/modules');
 }
 
@@ -701,9 +700,11 @@ export async function adminSetTenantEntityTierFromForm(formData: FormData): Prom
         Boolean((before.modules as { inventory?: boolean; pos?: boolean } | null)?.pos));
 
   const modules =
-    entityKind === 'sole_prop'
-      ? modulesForEntityKind('sole_prop', nextTier, { preserveAdvancedView })
-      : modulesForEntityKind(entityKind as 'personal' | 'sole_prop' | 'company' | 'pending', 'full');
+    entityKind === 'personal' || entityKind === 'pending'
+      ? modulesForEntityKind(entityKind)
+      : entityKind === 'sole_prop'
+        ? modulesForEntityKind('sole_prop', nextTier, { preserveAdvancedView })
+        : normalizeModules(before.modules, 'starter');
 
   await db()
     .update(tenants)

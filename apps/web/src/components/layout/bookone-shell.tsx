@@ -139,6 +139,7 @@ const navSuites: NavSuite[] = [
       { label: 'Stock Transfers', icon: ClipboardList, href: '/inventory/transfers' },
       { label: 'Stock Adjustments', icon: SlidersHorizontal, href: '/inventory/adjustments' },
       { label: 'Rental calendar', icon: CalendarDays, href: '/inventory/calendar' },
+      { label: 'Dispatch / returns', icon: ClipboardList, href: '/inventory/on-rent' },
       { label: 'On rent', icon: CalendarDays, href: '/inventory/levels?fleet=on_rent' },
     ],
   },

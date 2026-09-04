@@ -5,7 +5,6 @@ import { z } from 'zod';
 import {
   buildOpeningStockPosting,
   buildStockAdjustmentPosting,
-  isPhysicalProduct,
   tracksStockQty,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
@@ -1151,8 +1150,8 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
         .from(inventoryProducts)
         .where(eq(inventoryProducts.id, line.productId))
         .limit(1);
-      if (!product || !isPhysicalProduct(product.productType)) {
-        throw new Error('Only physical products can be transferred or adjusted.');
+      if (!product || !tracksStockQty(product.productType)) {
+        throw new Error('Only physical or rental products can be transferred or adjusted.');
       }
     }
 
@@ -1385,8 +1384,8 @@ export async function createStockTransfer(input: {
           .from(inventoryProducts)
           .where(eq(inventoryProducts.id, line.productId))
           .limit(1);
-        if (!product || !isPhysicalProduct(product.productType)) {
-          throw new Error('Only physical products can be transferred.');
+        if (!product || !tracksStockQty(product.productType)) {
+          throw new Error('Only physical or rental products can be transferred.');
         }
       }
 

@@ -44,6 +44,7 @@ export function CommercialDocumentDetail({
   convertLabel,
   returnFromBill,
   convertPanel,
+  extraPanel,
 }: {
   doc: CommercialDocDetail;
   listHref: string;
@@ -57,6 +58,7 @@ export function CommercialDocumentDetail({
   returnFromBill?: boolean;
   /** Extra panel (e.g. partial PO convert) */
   convertPanel?: ReactNode;
+  extraPanel?: ReactNode;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -64,6 +66,23 @@ export function CommercialDocumentDetail({
   const [busy, setBusy] = useState(false);
 
   const title = TYPE_LABEL[doc.documentType] ?? doc.documentType;
+  const isSalesDoc = [
+    'sales_invoice',
+    'customer_invoice',
+    'quotation',
+    'sales_order',
+    'sales_return',
+    'pos_sale',
+  ].includes(doc.documentType);
+  const isPurchaseDoc = [
+    'purchase_order',
+    'purchase',
+    'import_purchase',
+    'cash_purchase',
+    'goods_receipt',
+    'purchase_return',
+    'vendor_bill',
+  ].includes(doc.documentType);
   const canPay = Boolean(payHref) && doc.balanceDue > 0.005 && Boolean(doc.transactionId);
   const canConvert =
     Boolean(convertTo) &&
@@ -238,30 +257,57 @@ export function CommercialDocumentDetail({
                 <strong>{doc.issueDate}</strong>
               </div>
             </div>
-            <div>
-              <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Due</span>
+            {doc.dueDate ? (
               <div>
-                <strong>{doc.dueDate || '—'}</strong>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Due</span>
+                <div>
+                  <strong>{doc.dueDate}</strong>
+                </div>
               </div>
-            </div>
-            <div>
-              <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Delivery</span>
+            ) : null}
+            {doc.deliveryDate ? (
               <div>
-                <strong>{doc.deliveryDate || '—'}</strong>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Delivery</span>
+                <div>
+                  <strong>{doc.deliveryDate}</strong>
+                </div>
               </div>
-            </div>
-            <div>
-              <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Supplier inv #</span>
+            ) : null}
+            {isPurchaseDoc && doc.supplierInvoiceNumber ? (
               <div>
-                <strong>{doc.supplierInvoiceNumber || '—'}</strong>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Supplier inv #</span>
+                <div>
+                  <strong>{doc.supplierInvoiceNumber}</strong>
+                </div>
               </div>
-            </div>
-            <div>
-              <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Terms</span>
+            ) : null}
+            {isSalesDoc && doc.invoiceKind === 'tax_invoice' ? (
               <div>
-                <strong>{doc.paymentMode || '—'}</strong>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Tax invoice</span>
+                <div>
+                  <strong>{doc.taxInvoiceNumber || doc.documentNumber}</strong>
+                </div>
               </div>
-            </div>
+            ) : null}
+            {isSalesDoc && doc.saleChannel === 'export' ? (
+              <div>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Export</span>
+                <div>
+                  <strong>
+                    {doc.exportCountry || 'Export'}
+                    {doc.exportRef ? ` · ${doc.exportRef}` : ''}
+                  </strong>
+                </div>
+              </div>
+            ) : null}
+            {doc.paymentMode ? (
+              <div>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>{isPurchaseDoc ? 'Terms' : 'Payment'}</span>
+                <div>
+                  <strong>{doc.paymentMode}</strong>
+                </div>
+              </div>
+            ) : null}
             <div>
               <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Currency</span>
               <div>
@@ -326,6 +372,7 @@ export function CommercialDocumentDetail({
       </Card>
 
       {convertPanel ? <div style={{ marginTop: 16 }}>{convertPanel}</div> : null}
+      {extraPanel ? <div style={{ marginTop: 16 }}>{extraPanel}</div> : null}
 
       <ConfirmDialog
         open={Boolean(confirm)}

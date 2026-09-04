@@ -15,7 +15,7 @@ import {
   type BrandOption,
   type LocationOption,
 } from '@/components/module/brand-location-fields';
-import { EventHireFields } from '@/components/sales/event-hire-fields';
+import { documentHasRentalLines, EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
 
 type PartyOpt = { id: string; name: string; code: string | null };
@@ -49,6 +49,13 @@ export function InvoiceDocumentForm({
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
+  const [saleChannel, setSaleChannel] = useState(settings.defaultSaleChannel || 'local');
+  const [invoiceKind, setInvoiceKind] = useState(
+    settings.vatRegistered ? settings.defaultInvoiceKind || 'commercial' : 'commercial',
+  );
+  const showExportFields = saleChannel === 'export';
+  const showTaxFields = invoiceKind === 'tax_invoice';
+  const showHireFields = documentHasRentalLines(lines, catalog);
 
   const handleSearchActive = useCallback(
     (active: boolean) => {
@@ -106,7 +113,12 @@ export function InvoiceDocumentForm({
         <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
           <div className="field">
             <label>Sale channel</label>
-            <select className="input" name="saleChannel" defaultValue={settings.defaultSaleChannel}>
+            <select
+              className="input"
+              name="saleChannel"
+              value={saleChannel}
+              onChange={(e) => setSaleChannel(e.target.value)}
+            >
               <option value="local">Local sales</option>
               <option value="export">Export sales</option>
             </select>
@@ -116,7 +128,8 @@ export function InvoiceDocumentForm({
             <select
               className="input"
               name="invoiceKind"
-              defaultValue={settings.vatRegistered ? settings.defaultInvoiceKind : 'commercial'}
+              value={invoiceKind}
+              onChange={(e) => setInvoiceKind(e.target.value)}
             >
               <option value="commercial">Commercial invoice</option>
               <option value="tax_invoice" disabled={!settings.vatRegistered}>
@@ -157,7 +170,7 @@ export function InvoiceDocumentForm({
             <input className="input" name="dueDate" type="date" />
           </div>
           <BrandLocationFields brands={brands} locations={locations} />
-          <EventHireFields />
+          <EventHireFields visible={showHireFields} />
           <div className="field">
             <label>Mode of payment</label>
             <select className="input" name="paymentMode" defaultValue="Credit">
@@ -168,30 +181,38 @@ export function InvoiceDocumentForm({
               <option value="Other">Other</option>
             </select>
           </div>
-          <div className="field field-span-2">
-            <label>Place of supply</label>
-            <input className="input" name="placeOfSupply" placeholder="e.g. Colombo" />
-          </div>
-          <div className="field">
-            <label>Purchaser TIN</label>
-            <input className="input" name="purchaserTin" />
-          </div>
-          <div className="field">
-            <label>Purchaser phone</label>
-            <input className="input" name="purchaserPhone" />
-          </div>
-          <div className="field field-span-2">
-            <label>Purchaser address</label>
-            <input className="input" name="purchaserAddress" />
-          </div>
-          <div className="field">
-            <label>Export country</label>
-            <input className="input" name="exportCountry" />
-          </div>
-          <div className="field">
-            <label>Export ref</label>
-            <input className="input" name="exportRef" />
-          </div>
+          {showTaxFields ? (
+            <>
+              <div className="field field-span-2">
+                <label>Place of supply</label>
+                <input className="input" name="placeOfSupply" placeholder="e.g. Colombo" />
+              </div>
+              <div className="field">
+                <label>Purchaser TIN</label>
+                <input className="input" name="purchaserTin" />
+              </div>
+              <div className="field">
+                <label>Purchaser phone</label>
+                <input className="input" name="purchaserPhone" />
+              </div>
+              <div className="field field-span-2">
+                <label>Purchaser address</label>
+                <input className="input" name="purchaserAddress" />
+              </div>
+            </>
+          ) : null}
+          {showExportFields ? (
+            <>
+              <div className="field">
+                <label>Export country</label>
+                <input className="input" name="exportCountry" />
+              </div>
+              <div className="field">
+                <label>Export ref</label>
+                <input className="input" name="exportRef" />
+              </div>
+            </>
+          ) : null}
         </div>
 
         {openOrders.length > 0 ? (

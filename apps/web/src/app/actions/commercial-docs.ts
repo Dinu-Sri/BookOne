@@ -2396,6 +2396,9 @@ export interface CommercialDocDetail {
   deliveryDate: string | null;
   saleChannel: string;
   invoiceKind: string;
+  taxInvoiceNumber: string | null;
+  exportCountry: string | null;
+  exportRef: string | null;
   transactionId: string | null;
   sourceDocumentId: string | null;
   brandId: string | null;
@@ -2461,6 +2464,9 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       deliveryDate: doc.deliveryDate ?? null,
       saleChannel: doc.saleChannel ?? 'local',
       invoiceKind: doc.invoiceKind ?? 'commercial',
+      taxInvoiceNumber: doc.taxInvoiceNumber ?? null,
+      exportCountry: doc.exportCountry ?? null,
+      exportRef: doc.exportRef ?? null,
       transactionId: doc.transactionId ?? null,
       sourceDocumentId: doc.sourceDocumentId ?? null,
       brandId: doc.brandId ?? null,

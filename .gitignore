@@ -55,5 +55,8 @@ uploads/*
 # Debug
 debug_log.txt
 
+# Local-only debug (credentials, cookie jars — never commit)
+.local/
+
 # Old project (archived)
 old-project/

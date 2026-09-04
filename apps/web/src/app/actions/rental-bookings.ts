@@ -1,7 +1,16 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { availableQty, datesOverlap, isRentalProduct, padHireTo } from '@bookone/accounting';
+import {
+  availableQty,
+  datesOverlap,
+  hireInvoiceTimingError,
+  inferInvoiceStage,
+  invoiceTimingAllowed,
+  isHireInvoiceTiming,
+  isRentalProduct,
+  padHireTo,
+} from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   and,
@@ -18,11 +27,19 @@ import {
   parties,
   rentalBookingLines,
   rentalEvents,
+  rentalReturnPhotos,
   sql,
   withTenantContext,
 } from '@bookone/db';
 import { getRentalSettings } from '@/app/actions/rental-settings';
-import { resolveHireWindow, type OverlapPolicy, type RentalEventInput } from '@/lib/rental-core';
+import {
+  enabledInvoiceTimings,
+  MAX_RETURN_PHOTOS,
+  resolveHireWindow,
+  type InvoiceTiming,
+  type OverlapPolicy,
+  type RentalEventInput,
+} from '@/lib/rental-core';
 
 const ACTIVE_STATUSES = ['hold', 'reserved', 'dispatched'] as const;
 
@@ -129,6 +146,10 @@ export async function persistRentalBookings(params: {
     overlapOverrideReason: params.event.overlapOverrideReason || null,
     overlapOverriddenBy:
       params.event.confirmOverlap && canOverrideOverlap(params.userRole) ? params.userId : null,
+    invoiceTiming:
+      params.event.invoiceTiming && isHireInvoiceTiming(params.event.invoiceTiming)
+        ? params.event.invoiceTiming
+        : settings.defaultInvoiceTiming,
     updatedAt: new Date(),
     voidedAt: null,
   };
@@ -224,7 +245,94 @@ export async function loadRentalEventForDocument(
     deliverAt: row.deliverAt,
     collectAt: row.collectAt,
     packingNotes: row.packingNotes,
+    invoiceTiming: isHireInvoiceTiming(row.invoiceTiming) ? row.invoiceTiming : 'on_confirm',
   };
+}
+
+export async function assertHireInvoiceTiming(params: {
+  tenantId: string;
+  documentType: string;
+  sourceDocumentId?: string | null;
+  hasRentalLines: boolean;
+  requestedTiming?: string | null;
+  confirmTimingOverride?: boolean;
+}): Promise<InvoiceTiming | null> {
+  if (!params.hasRentalLines) return null;
+  if (!['quotation', 'sales_order', 'sales_invoice', 'pos_sale'].includes(params.documentType)) {
+    return null;
+  }
+
+  const settings = await getRentalSettings();
+  const enabled = enabledInvoiceTimings(settings);
+  let sourceTiming: InvoiceTiming | null = null;
+  if (params.sourceDocumentId) {
+    const [event] = await db()
+      .select({ invoiceTiming: rentalEvents.invoiceTiming })
+      .from(rentalEvents)
+      .where(
+        and(
+          eq(rentalEvents.tenantId, params.tenantId),
+          eq(rentalEvents.documentId, params.sourceDocumentId),
+          isNull(rentalEvents.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (event && isHireInvoiceTiming(event.invoiceTiming)) {
+      sourceTiming = event.invoiceTiming;
+    }
+  }
+
+  const requested: InvoiceTiming | null = isHireInvoiceTiming(params.requestedTiming ?? '')
+    ? (params.requestedTiming as InvoiceTiming)
+    : null;
+  let timing: InvoiceTiming = sourceTiming ?? settings.defaultInvoiceTiming;
+  if (requested) {
+    if (!enabled.includes(requested)) {
+      throw new Error(`Invoice timing “${requested}” is not enabled for this company.`);
+    }
+    if (
+      requested !== settings.defaultInvoiceTiming &&
+      requested !== sourceTiming &&
+      !settings.allowInvoiceTimingOverride
+    ) {
+      throw new Error('This company does not allow a different invoice timing on each booking.');
+    }
+    timing = requested;
+  } else if (!enabled.includes(timing)) {
+    timing = enabled[0]!;
+  }
+
+  const isInvoice = params.documentType === 'sales_invoice' || params.documentType === 'pos_sale';
+  if (!isInvoice) return timing;
+
+  let statuses: string[] = [];
+  if (params.sourceDocumentId) {
+    const rows = await db()
+      .select({ status: rentalBookingLines.status })
+      .from(rentalBookingLines)
+      .where(
+        and(
+          eq(rentalBookingLines.tenantId, params.tenantId),
+          eq(rentalBookingLines.documentId, params.sourceDocumentId),
+          isNull(rentalBookingLines.voidedAt),
+        ),
+      );
+    statuses = rows.map((r) => r.status);
+  }
+  const stage = inferInvoiceStage(statuses);
+  if (!invoiceTimingAllowed(timing, stage)) {
+    if (params.confirmTimingOverride) {
+      if (!settings.allowInvoiceTimingOverride) {
+        throw new Error('This company does not allow invoicing before the configured hire stage.');
+      }
+      return timing;
+    }
+    throw new Error(
+      hireInvoiceTimingError(timing, stage) ??
+        'Hire invoice timing does not allow invoicing at this stage.',
+    );
+  }
+  return timing;
 }
 
 async function assertAvailability(params: {
@@ -520,6 +628,10 @@ export type RentalJobLine = {
   depositRefunded: number;
   depositOpen: number;
   defaultLateFeePerDay: number;
+  eventHireFrom: string;
+  eventHireTo: string;
+  invoiceTiming: string;
+  returnPhotoUrls: string[];
 };
 
 async function fleetLocationId(tenantId: string, type: 'on_rent' | 'repair' | 'wash'): Promise<string> {
@@ -661,7 +773,9 @@ export async function listRentalJobs(filter?: {
     ];
     if (filter?.documentId) conditions.push(eq(rentalBookingLines.documentId, filter.documentId));
     if (filter?.status) conditions.push(eq(rentalBookingLines.status, filter.status));
-    else conditions.push(inArray(rentalBookingLines.status, ['reserved', 'dispatched']));
+    else if (filter?.documentId) {
+      conditions.push(inArray(rentalBookingLines.status, ['reserved', 'dispatched', 'returned']));
+    } else conditions.push(inArray(rentalBookingLines.status, ['reserved', 'dispatched']));
 
     const rows = await db()
       .select({
@@ -687,6 +801,9 @@ export async function listRentalJobs(filter?: {
         depositHeld: rentalEvents.depositHeld,
         depositApplied: rentalEvents.depositApplied,
         depositRefunded: rentalEvents.depositRefunded,
+        eventHireFrom: rentalEvents.hireFrom,
+        eventHireTo: rentalEvents.hireTo,
+        invoiceTiming: rentalEvents.invoiceTiming,
       })
       .from(rentalBookingLines)
       .innerJoin(inventoryProducts, eq(inventoryProducts.id, rentalBookingLines.productId))
@@ -698,6 +815,32 @@ export async function listRentalJobs(filter?: {
       )
       .where(and(...conditions))
       .orderBy(desc(rentalBookingLines.hireFrom));
+
+    const lineIds = rows.map((r) => r.id);
+    const photoRows =
+      lineIds.length === 0
+        ? []
+        : await db()
+            .select({
+              bookingLineId: rentalReturnPhotos.bookingLineId,
+              imageKey: rentalReturnPhotos.imageKey,
+            })
+            .from(rentalReturnPhotos)
+            .where(
+              and(
+                eq(rentalReturnPhotos.tenantId, user.tenantId),
+                inArray(rentalReturnPhotos.bookingLineId, lineIds),
+              ),
+            );
+    const { resolveProductImageUrl } = await import('@/lib/product-image');
+    const urlsByLine = new Map<string, string[]>();
+    for (const photo of photoRows) {
+      const url = await resolveProductImageUrl(photo.imageKey);
+      if (!url) continue;
+      const list = urlsByLine.get(photo.bookingLineId) ?? [];
+      list.push(url);
+      urlsByLine.set(photo.bookingLineId, list);
+    }
 
     return rows.map((r) => {
       const overdue = r.status === 'dispatched' && r.hireTo < today;
@@ -739,6 +882,10 @@ export async function listRentalJobs(filter?: {
         depositRefunded: refunded,
         depositOpen: Math.max(0, Math.round((held - applied - refunded) * 100) / 100),
         defaultLateFeePerDay: latePerDay,
+        eventHireFrom: r.eventHireFrom || r.hireFrom,
+        eventHireTo: r.eventHireTo || r.hireTo,
+        invoiceTiming: r.invoiceTiming && isHireInvoiceTiming(r.invoiceTiming) ? r.invoiceTiming : 'on_confirm',
+        returnPhotoUrls: urlsByLine.get(r.id) ?? [],
       };
     });
   });
@@ -805,6 +952,7 @@ export async function returnRentalLine(input: {
   goodQty: number;
   damagedQty: number;
   missingQty: number;
+  photos?: File[];
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const goodQty = Math.max(0, Number(input.goodQty) || 0);
@@ -886,10 +1034,124 @@ export async function returnRentalLine(input: {
           updatedAt: new Date(),
         })
         .where(eq(rentalBookingLines.id, line.id));
+
+      const files = (input.photos ?? []).filter((f) => f && typeof f.size === 'number' && f.size > 0);
+      if (files.length > MAX_RETURN_PHOTOS) {
+        throw new Error(`At most ${MAX_RETURN_PHOTOS} return photos per line.`);
+      }
+      if (files.length > 0) {
+        const { saveRentalInspectPhoto } = await import('@/lib/product-image');
+        for (const file of files) {
+          const saved = await saveRentalInspectPhoto({
+            tenantId: user.tenantId,
+            bookingLineId: line.id,
+            file,
+          });
+          await db().insert(rentalReturnPhotos).values({
+            tenantId: user.tenantId,
+            bookingLineId: line.id,
+            documentId: line.documentId,
+            imageKey: saved.imageKey,
+            createdBy: user.id,
+          });
+        }
+      }
       revalidateRentalPaths(line.documentId);
     });
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Return failed.' };
+  }
+}
+
+export async function extendRentalHire(input: {
+  documentId: string;
+  hireTo: string;
+  confirmOverlap?: boolean;
+  overlapOverrideReason?: string | null;
+}): Promise<{ ok: boolean; error?: string; hireTo?: string }> {
+  try {
+    const newTo = (input.hireTo ?? '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newTo)) {
+      return { ok: false, error: 'Pick a new hire-to date.' };
+    }
+    const user = await requireTenantContext();
+    const settings = await getRentalSettings();
+    let nextTo = newTo;
+    await withTenantContext(user.tenantId, async () => {
+      const [event] = await db()
+        .select()
+        .from(rentalEvents)
+        .where(
+          and(
+            eq(rentalEvents.tenantId, user.tenantId),
+            eq(rentalEvents.documentId, input.documentId),
+            isNull(rentalEvents.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!event) throw new Error('This document has no hire event.');
+      if (newTo <= event.hireTo) {
+        throw new Error(`New hire-to ${newTo} must be after the current end ${event.hireTo}.`);
+      }
+      const lines = await db()
+        .select()
+        .from(rentalBookingLines)
+        .where(
+          and(
+            eq(rentalBookingLines.tenantId, user.tenantId),
+            eq(rentalBookingLines.documentId, input.documentId),
+            isNull(rentalBookingLines.voidedAt),
+            inArray(rentalBookingLines.status, [...ACTIVE_STATUSES]),
+          ),
+        );
+      if (lines.length === 0) throw new Error('Nothing left on hire to extend.');
+      await assertAvailability({
+        tenantId: user.tenantId,
+        userRole: user.role,
+        locationId: lines[0]?.locationId ?? null,
+        hireFrom: event.hireFrom,
+        hireTo: newTo,
+        lines: lines.map((l) => ({ productId: l.productId, quantity: Number(l.qty) })),
+        excludeDocumentId: input.documentId,
+        policy: settings.overlapPolicy,
+        confirmOverlap: Boolean(input.confirmOverlap),
+        overrideReason: input.overlapOverrideReason,
+        defaultTurnaroundHours: settings.defaultTurnaroundHours,
+      });
+      const collectAt = !event.collectAt || event.collectAt === event.hireTo ? newTo : event.collectAt;
+      await db()
+        .update(rentalEvents)
+        .set({
+          hireTo: newTo,
+          collectAt,
+          overlapOverrideReason: input.overlapOverrideReason || event.overlapOverrideReason,
+          overlapOverriddenBy:
+            input.confirmOverlap && canOverrideOverlap(user.role) ? user.id : event.overlapOverriddenBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(rentalEvents.id, event.id));
+      for (const line of lines) {
+        const [product] = await db()
+          .select({ turnaroundHours: inventoryProducts.turnaroundHours })
+          .from(inventoryProducts)
+          .where(eq(inventoryProducts.id, line.productId))
+          .limit(1);
+        const hours =
+          product?.turnaroundHours != null && product.turnaroundHours !== ''
+            ? Number(product.turnaroundHours)
+            : settings.defaultTurnaroundHours;
+        const paddedTo = padHireTo(newTo, Number.isFinite(hours) ? hours : 0);
+        await db()
+          .update(rentalBookingLines)
+          .set({ hireTo: paddedTo, updatedAt: new Date() })
+          .where(eq(rentalBookingLines.id, line.id));
+      }
+      nextTo = newTo;
+      revalidateRentalPaths(input.documentId);
+    });
+    return { ok: true, hireTo: nextTo };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not extend hire.' };
   }
 }

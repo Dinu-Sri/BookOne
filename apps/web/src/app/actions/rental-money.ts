@@ -404,12 +404,16 @@ export async function invoiceHireCharges(input: {
   documentId: string;
   damageCharge?: number;
   lateFee?: number;
+  extraHire?: number;
   applyDeposit?: boolean;
 }): Promise<{ ok: boolean; error?: string; invoiceId?: string }> {
   try {
     const damageCharge = money(input.damageCharge ?? 0);
     const lateFee = money(input.lateFee ?? 0);
-    if (damageCharge + lateFee <= 0) return { ok: false, error: 'Enter a damage or late-fee amount.' };
+    const extraHire = money(input.extraHire ?? 0);
+    if (damageCharge + lateFee + extraHire <= 0) {
+      return { ok: false, error: 'Enter a damage, late-fee, or extra hire amount.' };
+    }
     const user = await requireTenantContext();
     const today = new Date().toISOString().slice(0, 10);
 
@@ -457,6 +461,14 @@ export async function invoiceHireCharges(input: {
         accountCode: '4450',
       });
     }
+    if (extraHire > 0) {
+      lines.push({
+        description: `Hire extension (${ctx.doc.documentNumber})`,
+        quantity: 1,
+        unitPrice: extraHire,
+        accountCode: '4400',
+      });
+    }
 
     const created = await createCommercialDocument({
       documentType: 'sales_invoice',
@@ -473,7 +485,7 @@ export async function invoiceHireCharges(input: {
     const invoiceId = created.id;
 
     if (input.applyDeposit && ctx.event) {
-      const apply = Math.min(depositOpen(ctx.event), money(damageCharge + lateFee));
+      const apply = Math.min(depositOpen(ctx.event), money(damageCharge + lateFee + extraHire));
       if (apply > 0) {
         await withTenantContext(user.tenantId, async () => {
           await assertOpenPeriod(user.tenantId, today);

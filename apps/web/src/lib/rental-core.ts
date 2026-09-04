@@ -6,6 +6,15 @@ export type HireUnit = (typeof HIRE_UNITS)[number];
 export const INVOICE_TIMINGS = ['on_confirm', 'on_dispatch', 'after_return', 'manual'] as const;
 export type InvoiceTiming = (typeof INVOICE_TIMINGS)[number];
 
+export const INVOICE_TIMING_LABELS: Record<InvoiceTiming, string> = {
+  on_confirm: 'On confirm',
+  on_dispatch: 'On dispatch',
+  after_return: 'After return',
+  manual: 'Manual',
+};
+
+export const MAX_RETURN_PHOTOS = 8;
+
 export const DEPOSIT_MODES = ['none', 'per_event', 'per_item', 'both'] as const;
 export type DepositMode = (typeof DEPOSIT_MODES)[number];
 
@@ -65,7 +74,18 @@ export type RentalEventInput = {
   packingNotes?: string | null;
   confirmOverlap?: boolean;
   overlapOverrideReason?: string | null;
+  invoiceTiming?: InvoiceTiming | null;
+  confirmTimingOverride?: boolean;
 };
+
+export function enabledInvoiceTimings(settings: RentalSettingsRow): InvoiceTiming[] {
+  const out: InvoiceTiming[] = [];
+  if (settings.allowInvoiceOnConfirm) out.push('on_confirm');
+  if (settings.allowInvoiceOnDispatch) out.push('on_dispatch');
+  if (settings.allowInvoiceAfterReturn) out.push('after_return');
+  if (settings.allowInvoiceManual) out.push('manual');
+  return out.length > 0 ? out : ['on_confirm'];
+}
 
 function isDate(v?: string | null): v is string {
   return Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));

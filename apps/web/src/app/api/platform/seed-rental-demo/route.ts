@@ -136,6 +136,8 @@ export async function POST() {
       hireTo: '2026-09-13',
       venue: 'Waters Edge lawn',
       guestCount: 80,
+      invoiceTiming: 'on_confirm',
+      confirmTimingOverride: true,
       notes: 'Demo hire invoice for rental testing',
       lines: [
         {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 import {
   dispatchRentalLine,
+  extendRentalHire,
   returnRentalLine,
   type RentalJobLine,
 } from '@/app/actions/rental-bookings';
@@ -16,6 +17,7 @@ import {
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { StatusBadge } from '@/components/module/list-page';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { INVOICE_TIMING_LABELS, MAX_RETURN_PHOTOS, type InvoiceTiming } from '@/lib/rental-core';
 
 function outstanding(row: RentalJobLine) {
   if (row.status === 'reserved' || row.status === 'hold') return row.qty - row.dispatchedQty;
@@ -46,6 +48,11 @@ export function RentalOpsPanel({
   const [applyDeposit, setApplyDeposit] = useState(true);
   const [depositAmt, setDepositAmt] = useState('');
   const [refundAmt, setRefundAmt] = useState('');
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [extendTo, setExtendTo] = useState('');
+  const [extraHire, setExtraHire] = useState('');
+  const [extendOverlap, setExtendOverlap] = useState(false);
+  const [extendReason, setExtendReason] = useState('');
 
   const jobs = useMemo(() => {
     const map = new Map<string, RentalJobLine>();
@@ -65,6 +72,7 @@ export function RentalOpsPanel({
     setDamageCharge(String(suggestedDamage));
     setLateFee(String(money(row.daysOverdue * row.defaultLateFeePerDay)));
     setApplyDeposit(row.depositOpen > 0);
+    setPhotoFiles([]);
   }
 
   function updateDamageCharge(nextDamaged: string, nextMissing: string, row: RentalJobLine) {
@@ -92,6 +100,7 @@ export function RentalOpsPanel({
         goodQty: Number(goodQty) || 0,
         damagedQty: Number(damagedQty) || 0,
         missingQty: Number(missingQty) || 0,
+        photos: photoFiles,
       });
       if (!res.ok) {
         pushStatusToast({ kind: 'error', message: res.error ?? 'Return failed' });
@@ -118,6 +127,49 @@ export function RentalOpsPanel({
         pushStatusToast({ kind: 'success', message: 'Return recorded' });
       }
       setOpenId(null);
+      setPhotoFiles([]);
+      router.refresh();
+    });
+  }
+
+  function runExtend(job: RentalJobLine) {
+    if (!extendTo) {
+      pushStatusToast({ kind: 'error', message: 'Pick a new hire-to date.' });
+      return;
+    }
+    startTransition(async () => {
+      const res = await extendRentalHire({
+        documentId: job.documentId,
+        hireTo: extendTo,
+        confirmOverlap: extendOverlap,
+        overlapOverrideReason: extendReason || null,
+      });
+      if (!res.ok) {
+        pushStatusToast({ kind: 'error', message: res.error ?? 'Could not extend hire' });
+        return;
+      }
+      const extra = money(Number(extraHire) || 0);
+      if (extra > 0) {
+        const inv = await invoiceHireCharges({
+          documentId: job.documentId,
+          extraHire: extra,
+          applyDeposit: job.depositOpen > 0,
+        });
+        if (!inv.ok) {
+          pushStatusToast({
+            kind: 'error',
+            message: `Extended, but extra hire invoice failed: ${inv.error ?? 'unknown'}`,
+          });
+        } else {
+          pushStatusToast({ kind: 'success', message: `Hire extended to ${res.hireTo} and extra days invoiced` });
+        }
+      } else {
+        pushStatusToast({ kind: 'success', message: `Hire extended to ${res.hireTo}` });
+      }
+      setExtendTo('');
+      setExtraHire('');
+      setExtendOverlap(false);
+      setExtendReason('');
       router.refresh();
     });
   }
@@ -173,8 +225,9 @@ export function RentalOpsPanel({
             {title}
           </h2>
           <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '6px 0 12px' }}>
-            Dispatch moves fleet to On rent. Return splits good / damaged / missing. Deposits sit on 2400 until
-            refunded or applied to damage/late charges.
+            Dispatch moves fleet to On rent. Return splits good / damaged / missing and can attach inspection
+            photos. Extend the hire window if the event runs long. Deposits sit on 2400 until refunded or
+            applied to damage/late/extension charges.
           </p>
         </div>
 
@@ -201,6 +254,11 @@ export function RentalOpsPanel({
                   {' '}
                   · held {job.depositHeld.toFixed(2)} · applied {job.depositApplied.toFixed(2)}
                 </span>
+                <div style={{ color: 'var(--ink-soft)', fontSize: 12 }}>
+                  Invoice {INVOICE_TIMING_LABELS[(job.invoiceTiming as InvoiceTiming) || 'on_confirm'] ?? job.invoiceTiming}
+                  {' · '}
+                  {job.eventHireFrom} → {job.eventHireTo}
+                </div>
               </div>
             </div>
             <div className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
@@ -243,6 +301,52 @@ export function RentalOpsPanel({
                 </>
               ) : null}
             </div>
+            {rows.some(
+              (r) =>
+                r.documentId === job.documentId && (r.status === 'reserved' || r.status === 'dispatched'),
+            ) ? (
+              <div className="cluster" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'end' }}>
+                <label style={{ fontSize: 11 }}>
+                  Extend hire to
+                  <input
+                    className="input"
+                    type="date"
+                    min={job.eventHireTo}
+                    value={extendTo}
+                    onChange={(e) => setExtendTo(e.target.value)}
+                  />
+                </label>
+                <label style={{ fontSize: 11 }}>
+                  Extra hire (4400)
+                  <input
+                    className="input"
+                    style={{ width: 120 }}
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={extraHire}
+                    onChange={(e) => setExtraHire(e.target.value)}
+                  />
+                </label>
+                <label className="party-check" style={{ fontSize: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={extendOverlap}
+                    onChange={(e) => setExtendOverlap(e.target.checked)}
+                  />
+                  Confirm overlap
+                </label>
+                <input
+                  className="input"
+                  style={{ minWidth: 180 }}
+                  placeholder="Overlap reason"
+                  value={extendReason}
+                  onChange={(e) => setExtendReason(e.target.value)}
+                />
+                <Button variant="secondary" type="button" disabled={pending} onClick={() => runExtend(job)}>
+                  Extend hire
+                </Button>
+              </div>
+            ) : null}
           </div>
         ))}
 
@@ -290,6 +394,27 @@ export function RentalOpsPanel({
                     <StatusBadge status={row.overdue ? 'overdue' : row.status} />
                   </td>
                   <td>
+                    {row.returnPhotoUrls.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                        {row.returnPhotoUrls.map((url) => (
+                          <a key={url} href={url} target="_blank" rel="noreferrer">
+                            <img
+                              src={url}
+                              alt="Return inspection"
+                              width={48}
+                              height={48}
+                              style={{
+                                width: 48,
+                                height: 48,
+                                objectFit: 'cover',
+                                borderRadius: 6,
+                                border: '1px solid var(--line)',
+                              }}
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
                     {row.status === 'reserved' ? (
                       <Button
                         variant="primary"
@@ -362,6 +487,23 @@ export function RentalOpsPanel({
                               />
                               Apply deposit (open {row.depositOpen.toFixed(2)})
                             </label>
+                          ) : null}
+                          <label style={{ fontSize: 11 }}>
+                            Return photos (max {MAX_RETURN_PHOTOS})
+                            <input
+                              className="input"
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={(e) =>
+                                setPhotoFiles(Array.from(e.target.files ?? []).slice(0, MAX_RETURN_PHOTOS))
+                              }
+                            />
+                          </label>
+                          {photoFiles.length > 0 ? (
+                            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                              {photoFiles.length} photo{photoFiles.length === 1 ? '' : 's'} selected
+                            </div>
                           ) : null}
                           <div className="cluster" style={{ gap: 6 }}>
                             <Button

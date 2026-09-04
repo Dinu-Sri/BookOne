@@ -17,6 +17,15 @@ export async function processProductPhoto(input: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
+/** Fit inside 1600×1600 WebP — keeps aspect for return inspection evidence. */
+export async function processInspectPhoto(input: Buffer): Promise<Buffer> {
+  return sharp(input)
+    .rotate()
+    .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 78, effort: 4 })
+    .toBuffer();
+}
+
 function s3Configured(): boolean {
   return Boolean(
     process.env.S3_ENDPOINT &&
@@ -131,4 +140,75 @@ export async function generateDemoProductWebp(label: string, bg: string, accent:
 
 function escapeXml(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function assertImageFile(file: File): void {
+  if (!ALLOWED.has(file.type) && file.type !== '') {
+    const name = file.name.toLowerCase();
+    const okExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif'].some((e) => name.endsWith(e));
+    if (!okExt) throw new Error(`Unsupported image type: ${file.type || 'unknown'}`);
+  }
+  if (file.size > MAX_INPUT_BYTES) {
+    throw new Error('Image too large (max 12 MB).');
+  }
+}
+
+async function storeWebp(opts: {
+  tenantId: string;
+  relDir: string;
+  filename: string;
+  s3Key: string;
+  webp: Buffer;
+  processed: string;
+  extraMeta?: Record<string, string>;
+}): Promise<{ imageKey: string }> {
+  if (s3Configured()) {
+    const client = makeS3Client();
+    await client.send(
+      new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET!,
+        Key: opts.s3Key,
+        Body: opts.webp,
+        ContentType: 'image/webp',
+        ContentLength: opts.webp.length,
+        Metadata: {
+          tenantId: opts.tenantId,
+          processed: opts.processed,
+          ...opts.extraMeta,
+        },
+      }),
+    );
+    return { imageKey: opts.s3Key };
+  }
+
+  const publicRoot = path.join(process.cwd(), 'public');
+  const absDir = path.join(publicRoot, opts.relDir);
+  await mkdir(absDir, { recursive: true });
+  await writeFile(path.join(absDir, opts.filename), opts.webp);
+  return { imageKey: `/${opts.relDir.replace(/\\/g, '/')}/${opts.filename}` };
+}
+
+/**
+ * Accepts an uploaded File/Blob, fits inside 1600×1600 WebP (no crop), stores to S3
+ * or public/rental-returns. Returns image_key for DB.
+ */
+export async function saveRentalInspectPhoto(opts: {
+  tenantId: string;
+  bookingLineId: string;
+  file: File;
+}): Promise<{ imageKey: string }> {
+  assertImageFile(opts.file);
+  const raw = Buffer.from(await opts.file.arrayBuffer());
+  const webp = await processInspectPhoto(raw);
+  const stamp = randomUUID().slice(0, 8);
+  const filename = `${opts.bookingLineId}-${stamp}.webp`;
+  return storeWebp({
+    tenantId: opts.tenantId,
+    relDir: path.join('rental-returns', opts.tenantId),
+    filename,
+    s3Key: `tenants/${opts.tenantId}/rental-returns/${filename}`,
+    webp,
+    processed: '1600-inside-webp',
+    extraMeta: { bookingLineId: opts.bookingLineId },
+  });
 }

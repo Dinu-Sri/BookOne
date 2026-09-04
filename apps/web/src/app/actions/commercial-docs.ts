@@ -48,11 +48,12 @@ import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { getInventorySettings } from '@/app/actions/inventory-settings';
 import { resolveDimensions } from '@/lib/dimensions';
 import {
+  assertHireInvoiceTiming,
   checkRentalAvailability,
   loadRentalEventForDocument,
   persistRentalBookings,
 } from '@/app/actions/rental-bookings';
-import { resolveHireWindow, type RentalEventInput } from '@/lib/rental-core';
+import { INVOICE_TIMINGS, resolveHireWindow, type RentalEventInput } from '@/lib/rental-core';
 
 export type CommercialDocType =
   | 'quotation'
@@ -136,6 +137,8 @@ const createSchema = z.object({
   packingNotes: z.string().max(2000).optional(),
   confirmOverlap: z.boolean().optional(),
   overlapOverrideReason: z.string().max(500).optional(),
+  invoiceTiming: z.enum(INVOICE_TIMINGS).optional(),
+  confirmTimingOverride: z.boolean().optional(),
   lines: z.array(lineSchema).min(1),
 });
 
@@ -865,6 +868,8 @@ export async function createCommercialDocument(
         packingNotes: parsed.packingNotes || null,
         confirmOverlap: Boolean(parsed.confirmOverlap),
         overlapOverrideReason: parsed.overlapOverrideReason || null,
+        invoiceTiming: parsed.invoiceTiming ?? null,
+        confirmTimingOverride: Boolean(parsed.confirmTimingOverride),
       };
       if (
         rentalPreview.length > 0 &&
@@ -884,6 +889,15 @@ export async function createCommercialDocument(
           confirmOverlap: Boolean(parsed.confirmOverlap),
           overlapOverrideReason: parsed.overlapOverrideReason,
         });
+        const timing = await assertHireInvoiceTiming({
+          tenantId: user.tenantId,
+          documentType: parsed.documentType,
+          sourceDocumentId: parsed.sourceDocumentId ?? null,
+          hasRentalLines: true,
+          requestedTiming: parsed.invoiceTiming ?? null,
+          confirmTimingOverride: Boolean(parsed.confirmTimingOverride),
+        });
+        if (timing) rentalEvent.invoiceTiming = timing;
       }
 
       // Allocate landed extras into unit cost for inventory purchases (value-weighted)
@@ -1796,6 +1810,11 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     packingNotes: String(formData.get('packingNotes') ?? ''),
     confirmOverlap: formData.get('confirmOverlap') === 'on',
     overlapOverrideReason: String(formData.get('overlapOverrideReason') ?? ''),
+    invoiceTiming: (() => {
+      const v = String(formData.get('invoiceTiming') ?? '');
+      return (INVOICE_TIMINGS as readonly string[]).includes(v) ? (v as (typeof INVOICE_TIMINGS)[number]) : undefined;
+    })(),
+    confirmTimingOverride: formData.get('confirmTimingOverride') === 'on',
     lines,
   });
 
@@ -2063,6 +2082,7 @@ export async function convertDocument(
         deliverAt: rentalFrom?.deliverAt || undefined,
         collectAt: rentalFrom?.collectAt || undefined,
         packingNotes: rentalFrom?.packingNotes || undefined,
+        invoiceTiming: rentalFrom?.invoiceTiming || undefined,
         lines: convertLines,
       });
 

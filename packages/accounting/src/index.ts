@@ -30,3 +30,11 @@ export type {
 } from './engine/document-posting';
 export { amountInWordsLkr, formatDateMmDdYyyy } from './amount-in-words';
 export { datesOverlap, padHireTo, availableQty } from './rental-availability';
+export {
+  HIRE_INVOICE_TIMINGS,
+  inferInvoiceStage,
+  invoiceTimingAllowed,
+  hireInvoiceTimingError,
+  isHireInvoiceTiming,
+} from './rental-invoice-timing';
+export type { HireInvoiceTiming, HireInvoiceStage } from './rental-invoice-timing';

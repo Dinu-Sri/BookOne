@@ -1,6 +1,7 @@
 'use client';
 
 import { todayString } from '@/components/module/list-page';
+import { INVOICE_TIMING_LABELS, INVOICE_TIMINGS, type InvoiceTiming } from '@/lib/rental-core';
 
 export function documentHasRentalLines(
   lines: { productId?: string; saveAsType?: string }[],
@@ -24,6 +25,7 @@ export function EventHireFields({
     hireTo?: string | null;
     venue?: string | null;
     guestCount?: number | null;
+    invoiceTiming?: InvoiceTiming | null;
   };
   visible?: boolean;
 }) {
@@ -65,6 +67,26 @@ export function EventHireFields({
       <div className="field field-full">
         <label>Overlap override reason</label>
         <input className="input" name="overlapOverrideReason" placeholder="Required when a manager forces an overlap" />
+      </div>
+      <div className="field">
+        <label>Invoice timing</label>
+        <select
+          className="input"
+          name="invoiceTiming"
+          defaultValue={defaults?.invoiceTiming ?? 'on_confirm'}
+        >
+          {INVOICE_TIMINGS.map((timing) => (
+            <option key={timing} value={timing}>
+              {INVOICE_TIMING_LABELS[timing]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field field-full">
+        <label className="party-check">
+          <input type="checkbox" name="confirmTimingOverride" value="on" />
+          Invoice before this stage (timing override)
+        </label>
       </div>
     </>
   );

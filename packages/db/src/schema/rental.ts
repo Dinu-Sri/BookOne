@@ -25,6 +25,8 @@ export const rentalEvents = pgTable(
     depositRefunded: numeric('deposit_refunded', { precision: 18, scale: 2 }).notNull().default('0'),
     overlapOverrideReason: varchar('overlap_override_reason', { length: 500 }),
     overlapOverriddenBy: uuid('overlap_overridden_by').references(() => users.id),
+    /** on_confirm | on_dispatch | after_return | manual */
+    invoiceTiming: varchar('invoice_timing', { length: 20 }).notNull().default('on_confirm'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     voidedAt: timestamp('voided_at', { withTimezone: true }),
@@ -54,4 +56,16 @@ export const rentalBookingLines = pgTable('rental_booking_lines', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+/** Inspection photos captured on return (damage / missing evidence). */
+export const rentalReturnPhotos = pgTable('rental_return_photos', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  bookingLineId: uuid('booking_line_id').notNull().references(() => rentalBookingLines.id),
+  documentId: uuid('document_id').notNull().references(() => businessDocuments.id),
+  imageKey: varchar('image_key', { length: 500 }).notNull(),
+  caption: varchar('caption', { length: 255 }),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

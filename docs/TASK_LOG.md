@@ -4,6 +4,15 @@
 
 ---
 
+## 2026-09-04 — Hire invoice timing, extension, return photos
+
+- **Invoice timing:** `rental_events.invoice_timing` (`on_confirm` / `on_dispatch` / `after_return` / `manual`). Sales invoices and POS sales with hire lines are blocked until the configured stage unless a manager ticks timing override. Quotes/orders store the timing without the gate.
+- **Hire extension:** On-rent / invoice hire panel can push `hire_to` forward, re-checks overlap (excluding this document), pads turnaround, optional extra 4400 invoice.
+- **Return photos:** `rental_return_photos` + inspection WebP (fit inside 1600, no crop). Attached on return; thumbnails on the job line.
+- Migration: `packages/db/migrations/026_rental_timing_photos.sql`
+
+---
+
 ## 2026-07-22 — E2E full-catalog deep automation (Phase 0 + auth)
 
 ### Decisions

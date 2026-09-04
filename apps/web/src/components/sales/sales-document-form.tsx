@@ -104,6 +104,8 @@ export function SalesDocumentForm({
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">
       <input type="hidden" name="documentType" value={documentType} />
+      <input type="hidden" name="saleChannel" value="local" />
+      <input type="hidden" name="invoiceKind" value="commercial" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
 

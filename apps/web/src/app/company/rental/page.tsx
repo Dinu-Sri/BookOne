@@ -268,6 +268,18 @@ export default async function CompanyRentalSettingsPage() {
                     </select>
                   </div>
                   <div className="field">
+                    <label>Late fee per overdue day</label>
+                    <input
+                      className="input"
+                      name="defaultLateFeePerDay"
+                      inputMode="decimal"
+                      defaultValue={settings.defaultLateFeePerDay}
+                    />
+                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                      Suggested on return when kit comes back after hire-to. 0 hides the suggestion.
+                    </p>
+                  </div>
+                  <div className="field">
                     <label>Default turnaround hours</label>
                     <input
                       className="input"

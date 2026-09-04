@@ -85,14 +85,17 @@ export default async function CompanySalesSettingsPage() {
                 </div>
                 <div className="field">
                   <label>Default sale channel</label>
-                  <select className="input" name="defaultSaleChannel" defaultValue={settings.defaultSaleChannel}>
+                  <select className="input" name="defaultSaleChannel" defaultValue={settings.defaultSaleChannel || 'local'}>
                     <option value="local">Local sales</option>
                     <option value="export">Export sales</option>
                   </select>
+                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                    New quotes, orders, and invoices always open as Local commercial. Change on that document for tax or export.
+                  </p>
                 </div>
                 <div className="field">
                   <label>Default invoice kind (office invoices)</label>
-                  <select className="input" name="defaultInvoiceKind" defaultValue={settings.defaultInvoiceKind}>
+                  <select className="input" name="defaultInvoiceKind" defaultValue={settings.defaultInvoiceKind || 'commercial'}>
                     <option value="commercial">Commercial invoice</option>
                     <option value="tax_invoice">Tax invoice</option>
                   </select>

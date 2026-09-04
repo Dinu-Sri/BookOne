@@ -49,10 +49,8 @@ export function InvoiceDocumentForm({
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
-  const [saleChannel, setSaleChannel] = useState(settings.defaultSaleChannel || 'local');
-  const [invoiceKind, setInvoiceKind] = useState(
-    settings.vatRegistered ? settings.defaultInvoiceKind || 'commercial' : 'commercial',
-  );
+  const [saleChannel, setSaleChannel] = useState('local');
+  const [invoiceKind, setInvoiceKind] = useState('commercial');
   const showExportFields = saleChannel === 'export';
   const showTaxFields = invoiceKind === 'tax_invoice';
   const showHireFields = documentHasRentalLines(lines, catalog);

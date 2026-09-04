@@ -512,6 +512,14 @@ export type RentalJobLine = {
   status: string;
   venue: string | null;
   overdue: boolean;
+  daysOverdue: number;
+  replacementPrice: number;
+  depositAmount: number;
+  depositHeld: number;
+  depositApplied: number;
+  depositRefunded: number;
+  depositOpen: number;
+  defaultLateFeePerDay: number;
 };
 
 async function fleetLocationId(tenantId: string, type: 'on_rent' | 'repair' | 'wash'): Promise<string> {
@@ -644,6 +652,8 @@ export async function listRentalJobs(filter?: {
 }): Promise<RentalJobLine[]> {
   const user = await requireTenantContext();
   const today = new Date().toISOString().slice(0, 10);
+  const settings = await getRentalSettings();
+  const latePerDay = Number(settings.defaultLateFeePerDay) || 0;
   return withTenantContext(user.tenantId, async () => {
     const conditions = [
       eq(rentalBookingLines.tenantId, user.tenantId),
@@ -672,6 +682,11 @@ export async function listRentalJobs(filter?: {
         hireTo: rentalBookingLines.hireTo,
         status: rentalBookingLines.status,
         venue: rentalEvents.venue,
+        replacementPrice: inventoryProducts.replacementPrice,
+        depositAmount: inventoryProducts.depositAmount,
+        depositHeld: rentalEvents.depositHeld,
+        depositApplied: rentalEvents.depositApplied,
+        depositRefunded: rentalEvents.depositRefunded,
       })
       .from(rentalBookingLines)
       .innerJoin(inventoryProducts, eq(inventoryProducts.id, rentalBookingLines.productId))
@@ -684,26 +699,48 @@ export async function listRentalJobs(filter?: {
       .where(and(...conditions))
       .orderBy(desc(rentalBookingLines.hireFrom));
 
-    return rows.map((r) => ({
-      id: r.id,
-      documentId: r.documentId,
-      documentNumber: r.documentNumber,
-      documentType: r.documentType,
-      partyName: r.partyName ?? 'Unknown',
-      productId: r.productId,
-      sku: r.sku,
-      productName: r.productName,
-      qty: Number(r.qty),
-      dispatchedQty: Number(r.dispatchedQty),
-      returnedQty: Number(r.returnedQty),
-      damagedQty: Number(r.damagedQty),
-      missingQty: Number(r.missingQty),
-      hireFrom: r.hireFrom,
-      hireTo: r.hireTo,
-      status: r.status,
-      venue: r.venue,
-      overdue: r.status === 'dispatched' && r.hireTo < today,
-    }));
+    return rows.map((r) => {
+      const overdue = r.status === 'dispatched' && r.hireTo < today;
+      const days = overdue
+        ? Math.max(
+            1,
+            Math.ceil(
+              (Date.parse(`${today}T12:00:00`) - Date.parse(`${r.hireTo}T12:00:00`)) / 86_400_000,
+            ),
+          )
+        : 0;
+      const held = Number(r.depositHeld ?? 0);
+      const applied = Number(r.depositApplied ?? 0);
+      const refunded = Number(r.depositRefunded ?? 0);
+      return {
+        id: r.id,
+        documentId: r.documentId,
+        documentNumber: r.documentNumber,
+        documentType: r.documentType,
+        partyName: r.partyName ?? 'Unknown',
+        productId: r.productId,
+        sku: r.sku,
+        productName: r.productName,
+        qty: Number(r.qty),
+        dispatchedQty: Number(r.dispatchedQty),
+        returnedQty: Number(r.returnedQty),
+        damagedQty: Number(r.damagedQty),
+        missingQty: Number(r.missingQty),
+        hireFrom: r.hireFrom,
+        hireTo: r.hireTo,
+        status: r.status,
+        venue: r.venue,
+        overdue,
+        daysOverdue: days,
+        replacementPrice: Number(r.replacementPrice ?? 0),
+        depositAmount: Number(r.depositAmount ?? 0),
+        depositHeld: held,
+        depositApplied: applied,
+        depositRefunded: refunded,
+        depositOpen: Math.max(0, Math.round((held - applied - refunded) * 100) / 100),
+        defaultLateFeePerDay: latePerDay,
+      };
+    });
   });
 }
 

@@ -831,6 +831,8 @@ export async function createCommercialDocument(
         } else if (isPurchaseDoc) {
           // Free-text purchase line — treat cost as unit price for expense total consistency
           unitCost = line.unitPrice;
+        } else if (line.accountCode) {
+          revenueAccountCode = line.accountCode;
         }
         const lineGross = line.quantity * line.unitPrice;
         const discountAmount = line.discountAmount ?? 0;
@@ -2051,6 +2053,8 @@ export async function convertDocument(
         deliveryDate: source.deliveryDate ?? undefined,
         brandId: source.brandId ?? null,
         locationId: source.locationId ?? null,
+        saleChannel: 'local',
+        invoiceKind: 'commercial',
         eventDate: rentalFrom?.eventDate || undefined,
         hireFrom: rentalFrom?.hireFrom || undefined,
         hireTo: rentalFrom?.hireTo || undefined,

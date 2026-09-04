@@ -30,6 +30,7 @@ export interface RentalSettingsRow {
   defaultEventDepositPercent: string;
   overlapPolicy: OverlapPolicy;
   defaultTurnaroundHours: number;
+  defaultLateFeePerDay: string;
 }
 
 export const DEFAULT_RENTAL_SETTINGS: RentalSettingsRow = {
@@ -50,6 +51,7 @@ export const DEFAULT_RENTAL_SETTINGS: RentalSettingsRow = {
   defaultEventDepositPercent: '0.00',
   overlapPolicy: 'override',
   defaultTurnaroundHours: 0,
+  defaultLateFeePerDay: '0.00',
 };
 
 export type RentalEventInput = {
@@ -131,6 +133,7 @@ export function mapRentalSettingsRow(row: {
   defaultEventDepositPercent: string;
   overlapPolicy: string;
   defaultTurnaroundHours: number;
+  defaultLateFeePerDay?: string | number | null;
 }): RentalSettingsRow {
   const hireUnit = HIRE_UNITS.includes(row.defaultHireUnit as HireUnit)
     ? (row.defaultHireUnit as HireUnit)
@@ -162,5 +165,30 @@ export function mapRentalSettingsRow(row: {
     defaultEventDepositPercent: Number(row.defaultEventDepositPercent).toFixed(2),
     overlapPolicy: overlap,
     defaultTurnaroundHours: Math.max(0, row.defaultTurnaroundHours ?? 0),
+    defaultLateFeePerDay: Number(row.defaultLateFeePerDay ?? 0).toFixed(2),
   };
+}
+
+export function suggestedEventDeposit(params: {
+  mode: DepositMode;
+  eventAmount: number;
+  eventPercent: number;
+  hireTotal: number;
+  itemDeposits: number;
+}): number {
+  const eventFlat = Math.max(0, params.eventAmount);
+  const eventPct = Math.max(0, (params.hireTotal * params.eventPercent) / 100);
+  const eventPart = Math.max(eventFlat, eventPct);
+  if (params.mode === 'none') return 0;
+  if (params.mode === 'per_event') return Math.round(eventPart * 100) / 100;
+  if (params.mode === 'per_item') return Math.round(Math.max(0, params.itemDeposits) * 100) / 100;
+  return Math.round((eventPart + Math.max(0, params.itemDeposits)) * 100) / 100;
+}
+
+export function daysOverdue(hireTo: string, onDate: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(hireTo) || !/^\d{4}-\d{2}-\d{2}$/.test(onDate)) return 0;
+  if (onDate <= hireTo) return 0;
+  const ms = Date.parse(`${onDate}T12:00:00`) - Date.parse(`${hireTo}T12:00:00`);
+  if (!Number.isFinite(ms) || ms <= 0) return 0;
+  return Math.ceil(ms / 86_400_000);
 }

@@ -33,6 +33,7 @@ const schema = z.object({
   defaultEventDepositPercent: z.string(),
   overlapPolicy: z.enum(OVERLAP_POLICIES),
   defaultTurnaroundHours: z.number().int().min(0).max(24 * 30),
+  defaultLateFeePerDay: z.string(),
 });
 
 function money(raw: string | null | undefined, fallback: string): string {
@@ -77,6 +78,7 @@ export async function saveRentalSettingsFromForm(formData: FormData): Promise<vo
     defaultEventDepositPercent: money(String(formData.get('defaultEventDepositPercent')), '0.00'),
     overlapPolicy: String(formData.get('overlapPolicy') ?? 'override'),
     defaultTurnaroundHours: Math.max(0, parseInt(String(formData.get('defaultTurnaroundHours') ?? '0'), 10) || 0),
+    defaultLateFeePerDay: money(String(formData.get('defaultLateFeePerDay')), '0.00'),
   });
 
   const reconciled = reconcileRentalSettings(parsed);
@@ -107,6 +109,7 @@ export async function saveRentalSettingsFromForm(formData: FormData): Promise<vo
       defaultEventDepositPercent: reconciled.defaultEventDepositPercent,
       overlapPolicy: reconciled.overlapPolicy,
       defaultTurnaroundHours: reconciled.defaultTurnaroundHours,
+      defaultLateFeePerDay: reconciled.defaultLateFeePerDay,
       updatedAt: new Date(),
     };
 

@@ -51,6 +51,8 @@ export const rentalSettings = pgTable('rental_settings', {
   overlapPolicy: varchar('overlap_policy', { length: 20 }).notNull().default('override'),
   /** Hours after a return before the qty is bookable again (wash / transit). */
   defaultTurnaroundHours: integer('default_turnaround_hours').notNull().default(0),
+  /** Suggested late fee per overdue day (helper on return). */
+  defaultLateFeePerDay: numeric('default_late_fee_per_day', { precision: 18, scale: 2 }).notNull().default('0'),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

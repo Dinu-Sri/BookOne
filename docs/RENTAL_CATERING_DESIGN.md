@@ -360,11 +360,11 @@ CoA 2400 / 4400 / 4450 / 5150 is seeded for existing tenants in migration `021_r
 - Overdue flag on dispatched lines past hire-to.  
 - Photos + customer damage invoice (4450) still Phase 4 with deposits.
 
-### Phase 4 — Deposits & late fees (1 week)
+### Phase 4 — Deposits & late fees (started 2026-09-04)
 
-- Deposit document or payment-to-2400.  
-- Apply/refund on return.  
-- Late fee helper.
+- Collect/refund deposit on the hire job (Dr/Cr 2400).  
+- Return can invoice damage/missing (4450) and a late fee.  
+- Optional apply open deposit to that charges invoice.
 
 ### Phase 5 — Hardening
 

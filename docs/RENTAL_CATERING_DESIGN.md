@@ -366,7 +366,11 @@ CoA 2400 / 4400 / 4450 / 5150 is seeded for existing tenants in migration `021_r
 - Return can invoice damage/missing (4450) and a late fee.  
 - Optional apply open deposit to that charges invoice.
 
-### Phase 5 — Hardening
+### Phase 5 — Packing list (started 2026-09-04)
+
+- Printable packing / dispatch sheet per hire job (`/inventory/on-rent/[id]/packing`).
+
+### Phase 6 — Hardening
 
 - Health Check + e2e cases from §6.  
 - Docs at `/docs`.  

@@ -398,6 +398,11 @@ export function RentalOpsPanel({
                             Open doc
                           </Button>
                         </Link>
+                        <Link href={`/inventory/on-rent/${row.documentId}/packing`}>
+                          <Button variant="ghost" type="button">
+                            Packing list
+                          </Button>
+                        </Link>
                       </div>
                     )}
                   </td>

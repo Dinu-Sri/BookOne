@@ -275,6 +275,27 @@ export function ProductForm({
                     defaultValue={product?.replacementPrice ?? ''}
                   />
                 </div>
+                <div className="field field-full">
+                  <label className="party-check">
+                    <input
+                      type="checkbox"
+                      name="tracksSerials"
+                      value="on"
+                      defaultChecked={product?.tracksSerials}
+                    />
+                    Track serial numbers (tents, generators — not bulk chairs)
+                  </label>
+                </div>
+                <div className="field field-full">
+                  <label>Serial codes (one per line)</label>
+                  <textarea
+                    className="input"
+                    name="serialCodes"
+                    rows={4}
+                    defaultValue={(product?.serialCodes ?? []).join('\n')}
+                    placeholder="PG-5X5-01"
+                  />
+                </div>
               </>
             ) : null}
           </div>

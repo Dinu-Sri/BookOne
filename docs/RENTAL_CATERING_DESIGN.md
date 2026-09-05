@@ -261,9 +261,9 @@ Never book repair qty. Calendar shows repair as a blocking bar.
 Catering quotes are “200 pax dinner + chairs + chafers.”  
 `rental_kit_components` on a hire SKU; adding the kit on a quote/invoice explodes into component fleet lines (qty × kit qty). Pax multipliers are still entered as the kit qty or component qty.
 
-### 5.9 Serial numbers (v2)
+### 5.9 Serial numbers (v2 — shipped 2026-09-05)
 
-Chairs: **bulk qty**. Generators / speakers / marquees: **serial**. Defer serials unless they have high-value unique kit. Damage history is painful without serials for those SKUs only.
+Chairs stay **bulk qty**. Tents / generators: product flag `tracks_serials` + `rental_serials`. Dispatch auto-assigns free serials; return sets available / repair / retired. Show serials on the hire job line.
 
 ### 5.10 Sub-rent
 

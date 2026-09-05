@@ -195,7 +195,12 @@ function looksLikeSelector(value) {
 
 async function locate(page, step) {
   if (step.testid) return page.getByTestId(step.testid);
-  if (step.selector) return page.locator(step.selector).first();
+  if (step.selector) {
+    let loc = page.locator(step.selector);
+    if (step.nth != null && step.nth !== '') loc = loc.nth(Number(step.nth));
+    else loc = loc.first();
+    return loc;
+  }
   if (step.label) {
     const field = page
       .locator('.field, label')

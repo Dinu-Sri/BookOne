@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-09-05 — Garden kit live + serials v2 + calendar span (grid)
+
+- Sample kit **GARDEN-SET** on SL TAX SOLUTION: 80 chairs + 10 tables + 1 tent, hire rate 35,000.
+- Timeline bars use CSS grid columns so a 12–13 hire covers both days.
+- Serials v2: `tracks_serials` + `rental_serials`. Dispatch auto-assigns; return sets available / repair / retired.
+
 ## 2026-09-05 — Hire kits + calendar bar span fix
 
 - Timeline bars now span the full hire-from → hire-to (overlay, not grid items).

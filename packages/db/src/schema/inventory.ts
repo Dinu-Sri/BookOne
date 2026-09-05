@@ -43,6 +43,8 @@ export const inventoryProducts = pgTable('inventory_products', {
   turnaroundHours: varchar('turnaround_hours', { length: 10 }),
   depositAmount: numeric('deposit_amount', { precision: 18, scale: 2 }),
   replacementPrice: numeric('replacement_price', { precision: 18, scale: 2 }),
+  /** 1 = hire units identified by serial (tents, generators) */
+  tracksSerials: varchar('tracks_serials', { length: 1 }).notNull().default('0'),
   isActive: varchar('is_active', { length: 1 }).notNull().default('1'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

@@ -86,3 +86,23 @@ export const rentalKitComponents = pgTable(
     kitUq: uniqueIndex('rental_kit_components_uq').on(t.tenantId, t.kitProductId, t.componentProductId),
   }),
 );
+
+/** Unique hire units for SKUs with tracks_serials. */
+export const rentalSerials = pgTable(
+  'rental_serials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+    productId: uuid('product_id').notNull().references(() => inventoryProducts.id),
+    serialCode: varchar('serial_code', { length: 80 }).notNull(),
+    /** available | on_rent | repair | retired */
+    status: varchar('status', { length: 20 }).notNull().default('available'),
+    bookingLineId: uuid('booking_line_id').references(() => rentalBookingLines.id),
+    notes: varchar('notes', { length: 255 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    codeUq: uniqueIndex('rental_serials_code_uq').on(t.tenantId, t.productId, t.serialCode),
+  }),
+);

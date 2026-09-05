@@ -20,6 +20,7 @@ export type CleanupPlan = {
 };
 
 const TENANT_CHILD_TABLES = [
+  'rental_serials',
   'rental_kit_components',
   'rental_return_photos',
   'rental_booking_lines',

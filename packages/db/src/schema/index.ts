@@ -47,7 +47,7 @@ export { salesSettings, taxInvoiceSequences, salesInvoiceSources } from './sales
 export { purchaseSettings } from './purchase-settings';
 export { inventorySettings } from './inventory-settings';
 export { rentalSettings } from './rental-settings';
-export { rentalEvents, rentalBookingLines, rentalReturnPhotos, rentalKitComponents } from './rental';
+export { rentalEvents, rentalBookingLines, rentalReturnPhotos, rentalKitComponents, rentalSerials } from './rental';
 
 export { healthCheckRuns } from './health-check';
 export { posRegisters, posShifts } from './pos';

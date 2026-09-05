@@ -382,7 +382,10 @@ export function RentalOpsPanel({
                   </td>
                   <td>
                     <div style={{ fontWeight: 650 }}>{row.productName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{row.sku}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                      {row.sku}
+                      {row.serials?.length ? ` · ${row.serials.join(', ')}` : ''}
+                    </div>
                   </td>
                   <td style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
                     {row.hireFrom} → {row.hireTo}

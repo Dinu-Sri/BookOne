@@ -8,6 +8,8 @@ import {
   inventoryStockLevels,
   isNull,
   locations,
+  rentalKitComponents,
+  rentalSerials,
   withTenantContext,
 } from '@bookone/db';
 import { createQuickProduct } from '@/app/actions/inventory';
@@ -122,6 +124,78 @@ export async function POST() {
       });
     }
 
+    const kit = await withTenantContext(user.tenantId, async () => {
+      let kitRow = (
+        await db()
+          .select({ id: inventoryProducts.id, sku: inventoryProducts.sku, name: inventoryProducts.name })
+          .from(inventoryProducts)
+          .where(
+            and(
+              eq(inventoryProducts.tenantId, user.tenantId),
+              eq(inventoryProducts.name, 'Garden banquet set'),
+              isNull(inventoryProducts.voidedAt),
+            ),
+          )
+          .limit(1)
+      )[0];
+      if (!kitRow) {
+        const created = await createQuickProduct({
+          name: 'Garden banquet set',
+          productType: 'rental',
+          sellPrice: 35000,
+          unitCost: 0,
+        });
+        if (!created.ok || !created.product) throw new Error(created.error ?? 'Could not create garden kit.');
+        kitRow = { id: created.product.id, sku: created.product.sku, name: created.product.name };
+      }
+      await db()
+        .delete(rentalKitComponents)
+        .where(
+          and(eq(rentalKitComponents.tenantId, user.tenantId), eq(rentalKitComponents.kitProductId, kitRow.id)),
+        );
+      const parts = [
+        { productId: products[0]!.id, qty: '80.0000' },
+        { productId: products[1]!.id, qty: '10.0000' },
+        { productId: products[2]!.id, qty: '1.0000' },
+      ];
+      for (const part of parts) {
+        await db().insert(rentalKitComponents).values({
+          tenantId: user.tenantId,
+          kitProductId: kitRow.id,
+          componentProductId: part.productId,
+          qty: part.qty,
+        });
+      }
+      const tentId = products[2]!.id;
+      await db()
+        .update(inventoryProducts)
+        .set({ tracksSerials: '1', updatedAt: new Date() })
+        .where(eq(inventoryProducts.id, tentId));
+      const tentCodes = ['PG-5X5-01', 'PG-5X5-02', 'PG-5X5-03', 'PG-5X5-04'];
+      for (const code of tentCodes) {
+        const [have] = await db()
+          .select({ id: rentalSerials.id })
+          .from(rentalSerials)
+          .where(
+            and(
+              eq(rentalSerials.tenantId, user.tenantId),
+              eq(rentalSerials.productId, tentId),
+              eq(rentalSerials.serialCode, code),
+            ),
+          )
+          .limit(1);
+        if (!have) {
+          await db().insert(rentalSerials).values({
+            tenantId: user.tenantId,
+            productId: tentId,
+            serialCode: code,
+            status: 'available',
+          });
+        }
+      }
+      return kitRow;
+    });
+
     const invoice = await createCommercialDocument({
       documentType: 'sales_invoice',
       partyName: 'Garden Banquet',
@@ -173,6 +247,7 @@ export async function POST() {
       products,
       warehouse: warehouse ? { id: warehouse.id, name: warehouse.name } : null,
       invoice: { id: invoice.id },
+      kit,
     });
   } catch (error) {
     return NextResponse.json(

@@ -28,6 +28,7 @@ import {
   rentalBookingLines,
   rentalEvents,
   rentalReturnPhotos,
+  rentalSerials,
   sql,
   withTenantContext,
 } from '@bookone/db';
@@ -643,6 +644,7 @@ export type RentalJobLine = {
   eventHireTo: string;
   invoiceTiming: string;
   returnPhotoUrls: string[];
+  serials: string[];
 };
 
 async function fleetLocationId(tenantId: string, type: 'on_rent' | 'repair' | 'wash'): Promise<string> {
@@ -843,6 +845,29 @@ export async function listRentalJobs(filter?: {
                 inArray(rentalReturnPhotos.bookingLineId, lineIds),
               ),
             );
+    const serialRows =
+      lineIds.length === 0
+        ? []
+        : await db()
+            .select({
+              bookingLineId: rentalSerials.bookingLineId,
+              serialCode: rentalSerials.serialCode,
+            })
+            .from(rentalSerials)
+            .where(
+              and(
+                eq(rentalSerials.tenantId, user.tenantId),
+                inArray(rentalSerials.bookingLineId, lineIds),
+              ),
+            );
+    const serialsByLine = new Map<string, string[]>();
+    for (const row of serialRows) {
+      if (!row.bookingLineId) continue;
+      const list = serialsByLine.get(row.bookingLineId) ?? [];
+      list.push(row.serialCode);
+      serialsByLine.set(row.bookingLineId, list);
+    }
+
     const { resolveProductImageUrl } = await import('@/lib/product-image');
     const urlsByLine = new Map<string, string[]>();
     for (const photo of photoRows) {
@@ -898,6 +923,7 @@ export async function listRentalJobs(filter?: {
         eventHireTo: r.eventHireTo || r.hireTo,
         invoiceTiming: r.invoiceTiming && isHireInvoiceTiming(r.invoiceTiming) ? r.invoiceTiming : 'on_confirm',
         returnPhotoUrls: urlsByLine.get(r.id) ?? [],
+        serials: serialsByLine.get(r.id) ?? [],
       };
     });
   });
@@ -951,6 +977,34 @@ export async function dispatchRentalLine(
           updatedAt: new Date(),
         })
         .where(eq(rentalBookingLines.id, line.id));
+      const [product] = await db()
+        .select({ tracksSerials: inventoryProducts.tracksSerials })
+        .from(inventoryProducts)
+        .where(eq(inventoryProducts.id, line.productId))
+        .limit(1);
+      if (product?.tracksSerials === '1') {
+        const available = await db()
+          .select()
+          .from(rentalSerials)
+          .where(
+            and(
+              eq(rentalSerials.tenantId, user.tenantId),
+              eq(rentalSerials.productId, line.productId),
+              eq(rentalSerials.status, 'available'),
+            ),
+          );
+        if (available.length < qty - 0.0001) {
+          throw new Error(
+            `Need ${qty} available serial(s) to dispatch this SKU; ${available.length} free.`,
+          );
+        }
+        for (const serial of available.slice(0, Math.round(qty))) {
+          await db()
+            .update(rentalSerials)
+            .set({ status: 'on_rent', bookingLineId: line.id, updatedAt: new Date() })
+            .where(eq(rentalSerials.id, serial.id));
+        }
+      }
       revalidateRentalPaths(line.documentId);
     });
     return { ok: true };
@@ -1092,6 +1146,30 @@ export async function returnRentalLine(input: {
           });
         }
       }
+      const onLine = await db()
+        .select()
+        .from(rentalSerials)
+        .where(
+          and(eq(rentalSerials.tenantId, user.tenantId), eq(rentalSerials.bookingLineId, line.id)),
+        );
+      let offset = 0;
+      const assign = async (count: number, status: string) => {
+        const slice = onLine.slice(offset, offset + Math.round(count));
+        offset += slice.length;
+        for (const serial of slice) {
+          await db()
+            .update(rentalSerials)
+            .set({
+              status,
+              bookingLineId: status === 'on_rent' ? line.id : null,
+              updatedAt: new Date(),
+            })
+            .where(eq(rentalSerials.id, serial.id));
+        }
+      };
+      await assign(goodQty + dirtyQty, 'available');
+      await assign(damagedQty, 'repair');
+      await assign(missingQty, 'retired');
       revalidateRentalPaths(line.documentId);
     });
     return { ok: true };

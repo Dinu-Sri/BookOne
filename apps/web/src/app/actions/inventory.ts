@@ -24,6 +24,7 @@ import {
   inventoryProducts,
   inventoryStockLevels,
   rentalKitComponents,
+  rentalSerials,
   inventoryStockDocs,
   inventoryStockDocLines,
   inventoryMovements,
@@ -64,6 +65,7 @@ const productInputSchema = z.object({
   turnaroundHours: z.number().int().min(0).max(24 * 30).optional().nullable(),
   depositAmount: z.number().min(0).optional().nullable(),
   replacementPrice: z.number().min(0).optional().nullable(),
+  tracksSerials: z.boolean().optional().default(false),
 });
 
 export type ProductInput = z.infer<typeof productInputSchema>;
@@ -110,6 +112,8 @@ export interface ProductRow {
     qty: number;
     sellPrice: number;
   }[];
+  tracksSerials: boolean;
+  serialCodes: string[];
 }
 
 export interface StockLevelRow {
@@ -272,6 +276,8 @@ function mapProduct(
       | 'typeLocked'
       | 'imageUrl'
       | 'kitComponents'
+      | 'tracksSerials'
+      | 'serialCodes'
     >
   >,
 ): ProductRow {
@@ -307,6 +313,8 @@ function mapProduct(
     deleteReasons: extras.deleteReasons ?? [],
     typeLocked: extras.typeLocked ?? false,
     kitComponents: extras.kitComponents ?? [],
+    tracksSerials: extras.tracksSerials ?? String(row.tracksSerials ?? '') === '1',
+    serialCodes: extras.serialCodes ?? [],
     hireUnit: (row.hireUnit as string | null) ?? null,
     turnaroundHours: row.turnaroundHours != null && row.turnaroundHours !== '' ? Number(row.turnaroundHours) : null,
     depositAmount: row.depositAmount != null ? Number(row.depositAmount) : null,
@@ -459,6 +467,24 @@ export async function listProducts(filter?: {
       product.kitComponents = kitsByParent.get(product.id) ?? [];
     }
 
+    const serialRows = await db()
+      .select({
+        productId: rentalSerials.productId,
+        serialCode: rentalSerials.serialCode,
+      })
+      .from(rentalSerials)
+      .where(eq(rentalSerials.tenantId, user.tenantId));
+    const serialsByProduct = new Map<string, string[]>();
+    for (const row of serialRows) {
+      const list = serialsByProduct.get(row.productId) ?? [];
+      list.push(row.serialCode);
+      serialsByProduct.set(row.productId, list);
+    }
+    for (const product of result) {
+      product.serialCodes = serialsByProduct.get(product.id) ?? [];
+      product.tracksSerials = product.tracksSerials || (product.serialCodes.length > 0);
+    }
+
     return result;
   });
 }
@@ -495,6 +521,36 @@ async function replaceKitComponents(
       kitProductId,
       componentProductId: item.productId,
       qty: item.qty.toFixed(4),
+    });
+  }
+}
+
+function parseSerialCodes(formData: FormData): string[] {
+  return String(formData.get('serialCodes') ?? '')
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function replaceSerials(tenantId: string, productId: string, codes: string[]) {
+  const existing = await db()
+    .select()
+    .from(rentalSerials)
+    .where(and(eq(rentalSerials.tenantId, tenantId), eq(rentalSerials.productId, productId)));
+  const wanted = new Set(codes);
+  for (const row of existing) {
+    if (!wanted.has(row.serialCode) && row.status === 'available') {
+      await db().delete(rentalSerials).where(eq(rentalSerials.id, row.id));
+    }
+  }
+  const have = new Set(existing.map((r) => r.serialCode));
+  for (const code of codes) {
+    if (have.has(code)) continue;
+    await db().insert(rentalSerials).values({
+      tenantId,
+      productId,
+      serialCode: code,
+      status: 'available',
     });
   }
 }
@@ -560,6 +616,7 @@ function formToProductInput(formData: FormData): ProductInput {
     replacementPrice: String(formData.get('replacementPrice') ?? '')
       ? Number(String(formData.get('replacementPrice')).replace(/[^0-9.-]/g, ''))
       : null,
+    tracksSerials: formData.get('tracksSerials') === 'on' || formData.get('tracksSerials') === '1',
   };
 }
 
@@ -596,6 +653,7 @@ function toProductValues(tenantId: string, parsed: ProductInput) {
       type === 'rental' && parsed.depositAmount != null ? parsed.depositAmount.toFixed(2) : null,
     replacementPrice:
       type === 'rental' && parsed.replacementPrice != null ? parsed.replacementPrice.toFixed(2) : null,
+    tracksSerials: type === 'rental' && parsed.tracksSerials ? '1' : '0',
     updatedAt: new Date(),
   };
 }
@@ -768,6 +826,7 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
 
     if (type === 'rental') {
       await replaceKitComponents(user.tenantId, product.id, parseKitComponents(formData));
+      await replaceSerials(user.tenantId, product.id, parsed.tracksSerials ? parseSerialCodes(formData) : []);
     }
 
     const photo = formData.get('photo');
@@ -949,6 +1008,7 @@ export async function updateProductFromForm(formData: FormData): Promise<void> {
 
     if (type === 'rental') {
       await replaceKitComponents(user.tenantId, id, parseKitComponents(formData));
+      await replaceSerials(user.tenantId, id, parsed.tracksSerials ? parseSerialCodes(formData) : []);
     } else {
       await replaceKitComponents(user.tenantId, id, []);
     }

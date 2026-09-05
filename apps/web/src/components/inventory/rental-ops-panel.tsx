@@ -6,7 +6,9 @@ import { useMemo, useState, useTransition } from 'react';
 import {
   dispatchRentalLine,
   extendRentalHire,
+  releaseFleetBay,
   returnRentalLine,
+  type FleetBayRow,
   type RentalJobLine,
 } from '@/app/actions/rental-bookings';
 import {
@@ -41,6 +43,8 @@ export function RentalOpsPanel({
   const [pending, startTransition] = useTransition();
   const [openId, setOpenId] = useState<string | null>(null);
   const [goodQty, setGoodQty] = useState('0');
+  const [dirtyQty, setDirtyQty] = useState('0');
+  const [goodDestination, setGoodDestination] = useState<'warehouse' | 'wash'>('warehouse');
   const [damagedQty, setDamagedQty] = useState('0');
   const [missingQty, setMissingQty] = useState('0');
   const [damageCharge, setDamageCharge] = useState('0');
@@ -67,6 +71,8 @@ export function RentalOpsPanel({
     const suggestedDamage = money(row.replacementPrice * 0);
     setOpenId(row.id);
     setGoodQty(String(left));
+    setDirtyQty('0');
+    setGoodDestination(row.defaultTurnaroundHours > 0 ? 'wash' : 'warehouse');
     setDamagedQty('0');
     setMissingQty('0');
     setDamageCharge(String(suggestedDamage));
@@ -98,8 +104,10 @@ export function RentalOpsPanel({
       const res = await returnRentalLine({
         bookingLineId: row.id,
         goodQty: Number(goodQty) || 0,
+        dirtyQty: Number(dirtyQty) || 0,
         damagedQty: Number(damagedQty) || 0,
         missingQty: Number(missingQty) || 0,
+        goodDestination,
         photos: photoFiles,
       });
       if (!res.ok) {
@@ -437,6 +445,28 @@ export function RentalOpsPanel({
                             />
                           </label>
                           <label style={{ fontSize: 11 }}>
+                            Good goes to
+                            <select
+                              className="input"
+                              value={goodDestination}
+                              onChange={(e) =>
+                                setGoodDestination(e.target.value === 'wash' ? 'wash' : 'warehouse')
+                              }
+                            >
+                              <option value="warehouse">Warehouse</option>
+                              <option value="wash">Wash / turnaround</option>
+                            </select>
+                          </label>
+                          <label style={{ fontSize: 11 }}>
+                            Dirty (wash)
+                            <input
+                              className="input"
+                              inputMode="decimal"
+                              value={dirtyQty}
+                              onChange={(e) => setDirtyQty(e.target.value)}
+                            />
+                          </label>
+                          <label style={{ fontSize: 11 }}>
                             Damaged
                             <input
                               className="input"
@@ -547,6 +577,79 @@ export function RentalOpsPanel({
                         </Link>
                       </div>
                     )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export function FleetBayPanel({ rows }: { rows: FleetBayRow[] }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  if (rows.length === 0) return null;
+  function markReady(row: FleetBayRow) {
+    startTransition(async () => {
+      const res = await releaseFleetBay({
+        productId: row.productId,
+        locationId: row.locationId,
+        qty: row.qty,
+      });
+      if (!res.ok) {
+        pushStatusToast({ kind: 'error', message: res.error ?? 'Could not mark ready' });
+        return;
+      }
+      pushStatusToast({
+        kind: 'success',
+        message: `${row.sku} moved from ${row.locationName} to warehouse`,
+      });
+      router.refresh();
+    });
+  }
+  return (
+    <Card>
+      <div className="card-body">
+        <h2 className="card-title" style={{ margin: 0 }}>
+          Wash / repair
+        </h2>
+        <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '6px 0 12px' }}>
+          Dirty returns sit in Wash. Damaged kit sits in Repair until you mark it ready for the
+          warehouse.
+        </p>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Bay</th>
+                <th>Qty</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.productId}-${row.locationId}`}>
+                  <td>
+                    <div style={{ fontWeight: 650 }}>{row.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{row.sku}</div>
+                  </td>
+                  <td>
+                    <StatusBadge status={row.locationType} />
+                  </td>
+                  <td>{row.qty}</td>
+                  <td>
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      disabled={pending}
+                      onClick={() => markReady(row)}
+                    >
+                      Mark ready
+                    </Button>
                   </td>
                 </tr>
               ))}

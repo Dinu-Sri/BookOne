@@ -628,6 +628,7 @@ export type RentalJobLine = {
   depositRefunded: number;
   depositOpen: number;
   defaultLateFeePerDay: number;
+  defaultTurnaroundHours: number;
   eventHireFrom: string;
   eventHireTo: string;
   invoiceTiming: string;
@@ -882,6 +883,7 @@ export async function listRentalJobs(filter?: {
         depositRefunded: refunded,
         depositOpen: Math.max(0, Math.round((held - applied - refunded) * 100) / 100),
         defaultLateFeePerDay: latePerDay,
+        defaultTurnaroundHours: settings.defaultTurnaroundHours,
         eventHireFrom: r.eventHireFrom || r.hireFrom,
         eventHireTo: r.eventHireTo || r.hireTo,
         invoiceTiming: r.invoiceTiming && isHireInvoiceTiming(r.invoiceTiming) ? r.invoiceTiming : 'on_confirm',
@@ -952,16 +954,20 @@ export async function returnRentalLine(input: {
   goodQty: number;
   damagedQty: number;
   missingQty: number;
+  dirtyQty?: number;
+  goodDestination?: 'warehouse' | 'wash';
   photos?: File[];
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const goodQty = Math.max(0, Number(input.goodQty) || 0);
+    const dirtyQty = Math.max(0, Number(input.dirtyQty) || 0);
     const damagedQty = Math.max(0, Number(input.damagedQty) || 0);
     const missingQty = Math.max(0, Number(input.missingQty) || 0);
-    const total = goodQty + damagedQty + missingQty;
-    if (total <= 0) return { ok: false, error: 'Enter good, damaged, or missing qty.' };
+    const total = goodQty + dirtyQty + damagedQty + missingQty;
+    if (total <= 0) return { ok: false, error: 'Enter good, dirty, damaged, or missing qty.' };
 
     const user = await requireTenantContext();
+    const settings = await getRentalSettings();
     await withTenantContext(user.tenantId, async () => {
       const [line] = await db()
         .select()
@@ -987,16 +993,36 @@ export async function returnRentalLine(input: {
       const onRentId = await fleetLocationId(user.tenantId, 'on_rent');
       const { createStockTransfer } = await import('@/app/actions/inventory');
       const today = new Date().toISOString().slice(0, 10);
+      const goodDestination =
+        input.goodDestination === 'wash' || input.goodDestination === 'warehouse'
+          ? input.goodDestination
+          : settings.defaultTurnaroundHours > 0
+            ? 'wash'
+            : 'warehouse';
       if (goodQty > 0) {
-        const warehouseId = await pickWarehouseLocation(user.tenantId, line.productId, null, 0);
+        const toLocationId =
+          goodDestination === 'wash'
+            ? await fleetLocationId(user.tenantId, 'wash')
+            : await pickWarehouseLocation(user.tenantId, line.productId, null, 0);
         const moved = await createStockTransfer({
           fromLocationId: onRentId,
-          toLocationId: warehouseId,
+          toLocationId,
           reason: 'Rental return',
-          notes: `Return good ${line.id}`,
+          notes: `Return good ${line.id} → ${goodDestination}`,
           lines: [{ productId: line.productId, quantity: goodQty }],
         });
         if (!moved.ok) throw new Error(moved.error || 'Good return transfer failed.');
+      }
+      if (dirtyQty > 0) {
+        const washId = await fleetLocationId(user.tenantId, 'wash');
+        const moved = await createStockTransfer({
+          fromLocationId: onRentId,
+          toLocationId: washId,
+          reason: 'Rental return wash',
+          notes: `Return dirty ${line.id}`,
+          lines: [{ productId: line.productId, quantity: dirtyQty }],
+        });
+        if (!moved.ok) throw new Error(moved.error || 'Dirty return transfer failed.');
       }
       if (damagedQty > 0) {
         const repairId = await fleetLocationId(user.tenantId, 'repair');
@@ -1020,7 +1046,7 @@ export async function returnRentalLine(input: {
           docDate: today,
         });
       }
-      const nextReturned = Number(line.returnedQty) + goodQty;
+      const nextReturned = Number(line.returnedQty) + goodQty + dirtyQty;
       const nextDamaged = Number(line.damagedQty) + damagedQty;
       const nextMissing = Number(line.missingQty) + missingQty;
       const remaining = Number(line.dispatchedQty) - nextReturned - nextDamaged - nextMissing;
@@ -1153,5 +1179,81 @@ export async function extendRentalHire(input: {
     return { ok: true, hireTo: nextTo };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not extend hire.' };
+  }
+}
+
+export type FleetBayRow = {
+  productId: string;
+  sku: string;
+  name: string;
+  locationId: string;
+  locationType: 'wash' | 'repair';
+  locationName: string;
+  qty: number;
+};
+
+export async function listFleetBays(): Promise<FleetBayRow[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const rows = await db()
+      .select({
+        productId: inventoryStockLevels.productId,
+        sku: inventoryProducts.sku,
+        name: inventoryProducts.name,
+        locationId: inventoryStockLevels.locationId,
+        locationType: locations.locationType,
+        locationName: locations.name,
+        qty: inventoryStockLevels.qtyOnHand,
+      })
+      .from(inventoryStockLevels)
+      .innerJoin(inventoryProducts, eq(inventoryProducts.id, inventoryStockLevels.productId))
+      .innerJoin(locations, eq(locations.id, inventoryStockLevels.locationId))
+      .where(
+        and(
+          eq(inventoryStockLevels.tenantId, user.tenantId),
+          isNull(inventoryProducts.voidedAt),
+          inArray(locations.locationType, ['wash', 'repair']),
+        ),
+      );
+    return rows
+      .filter((r) => r.locationId && Number(r.qty) > 0.0001)
+      .map((r) => ({
+        productId: r.productId,
+        sku: r.sku,
+        name: r.name,
+        locationId: r.locationId!,
+        locationType: r.locationType === 'repair' ? 'repair' : 'wash',
+        locationName: r.locationName,
+        qty: Number(r.qty),
+      }));
+  });
+}
+
+export async function releaseFleetBay(input: {
+  productId: string;
+  locationId: string;
+  qty: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const qty = Math.max(0, Number(input.qty) || 0);
+    if (qty <= 0) return { ok: false, error: 'Enter a qty to mark ready.' };
+    const user = await requireTenantContext();
+    await withTenantContext(user.tenantId, async () => {
+      const warehouseId = await pickWarehouseLocation(user.tenantId, input.productId, null, 0);
+      const { createStockTransfer } = await import('@/app/actions/inventory');
+      const moved = await createStockTransfer({
+        fromLocationId: input.locationId,
+        toLocationId: warehouseId,
+        reason: 'Rental turnaround',
+        notes: `Ready from bay ${input.locationId}`,
+        lines: [{ productId: input.productId, quantity: qty }],
+      });
+      if (!moved.ok) throw new Error(moved.error || 'Could not move kit to warehouse.');
+      revalidateRentalPaths();
+      revalidatePath('/inventory/levels');
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not mark ready.' };
   }
 }

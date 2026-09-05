@@ -114,6 +114,7 @@ export interface StockLevelRow {
   qtyOnHand: number;
   qtyOnRent: number;
   qtyInRepair: number;
+  qtyInWash: number;
   qtyAvailable: number;
   productType: string;
   unitCost: number;
@@ -979,9 +980,13 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
       onRentMap.set(id, await currentlyOnRentQty(user.tenantId, id, today));
     }
     const repairByProduct = new Map<string, number>();
+    const washByProduct = new Map<string, number>();
     for (const r of rows) {
       if (r.locationType === 'repair') {
         repairByProduct.set(r.productId, (repairByProduct.get(r.productId) ?? 0) + Number(r.qtyOnHand));
+      }
+      if (r.locationType === 'wash') {
+        washByProduct.set(r.productId, (washByProduct.get(r.productId) ?? 0) + Number(r.qtyOnHand));
       }
     }
 
@@ -1001,7 +1006,8 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
         const reorder = r.reorderLevel != null ? Number(r.reorderLevel) : null;
         const onRent = r.productType === 'rental' ? onRentMap.get(r.productId) ?? 0 : 0;
         const inRepair = r.productType === 'rental' ? repairByProduct.get(r.productId) ?? 0 : 0;
-        const available = Math.round((qty - onRent - inRepair) * 10000) / 10000;
+        const inWash = r.productType === 'rental' ? washByProduct.get(r.productId) ?? 0 : 0;
+        const available = Math.round((qty - onRent - inRepair - inWash) * 10000) / 10000;
         return {
           id: r.id,
           productId: r.productId,
@@ -1012,6 +1018,7 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
           qtyOnHand: qty,
           qtyOnRent: onRent,
           qtyInRepair: inRepair,
+          qtyInWash: inWash,
           qtyAvailable: available,
           productType: r.productType,
           unitCost: cost,

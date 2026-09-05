@@ -6093,4 +6093,57 @@
 
 ---
 
+## 28. Event hire / rental
+
+### S-0699 — Rental settings page loads
+
+- **Priority:** P1
+- **Tags:** `@rental`, `@settings`
+- **Steps:** Open `/company/rental`
+- **Expect:** Invoice timing and overlap policy fields visible.
+
+### S-0700 — Rental calendar page loads
+
+- **Priority:** P1
+- **Tags:** `@rental`
+- **Steps:** Open `/inventory/calendar`
+- **Expect:** Calendar workspace renders.
+
+### S-0701 — Dispatch / returns page loads
+
+- **Priority:** P0
+- **Tags:** `@rental`, `@inventory`
+- **Steps:** Open `/inventory/on-rent`
+- **Expect:** Hire dispatch / return panel.
+
+### S-0702 — Hire docs page is public
+
+- **Priority:** P2
+- **Tags:** `@rental`, `@docs`, `@public`
+- **Steps:** Open `/docs/inventory/rental` logged out
+- **Expect:** Event hire documentation, not redirected to login.
+
+### S-0703 — Stock levels fleet filters
+
+- **Priority:** P1
+- **Tags:** `@rental`, `@inventory`
+- **Steps:** Open `/inventory/levels?fleet=on_rent` and `?fleet=wash`
+- **Expect:** On rent / Wash filter controls visible.
+
+### S-0704 — Hire invoice does not COGS
+
+- **Priority:** P0
+- **Tags:** `@rental`, `@accounting`
+- **Steps:** Invoice a rental SKU
+- **Expect:** Cr 4400, no 5000/5100; fleet qty unchanged until dispatch.
+
+### S-0705 — Return dirty goes to wash then Mark ready
+
+- **Priority:** P1
+- **Tags:** `@rental`, `@inventory`
+- **Steps:** Dispatch, return dirty or good→wash, Mark ready
+- **Expect:** Qty in Wash, then warehouse after Mark ready.
+
+---
+
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

@@ -240,6 +240,14 @@ export const E2E_BUCKETS: E2eBucket[] = [
     files: ['27-catalog-sweep.spec.ts'],
     group: 'depth',
   },
+  {
+    id: 'rental',
+    label: 'Event hire / rental',
+    description: 'Settings, calendar, dispatch/returns, hire docs (S-0699…)',
+    eta: '~5–10 min',
+    files: ['28-rental.spec.ts'],
+    group: 'money',
+  },
 ];
 
 /** Named multi-bucket presets for daily / weekly runs. */
@@ -284,6 +292,7 @@ export const E2E_PRESETS: Record<string, { label: string; description: string; e
       'products',
       'sales',
       'purchase',
+      'rental',
       'accounting',
       'pos',
       'security',

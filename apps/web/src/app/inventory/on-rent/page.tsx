@@ -1,15 +1,16 @@
 import { redirect } from 'next/navigation';
-import { listRentalJobs } from '@/app/actions/rental-bookings';
+import { listFleetBays, listRentalJobs, type FleetBayRow, type RentalJobLine } from '@/app/actions/rental-bookings';
 import { getTenantInfo } from '@/app/actions/workspace';
-import { RentalOpsPanel } from '@/components/inventory/rental-ops-panel';
+import { FleetBayPanel, RentalOpsPanel } from '@/components/inventory/rental-ops-panel';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { ModulePageHeader } from '@/components/module/list-page';
 
 export default async function OnRentPage() {
   let tenant;
-  let rows;
+  let rows: RentalJobLine[] = [];
+  let bays: FleetBayRow[] = [];
   try {
-    [tenant, rows] = await Promise.all([getTenantInfo(), listRentalJobs()]);
+    [tenant, rows, bays] = await Promise.all([getTenantInfo(), listRentalJobs(), listFleetBays()]);
   } catch {
     redirect('/login');
   }
@@ -29,6 +30,7 @@ export default async function OnRentPage() {
           }
         />
         <RentalOpsPanel rows={rows} />
+        <FleetBayPanel rows={bays} />
       </div>
     </BookOneShell>
   );

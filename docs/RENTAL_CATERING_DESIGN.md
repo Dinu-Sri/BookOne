@@ -1,7 +1,7 @@
 # BookOne — Event rental + catering (hire inventory)
 
-**Status:** architecture draft · rental **settings shipped** (`/company/rental`, module flag `rental`)  
-**Date:** 2026-09-03  
+**Status:** Phases 0–6 shipped (hire loop + wash/repair + health/docs/e2e). Kits v1.5 and serials v2 still later.  
+**Date:** 2026-09-05  
 **Offline / local-node work is out of scope** (cloud-only).
 
 Offline / local-node work from `docs/OFFLINE_SYNC_ARCHITECTURE.md` is **out of scope** (product decision: cloud-only).
@@ -353,29 +353,32 @@ CoA 2400 / 4400 / 4450 / 5150 is seeded for existing tenants in migration `021_r
 - Calendar at `/inventory/calendar` (month + product bars).  
 - Quote → order / invoice convert copies hire period and cancels the source hold.
 
-### Phase 3 — Dispatch / return / damage (started 2026-09-04)
+### Phase 3 — Dispatch / return / damage (done 2026-09-04)
 
 - Dispatch/return wizards at `/inventory/on-rent` and on the sales invoice.  
-- Condition counts: good → warehouse, damaged → Repair, missing → write off qty.  
+- Condition counts: good → warehouse **or wash**, dirty → wash, damaged → Repair, missing → write off qty.  
 - Overdue flag on dispatched lines past hire-to.  
-- Photos + customer damage invoice (4450) still Phase 4 with deposits.
+- Return inspection photos (fit-inside 1600 WebP).
 
-### Phase 4 — Deposits & late fees (started 2026-09-04)
+### Phase 4 — Deposits & late fees (done 2026-09-04)
 
 - Collect/refund deposit on the hire job (Dr/Cr 2400).  
 - Return can invoice damage/missing (4450) and a late fee.  
-- Optional apply open deposit to that charges invoice.
+- Optional apply open deposit to that charges invoice.  
+- Invoice timing enforced on sales invoice / POS. Hire period extension with overlap re-check.
 
-### Phase 5 — Packing list (started 2026-09-04)
+### Phase 5 — Packing list (done 2026-09-04)
 
 - Printable packing / dispatch sheet per hire job (`/inventory/on-rent/[id]/packing`).
 
-### Phase 6 — Hardening
+### Phase 6 — Hardening (done 2026-09-05)
 
-- Health Check + e2e cases from §6.  
-- Docs at `/docs`.  
-- Module flag in Control Room.  
-- Optional kits later.
+- Health Check full suite step: hire invoice credits 4400 (no COGS), dispatch, return to wash, Mark ready.  
+- Docs at `/docs/inventory/rental`.  
+- E2E S-0699…S-0703 load tests (`tests/28-rental.spec.ts`); S-0704/0705 on backlog for deep mutate.  
+- Wash / repair bay on Dispatch / returns with **Mark ready**.  
+- Stock levels Wash filter.  
+- Optional kits still later (v1.5). Serials v2.
 
 ---
 
@@ -402,9 +405,9 @@ Resolved (tenant settings, not a single product lock):
 3. Deposit — **per event, per item, both, or none**; event amount and/or %.  
 5. Overlap — **block / manager override / warn / allow**.
 
-Still open:
+Resolved:
 
-4. Wash location required, or return straight to warehouse with padding hours only? (Turnaround hours is already a setting; virtual wash location is Phase 1/3.)
+4. Wash is **optional per return**. Good qty can go warehouse or wash (defaults to wash when tenant turnaround hours > 0). Dirty always goes to wash. **Mark ready** moves wash/repair back to warehouse. Padding hours still block the calendar even if qty is already on the shelf.
 
 ---
 

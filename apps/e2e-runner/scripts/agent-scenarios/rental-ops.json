@@ -1,0 +1,13 @@
+{
+  "name": "rental-ops",
+  "steps": [
+    { "action": "goto", "path": "/company/rental" },
+    { "action": "screenshot", "name": "rental-settings" },
+    { "action": "assertText", "text": "When to invoice" },
+    { "action": "goto", "path": "/inventory/calendar" },
+    { "action": "screenshot", "name": "rental-calendar" },
+    { "action": "goto", "path": "/inventory/on-rent" },
+    { "action": "screenshot", "name": "dispatch-returns" },
+    { "action": "assertText", "text": "Hire dispatch" }
+  ]
+}

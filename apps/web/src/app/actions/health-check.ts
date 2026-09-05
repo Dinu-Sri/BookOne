@@ -1659,6 +1659,25 @@ export async function runHealthCheckSuite(input?: {
       });
     }
 
+    // ── hire / rental loop (full) ────────────────────────────────
+    if (suite === 'full') {
+      await step('rental_hire', '14. Hire invoice 4400, dispatch, wash, warehouse', async () => {
+        const { runRentalHireLoop } = await import('@/app/actions/rental-health');
+        const result = await runRentalHireLoop({
+          tenantId: user.tenantId,
+          brandId,
+          locationId,
+          seed,
+          issueDate,
+        });
+        for (const id of result.transactionIds) trackTx(id);
+        for (const id of result.documentIds) trackDoc(id);
+        if (result.meta.invoiceId) created.rentalInvoiceId = String(result.meta.invoiceId);
+        if (result.meta.productId) created.rentalProductId = String(result.meta.productId);
+        return { detail: result.detail, meta: result.meta };
+      });
+    }
+
     // ── final balance ────────────────────────────────────────────
     await step('balance', 'Final. Run-scoped TB + stock formula', async () => {
       if (!created.productId) throw new Error('No product');
@@ -1752,6 +1771,7 @@ export async function runHealthCheckSuite(input?: {
 
     revalidatePath('/control-room/health-check');
     revalidatePath('/inventory/products');
+    revalidatePath('/inventory/on-rent');
     revalidatePath('/sales/invoices');
     revalidatePath('/purchase/purchases');
     revalidatePath('/journal');

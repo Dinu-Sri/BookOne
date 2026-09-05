@@ -20,6 +20,8 @@
 
 8. **Respect period locks.** Locked periods cannot be directly edited — use reversals.
 
+9. **UI verification is `pnpm agent:browse`.** Playwright logs in like a person (credentials in gitignored `.local/debug-accounts.json`). After any screen change, browse the route, read `.local/agent-browse/<run>/final.png`, and do not claim the UI works from curl or a code-only read. Full contract: **AGENTS.md → Agent UI testing**. Never print or commit passwords.
+
 ## When Making Changes
 
 Document in commit message:

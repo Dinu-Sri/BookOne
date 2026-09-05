@@ -15,7 +15,7 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const lowOnly = searchParams.get('low') === '1';
-  const fleet = searchParams.get('fleet'); // on_rent | repair | available
+  const fleet = searchParams.get('fleet'); // on_rent | repair | wash | available
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>('name');
@@ -33,6 +33,7 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
     if (lowOnly) list = list.filter((r) => r.belowReorder);
     if (fleet === 'on_rent') list = list.filter((r) => r.qtyOnRent > 0);
     if (fleet === 'repair') list = list.filter((r) => r.qtyInRepair > 0);
+    if (fleet === 'wash') list = list.filter((r) => r.qtyInWash > 0);
     if (fleet === 'available') list = list.filter((r) => r.productType === 'rental' && r.qtyAvailable > 0);
     if (q) {
       list = list.filter((r) =>
@@ -46,7 +47,7 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
       if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
       return String(av ?? '').localeCompare(String(bv ?? ''), undefined, { sensitivity: 'base' }) * dir;
     });
-  }, [rows, query, lowOnly, sortKey, sortDir]);
+  }, [rows, query, lowOnly, fleet, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -100,6 +101,11 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
             In repair
           </Button>
         </Link>
+        <Link href="/inventory/levels?fleet=wash">
+          <Button variant={fleet === 'wash' ? 'primary' : 'secondary'} type="button">
+            Wash
+          </Button>
+        </Link>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
           Stock value {formatLKR(totalValue)}
         </span>
@@ -128,6 +134,8 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
                     ? 'Nothing on rent'
                     : fleet === 'repair'
                       ? 'Nothing in repair'
+                      : fleet === 'wash'
+                        ? 'Nothing in wash'
                       : 'No stocked or hire products yet'}
               </h3>
               <p>
@@ -171,6 +179,7 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
                       </button>
                     </th>
                     <th>Repair</th>
+                    <th>Wash</th>
                     <th>
                       <button
                         type="button"
@@ -228,6 +237,7 @@ export function StockLevelsList({ rows }: { rows: StockLevelRow[] }) {
                       </td>
                       <td>{r.qtyOnRent || '—'}</td>
                       <td>{r.qtyInRepair || '—'}</td>
+                      <td>{r.qtyInWash || '—'}</td>
                       <td>{r.productType === 'rental' ? r.qtyAvailable : r.qtyOnHand}</td>
                       <td>
                         {formatLKR(r.unitCost)}

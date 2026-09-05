@@ -38,6 +38,18 @@
       "feature_ref": "docs/E2E_GOVERNANCE.md",
       "added_at": "2026-07-22",
       "notes": "Process live — agents and humans follow governance checklist."
+    },
+    {
+      "id": "BL-0004",
+      "kind": "feature",
+      "related_scenarios": ["S-0704", "S-0705"],
+      "title": "Rental hire invoice + wash return mutate/balance asserts",
+      "priority": "P1",
+      "status": "planned",
+      "target_depth": "balance",
+      "feature_ref": "docs/RENTAL_CATERING_DESIGN.md",
+      "added_at": "2026-09-05",
+      "notes": "Load coverage in tests/28-rental.spec.ts. Deep 4400/wash path is Health Check step rental_hire."
     }
   ]
 }

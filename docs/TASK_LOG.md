@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-09-05 — Rental Phase 6 + agent-browse contract
+
+- **AGENTS.md** records `pnpm agent:browse`: when to use, flags, JSON steps, credentials, artifacts, production vs local, no-mutate rule. Copilot instructions point at the same contract.
+- **Wash / repair:** return good → warehouse or wash; dirty → wash; **Mark ready** back to warehouse. Stock levels Wash filter.
+- **Health Check** full suite step `rental_hire` (4400, no COGS, dispatch → wash → warehouse).
+- **Docs** `/docs/inventory/rental`. E2E S-0699…S-0703 + bucket `rental`.
+
 ## 2026-09-05 — Agent browser (login + click like a person)
 
 - `pnpm agent:browse` runs Playwright Chromium on this machine, logs in from `.local/debug-accounts.json`, and writes screenshots + text snapshots to `.local/agent-browse/<run>/`.

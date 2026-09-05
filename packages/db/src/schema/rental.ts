@@ -69,3 +69,20 @@ export const rentalReturnPhotos = pgTable('rental_return_photos', {
   createdBy: uuid('created_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/** Hire kit → component fleet SKUs (qty per 1 kit). */
+export const rentalKitComponents = pgTable(
+  'rental_kit_components',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+    kitProductId: uuid('kit_product_id').notNull().references(() => inventoryProducts.id),
+    componentProductId: uuid('component_product_id').notNull().references(() => inventoryProducts.id),
+    qty: numeric('qty', { precision: 18, scale: 4 }).notNull().default('1'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    kitUq: uniqueIndex('rental_kit_components_uq').on(t.tenantId, t.kitProductId, t.componentProductId),
+  }),
+);

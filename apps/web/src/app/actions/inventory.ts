@@ -23,6 +23,7 @@ import {
   or,
   inventoryProducts,
   inventoryStockLevels,
+  rentalKitComponents,
   inventoryStockDocs,
   inventoryStockDocLines,
   inventoryMovements,
@@ -102,6 +103,13 @@ export interface ProductRow {
   turnaroundHours: number | null;
   depositAmount: number | null;
   replacementPrice: number | null;
+  kitComponents: {
+    productId: string;
+    sku: string;
+    name: string;
+    qty: number;
+    sellPrice: number;
+  }[];
 }
 
 export interface StockLevelRow {
@@ -263,6 +271,7 @@ function mapProduct(
       | 'deleteReasons'
       | 'typeLocked'
       | 'imageUrl'
+      | 'kitComponents'
     >
   >,
 ): ProductRow {
@@ -297,6 +306,7 @@ function mapProduct(
     canDelete: extras.canDelete ?? false,
     deleteReasons: extras.deleteReasons ?? [],
     typeLocked: extras.typeLocked ?? false,
+    kitComponents: extras.kitComponents ?? [],
     hireUnit: (row.hireUnit as string | null) ?? null,
     turnaroundHours: row.turnaroundHours != null && row.turnaroundHours !== '' ? Number(row.turnaroundHours) : null,
     depositAmount: row.depositAmount != null ? Number(row.depositAmount) : null,
@@ -421,8 +431,72 @@ export async function listProducts(filter?: {
       result.sort((a, b) => (dir === 'desc' ? b.qtyOnHand - a.qtyOnHand : a.qtyOnHand - b.qtyOnHand));
     }
 
+    const kitRows = await db()
+      .select({
+        kitProductId: rentalKitComponents.kitProductId,
+        productId: rentalKitComponents.componentProductId,
+        qty: rentalKitComponents.qty,
+        sku: inventoryProducts.sku,
+        name: inventoryProducts.name,
+        sellPrice: inventoryProducts.sellPrice,
+      })
+      .from(rentalKitComponents)
+      .innerJoin(inventoryProducts, eq(inventoryProducts.id, rentalKitComponents.componentProductId))
+      .where(and(eq(rentalKitComponents.tenantId, user.tenantId), isNull(inventoryProducts.voidedAt)));
+    const kitsByParent = new Map<string, ProductRow['kitComponents']>();
+    for (const row of kitRows) {
+      const list = kitsByParent.get(row.kitProductId) ?? [];
+      list.push({
+        productId: row.productId,
+        sku: row.sku,
+        name: row.name,
+        qty: Number(row.qty),
+        sellPrice: Number(row.sellPrice),
+      });
+      kitsByParent.set(row.kitProductId, list);
+    }
+    for (const product of result) {
+      product.kitComponents = kitsByParent.get(product.id) ?? [];
+    }
+
     return result;
   });
+}
+
+function parseKitComponents(formData: FormData): { productId: string; qty: number }[] {
+  const ids = formData.getAll('kitComponentId').map((v) => String(v));
+  const qtys = formData.getAll('kitComponentQty').map((v) => String(v));
+  const out: { productId: string; qty: number }[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const productId = ids[i] ?? '';
+    const qty = Number(String(qtys[i] ?? '1').replace(/[^0-9.-]/g, '')) || 0;
+    if (!productId || qty <= 0) continue;
+    out.push({ productId, qty });
+  }
+  return out;
+}
+
+async function replaceKitComponents(
+  tenantId: string,
+  kitProductId: string,
+  items: { productId: string; qty: number }[],
+) {
+  await db()
+    .delete(rentalKitComponents)
+    .where(
+      and(eq(rentalKitComponents.tenantId, tenantId), eq(rentalKitComponents.kitProductId, kitProductId)),
+    );
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (item.productId === kitProductId || seen.has(item.productId)) continue;
+    seen.add(item.productId);
+    await db().insert(rentalKitComponents).values({
+      tenantId,
+      kitProductId,
+      componentProductId: item.productId,
+      qty: item.qty.toFixed(4),
+    });
+  }
 }
 
 export async function getProduct(id: string): Promise<ProductRow | null> {
@@ -692,6 +766,10 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
       .values(toProductValues(user.tenantId, { ...parsed, productType: type }))
       .returning({ id: inventoryProducts.id });
 
+    if (type === 'rental') {
+      await replaceKitComponents(user.tenantId, product.id, parseKitComponents(formData));
+    }
+
     const photo = formData.get('photo');
     if (photo instanceof File && photo.size > 0) {
       const { saveProductPhoto } = await import('@/lib/product-image');
@@ -868,6 +946,12 @@ export async function updateProductFromForm(formData: FormData): Promise<void> {
     }
 
     await db().update(inventoryProducts).set(values).where(eq(inventoryProducts.id, id));
+
+    if (type === 'rental') {
+      await replaceKitComponents(user.tenantId, id, parseKitComponents(formData));
+    } else {
+      await replaceKitComponents(user.tenantId, id, []);
+    }
 
     await db().insert(auditLog).values({
       tenantId: user.tenantId,

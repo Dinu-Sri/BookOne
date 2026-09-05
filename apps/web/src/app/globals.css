@@ -9081,7 +9081,10 @@ a.bih-card:hover {
 .hire-cal-dayhead.is-today,
 .hire-cal-cell.is-today { background: #fff7ed; }
 .hire-cal-row { align-items: stretch; }
+.hire-cal-track-wrap { position: relative; min-height: 44px; }
 .hire-cal-track { min-height: 44px; }
+.hire-cal-bars { position: absolute; inset: 0; pointer-events: none; }
+.hire-cal-bars .hire-cal-bar { pointer-events: auto; }
 .hire-cal-bar {
   position: absolute;
   height: 22px;

@@ -11,6 +11,7 @@ const TABS = [
   { id: 'pricing', label: 'Pricing' },
   { id: 'accounts', label: 'Accounts' },
   { id: 'stock', label: 'Stock' },
+  { id: 'kit', label: 'Kit' },
   { id: 'notes', label: 'Notes' },
 ] as const;
 
@@ -19,9 +20,11 @@ type TabId = (typeof TABS)[number]['id'];
 export function ProductForm({
   mode,
   product,
+  rentalCatalog = [],
 }: {
   mode: 'create' | 'edit';
   product?: ProductRow | null;
+  rentalCatalog?: { id: string; sku: string; name: string }[];
 }) {
   const action = mode === 'edit' ? updateProductFromForm : createProductFromForm;
   const [tab, setTab] = useState<TabId>('identity');
@@ -29,6 +32,9 @@ export function ProductForm({
   const [preview, setPreview] = useState<string | null>(product?.imageUrl ?? null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [kitRows, setKitRows] = useState<{ productId: string; qty: string }[]>(
+    (product?.kitComponents ?? []).map((c) => ({ productId: c.productId, qty: String(c.qty) })),
+  );
   const fileRef = useRef<HTMLInputElement>(null);
   const isPhysical = productType === 'physical' || productType === 'stocked';
   const isRental = productType === 'rental';
@@ -78,6 +84,7 @@ export function ProductForm({
         <div className="party-tabs" role="tablist">
           {TABS.map((t) => {
             if (t.id === 'stock' && !tracksQty) return null;
+            if (t.id === 'kit' && !isRental) return null;
             return (
               <button
                 key={t.id}
@@ -346,6 +353,64 @@ export function ProductForm({
         ) : (
           <input type="hidden" name="openingQty" value="0" />
         )}
+
+        {isRental ? (
+          <div className="party-tab-panel" hidden={tab !== 'kit'}>
+            <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: '0 0 12px' }}>
+              Optional. Adding this SKU on a quote or invoice explodes into these fleet items (qty × kit
+              qty).
+            </p>
+            {kitRows.map((row, i) => (
+              <div key={i} className="cluster" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                <select
+                  className="input"
+                  name="kitComponentId"
+                  value={row.productId}
+                  onChange={(e) =>
+                    setKitRows((rows) =>
+                      rows.map((r, j) => (j === i ? { ...r, productId: e.target.value } : r)),
+                    )
+                  }
+                  style={{ minWidth: 240 }}
+                >
+                  <option value="">Component SKU</option>
+                  {rentalCatalog
+                    .filter((p) => p.id !== product?.id)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.sku} — {p.name}
+                      </option>
+                    ))}
+                </select>
+                <input
+                  className="input"
+                  name="kitComponentQty"
+                  inputMode="decimal"
+                  value={row.qty}
+                  onChange={(e) =>
+                    setKitRows((rows) => rows.map((r, j) => (j === i ? { ...r, qty: e.target.value } : r)))
+                  }
+                  style={{ width: 100 }}
+                  aria-label="Kit component qty"
+                />
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={() => setKitRows((rows) => rows.filter((_, j) => j !== i))}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setKitRows((rows) => [...rows, { productId: '', qty: '1' }])}
+            >
+              Add component
+            </Button>
+          </div>
+        ) : null}
 
         <div className="party-tab-panel" hidden={tab !== 'notes'}>
           <div className="party-tab-grid">

@@ -256,10 +256,10 @@ Inventory filters:
 
 Never book repair qty. Calendar shows repair as a blocking bar.
 
-### 5.8 Kits / packages (v1.5)
+### 5.8 Kits / packages (v1.5 — shipped 2026-09-05)
 
-Catering quotes are “200 pax dinner + chairs + chafers.” v1 can be **manual lines** (already have line editor + save-as-product).  
-v1.5: `rental_kits` exploding into component lines with qty × pax rules (1.2× plates, etc.). Not required to onboard the customer if staff explode packages by hand.
+Catering quotes are “200 pax dinner + chairs + chafers.”  
+`rental_kit_components` on a hire SKU; adding the kit on a quote/invoice explodes into component fleet lines (qty × kit qty). Pax multipliers are still entered as the kit qty or component qty.
 
 ### 5.9 Serial numbers (v2)
 

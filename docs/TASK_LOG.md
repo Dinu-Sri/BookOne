@@ -4,6 +4,11 @@
 
 ---
 
+## 2026-09-05 — Hire kits + calendar bar span fix
+
+- Timeline bars now span the full hire-from → hire-to (overlay, not grid items).
+- Hire **kits**: `rental_kit_components`. Product → Kit tab. Quote/invoice add explodes into component fleet lines.
+
 ## 2026-09-05 — Hire calendar timeline (pastel bars)
 
 - Default **Timeline** view: one row per hire SKU, days across, pastel bars spanning hire-from → hire-to.

@@ -22,6 +22,13 @@ export type ProductPick = {
   barcode?: string | null;
   imageUrl?: string | null;
   productType?: string;
+  kitComponents?: {
+    productId: string;
+    sku: string;
+    name: string;
+    qty: number;
+    sellPrice: number;
+  }[];
 };
 
 function money(n: number) {

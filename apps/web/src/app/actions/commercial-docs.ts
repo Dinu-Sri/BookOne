@@ -33,6 +33,7 @@ import {
   periodLocks,
   inventoryProducts,
   inventoryStockLevels,
+  rentalKitComponents,
   inventoryMovements,
   salesDiscounts,
   salesSettings,
@@ -800,8 +801,51 @@ export async function createCommercialDocument(
         }
       }
 
+      let sourceLines = [...parsed.lines];
+      if (['quotation', 'sales_order', 'sales_invoice', 'pos_sale'].includes(parsed.documentType)) {
+        const exploded: typeof sourceLines = [];
+        for (const line of sourceLines) {
+          if (!line.productId) {
+            exploded.push(line);
+            continue;
+          }
+          const components = await db()
+            .select({
+              productId: rentalKitComponents.componentProductId,
+              qty: rentalKitComponents.qty,
+              name: inventoryProducts.name,
+              sellPrice: inventoryProducts.sellPrice,
+              unitCost: inventoryProducts.unitCost,
+            })
+            .from(rentalKitComponents)
+            .innerJoin(inventoryProducts, eq(inventoryProducts.id, rentalKitComponents.componentProductId))
+            .where(
+              and(
+                eq(rentalKitComponents.tenantId, user.tenantId),
+                eq(rentalKitComponents.kitProductId, line.productId),
+                isNull(inventoryProducts.voidedAt),
+              ),
+            );
+          if (components.length === 0) {
+            exploded.push(line);
+            continue;
+          }
+          for (const c of components) {
+            exploded.push({
+              productId: c.productId,
+              description: c.name,
+              quantity: line.quantity * Number(c.qty),
+              unitPrice: Number(c.sellPrice),
+              unitCost: Number(c.unitCost),
+              discountAmount: 0,
+            });
+          }
+        }
+        sourceLines = exploded;
+      }
+
       const enriched = [];
-      for (const line of parsed.lines) {
+      for (const line of sourceLines) {
         let unitCost = line.unitCost ?? 0;
         let productType = 'service';
         let description = line.description;

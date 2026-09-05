@@ -271,49 +271,54 @@ export function RentalCalendar({
                           <strong>{row.productName}</strong>
                           <small>{row.sku}</small>
                         </div>
-                        <div
-                          className="hire-cal-track"
-                          style={{ gridTemplateColumns: `repeat(${last}, minmax(36px, 1fr))` }}
-                        >
-                          {Array.from({ length: last }, (_, i) => {
-                            const d = iso(y, m, i + 1);
-                            const weekend = new Date(`${d}T12:00:00`).getDay() % 6 === 0;
-                            return (
-                              <div
-                                key={d}
-                                className={`hire-cal-cell${d === today ? ' is-today' : ''}${weekend ? ' is-weekend' : ''}`}
-                              />
-                            );
-                          })}
-                          {row.bars.map((bar) => {
-                            const start = clampDay(bar.hireFrom, y, m, last);
-                            const end = clampDay(bar.hireTo, y, m, last);
-                            if (end < start) return null;
-                            const lane = laneOf.get(bar.id) ?? 0;
-                            const color = barColor(bar, today);
-                            const continuesLeft = bar.hireFrom.slice(0, 7) < month;
-                            const continuesRight = bar.hireTo.slice(0, 7) > month;
-                            return (
-                              <Link
-                                key={bar.id}
-                                href={docHref(bar.documentType, bar.documentId)}
-                                className={`hire-cal-bar${bar.status === 'dispatched' ? ' is-out' : ''}${continuesLeft ? ' is-cont-left' : ''}${continuesRight ? ' is-cont-right' : ''}`}
-                                style={{
-                                  left: `calc(${((start - 1) / last) * 100}% + 3px)`,
-                                  width: `calc(${((end - start + 1) / last) * 100}% - 6px)`,
-                                  top: 6 + lane * 26,
-                                  background: color.bg,
-                                  borderColor: color.border,
-                                  color: color.text,
-                                }}
-                                title={`${bar.documentNumber} · ${bar.partyName} · qty ${bar.qty} · ${bar.hireFrom} → ${bar.hireTo} · ${bar.status}`}
-                              >
-                                <span>
-                                  {bar.qty} · {bar.partyName}
-                                </span>
-                              </Link>
-                            );
-                          })}
+                        <div className="hire-cal-track-wrap">
+                          <div
+                            className="hire-cal-track"
+                            style={{ gridTemplateColumns: `repeat(${last}, minmax(36px, 1fr))` }}
+                          >
+                            {Array.from({ length: last }, (_, i) => {
+                              const d = iso(y, m, i + 1);
+                              const weekend = new Date(`${d}T12:00:00`).getDay() % 6 === 0;
+                              return (
+                                <div
+                                  key={d}
+                                  className={`hire-cal-cell${d === today ? ' is-today' : ''}${weekend ? ' is-weekend' : ''}`}
+                                />
+                              );
+                            })}
+                          </div>
+                          <div className="hire-cal-bars">
+                            {row.bars.map((bar) => {
+                              const start = clampDay(bar.hireFrom, y, m, last);
+                              const end = clampDay(bar.hireTo, y, m, last);
+                              if (end < start) return null;
+                              const lane = laneOf.get(bar.id) ?? 0;
+                              const color = barColor(bar, today);
+                              const continuesLeft = bar.hireFrom.slice(0, 7) < month;
+                              const continuesRight = bar.hireTo.slice(0, 7) > month;
+                              const span = end - start + 1;
+                              return (
+                                <Link
+                                  key={bar.id}
+                                  href={docHref(bar.documentType, bar.documentId)}
+                                  className={`hire-cal-bar${bar.status === 'dispatched' ? ' is-out' : ''}${continuesLeft ? ' is-cont-left' : ''}${continuesRight ? ' is-cont-right' : ''}`}
+                                  style={{
+                                    left: `calc(${((start - 1) / last) * 100}% + 3px)`,
+                                    width: `calc(${(span / last) * 100}% - 6px)`,
+                                    top: 6 + lane * 26,
+                                    background: color.bg,
+                                    borderColor: color.border,
+                                    color: color.text,
+                                  }}
+                                  title={`${bar.documentNumber} · ${bar.partyName} · qty ${bar.qty} · ${bar.hireFrom} → ${bar.hireTo} · ${bar.status}`}
+                                >
+                                  <span>
+                                    {bar.qty} · {bar.partyName}
+                                  </span>
+                                </Link>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     );

@@ -71,6 +71,25 @@ export function DocumentLinesEditor({
   }
 
   function pickProduct(p: ProductPick) {
+    if (p.kitComponents && p.kitComponents.length > 0) {
+      onChange([
+        ...lines,
+        ...p.kitComponents.map((c) => ({
+          key: newKey(),
+          productId: c.productId,
+          description: c.name,
+          quantity: String(c.qty),
+          unitPrice: String(c.sellPrice),
+          sku: c.sku,
+          isManual: false,
+        })),
+      ]);
+      pushStatusToast({
+        kind: 'success',
+        message: `Added kit ${p.name} as ${p.kitComponents.length} hire lines`,
+      });
+      return;
+    }
     onChange([
       ...lines,
       {

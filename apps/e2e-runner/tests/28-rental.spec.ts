@@ -10,7 +10,8 @@ test.describe('Rental / event hire @rental', () => {
 
   test('S-0700 rental calendar page loads', async ({ authedPage: page }) => {
     await go(page, '/inventory/calendar');
-    await expect(page.locator('.workspace, .card-body').first()).toBeVisible();
+    await expect(page.locator('.hire-cal, .workspace').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /timeline/i })).toBeVisible();
   });
 
   test('S-0701 dispatch / returns page loads', async ({ authedPage: page }) => {

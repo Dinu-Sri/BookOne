@@ -499,7 +499,10 @@ export async function listRentalCalendar(input: {
     qty: number;
     hireFrom: string;
     hireTo: string;
+    documentId: string;
     documentNumber: string;
+    documentType: string;
+    partyName: string;
     status: string;
   }[];
 }> {
@@ -555,12 +558,16 @@ export async function listRentalCalendar(input: {
         qty: rentalBookingLines.qty,
         hireFrom: rentalBookingLines.hireFrom,
         hireTo: rentalBookingLines.hireTo,
+        documentId: rentalBookingLines.documentId,
         documentNumber: businessDocuments.documentNumber,
+        documentType: businessDocuments.documentType,
+        partyName: parties.name,
         status: rentalBookingLines.status,
       })
       .from(rentalBookingLines)
       .innerJoin(inventoryProducts, eq(inventoryProducts.id, rentalBookingLines.productId))
       .innerJoin(businessDocuments, eq(businessDocuments.id, rentalBookingLines.documentId))
+      .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
       .where(and(...barConditions));
 
     return {
@@ -585,7 +592,10 @@ export async function listRentalCalendar(input: {
         qty: Number(r.qty),
         hireFrom: r.hireFrom,
         hireTo: r.hireTo,
+        documentId: r.documentId,
         documentNumber: r.documentNumber,
+        documentType: r.documentType,
+        partyName: r.partyName ?? 'Customer',
         status: r.status,
       })),
     };

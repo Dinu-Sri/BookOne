@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-09-05 — Hire calendar timeline (pastel bars)
+
+- Default **Timeline** view: one row per hire SKU, days across, pastel bars spanning hire-from → hire-to.
+- Same job keeps the same pastel on every SKU. Overlapping jobs on one SKU stack into lanes. Overdue = peach.
+- Month view uses stacked chips; List keeps the table with a colour swatch. Toggle Timeline / Month / List.
+
 ## 2026-09-05 — Rental Phase 6 + agent-browse contract
 
 - **AGENTS.md** records `pnpm agent:browse`: when to use, flags, JSON steps, credentials, artifacts, production vs local, no-mutate rule. Copilot instructions point at the same contract.

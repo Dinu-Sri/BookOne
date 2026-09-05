@@ -16,7 +16,7 @@ function monthBounds(ym: string) {
 export default async function InventoryCalendarPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ month?: string; productId?: string }> | { month?: string; productId?: string };
+  searchParams?: Promise<{ month?: string; productId?: string; view?: string }> | { month?: string; productId?: string; view?: string };
 }) {
   const sp = (await searchParams) ?? {};
   const now = new Date();
@@ -25,6 +25,7 @@ export default async function InventoryCalendarPage({
     : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const { from, to } = monthBounds(month);
   const productId = sp.productId || null;
+  const view = sp.view === 'month' || sp.view === 'list' ? sp.view : 'timeline';
 
   let tenant;
   let data;
@@ -43,7 +44,14 @@ export default async function InventoryCalendarPage({
 
   return (
     <BookOneShell active="Rental calendar" tenant={tenant}>
-      <RentalCalendar month={month} productId={productId} products={products} events={data.events} bars={data.bars} />
+      <RentalCalendar
+        month={month}
+        productId={productId}
+        view={view}
+        products={products}
+        events={data.events}
+        bars={data.bars}
+      />
     </BookOneShell>
   );
 }

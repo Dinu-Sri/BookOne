@@ -9009,3 +9009,156 @@ a.bih-card:hover {
   color: #64748b;
   text-align: left;
 }
+
+/* Hire calendar — resource timeline + month chips */
+.hire-cal-views { display: flex; gap: 6px; flex-wrap: wrap; }
+.hire-cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.hire-cal-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+.hire-cal-chip-reserved { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+.hire-cal-chip-out { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+.hire-cal-chip-late { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.hire-cal-empty { margin: 0; padding: 28px; color: var(--ink-muted); }
+.hire-cal-scroll { overflow-x: auto; }
+.hire-cal-timeline { min-width: 720px; }
+.hire-cal-head,
+.hire-cal-row {
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  border-bottom: 1px solid var(--line);
+}
+.hire-cal-head { position: sticky; top: 0; z-index: 2; background: var(--surface); }
+.hire-cal-item-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  padding: 8px 10px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.hire-cal-item-col strong { font-size: 13px; line-height: 1.2; }
+.hire-cal-item-col small { font-size: 11px; color: var(--ink-soft); }
+.hire-cal-days,
+.hire-cal-track {
+  display: grid;
+  grid-template-columns: repeat(var(--hire-days, 31), minmax(36px, 1fr));
+  position: relative;
+}
+.hire-cal-dayhead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border-left: 1px solid var(--line);
+}
+.hire-cal-dayhead small { font-size: 10px; font-weight: 600; color: var(--ink-soft); }
+.hire-cal-cell {
+  min-height: 100%;
+  border-left: 1px solid var(--line);
+}
+.hire-cal-dayhead.is-weekend,
+.hire-cal-cell.is-weekend { background: rgba(15, 23, 42, 0.03); }
+.hire-cal-dayhead.is-today,
+.hire-cal-cell.is-today { background: #fff7ed; }
+.hire-cal-row { align-items: stretch; }
+.hire-cal-track { min-height: 44px; }
+.hire-cal-bar {
+  position: absolute;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+}
+.hire-cal-bar.is-out { box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06); }
+.hire-cal-bar.is-cont-left { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+.hire-cal-bar.is-cont-right { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+.hire-cal-month {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.hire-cal-month-dow {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  padding: 4px 6px;
+}
+.hire-cal-month-cell {
+  min-height: 108px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px;
+  background: var(--surface);
+}
+.hire-cal-month-cell.is-pad { background: transparent; border-color: transparent; }
+.hire-cal-month-cell.is-today { box-shadow: inset 0 0 0 2px #fdba74; }
+.hire-cal-month-num { font-size: 12px; font-weight: 700; }
+.hire-cal-month-stack { display: grid; gap: 3px; margin-top: 4px; }
+.hire-cal-month-chip {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.hire-cal-more { font-size: 10px; color: var(--ink-soft); }
+.hire-cal-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid;
+  vertical-align: middle;
+}
+.hire-cal-jobs { display: flex; flex-wrap: wrap; gap: 8px; }
+.hire-cal-job {
+  display: grid;
+  gap: 2px;
+  min-width: 180px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid;
+  text-decoration: none;
+  color: inherit;
+  font-size: 12px;
+}
+.hire-cal-job small { color: var(--ink-soft); }
+@media (max-width: 800px) {
+  .hire-cal-head,
+  .hire-cal-row { grid-template-columns: 120px 1fr; }
+  .hire-cal-item-col { padding: 6px; }
+}

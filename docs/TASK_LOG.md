@@ -4,6 +4,11 @@
 
 ---
 
+## 2026-09-05 — Agent browser (login + click like a person)
+
+- `pnpm agent:browse` runs Playwright Chromium on this machine, logs in from `.local/debug-accounts.json`, and writes screenshots + text snapshots to `.local/agent-browse/<run>/`.
+- Use this for UI verification (hire dispatch, invoices, settings) instead of curl. Session is reused so `/login` is not hammered.
+
 ## 2026-09-04 — Hire invoice timing, extension, return photos
 
 - **Invoice timing:** `rental_events.invoice_timing` (`on_confirm` / `on_dispatch` / `after_return` / `manual`). Sales invoices and POS sales with hire lines are blocked until the configured stage unless a manager ticks timing override. Quotes/orders store the timing without the gate.

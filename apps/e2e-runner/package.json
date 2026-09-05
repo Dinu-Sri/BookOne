@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "agent:browse": "node scripts/agent-browse.mjs",
     "ui-audit:cashbook": "node scripts/ui-audit-cashbook.mjs",
     "demo:bank-recon": "node scripts/e2e-bank-recon-demo.mjs",
     "demo:bank-recon-journey": "node scripts/e2e-bank-recon-journey.mjs",

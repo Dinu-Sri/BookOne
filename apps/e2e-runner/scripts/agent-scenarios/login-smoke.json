@@ -1,0 +1,9 @@
+{
+  "name": "login-smoke",
+  "paths": [
+    "/dashboard",
+    "/inventory/on-rent",
+    "/sales/invoices",
+    "/company/rental"
+  ]
+}

@@ -189,6 +189,26 @@ pnpm dev                       # Start Next.js dev server at http://localhost:30
 
 ---
 
+## Agent UI testing (use this for screens a person uses)
+
+Drive BookOne in a real Chromium on this machine (login, click, type, screenshot). This is how AI assistants verify hire dispatch, invoices, settings, etc. — not curl.
+
+```bash
+pnpm agent:browse
+pnpm agent:browse --path /inventory/on-rent --path /sales/invoices
+pnpm agent:browse --script apps/e2e-runner/scripts/agent-scenarios/login-smoke.json
+pnpm agent:browse --base-url http://localhost:3000 --path /dashboard
+```
+
+- Credentials: gitignored `.local/debug-accounts.json` (or `E2E_EMAIL` / `E2E_PASSWORD`). Never print the password. Never commit `.local/`.
+- Session is reused under `.local/agent-browse/storage-*.json` so we do not hammer `/login`. Pass `--fresh` to force a new login.
+- Artifacts (screenshots + text snapshot) land in `.local/agent-browse/<run>/`. Read `final.png`, `final.md`, and `result.json`.
+- Default target is production (`debug-accounts.json` → `productionUrl`). Use `--base-url http://localhost:3000` only when `pnpm dev` is up.
+
+After any UI change, run `pnpm agent:browse` against the screens you touched before calling the work done.
+
+---
+
 ## Git Workflow
 
 ```bash

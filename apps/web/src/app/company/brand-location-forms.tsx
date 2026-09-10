@@ -256,7 +256,7 @@ function LocationForm({
 function ActionMessage({ state }: { state: CompanyActionState }) {
   if (state.error) return <span className="form-error inline">{state.error}</span>;
   if (state.message) return <span className="entry-result success inline">{state.message}</span>;
-  return <span />;
+  return null;
 }
 
 function SubmitButton({ children, icon }: { children: React.ReactNode; icon: React.ReactNode }) {

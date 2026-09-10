@@ -1942,10 +1942,15 @@ textarea.input {
   background: var(--surface);
 }
 
+.company-inline-form .field-full,
+.company-inline-form .company-form-footer {
+  grid-column: 1 / -1;
+}
+
 .company-form-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   min-height: 38px;
 }
@@ -1954,6 +1959,7 @@ textarea.input {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   margin-left: auto;
 }

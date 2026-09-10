@@ -18,7 +18,7 @@ export default async function CompanyLocationsPage() {
   return (
     <BookOneShell active="Locations" tenant={tenant}>
       <div className="workspace">
-        <CompanyCard title="Locations" subtitle="Branches, warehouses, counters, and offices." action={<MapPin size={18} color="var(--brand)" />}>
+        <CompanyCard title="Locations" subtitle="Branches, warehouses, counters, and offices. Delete is blocked if the location is already in use." action={<MapPin size={18} color="var(--brand)" />}>
           <LocationForms brands={data.brands} locations={data.locations} />
         </CompanyCard>
       </div>

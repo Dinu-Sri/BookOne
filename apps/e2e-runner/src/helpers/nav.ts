@@ -77,6 +77,7 @@ export const TENANT_SMOKE_ROUTES: { path: string; name: string }[] = [
   { path: '/purchase/suppliers', name: 'Suppliers' },
   { path: '/inventory/products', name: 'Products' },
   { path: '/inventory/products/new', name: 'New product' },
+  { path: '/inventory/categories', name: 'Product categories' },
   { path: '/inventory/levels', name: 'Stock levels' },
   { path: '/inventory/ledger', name: 'Stock ledger' },
   { path: '/inventory/transfers', name: 'Transfers' },

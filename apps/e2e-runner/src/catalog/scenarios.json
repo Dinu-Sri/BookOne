@@ -9246,5 +9246,158 @@
       "Save",
       "Reload persists"
     ]
+  },
+  {
+    "id": "S-0699",
+    "title": "Rental settings page loads",
+    "section": "28. Event hire / rental",
+    "priority": "P1",
+    "tags": [
+      "@rental",
+      "@settings"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0700",
+    "title": "Rental calendar page loads",
+    "section": "28. Event hire / rental",
+    "priority": "P1",
+    "tags": [
+      "@rental"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0701",
+    "title": "Dispatch / returns page loads",
+    "section": "28. Event hire / rental",
+    "priority": "P0",
+    "tags": [
+      "@rental",
+      "@inventory"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0702",
+    "title": "Hire docs page is public",
+    "section": "28. Event hire / rental",
+    "priority": "P2",
+    "tags": [
+      "@rental",
+      "@docs",
+      "@public"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0703",
+    "title": "Stock levels fleet filters",
+    "section": "28. Event hire / rental",
+    "priority": "P1",
+    "tags": [
+      "@rental",
+      "@inventory"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0704",
+    "title": "Hire invoice does not COGS",
+    "section": "28. Event hire / rental",
+    "priority": "P0",
+    "tags": [
+      "@rental",
+      "@accounting"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0705",
+    "title": "Return dirty goes to wash then Mark ready",
+    "section": "28. Event hire / rental",
+    "priority": "P1",
+    "tags": [
+      "@rental",
+      "@inventory"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0706",
+    "title": "Delete unused location",
+    "section": "29. Company location delete",
+    "priority": "P0",
+    "tags": [
+      "@company",
+      "@location"
+    ],
+    "steps": [
+      "Company → Locations → add a unique unused location",
+      "Click Delete",
+      "Confirm"
+    ]
+  },
+  {
+    "id": "S-0707",
+    "title": "Block delete when location is in use",
+    "section": "29. Company location delete",
+    "priority": "P0",
+    "tags": [
+      "@company",
+      "@location"
+    ],
+    "steps": [
+      "Create a location",
+      "Post a simple-entry (or other record) against it",
+      "Company → Locations → Delete"
+    ]
+  },
+  {
+    "id": "S-0708",
+    "title": "Product unit shows plain language",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P0",
+    "tags": [
+      "@inventory",
+      "@product"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0709",
+    "title": "Create category from product popup",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P0",
+    "tags": [
+      "@inventory",
+      "@product"
+    ],
+    "steps": [
+      "New product → Category → New",
+      "Save a unique category name"
+    ]
+  },
+  {
+    "id": "S-0710",
+    "title": "Short and long description editors",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P1",
+    "tags": [
+      "@inventory",
+      "@product"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0711",
+    "title": "Categories screen loads",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P1",
+    "tags": [
+      "@inventory"
+    ],
+    "steps": []
   }
 ]

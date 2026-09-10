@@ -36,15 +36,18 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { assertModuleWrite } from '@/lib/module-access';
+import { sanitizeProductHtml } from '@/lib/product-html';
+import { normalizeProductUnit } from '@/lib/product-units';
 
 const productTypeSchema = z.enum(['physical', 'digital', 'service', 'stocked', 'rental']);
 
 const productInputSchema = z.object({
   sku: z.string().min(1).max(80),
   name: z.string().min(1).max(255),
-  description: z.string().max(2000).optional(),
+  description: z.string().max(8000).optional(),
+  longDescription: z.string().max(200000).optional(),
   productType: productTypeSchema.default('physical'),
-  unit: z.string().max(40).default('ea'),
+  unit: z.string().max(40).default('each'),
   unitCost: z.number().min(0).default(0),
   sellPrice: z.number().min(0).default(0),
   openingQty: z.number().default(0),
@@ -75,6 +78,7 @@ export interface ProductRow {
   sku: string;
   name: string;
   description: string | null;
+  longDescription: string | null;
   productType: string;
   unit: string;
   unitCost: number;
@@ -175,6 +179,7 @@ function normalizeType(t: string): 'physical' | 'digital' | 'service' | 'rental'
 
 function revalidateInventory() {
   revalidatePath('/inventory/products');
+  revalidatePath('/inventory/categories');
   revalidatePath('/inventory/levels');
   revalidatePath('/inventory/ledger');
   revalidatePath('/inventory/transfers');
@@ -287,8 +292,9 @@ function mapProduct(
     sku: String(row.sku),
     name: String(row.name),
     description: (row.description as string | null) ?? null,
+    longDescription: (row.longDescription as string | null) ?? null,
     productType: type,
-    unit: String(row.unit ?? 'ea'),
+    unit: String(row.unit ?? 'each'),
     unitCost: Number(row.unitCost ?? 0),
     sellPrice: Number(row.sellPrice ?? 0),
     qtyOnHand: extras.qtyOnHand ?? 0,
@@ -579,8 +585,9 @@ function formToProductInput(formData: FormData): ProductInput {
     sku: String(formData.get('sku') ?? ''),
     name: String(formData.get('name') ?? ''),
     description: String(formData.get('description') ?? ''),
+    longDescription: String(formData.get('longDescription') ?? ''),
     productType: (String(formData.get('productType') ?? 'physical') as ProductInput['productType']) || 'physical',
-    unit: String(formData.get('unit') ?? 'ea'),
+    unit: String(formData.get('unit') ?? 'each'),
     unitCost: Number(String(formData.get('unitCost') ?? '0').replace(/[^0-9.-]/g, '')) || 0,
     sellPrice: Number(String(formData.get('sellPrice') ?? '0').replace(/[^0-9.-]/g, '')) || 0,
     openingQty: Number(String(formData.get('openingQty') ?? '0').replace(/[^0-9.-]/g, '')) || 0,
@@ -626,9 +633,10 @@ function toProductValues(tenantId: string, parsed: ProductInput) {
     tenantId,
     sku: parsed.sku.trim(),
     name: parsed.name.trim(),
-    description: clean(parsed.description),
+    description: sanitizeProductHtml(parsed.description) || null,
+    longDescription: sanitizeProductHtml(parsed.longDescription) || null,
     productType: type,
-    unit: parsed.unit || 'ea',
+    unit: normalizeProductUnit(parsed.unit),
     unitCost: parsed.unitCost.toFixed(2),
     sellPrice: parsed.sellPrice.toFixed(2),
     category: clean(parsed.category),
@@ -725,7 +733,7 @@ export async function createQuickProduct(input: {
             name,
             description: name,
             productType: type,
-            unit: 'ea',
+            unit: 'each',
             unitCost,
             sellPrice,
             openingQty: 0,

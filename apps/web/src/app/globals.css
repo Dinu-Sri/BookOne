@@ -1950,6 +1950,14 @@ textarea.input {
   min-height: 38px;
 }
 
+.company-form-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .mini-actions {
   display: flex;
   flex-wrap: wrap;
@@ -3373,6 +3381,75 @@ textarea.input {
   color: var(--brand-ink);
   background: var(--brand-soft);
   aspect-ratio: 1 / 1;
+}
+
+.rich-text-field {
+  display: grid;
+  gap: 6px;
+}
+
+.rich-text-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rich-text-expand {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.rich-text-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rich-text-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.rich-text-toolbar button:hover {
+  border-color: var(--line-strong);
+}
+
+.rich-text-surface {
+  min-height: 88px;
+  max-height: 220px;
+  overflow: auto;
+  line-height: 1.45;
+}
+
+.rich-text-surface:empty::before {
+  content: attr(data-placeholder);
+  color: var(--ink-muted);
+}
+
+.rich-text-field.is-compact .rich-text-surface {
+  min-height: 72px;
+  max-height: 112px;
+}
+
+.rich-text-modal {
+  width: min(920px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.rich-text-modal .rich-text-surface {
+  min-height: 280px;
+  max-height: min(52vh, 420px);
 }
 
 .product-dropzone {

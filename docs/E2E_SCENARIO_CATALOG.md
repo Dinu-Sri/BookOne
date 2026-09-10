@@ -2,7 +2,7 @@
 
 > **Purpose:** Exhaustive day-to-day and edge-case scenarios for Playwright automation.
 > **Scope:** Tenant ERP + super-admin Control Room + public surfaces.
-> **Status:** **698 designed** scenarios. A growing subset is automated under `apps/e2e-runner/tests/` with catalog IDs `S-NNNN`. Track coverage: `docs/E2E_COVERAGE.md` (run `pnpm --dir apps/e2e-runner coverage`).
+> **Status:** **711 designed** scenarios. A growing subset is automated under `apps/e2e-runner/tests/` with catalog IDs `S-NNNN`. Track coverage: `docs/E2E_COVERAGE.md` (run `pnpm --dir apps/e2e-runner coverage`).
 > **Depth goal:** Full deep coverage (mutate/balance asserts for money paths; load-only for pure route smoke). Run from `/e2e` against any instance (URL + credentials).
 > **Source:** Routes, server actions, settings, and validations in the BookOne monorepo.
 
@@ -6143,6 +6143,64 @@
 - **Tags:** `@rental`, `@inventory`
 - **Steps:** Dispatch, return dirty or good→wash, Mark ready
 - **Expect:** Qty in Wash, then warehouse after Mark ready.
+
+---
+
+## 29. Company location delete
+
+### S-0706 — Delete unused location
+
+- **Priority:** P0
+- **Tags:** `@company`, `@location`
+- **Steps:**
+  1. Company → Locations → add a unique unused location
+  2. Click Delete
+  3. Confirm
+- **Expect:** Location is removed from the list. Soft-void only; no hard delete.
+
+### S-0707 — Block delete when location is in use
+
+- **Priority:** P0
+- **Tags:** `@company`, `@location`
+- **Steps:**
+  1. Create a location
+  2. Post a simple-entry (or other record) against it
+  3. Company → Locations → Delete
+- **Expect:** Delete is blocked with a clear in-use reason (documents, stock, journals, POS, hire). Location remains.
+
+---
+
+## 30. Product identity (units, categories, descriptions)
+
+### S-0708 — Product unit shows plain language
+
+- **Priority:** P0
+- **Tags:** `@inventory`, `@product`
+- **Steps:** Open `/inventory/products/new`
+- **Expect:** Sold as dropdown shows “Each (one item)”, not `ea`.
+
+### S-0709 — Create category from product popup
+
+- **Priority:** P0
+- **Tags:** `@inventory`, `@product`
+- **Steps:**
+  1. New product → Category → New
+  2. Save a unique category name
+- **Expect:** Category appears in the product dropdown.
+
+### S-0710 — Short and long description editors
+
+- **Priority:** P1
+- **Tags:** `@inventory`, `@product`
+- **Steps:** Open new product Identity tab
+- **Expect:** Short description and long description rich-text fields, each with Edit in popup.
+
+### S-0711 — Categories screen loads
+
+- **Priority:** P1
+- **Tags:** `@inventory`
+- **Steps:** Open `/inventory/categories`
+- **Expect:** Add category form and list.
 
 ---
 

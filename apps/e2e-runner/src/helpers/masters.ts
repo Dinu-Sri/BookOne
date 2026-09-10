@@ -86,6 +86,22 @@ export async function ensureLocation(page: Page, name?: string, brandLabel?: str
   return locName;
 }
 
+export async function locationEditForm(page: Page, name: string) {
+  const forms = page.locator('form.company-inline-form.is-edit');
+  const count = await forms.count();
+  for (let i = 0; i < count; i++) {
+    const form = forms.nth(i);
+    const value = await form.locator('input[name="name"]').inputValue().catch(() => '');
+    if (value === name) return form;
+  }
+  throw new Error(`Location edit form not found: ${name}`);
+}
+
+export async function clickDeleteLocation(page: Page, name: string) {
+  const form = await locationEditForm(page, name);
+  await form.getByTestId('delete-location').click();
+}
+
 /** After create, party lists are paginated (10) — always filter by q. */
 async function assertPartyOnList(page: Page, role: 'customer' | 'vendor', partyName: string) {
   const base = role === 'customer' ? '/parties/customers' : '/parties/vendors';

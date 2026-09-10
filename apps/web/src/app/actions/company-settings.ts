@@ -9,17 +9,28 @@ import {
   accounts,
   auditLog,
   brands,
+  businessDocuments,
   companyProfiles,
   db,
   eq,
   and,
   isNull,
+  or,
+  sql,
   asc,
   financialYears,
+  inventoryMovements,
+  inventoryStockDocs,
+  inventoryStockLevels,
+  journalEntries,
+  journalLines,
   locations,
+  posRegisters,
+  rentalBookingLines,
   taxProfiles,
   tenantMemberships,
   tenants,
+  transactions,
   users,
   withTenantContext,
 } from '@bookone/db';
@@ -550,6 +561,189 @@ export async function saveLocationForm(_state: CompanyActionState = emptyActionS
   revalidatePath('/company/locations');
   revalidatePath('/');
   return { ok: true, message: id ? 'Location updated.' : 'Location added.' };
+}
+
+function usageReason(label: string, total: number, sample?: string | null): string | null {
+  const n = Number(total);
+  if (n <= 0) return null;
+  return `${label}: ${n}` + (sample ? ` (e.g. ${sample})` : '') + '.';
+}
+
+/** Block delete when any live operational record still points at this location. */
+async function assertLocationDeletable(tenantId: string, locationId: string): Promise<{ ok: boolean; reasons: string[] }> {
+  const reasons: string[] = [];
+
+  const [docs] = await db()
+    .select({
+      total: sql<number>`count(*)`,
+      sample: sql<string | null>`min(${businessDocuments.documentNumber})`,
+    })
+    .from(businessDocuments)
+    .where(
+      and(
+        eq(businessDocuments.tenantId, tenantId),
+        eq(businessDocuments.locationId, locationId),
+        isNull(businessDocuments.voidedAt),
+      ),
+    );
+  const docReason = usageReason('Used on commercial document(s)', Number(docs?.total ?? 0), docs?.sample);
+  if (docReason) reasons.push(docReason);
+
+  const [txs] = await db()
+    .select({
+      total: sql<number>`count(*)`,
+      sample: sql<string | null>`min(${transactions.description})`,
+    })
+    .from(transactions)
+    .where(
+      and(eq(transactions.tenantId, tenantId), eq(transactions.locationId, locationId), isNull(transactions.voidedAt)),
+    );
+  const txReason = usageReason('Used on simple-entry / journal transaction(s)', Number(txs?.total ?? 0), txs?.sample);
+  if (txReason) reasons.push(txReason);
+
+  const [journals] = await db()
+    .select({ total: sql<number>`count(*)` })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.tenantId, tenantId),
+        eq(journalEntries.locationId, locationId),
+        isNull(journalEntries.voidedAt),
+      ),
+    );
+  const journalReason = usageReason('Used on journal entries', Number(journals?.total ?? 0));
+  if (journalReason) reasons.push(journalReason);
+
+  const [lines] = await db()
+    .select({ total: sql<number>`count(*)` })
+    .from(journalLines)
+    .where(
+      and(eq(journalLines.tenantId, tenantId), eq(journalLines.locationId, locationId), isNull(journalLines.voidedAt)),
+    );
+  const lineReason = usageReason('Used on journal lines', Number(lines?.total ?? 0));
+  if (lineReason) reasons.push(lineReason);
+
+  const [stock] = await db()
+    .select({
+      qty: sql<string>`coalesce(sum(abs(${inventoryStockLevels.qtyOnHand}::numeric)), 0)`,
+    })
+    .from(inventoryStockLevels)
+    .where(and(eq(inventoryStockLevels.tenantId, tenantId), eq(inventoryStockLevels.locationId, locationId)));
+  const qtyOnHand = Number(stock?.qty ?? 0);
+  if (Math.abs(qtyOnHand) > 0.0001) {
+    reasons.push(`Stock on hand is ${qtyOnHand}. Transfer or adjust to zero first.`);
+  }
+
+  const [movements] = await db()
+    .select({ total: sql<number>`count(*)` })
+    .from(inventoryMovements)
+    .where(
+      and(
+        eq(inventoryMovements.tenantId, tenantId),
+        or(eq(inventoryMovements.fromLocationId, locationId), eq(inventoryMovements.toLocationId, locationId)),
+      ),
+    );
+  const movReason = usageReason('Used on stock movement(s)', Number(movements?.total ?? 0));
+  if (movReason) reasons.push(movReason);
+
+  const [stockDocs] = await db()
+    .select({
+      total: sql<number>`count(*)`,
+      sample: sql<string | null>`min(${inventoryStockDocs.documentNumber})`,
+    })
+    .from(inventoryStockDocs)
+    .where(
+      and(
+        eq(inventoryStockDocs.tenantId, tenantId),
+        or(eq(inventoryStockDocs.fromLocationId, locationId), eq(inventoryStockDocs.toLocationId, locationId)),
+        isNull(inventoryStockDocs.voidedAt),
+      ),
+    );
+  const stockDocReason = usageReason(
+    'Used on stock transfer/adjustment document(s)',
+    Number(stockDocs?.total ?? 0),
+    stockDocs?.sample,
+  );
+  if (stockDocReason) reasons.push(stockDocReason);
+
+  const [registers] = await db()
+    .select({
+      total: sql<number>`count(*)`,
+      sample: sql<string | null>`min(${posRegisters.name})`,
+    })
+    .from(posRegisters)
+    .where(
+      and(eq(posRegisters.tenantId, tenantId), eq(posRegisters.locationId, locationId), isNull(posRegisters.voidedAt)),
+    );
+  const registerReason = usageReason('Linked to POS register(s)', Number(registers?.total ?? 0), registers?.sample);
+  if (registerReason) reasons.push(registerReason);
+
+  const [bookings] = await db()
+    .select({ total: sql<number>`count(*)` })
+    .from(rentalBookingLines)
+    .where(
+      and(
+        eq(rentalBookingLines.tenantId, tenantId),
+        eq(rentalBookingLines.locationId, locationId),
+        isNull(rentalBookingLines.voidedAt),
+        sql`${rentalBookingLines.status} <> 'cancelled'`,
+      ),
+    );
+  const bookingReason = usageReason('Used on hire booking line(s)', Number(bookings?.total ?? 0));
+  if (bookingReason) reasons.push(bookingReason);
+
+  return { ok: reasons.length === 0, reasons };
+}
+
+export async function getLocationDeleteBlockers(id: string): Promise<{ ok: boolean; reasons: string[] }> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const [existing] = await db()
+      .select({ id: locations.id })
+      .from(locations)
+      .where(and(eq(locations.tenantId, user.tenantId), eq(locations.id, id), isNull(locations.voidedAt)))
+      .limit(1);
+    if (!existing) return { ok: false, reasons: ['Location not found.'] };
+    return assertLocationDeletable(user.tenantId, id);
+  });
+}
+
+export async function deleteLocationFromForm(formData: FormData): Promise<void> {
+  const id = String(formData.get('id') ?? '').trim();
+  if (!id) throw new Error('Location not found.');
+
+  const user = await requireTenantContext();
+  await withTenantContext(user.tenantId, async () => {
+    const [existing] = await db()
+      .select({ id: locations.id, name: locations.name })
+      .from(locations)
+      .where(and(eq(locations.tenantId, user.tenantId), eq(locations.id, id), isNull(locations.voidedAt)))
+      .limit(1);
+    if (!existing) throw new Error('Location not found.');
+
+    const check = await assertLocationDeletable(user.tenantId, id);
+    if (!check.ok) {
+      throw new Error(`Cannot delete: ${check.reasons.join(' ')}`);
+    }
+
+    await db()
+      .update(locations)
+      .set({ voidedAt: new Date(), status: 'inactive', updatedAt: new Date() })
+      .where(eq(locations.id, id));
+
+    await db().insert(auditLog).values({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'DELETE',
+      tableName: 'locations',
+      recordId: id,
+      oldValues: { name: existing.name },
+      notes: 'Soft-voided location (not in use).',
+    });
+  });
+
+  revalidatePath('/company/locations');
+  revalidatePath('/');
 }
 
 export async function createCompany(formData: FormData): Promise<void> {

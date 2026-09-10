@@ -274,6 +274,40 @@ test.describe('Parties & products catalog §6 @parties @inventory @product @p0',
     await expect(page.getByText(physicalSku)).toBeVisible();
   });
 
+  test('S-0708 Product unit shows plain language', async ({ authedPage: page }) => {
+    await go(page, '/inventory/products/new');
+    const unit = page.locator('select[name="unit"]').first();
+    await expect(unit).toBeVisible();
+    const text = await unit.locator('option:checked').textContent();
+    expect(text ?? '').toMatch(/each/i);
+    expect(text ?? '').not.toMatch(/^\[?ea\]?$/i);
+  });
+
+  test('S-0709 Create category from product popup', async ({ authedPage: page }) => {
+    const name = `E2E Cat ${seed()}`.slice(0, 40);
+    await go(page, '/inventory/products/new');
+    await page.locator('.field').filter({ hasText: /^Category$/ }).getByRole('button', { name: /^new$/i }).click();
+    const dialog = page.getByRole('dialog', { name: /new category/i });
+    await expect(dialog).toBeVisible();
+    await dialog.locator('input').fill(name);
+    await dialog.getByRole('button', { name: /save category/i }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    await expect(page.locator('select[name="category"]')).toHaveValue(name);
+  });
+
+  test('S-0710 Short and long description editors', async ({ authedPage: page }) => {
+    await go(page, '/inventory/products/new');
+    await expect(page.getByText(/short description/i).first()).toBeVisible();
+    await expect(page.getByText(/long description/i).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /edit in popup/i }).first()).toBeVisible();
+  });
+
+  test('S-0711 Categories screen loads', async ({ authedPage: page }) => {
+    await go(page, '/inventory/categories');
+    await expect(page.getByRole('button', { name: /add category/i })).toBeVisible();
+    await expectAuthedShell(page);
+  });
+
   test('search customer', async ({ authedPage: page }) => {
     test.skip(!customerName, 'no customer');
     await go(page, '/parties/customers');

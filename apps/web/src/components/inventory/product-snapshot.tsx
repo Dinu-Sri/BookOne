@@ -5,6 +5,7 @@ import { Package, X } from 'lucide-react';
 import type { ProductRow } from '@/app/actions/inventory';
 import { ProductImageHover } from '@/components/inventory/product-image-hover';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
+import { productUnitLabel } from '@/lib/product-units';
 import { Button } from '@/components/ui/bookone-ui';
 
 export function ProductSnapshotDialog({ product, onClose }: { product: ProductRow; onClose: () => void }) {
@@ -60,8 +61,8 @@ export function ProductSnapshotDialog({ product, onClose }: { product: ProductRo
         ) : null}
         <div className="party-snapshot-grid">
           <div className="party-snapshot-item">
-            <div className="party-snapshot-item-label">Unit</div>
-            <p>{product.unit}</p>
+            <div className="party-snapshot-item-label">Sold as</div>
+            <p>{productUnitLabel(product.unit)}</p>
           </div>
           <div className="party-snapshot-item">
             <div className="party-snapshot-item-label">Category</div>

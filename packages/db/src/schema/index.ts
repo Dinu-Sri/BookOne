@@ -37,6 +37,7 @@ export {
 } from './company-settings';
 export {
   inventoryProducts,
+  inventoryProductCategories,
   inventoryStockLevels,
   inventoryStockDocs,
   inventoryStockDocLines,

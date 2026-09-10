@@ -1,9 +1,15 @@
 import { test, expect, seed } from '../src/fixtures';
-import { ensureBrand, ensureLocation, expectInlineMasterName } from '../src/helpers/masters';
+import {
+  clickDeleteLocation,
+  ensureBrand,
+  ensureLocation,
+  expectInlineMasterName,
+} from '../src/helpers/masters';
 import { go } from '../src/helpers/nav';
 import { clickPrimary, fillBrandLocationIfPresent } from '../src/helpers/forms';
 import { expectAuthedShell } from '../src/helpers/assert';
 import { saveAndReloadTextField } from '../src/helpers/settings';
+import { simpleEntry } from '../src/helpers/documents';
 
 /**
  * Catalog §4 — Company masters (S-0050…S-0079)
@@ -290,6 +296,34 @@ test.describe('Company masters catalog §4 @company @brand @location @p0', () =>
     await go(page, '/');
     await fillBrandLocationIfPresent(page);
     await expectAuthedShell(page);
+  });
+
+  test('S-0706 Delete unused location', async ({ authedPage: page }) => {
+    const locName = await ensureLocation(page, `E2E Loc Del ${seed()}`);
+    await go(page, '/company/locations');
+    await clickDeleteLocation(page, locName);
+    const confirm = page.getByRole('dialog', { name: /delete location/i });
+    await expect(confirm).toBeVisible({ timeout: 15_000 });
+    await confirm.getByRole('button', { name: /^delete$/i }).click();
+    await expect(confirm).toBeHidden({ timeout: 15_000 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const values = await page
+      .locator('form.company-inline-form input[name="name"]')
+      .evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+    expect(values.some((v) => v === locName)).toBe(false);
+  });
+
+  test('S-0707 Block delete when location is in use', async ({ authedPage: page }) => {
+    const locName = await ensureLocation(page, `E2E Loc Used ${seed()}`);
+    await simpleEntry(page, { mode: 'money_in', amount: '10', locationName: locName });
+    await go(page, '/company/locations');
+    await clickDeleteLocation(page, locName);
+    const blocked = page.getByRole('dialog', { name: /cannot delete/i });
+    await expect(blocked).toBeVisible({ timeout: 15_000 });
+    await expect(blocked).toContainText(/in use|used on|stock|register|document|transaction/i);
+    await blocked.getByRole('button', { name: /ok|close/i }).first().click();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expectInlineMasterName(page, locName);
   });
 
   test('S-sales settings and POS registers (extra)', async ({ authedPage: page }) => {

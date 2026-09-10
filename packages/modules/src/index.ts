@@ -52,6 +52,7 @@ export const MODULES: ModuleDefinition[] = [
     description: 'Products, stock levels, ledger, transfers, and adjustments',
     features: [
       { id: 'products', label: 'Products', href: '/inventory/products' },
+      { id: 'categories', label: 'Categories', href: '/inventory/categories' },
       { id: 'levels', label: 'Stock Levels', href: '/inventory/levels' },
       { id: 'ledger', label: 'Stock Ledger', href: '/inventory/ledger' },
       { id: 'transfers', label: 'Stock Transfers', href: '/inventory/transfers' },

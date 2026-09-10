@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, numeric, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, numeric, text, integer, uniqueIndex } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { users } from './users';
 import { locations } from './company-settings';
@@ -17,9 +17,12 @@ export const inventoryProducts = pgTable('inventory_products', {
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
   sku: varchar('sku', { length: 80 }).notNull(),
   name: varchar('name', { length: 255 }).notNull(),
+  /** Short / card HTML — maps to WordPress short description later. */
   description: text('description'),
+  /** Full HTML — maps to WordPress long description later. */
+  longDescription: text('long_description'),
   productType: varchar('product_type', { length: 20 }).notNull().default('physical'),
-  unit: varchar('unit', { length: 40 }).notNull().default('ea'),
+  unit: varchar('unit', { length: 40 }).notNull().default('each'),
   unitCost: numeric('unit_cost', { precision: 18, scale: 2 }).notNull().default('0'),
   sellPrice: numeric('sell_price', { precision: 18, scale: 2 }).notNull().default('0'),
   revenueAccountCode: varchar('revenue_account_code', { length: 20 }).notNull().default('4000'),
@@ -46,6 +49,18 @@ export const inventoryProducts = pgTable('inventory_products', {
   /** 1 = hire units identified by serial (tents, generators) */
   tracksSerials: varchar('tracks_serials', { length: 1 }).notNull().default('0'),
   isActive: varchar('is_active', { length: 1 }).notNull().default('1'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+/** Tenant product categories (POS filters + product form picker). */
+export const inventoryProductCategories = pgTable('inventory_product_categories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  name: varchar('name', { length: 120 }).notNull(),
+  slug: varchar('slug', { length: 80 }),
+  sortOrder: integer('sort_order').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),

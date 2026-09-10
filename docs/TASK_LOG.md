@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-09-10 — Product units, categories, rich descriptions
+
+- Product form **Sold as** dropdown uses plain labels (Each, Box, Pack, Kilogram…) instead of `ea`.
+- Product **categories** master (`inventory_product_categories`) with `/inventory/categories` screen. Create from the product form via popup; delete blocked if products still use the name.
+- **Short description** + **long description** rich-text (HTML, WordPress-ready). Compact on the Identity tab; **Edit in popup** for more space.
+- Additive migration `029_product_categories_descriptions.sql`.
+- E2E: S-0708…S-0711.
+
+---
+
+## 2026-09-10 — Location delete with in-use guard
+
+- Company → Locations now has **Delete** on each saved location.
+- Soft-void only (`voided_at` + inactive). Never hard-delete.
+- Server re-checks before void: commercial docs, simple-entry transactions, journal entries/lines, stock on hand, stock movements, stock transfer/adjustment docs, POS registers, hire booking lines.
+- If anything is linked, UI shows **Cannot delete** with the reasons. Unused locations can be removed after confirm.
+- E2E: S-0706 (unused delete) · S-0707 (in-use blocked).
+
+---
+
 ## 2026-09-05 — Garden kit live + serials v2 + calendar span (grid)
 
 - Sample kit **GARDEN-SET** on SL TAX SOLUTION: 80 chairs + 10 tables + 1 tent, hire rate 35,000.

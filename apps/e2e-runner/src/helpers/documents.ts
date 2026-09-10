@@ -130,7 +130,13 @@ export type SimpleEntryMode = 'money_out' | 'money_in' | 'transfer';
 /** Post a Simple Entry on `/` with optional mode strip. */
 export async function simpleEntry(
   page: Page,
-  opts: { mode?: SimpleEntryMode; amount?: string; party?: string; skipDimensions?: boolean } = {},
+  opts: {
+    mode?: SimpleEntryMode;
+    amount?: string;
+    party?: string;
+    skipDimensions?: boolean;
+    locationName?: string;
+  } = {},
 ) {
   const amount = opts.amount ?? '100';
   await go(page, '/');
@@ -150,6 +156,29 @@ export async function simpleEntry(
   }
   if (!opts.skipDimensions) {
     await fillBrandLocationIfPresent(page);
+  }
+  if (opts.locationName) {
+    const named = page.locator('select[name="locationId"], select[name="location"]').first();
+    const labeled = page
+      .locator('.field')
+      .filter({ has: page.getByText(/^Location$/i) })
+      .locator('select')
+      .first();
+    const loc = (await named.isVisible().catch(() => false)) ? named : labeled;
+    if (await loc.isVisible().catch(() => false)) {
+      const needle = opts.locationName.slice(0, 12);
+      await loc.selectOption({ label: new RegExp(needle, 'i') }).catch(async () => {
+        const options = loc.locator('option');
+        const count = await options.count();
+        for (let i = 0; i < count; i++) {
+          const label = (await options.nth(i).textContent())?.trim() ?? '';
+          if (label.includes(needle)) {
+            await loc.selectOption({ index: i });
+            break;
+          }
+        }
+      });
+    }
   }
   const partyInput = page.locator('.entry-form input.large, .entry-form input, input[name="partyName"]').first();
   if (await partyInput.isVisible().catch(() => false) && opts.party) {

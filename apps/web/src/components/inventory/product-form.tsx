@@ -1,10 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { ImagePlus, Trash2 } from 'lucide-react';
+import { ImagePlus, Plus, Trash2 } from 'lucide-react';
 import { useRef, useState, type DragEvent } from 'react';
 import { createProductFromForm, updateProductFromForm, type ProductRow } from '@/app/actions/inventory';
+import { createProductCategory, type ProductCategoryRow } from '@/app/actions/product-categories';
 import { Button } from '@/components/ui/bookone-ui';
+import { RichTextEditor, RichTextPopup } from '@/components/ui/rich-text-editor';
+import { normalizeProductUnit, productUnitOptions } from '@/lib/product-units';
 
 const TABS = [
   { id: 'identity', label: 'Identity' },
@@ -21,10 +24,12 @@ export function ProductForm({
   mode,
   product,
   rentalCatalog = [],
+  categories = [],
 }: {
   mode: 'create' | 'edit';
   product?: ProductRow | null;
   rentalCatalog?: { id: string; sku: string; name: string }[];
+  categories?: ProductCategoryRow[];
 }) {
   const action = mode === 'edit' ? updateProductFromForm : createProductFromForm;
   const [tab, setTab] = useState<TabId>('identity');
@@ -35,7 +40,17 @@ export function ProductForm({
   const [kitRows, setKitRows] = useState<{ productId: string; qty: string }[]>(
     (product?.kitComponents ?? []).map((c) => ({ productId: c.productId, qty: String(c.qty) })),
   );
+  const [categoryList, setCategoryList] = useState(categories);
+  const [category, setCategory] = useState(product?.category ?? '');
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState('');
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const [shortHtml, setShortHtml] = useState(product?.description ?? '');
+  const [longHtml, setLongHtml] = useState(product?.longDescription ?? '');
+  const [textPopup, setTextPopup] = useState<'short' | 'long' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const unitOptions = productUnitOptions(product?.unit);
   const isPhysical = productType === 'physical' || productType === 'stocked';
   const isRental = productType === 'rental';
   const tracksQty = isPhysical || isRental;
@@ -67,6 +82,32 @@ export function ProductForm({
     if (fileRef.current) fileRef.current.value = '';
     setPreview(product?.imageUrl ?? null);
     setFileName(null);
+  }
+
+  async function saveNewCategory() {
+    setCategoryBusy(true);
+    setCategoryError('');
+    try {
+      const result = await createProductCategory(categoryName);
+      if (!result.ok || !result.name) {
+        setCategoryError(result.error ?? 'Could not save category.');
+        return;
+      }
+      setCategoryList((rows) =>
+        rows.some((r) => r.name.toLowerCase() === result.name!.toLowerCase())
+          ? rows
+          : [...rows, { id: `new-${result.name}`, name: result.name, productCount: 0 }].sort((a, b) =>
+              a.name.localeCompare(b.name),
+            ),
+      );
+      setCategory(result.name);
+      setCategoryName('');
+      setCategoryOpen(false);
+    } catch (error) {
+      setCategoryError(error instanceof Error ? error.message : 'Could not save category.');
+    } finally {
+      setCategoryBusy(false);
+    }
   }
 
   return (
@@ -191,12 +232,44 @@ export function ProductForm({
               <input className="input" name="name" required defaultValue={product?.name ?? ''} />
             </div>
             <div className="field">
-              <label>Unit</label>
-              <input className="input" name="unit" defaultValue={product?.unit ?? 'ea'} />
+              <label>Sold as</label>
+              <select className="input" name="unit" defaultValue={normalizeProductUnit(product?.unit ?? 'each')}>
+                {unitOptions.map((unit) => (
+                  <option value={unit.value} key={unit.value}>
+                    {unit.label}
+                  </option>
+                ))}
+              </select>
+              <p className="party-hint">How you count this item when selling or buying.</p>
             </div>
             <div className="field">
               <label>Category</label>
-              <input className="input" name="category" defaultValue={product?.category ?? ''} />
+              <div className="cluster" style={{ gap: 8 }}>
+                <select
+                  className="input"
+                  name="category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  style={{ flex: 1 }}
+                >
+                  <option value="">No category</option>
+                  {categoryList.map((row) => (
+                    <option value={row.name} key={row.id}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="secondary" type="button" onClick={() => setCategoryOpen(true)}>
+                  <Plus size={15} />
+                  New
+                </Button>
+              </div>
+              <p className="party-hint">
+                Group products for POS and lists.{' '}
+                <Link href="/inventory/categories" style={{ fontWeight: 700 }}>
+                  Manage categories
+                </Link>
+              </p>
             </div>
             <div className="field">
               <label>Barcode</label>
@@ -220,10 +293,26 @@ export function ProductForm({
                 Purchasable
               </label>
             </div>
-            <div className="field field-full">
-              <label>Description</label>
-              <input className="input" name="description" defaultValue={product?.description ?? ''} />
-            </div>
+            <RichTextEditor
+              label="Short description"
+              hint="One or two lines for lists, POS, and later a website product card."
+              name="description"
+              value={shortHtml}
+              onChange={setShortHtml}
+              compact
+              placeholder="A short summary customers will see first."
+              onOpenPopup={() => setTextPopup('short')}
+            />
+            <RichTextEditor
+              label="Long description"
+              hint="Full details, features, and care notes. Later this can sync to a website product page."
+              name="longDescription"
+              value={longHtml}
+              onChange={setLongHtml}
+              compact
+              placeholder="Full product story, packing list, or specs."
+              onOpenPopup={() => setTextPopup('long')}
+            />
           </div>
         </div>
 
@@ -460,6 +549,65 @@ export function ProductForm({
           </Button>
         </div>
       </form>
+
+      {categoryOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setCategoryOpen(false)}>
+          <div
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-category-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="new-category-title" className="modal-title">
+              New category
+            </h2>
+            <p className="modal-message">Give this group a name people will recognise (for example Chairs, Lighting, Food).</p>
+            <div className="field">
+              <label>Category name</label>
+              <input
+                className="input"
+                value={categoryName}
+                onChange={(e) => setCategoryName(e.target.value)}
+                placeholder="e.g. Garden furniture"
+                autoFocus
+              />
+            </div>
+            {categoryError ? <p className="form-error inline">{categoryError}</p> : null}
+            <div className="modal-actions">
+              <Button variant="secondary" type="button" onClick={() => setCategoryOpen(false)} disabled={categoryBusy}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="button" onClick={saveNewCategory} disabled={categoryBusy}>
+                {categoryBusy ? 'Saving…' : 'Save category'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <RichTextPopup
+        open={textPopup === 'short'}
+        title="Short description"
+        hint="Keep this brief. It is the website-style short description."
+        value={shortHtml}
+        onCancel={() => setTextPopup(null)}
+        onSave={(html) => {
+          setShortHtml(html);
+          setTextPopup(null);
+        }}
+      />
+      <RichTextPopup
+        open={textPopup === 'long'}
+        title="Long description"
+        hint="Full product page text. Formatting is saved as HTML for a later website sync."
+        value={longHtml}
+        onCancel={() => setTextPopup(null)}
+        onSave={(html) => {
+          setLongHtml(html);
+          setTextPopup(null);
+        }}
+      />
     </div>
   );
 }

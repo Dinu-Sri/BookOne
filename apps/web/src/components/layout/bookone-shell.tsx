@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   ShieldCheck,
   ShoppingCart,
+  Tags,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -133,6 +134,7 @@ const navSuites: NavSuite[] = [
     icon: Package,
     items: [
       { label: 'Products', icon: Package, href: '/inventory/products' },
+      { label: 'Categories', icon: Tags, href: '/inventory/categories' },
       { label: 'Stock Levels', icon: Landmark, href: '/inventory/levels' },
       { label: 'Low Stock', icon: SlidersHorizontal, href: '/inventory/levels?low=1' },
       { label: 'Stock Ledger', icon: BookOpenCheck, href: '/inventory/ledger' },

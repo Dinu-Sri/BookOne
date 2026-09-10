@@ -292,7 +292,7 @@ test.describe('Parties & products catalog §6 @parties @inventory @product @p0',
     await dialog.locator('input').fill(name);
     await dialog.getByRole('button', { name: /save category/i }).click();
     await expect(dialog).toBeHidden({ timeout: 15_000 });
-    await expect(page.locator('select[name="category"]')).toHaveValue(name);
+    await expect(page.locator('select[name="categoryId"] option:checked')).toContainText(name);
   });
 
   test('S-0710 Short and long description editors', async ({ authedPage: page }) => {
@@ -306,6 +306,13 @@ test.describe('Parties & products catalog §6 @parties @inventory @product @p0',
     await go(page, '/inventory/categories');
     await expect(page.getByRole('button', { name: /add category/i })).toBeVisible();
     await expectAuthedShell(page);
+  });
+
+  test('S-0712 Category parent brand location fields', async ({ authedPage: page }) => {
+    await go(page, '/inventory/categories');
+    await expect(page.locator('select[name="parentId"]').first()).toBeVisible();
+    await expect(page.locator('select[name="brandId"]').first()).toBeVisible();
+    await expect(page.locator('select[name="locationId"]').first()).toBeVisible();
   });
 
   test('search customer', async ({ authedPage: page }) => {

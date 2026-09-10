@@ -22,6 +22,7 @@ import {
   sql,
   or,
   inventoryProducts,
+  inventoryProductCategories,
   inventoryStockLevels,
   rentalKitComponents,
   rentalSerials,
@@ -52,6 +53,7 @@ const productInputSchema = z.object({
   sellPrice: z.number().min(0).default(0),
   openingQty: z.number().default(0),
   category: z.string().max(120).optional(),
+  categoryId: z.string().uuid().optional().nullable(),
   barcode: z.string().max(80).optional(),
   sellable: z.boolean().default(true),
   purchasable: z.boolean().default(true),
@@ -86,6 +88,7 @@ export interface ProductRow {
   qtyOnHand: number;
   isActive: string;
   category: string | null;
+  categoryId: string | null;
   barcode: string | null;
   sellable: boolean;
   purchasable: boolean;
@@ -300,6 +303,7 @@ function mapProduct(
     qtyOnHand: extras.qtyOnHand ?? 0,
     isActive: String(row.isActive ?? '1'),
     category: (row.category as string | null) ?? null,
+    categoryId: (row.categoryId as string | null) ?? null,
     barcode: (row.barcode as string | null) ?? null,
     sellable: row.sellable !== '0' && row.sellable !== false,
     purchasable: row.purchasable !== '0' && row.purchasable !== false,
@@ -580,6 +584,45 @@ export async function listPhysicalProductOptions(): Promise<
   }));
 }
 
+async function applyCategory(tenantId: string, parsed: ProductInput): Promise<void> {
+  if (parsed.categoryId) {
+    const [row] = await db()
+      .select({ id: inventoryProductCategories.id, name: inventoryProductCategories.name })
+      .from(inventoryProductCategories)
+      .where(
+        and(
+          eq(inventoryProductCategories.tenantId, tenantId),
+          eq(inventoryProductCategories.id, parsed.categoryId),
+          isNull(inventoryProductCategories.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) throw new Error('Category was not found.');
+    parsed.category = row.name;
+    parsed.categoryId = row.id;
+    return;
+  }
+  const name = parsed.category?.trim();
+  if (!name) {
+    parsed.category = undefined;
+    parsed.categoryId = null;
+    return;
+  }
+  const [row] = await db()
+    .select({ id: inventoryProductCategories.id, name: inventoryProductCategories.name })
+    .from(inventoryProductCategories)
+    .where(
+      and(
+        eq(inventoryProductCategories.tenantId, tenantId),
+        sql`lower(${inventoryProductCategories.name}) = lower(${name})`,
+        isNull(inventoryProductCategories.voidedAt),
+      ),
+    )
+    .limit(1);
+  parsed.category = name;
+  parsed.categoryId = row?.id ?? null;
+}
+
 function formToProductInput(formData: FormData): ProductInput {
   return {
     sku: String(formData.get('sku') ?? ''),
@@ -592,6 +635,7 @@ function formToProductInput(formData: FormData): ProductInput {
     sellPrice: Number(String(formData.get('sellPrice') ?? '0').replace(/[^0-9.-]/g, '')) || 0,
     openingQty: Number(String(formData.get('openingQty') ?? '0').replace(/[^0-9.-]/g, '')) || 0,
     category: String(formData.get('category') ?? ''),
+    categoryId: String(formData.get('categoryId') ?? '').trim() || null,
     barcode: String(formData.get('barcode') ?? ''),
     sellable: formData.get('sellable') === 'on' || formData.get('sellable') === '1' || formData.get('sellable') === 'true',
     purchasable:
@@ -640,6 +684,7 @@ function toProductValues(tenantId: string, parsed: ProductInput) {
     unitCost: parsed.unitCost.toFixed(2),
     sellPrice: parsed.sellPrice.toFixed(2),
     category: clean(parsed.category),
+    categoryId: parsed.categoryId || null,
     barcode: clean(parsed.barcode),
     sellable: parsed.sellable ? '1' : '0',
     purchasable: parsed.purchasable ? '1' : '0',
@@ -738,6 +783,7 @@ export async function createQuickProduct(input: {
             sellPrice,
             openingQty: 0,
             category: type === 'service' ? 'Services' : type === 'digital' ? 'Digital' : 'General',
+            categoryId: null,
             barcode: '',
             sellable: true,
             purchasable: type === 'physical' || type === 'rental',
@@ -814,6 +860,7 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
 
   await withTenantContext(user.tenantId, async () => {
+    await applyCategory(user.tenantId, parsed);
     const [dup] = await db()
       .select({ id: inventoryProducts.id })
       .from(inventoryProducts)
@@ -983,6 +1030,7 @@ export async function updateProductFromForm(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
 
   await withTenantContext(user.tenantId, async () => {
+    await applyCategory(user.tenantId, parsed);
     const [existing] = await db()
       .select()
       .from(inventoryProducts)

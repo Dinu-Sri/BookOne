@@ -4,6 +4,16 @@
 
 ---
 
+## 2026-09-10 — Category tree, brand/location scope, footer align
+
+- Category **Add / Delete / Save** buttons right-aligned (same footer as locations).
+- Parent / child categories (two levels, WordPress-style). Child rows indent on the list.
+- Optional **brand** and **location** on a category for later inventory reports and website sync. Blank = all shops.
+- Products store `category_id` plus the display name POS already uses.
+- Migration `030_product_category_tree.sql`. E2E S-0712.
+
+---
+
 ## 2026-09-10 — Product units, categories, rich descriptions
 
 - Product form **Sold as** dropdown uses plain labels (Each, Box, Pack, Kilogram…) instead of `ea`.

@@ -1942,6 +1942,10 @@ textarea.input {
   background: var(--surface);
 }
 
+.company-inline-form.is-child {
+  margin-left: 28px;
+}
+
 .company-inline-form .field-full,
 .company-inline-form .company-form-footer {
   grid-column: 1 / -1;
@@ -2348,6 +2352,10 @@ textarea.input {
   .state-demo,
   .audit-check-grid {
     grid-template-columns: 1fr;
+  }
+
+  .company-inline-form.is-child {
+    margin-left: 12px;
   }
 
   .journal-audit-row summary {

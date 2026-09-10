@@ -9399,5 +9399,15 @@
       "@inventory"
     ],
     "steps": []
+  },
+  {
+    "id": "S-0712",
+    "title": "Category parent, brand, and location fields",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P1",
+    "tags": [
+      "@inventory"
+    ],
+    "steps": []
   }
 ]

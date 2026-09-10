@@ -1,7 +1,7 @@
-import { pgTable, uuid, varchar, timestamp, numeric, text, integer, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, numeric, text, integer, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { users } from './users';
-import { locations } from './company-settings';
+import { brands, locations } from './company-settings';
 import { transactions } from './transactions';
 import { parties } from './parties';
 
@@ -30,6 +30,7 @@ export const inventoryProducts = pgTable('inventory_products', {
   inventoryAccountCode: varchar('inventory_account_code', { length: 20 }).notNull().default('5100'),
   expenseAccountCode: varchar('expense_account_code', { length: 20 }).notNull().default('6800'),
   category: varchar('category', { length: 120 }),
+  categoryId: uuid('category_id').references((): AnyPgColumn => inventoryProductCategories.id),
   barcode: varchar('barcode', { length: 80 }),
   sellable: varchar('sellable', { length: 1 }).notNull().default('1'),
   purchasable: varchar('purchasable', { length: 1 }).notNull().default('1'),
@@ -54,12 +55,15 @@ export const inventoryProducts = pgTable('inventory_products', {
   voidedAt: timestamp('voided_at', { withTimezone: true }),
 });
 
-/** Tenant product categories (POS filters + product form picker). */
+/** Tenant product categories (POS filters + product form picker + later WordPress tree). */
 export const inventoryProductCategories = pgTable('inventory_product_categories', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
   name: varchar('name', { length: 120 }).notNull(),
   slug: varchar('slug', { length: 80 }),
+  parentId: uuid('parent_id').references((): AnyPgColumn => inventoryProductCategories.id),
+  brandId: uuid('brand_id').references(() => brands.id),
+  locationId: uuid('location_id').references(() => locations.id),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

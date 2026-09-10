@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-10T08:41:52.433Z",
-    "catalog_total": 711,
-    "referenced": 711,
+    "generated_at": "2026-09-10T09:59:02.191Z",
+    "catalog_total": 712,
+    "referenced": 712,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
       "P0": 328,
-      "P1": 296,
+      "P1": 297,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -108,8 +108,8 @@
       "referenced": 16
     },
     "30. Product identity (units, categories, descriptions)": {
-      "total": 4,
-      "referenced": 4
+      "total": 5,
+      "referenced": 5
     },
     "4. Company masters": {
       "total": 30,
@@ -9906,6 +9906,19 @@
     {
       "id": "S-0711",
       "title": "Categories screen loads",
+      "section": "30. Product identity (units, categories, descriptions)",
+      "priority": "P1",
+      "tags": [
+        "@inventory"
+      ],
+      "referenced_in": [
+        "tests/05-parties-products.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0712",
+      "title": "Category parent, brand, and location fields",
       "section": "30. Product identity (units, categories, descriptions)",
       "priority": "P1",
       "tags": [

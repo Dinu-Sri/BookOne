@@ -7,6 +7,7 @@ import { createProductFromForm, updateProductFromForm, type ProductRow } from '@
 import { createProductCategory, type ProductCategoryRow } from '@/app/actions/product-categories';
 import { Button } from '@/components/ui/bookone-ui';
 import { RichTextEditor, RichTextPopup } from '@/components/ui/rich-text-editor';
+import { categoryOptionLabel } from '@/lib/product-category-display';
 import { normalizeProductUnit, productUnitOptions } from '@/lib/product-units';
 
 const TABS = [
@@ -41,9 +42,12 @@ export function ProductForm({
     (product?.kitComponents ?? []).map((c) => ({ productId: c.productId, qty: String(c.qty) })),
   );
   const [categoryList, setCategoryList] = useState(categories);
-  const [category, setCategory] = useState(product?.category ?? '');
+  const [categoryId, setCategoryId] = useState(
+    product?.categoryId ?? categories.find((c) => c.name === product?.category)?.id ?? '',
+  );
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [categoryName, setCategoryName] = useState('');
+  const [categoryParentId, setCategoryParentId] = useState('');
   const [categoryError, setCategoryError] = useState('');
   const [categoryBusy, setCategoryBusy] = useState(false);
   const [shortHtml, setShortHtml] = useState(product?.description ?? '');
@@ -88,20 +92,35 @@ export function ProductForm({
     setCategoryBusy(true);
     setCategoryError('');
     try {
-      const result = await createProductCategory(categoryName);
-      if (!result.ok || !result.name) {
+      const result = await createProductCategory(categoryName, { parentId: categoryParentId || null });
+      if (!result.ok || !result.name || !result.id) {
         setCategoryError(result.error ?? 'Could not save category.');
         return;
       }
+      const parent = categoryList.find((r) => r.id === categoryParentId);
       setCategoryList((rows) =>
-        rows.some((r) => r.name.toLowerCase() === result.name!.toLowerCase())
+        rows.some((r) => r.id === result.id)
           ? rows
-          : [...rows, { id: `new-${result.name}`, name: result.name, productCount: 0 }].sort((a, b) =>
-              a.name.localeCompare(b.name),
-            ),
+          : [
+              ...rows,
+              {
+                id: result.id,
+                name: result.name!,
+                slug: null,
+                parentId: categoryParentId || null,
+                parentName: parent?.name ?? null,
+                brandId: null,
+                brandName: null,
+                locationId: null,
+                locationName: null,
+                productCount: 0,
+                childCount: 0,
+              },
+            ],
       );
-      setCategory(result.name);
+      setCategoryId(result.id);
       setCategoryName('');
+      setCategoryParentId('');
       setCategoryOpen(false);
     } catch (error) {
       setCategoryError(error instanceof Error ? error.message : 'Could not save category.');
@@ -247,15 +266,16 @@ export function ProductForm({
               <div className="cluster" style={{ gap: 8 }}>
                 <select
                   className="input"
-                  name="category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  name="categoryId"
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
                   style={{ flex: 1 }}
                 >
                   <option value="">No category</option>
                   {categoryList.map((row) => (
-                    <option value={row.name} key={row.id}>
-                      {row.name}
+                    <option value={row.id} key={row.id}>
+                      {row.parentId ? '— ' : ''}
+                      {categoryOptionLabel(row)}
                     </option>
                   ))}
                 </select>
@@ -562,7 +582,9 @@ export function ProductForm({
             <h2 id="new-category-title" className="modal-title">
               New category
             </h2>
-            <p className="modal-message">Give this group a name people will recognise (for example Chairs, Lighting, Food).</p>
+            <p className="modal-message">
+              Give this group a name people will recognise. Optional parent makes it a child category (WordPress-style).
+            </p>
             <div className="field">
               <label>Category name</label>
               <input
@@ -572,6 +594,23 @@ export function ProductForm({
                 placeholder="e.g. Garden furniture"
                 autoFocus
               />
+            </div>
+            <div className="field">
+              <label>Parent category</label>
+              <select
+                className="input"
+                value={categoryParentId}
+                onChange={(e) => setCategoryParentId(e.target.value)}
+              >
+                <option value="">None — this is a parent</option>
+                {categoryList
+                  .filter((row) => !row.parentId)
+                  .map((row) => (
+                    <option value={row.id} key={row.id}>
+                      {row.name}
+                    </option>
+                  ))}
+              </select>
             </div>
             {categoryError ? <p className="form-error inline">{categoryError}</p> : null}
             <div className="modal-actions">

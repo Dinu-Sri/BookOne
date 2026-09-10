@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { Tags } from 'lucide-react';
+import { getCompanySettingsData } from '@/app/actions/company-settings';
 import { listProductCategories } from '@/app/actions/product-categories';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
@@ -9,8 +10,13 @@ import { Card, CardBody, CardHeader } from '@/components/ui/bookone-ui';
 export default async function ProductCategoriesPage() {
   let tenant;
   let categories;
+  let masters;
   try {
-    [tenant, categories] = await Promise.all([getTenantInfo(), listProductCategories()]);
+    [tenant, categories, masters] = await Promise.all([
+      getTenantInfo(),
+      listProductCategories(),
+      getCompanySettingsData(),
+    ]);
   } catch {
     redirect('/login');
   }
@@ -21,11 +27,20 @@ export default async function ProductCategoriesPage() {
         <Card>
           <CardHeader
             title="Product categories"
-            subtitle="Groups such as Chairs or Lighting. Create them here or from a product. Delete is blocked if products still use the name."
+            subtitle="Parent and child groups (WordPress-style). Optional brand and location for later inventory reports. Delete is blocked if products or child categories still use it."
             action={<Tags size={18} color="var(--brand)" />}
           />
           <CardBody>
-            <CategoryForms categories={categories} />
+            <CategoryForms
+              categories={categories}
+              brands={masters.brands}
+              locations={masters.locations.map((l) => ({
+                id: l.id,
+                name: l.name,
+                code: l.code,
+                brandId: l.brandId,
+              }))}
+            />
           </CardBody>
         </Card>
       </div>

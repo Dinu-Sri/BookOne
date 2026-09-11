@@ -6,6 +6,7 @@ import { BookOneShell } from '@/components/layout/bookone-shell';
 import { StatusBadge } from '@/components/module/list-page';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { entityKindLabel } from '@/lib/entity-labels';
+import { isPlatformAdmin } from '@/lib/platform-admin';
 
 export default async function ControlRoomOverviewPage() {
   let tenant;
@@ -17,7 +18,7 @@ export default async function ControlRoomOverviewPage() {
     redirect('/login');
   }
 
-  if (tenant.userRole !== 'super_admin' && tenant.userEmail !== 'dinu.sri.m@gmail.com') {
+  if (!isPlatformAdmin(tenant)) {
     redirect('/');
   }
 

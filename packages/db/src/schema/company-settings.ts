@@ -7,6 +7,7 @@ export const tenantMemberships = pgTable('tenant_memberships', {
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
   userId: uuid('user_id').notNull().references(() => users.id),
   role: varchar('role', { length: 50 }).notNull().default('owner'),
+  primaryRoleId: uuid('primary_role_id'),
   status: varchar('status', { length: 20 }).notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

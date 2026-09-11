@@ -159,6 +159,8 @@ const navSuites: NavSuite[] = [
       { label: 'Brands', icon: Package, href: '/company/brands' },
       { label: 'Locations', icon: Landmark, href: '/company/locations' },
       { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },
+      { label: 'Team', icon: Users, href: '/company/team' },
+      { label: 'Jobs', icon: ShieldCheck, href: '/company/team/jobs' },
     ],
   },
   {
@@ -285,6 +287,9 @@ export interface TenantLite {
   /** personal | sole_prop | company | pending */
   entityKind?: string;
   capabilityTier?: string | null;
+  platformRole?: 'super_admin' | 'user';
+  jobSlug?: string | null;
+  accessByLabel?: Record<string, 'none' | 'read' | 'write'>;
 }
 
 export interface PeriodLite {
@@ -305,7 +310,7 @@ export function BookOneShell({
 }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const isSuperAdmin = tenant?.userRole === 'super_admin' || tenant?.userEmail === 'dinu.sri.m@gmail.com';
+  const isSuperAdmin = tenant?.platformRole === 'super_admin' || tenant?.userRole === 'super_admin';
 
   // Personal-only workspaces stay in cashbook (unless super admin / Control Room).
   // Sole lite may enter ERP to view history after a downgrade (read-only advanced modules).
@@ -321,6 +326,14 @@ export function BookOneShell({
       router.replace(homePathForEntity(kind, tenant.capabilityTier));
     }
   }, [tenant?.entityKind, tenant?.capabilityTier, router, isSuperAdmin]);
+
+  useEffect(() => {
+    if (!tenant?.accessByLabel || !active || isSuperAdmin) return;
+    if (active === 'Documentation' || active === 'Control Room') return;
+    if (tenant.accessByLabel[active] === 'none') {
+      router.replace('/?denied=1');
+    }
+  }, [tenant?.accessByLabel, active, isSuperAdmin, router]);
 
   const modules = useMemo(
     () => normalizeModules(tenant?.modules, tenant?.plan ?? 'starter'),
@@ -348,6 +361,16 @@ export function BookOneShell({
         if ((suite.id === 'company' || suite.id === 'inventory') && !modules.rental) {
           items = items.filter((item) => !isRentalNavItem(item.label));
         }
+        if (suite.id === 'company' && entityKind === 'personal') {
+          items = items.filter((item) => item.label !== 'Team' && item.label !== 'Jobs');
+        }
+        if (tenant?.accessByLabel) {
+          items = items.filter((item) => {
+            if (!item.href || item.label === 'Documentation') return true;
+            const level = tenant.accessByLabel?.[item.label] ?? 'write';
+            return level !== 'none';
+          });
+        }
         // Sole: always link Cashbook (Personal | Business domains) from ERP
         if (suite.id === 'accounting' && soleNeedsCashbook) {
           items = [
@@ -372,7 +395,7 @@ export function BookOneShell({
         return { ...suite, items };
       })
       .filter(Boolean) as NavSuite[];
-  }, [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier]);
+  }, [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier, tenant?.accessByLabel]);
   const activeSuite = visibleSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
 
@@ -433,6 +456,9 @@ export function BookOneShell({
                               <span className="nav-item-label">{item.label}</span>
                               {item.subtitle ? (
                                 <span className="nav-item-sub">{item.subtitle}</span>
+                              ) : null}
+                              {tenant?.accessByLabel?.[item.label] === 'read' ? (
+                                <span className="nav-item-sub">View only</span>
                               ) : null}
                             </span>
                             {!item.href ? <em>Soon</em> : null}

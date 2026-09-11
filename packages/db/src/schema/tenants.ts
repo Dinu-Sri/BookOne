@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, jsonb, boolean } from 'drizzle-orm/pg-core';
 
 /** Module flags stored on the tenant row (accounting + company are always on). */
 export type TenantModulesJson = {
@@ -37,6 +37,7 @@ export const tenants = pgTable('tenants', {
   entityKind: varchar('entity_kind', { length: 20 }).notNull().default('company'),
   /** lite | full — mainly sole_prop; optional */
   capabilityTier: varchar('capability_tier', { length: 20 }),
+  rbacEnforced: boolean('rbac_enforced').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),

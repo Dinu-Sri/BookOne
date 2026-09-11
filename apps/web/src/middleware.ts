@@ -21,6 +21,7 @@ function hasSessionCookie(req: NextRequest): boolean {
 
 function isPublicPath(pathname: string): boolean {
   if (pathname === '/login') return true;
+  if (pathname === '/invite' || pathname.startsWith('/invite/')) return true;
   // Public product docs + docs search API (no session required).
   if (pathname === '/docs' || pathname.startsWith('/docs/')) return true;
   if (pathname === '/api/search') return true;

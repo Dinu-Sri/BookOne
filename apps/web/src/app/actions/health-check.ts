@@ -80,8 +80,8 @@ export interface HealthCheckPageData {
 
 // ─── utils ───────────────────────────────────────────────────────────────────
 
-function isSuperAdmin(user: { role: string; email: string }) {
-  return user.role === 'super_admin' || user.email === 'dinu.sri.m@gmail.com';
+function isSuperAdmin(user: { role: string; email: string; platformRole?: string }) {
+  return user.platformRole === 'super_admin' || user.role === 'super_admin';
 }
 
 function makeRng(seed: number) {

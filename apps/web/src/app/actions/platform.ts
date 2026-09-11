@@ -29,8 +29,6 @@ import {
   PLANS,
 } from '@/lib/platform-modules';
 
-const SUPER_EMAIL = 'dinu.sri.m@gmail.com';
-
 export type PlatformCompanyRow = {
   id: string;
   name: string;
@@ -102,8 +100,8 @@ export type PlatformUserRow = {
   createdAt: string;
 };
 
-function isSuperAdmin(user: { role: string; email: string }) {
-  return user.role === 'super_admin' || user.email === SUPER_EMAIL;
+function isSuperAdmin(user: { role: string; email: string; platformRole?: string }) {
+  return user.platformRole === 'super_admin' || user.role === 'super_admin';
 }
 
 async function requirePlatformAdmin() {

@@ -107,7 +107,7 @@ export async function switchWorkspace(tenantId: string): Promise<
       return { ok: false, error: 'You do not have access to that workspace.' };
     }
 
-    await db().update(users).set({ tenantId }).where(eq(users.id, user.id));
+    await db().update(users).set({ tenantId, activeTenantId: tenantId, updatedAt: new Date() }).where(eq(users.id, user.id));
 
     const entityKind = parseEntityKind(membership.entityKind);
     const homePath = homePathForEntity(entityKind, membership.capabilityTier);

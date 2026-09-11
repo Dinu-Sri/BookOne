@@ -517,6 +517,8 @@ export async function payVendorBills(input: {
   allocations: { documentId: string; amount: number }[];
 }): Promise<{ ok: boolean; error?: string; paidCount?: number }> {
   try {
+    const { assertPermission } = await import('@/lib/access');
+    await assertPermission('purchase.payments.write', 'write');
     const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(input.paymentDate);
     const account = z.string().min(1).max(20).parse(input.paymentAccountCode);
     const allocations = input.allocations.filter((a) => a.amount > 0);
@@ -549,6 +551,8 @@ export async function receiveCustomerPayments(input: {
   allocations: { documentId: string; amount: number }[];
 }): Promise<{ ok: boolean; error?: string; paidCount?: number }> {
   try {
+    const { assertPermission } = await import('@/lib/access');
+    await assertPermission('sales.payments.write', 'write');
     const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(input.paymentDate);
     const account = z.string().min(1).max(20).parse(input.paymentAccountCode);
     const allocations = input.allocations.filter((a) => a.amount > 0);

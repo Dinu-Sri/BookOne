@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-10T09:59:02.191Z",
-    "catalog_total": 712,
-    "referenced": 712,
+    "generated_at": "2026-09-11T02:04:26.276Z",
+    "catalog_total": 714,
+    "referenced": 714,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
-      "P0": 328,
-      "P1": 297,
+      "P0": 329,
+      "P1": 298,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -110,6 +110,10 @@
     "30. Product identity (units, categories, descriptions)": {
       "total": 5,
       "referenced": 5
+    },
+    "31. Team access (RBAC)": {
+      "total": 2,
+      "referenced": 2
     },
     "4. Company masters": {
       "total": 30,
@@ -9926,6 +9930,34 @@
       ],
       "referenced_in": [
         "tests/05-parties-products.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0713",
+      "title": "Company → Team loads for owner",
+      "section": "31. Team access (RBAC)",
+      "priority": "P0",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0714",
+      "title": "Jobs screen loads",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
       ],
       "status": "referenced"
     }

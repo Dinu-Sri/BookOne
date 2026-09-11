@@ -47,6 +47,9 @@ export interface TenantInfo {
   };
   userEmail?: string;
   userRole?: string;
+  platformRole?: 'super_admin' | 'user';
+  jobSlug?: string | null;
+  accessByLabel?: Record<string, 'none' | 'read' | 'write'>;
 }
 
 export interface AccountBalance {
@@ -124,6 +127,18 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     .where(eq(tenants.id, user.tenantId))
     .limit(1);
   if (!t) throw new Error('Tenant not found.');
+  const { loadAccessForUser, SCREEN_DEFS } = await import('@bookone/auth');
+  const access = await loadAccessForUser(user.id, user.tenantId, user.platformRole);
+  const accessByLabel: Record<string, 'none' | 'read' | 'write'> = {};
+  for (const screen of SCREEN_DEFS) {
+    if (access?.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
+    else if (access?.allows(`${screen.keyPrefix}.read`, 'read')) accessByLabel[screen.label] = 'read';
+    else accessByLabel[screen.label] = 'none';
+  }
+  accessByLabel.Documentation = 'read';
+  accessByLabel['Low Stock'] = accessByLabel['Stock Levels'] ?? 'none';
+  accessByLabel['On rent'] = accessByLabel['Stock Levels'] ?? 'none';
+  accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
   return {
     ...t,
     environment: t.environment ?? 'production',
@@ -133,6 +148,9 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     modules: normalizeModules(t.modules, t.plan),
     userEmail: user.email,
     userRole: user.role,
+    platformRole: user.platformRole,
+    jobSlug: user.jobSlug,
+    accessByLabel,
   };
 }
 

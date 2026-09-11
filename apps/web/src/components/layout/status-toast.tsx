@@ -43,6 +43,14 @@ export function StatusToast() {
   }
 
   useEffect(() => {
+    if (searchParams.get('denied') === '1') {
+      show({ kind: 'error', message: 'You do not have access to that screen.' });
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('denied');
+      const next = params.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+      return;
+    }
     const flash = searchParams.get('flash');
     if (!flash) return;
     const mapped = FLASH_MAP[flash] ?? { kind: 'success' as const, message: decodeURIComponent(flash.replace(/\+/g, ' ')) };

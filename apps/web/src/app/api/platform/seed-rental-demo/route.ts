@@ -17,8 +17,8 @@ import { createCommercialDocument } from '@/app/actions/commercial-docs';
 
 export const dynamic = 'force-dynamic';
 
-function isAllowed(user: { role: string; email: string }) {
-  return user.role === 'super_admin' || user.email === 'dinu.sri.m@gmail.com';
+function isAllowed(user: { role: string; email: string; platformRole?: string }) {
+  return user.platformRole === 'super_admin' || user.role === 'super_admin';
 }
 
 const DEMO_PRODUCTS = [

@@ -748,6 +748,8 @@ export async function deleteLocationFromForm(formData: FormData): Promise<void> 
 
 export async function createCompany(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
+  const { assertPermission } = await import('@/lib/access');
+  await assertPermission('company.lifecycle.write', 'write');
   const name = String(formData.get('name') ?? '');
   const parsed = createCompanySchema.parse({
     name,
@@ -832,6 +834,6 @@ export async function switchActiveCompany(formData: FormData): Promise<void> {
 
   if (!membership) throw new Error('You do not have access to this company.');
 
-  await db().update(users).set({ tenantId, updatedAt: new Date() }).where(eq(users.id, user.id));
+  await db().update(users).set({ tenantId, activeTenantId: tenantId, updatedAt: new Date() }).where(eq(users.id, user.id));
   redirect('/login?switched=1');
 }

@@ -63,6 +63,8 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
   try {
     const parsed = entrySchema.parse(input);
     const user = await requireTenantContext();
+    const { assertPermission } = await import('@/lib/access');
+    await assertPermission('accounting.simple_entry.write', 'write');
     const entryPeriod = parsed.date.slice(0, 7);
     // Personal / lite: skip brand-location hard requirements
     const { tenants } = await import('@bookone/db');

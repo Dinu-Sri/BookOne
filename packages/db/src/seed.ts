@@ -33,6 +33,7 @@ async function seed() {
       name: 'Clossyan Holdings',
       slug: 'clossyan',
       plan: 'starter',
+      rbacEnforced: true,
     });
     console.log('Tenant created.');
   } else {
@@ -63,6 +64,24 @@ async function seed() {
       .set({ role: 'super_admin', updatedAt: sql`NOW()` })
       .where(eq(schema.users.email, 'dinu.sri.m@gmail.com'));
     console.log('Super admin user already exists; role refreshed.');
+  }
+
+  const adminId = existingUser[0]?.id ?? ADMIN_USER_ID;
+  const tenantRowId = existingTenant[0]?.id ?? TENANT_ID;
+  const { tenantMemberships } = schema;
+  const existingMem = await db
+    .select({ id: tenantMemberships.id })
+    .from(tenantMemberships)
+    .where(eq(tenantMemberships.userId, adminId))
+    .limit(1);
+  if (existingMem.length === 0) {
+    await db.insert(tenantMemberships).values({
+      tenantId: tenantRowId,
+      userId: adminId,
+      role: 'owner',
+      status: 'active',
+    });
+    console.log('Super admin membership created.');
   }
 
   // 3. Seed chart of accounts (skip if already seeded)

@@ -8,8 +8,8 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-function isPlatformAdmin(user: { role: string; email: string }) {
-  return user.role === 'super_admin' || user.email === 'dinu.sri.m@gmail.com';
+function isPlatformAdmin(user: { role: string; email: string; platformRole?: string }) {
+  return user.platformRole === 'super_admin' || user.role === 'super_admin';
 }
 
 async function requireAdmin() {

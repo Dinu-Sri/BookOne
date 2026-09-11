@@ -52,3 +52,12 @@ export { rentalEvents, rentalBookingLines, rentalReturnPhotos, rentalKitComponen
 
 export { healthCheckRuns } from './health-check';
 export { posRegisters, posShifts } from './pos';
+export {
+  tenantRoles,
+  tenantRolePermissions,
+  tenantMembershipRoles,
+  tenantPermissionOverrides,
+  tenantTeams,
+  tenantTeamMembers,
+  tenantInvites,
+} from './access';

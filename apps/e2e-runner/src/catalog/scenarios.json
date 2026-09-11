@@ -9409,5 +9409,27 @@
       "@inventory"
     ],
     "steps": []
+  },
+  {
+    "id": "S-0713",
+    "title": "Company → Team loads for owner",
+    "section": "31. Team access (RBAC)",
+    "priority": "P0",
+    "tags": [
+      "@company",
+      "@team"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0714",
+    "title": "Jobs screen loads",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company",
+      "@team"
+    ],
+    "steps": []
   }
 ]

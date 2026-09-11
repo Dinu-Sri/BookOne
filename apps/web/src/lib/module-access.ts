@@ -1,4 +1,6 @@
+import { SCREEN_DEFS } from '@bookone/auth';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { getMyAccess } from '@/lib/access';
 import {
   canWriteModule,
   parseEntityKind,
@@ -7,7 +9,7 @@ import {
 
 /**
  * Server-side write gate for inventory/POS (and other modules).
- * After sole full → lite downgrade, advanced modules stay viewable but this throws on write.
+ * Ceiling (entity kind + module flags) plus at least one job write in that module.
  */
 export async function assertModuleWrite(module: ModuleWriteKey): Promise<void> {
   const tenant = await getTenantInfo();
@@ -20,4 +22,8 @@ export async function assertModuleWrite(module: ModuleWriteKey): Promise<void> {
         : 'You do not have write access to this module.',
     );
   }
+  const access = await getMyAccess();
+  if (!access?.rbacEnforced) return;
+  const hit = SCREEN_DEFS.some((s) => s.module === module && access.allows(`${s.keyPrefix}.write`, 'write'));
+  if (!hit) throw new Error('You do not have permission to change this.');
 }

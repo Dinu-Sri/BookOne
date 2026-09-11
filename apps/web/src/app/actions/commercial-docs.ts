@@ -612,12 +612,46 @@ export async function listCommercialDocuments(types: string[], period?: string):
   });
 }
 
+function permissionForDocumentType(documentType: string): string {
+  switch (documentType) {
+    case 'quotation':
+      return 'sales.quotations.write';
+    case 'sales_order':
+      return 'sales.orders.write';
+    case 'sales_invoice':
+    case 'customer_invoice':
+      return 'sales.invoices.write';
+    case 'sales_return':
+      return 'sales.returns.write';
+    case 'pos_sale':
+      return 'pos.terminal.write';
+    case 'purchase_order':
+      return 'purchase.orders.write';
+    case 'goods_receipt':
+      return 'purchase.receipts.write';
+    case 'purchase':
+    case 'vendor_bill':
+    case 'import_purchase':
+      return documentType === 'import_purchase' ? 'purchase.import.write' : 'purchase.bills.write';
+    case 'cash_purchase':
+      return 'purchase.expenses.write';
+    case 'purchase_return':
+      return 'purchase.returns.write';
+    default:
+      return '';
+  }
+}
+
 export async function createCommercialDocument(
   input: z.input<typeof createSchema>,
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
     const parsed = createSchema.parse(input);
     const user = await requireTenantContext();
+    const { assertPermission } = await import('@/lib/access');
+    const perm = permissionForDocumentType(parsed.documentType);
+    if (!perm) return { ok: false, error: 'You do not have permission to do that.' };
+    await assertPermission(perm, 'write');
     const isSales = (SALES_TYPES as readonly string[]).includes(parsed.documentType);
     const party = await ensureParty({
       name: parsed.partyName,

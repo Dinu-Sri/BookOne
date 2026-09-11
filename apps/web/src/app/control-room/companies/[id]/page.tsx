@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { getPlatformCompany } from '@/app/actions/platform';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { isPlatformAdmin } from '@/lib/platform-admin';
 import { CompanyEditForm } from '@/components/control-room/company-form';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 
@@ -14,7 +15,7 @@ export default async function CompanyDetailPage({
   let company;
   try {
     tenant = await getTenantInfo();
-    if (tenant.userRole !== 'super_admin' && tenant.userEmail !== 'dinu.sri.m@gmail.com') {
+    if (!isPlatformAdmin(tenant)) {
       redirect('/');
     }
     company = await getPlatformCompany(id);

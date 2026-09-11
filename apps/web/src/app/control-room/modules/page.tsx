@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { listModuleMatrix } from '@/app/actions/platform';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { isPlatformAdmin } from '@/lib/platform-admin';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { MODULE_CATALOG, MODULE_KEYS } from '@/lib/platform-modules';
 import { StatusBadge } from '@/components/module/list-page';
@@ -12,7 +13,7 @@ export default async function ControlRoomModulesPage() {
   let matrix;
   try {
     tenant = await getTenantInfo();
-    if (tenant.userRole !== 'super_admin' && tenant.userEmail !== 'dinu.sri.m@gmail.com') {
+    if (!isPlatformAdmin(tenant)) {
       redirect('/');
     }
     matrix = await listModuleMatrix();

@@ -49,12 +49,14 @@ export interface ResetCompanyResult {
   error?: string;
 }
 
-function isPrivileged(user: { role: string; email: string }) {
+function isPrivileged(user: { role: string; email: string; platformRole?: string; jobSlug?: string | null }) {
   return (
+    user.platformRole === 'super_admin' ||
     user.role === 'admin' ||
     user.role === 'super_admin' ||
     user.role === 'owner' ||
-    user.email === 'dinu.sri.m@gmail.com'
+    user.jobSlug === 'owner' ||
+    user.jobSlug === 'admin'
   );
 }
 
@@ -456,8 +458,7 @@ export async function resetPlatformCompanyData(
     }
 
     const user = await requireTenantContext();
-    const isSuper =
-      user.role === 'super_admin' || user.email === 'dinu.sri.m@gmail.com';
+    const isSuper = user.platformRole === 'super_admin' || user.role === 'super_admin';
     if (!isSuper) {
       return { ok: false, error: 'Only platform super admin can reset another company.' };
     }

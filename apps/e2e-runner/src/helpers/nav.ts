@@ -93,6 +93,8 @@ export const TENANT_SMOKE_ROUTES: { path: string; name: string }[] = [
   { path: '/company/rental', name: 'Rental settings' },
   { path: '/company/brands', name: 'Brands' },
   { path: '/company/locations', name: 'Locations' },
+  { path: '/company/team', name: 'Team' },
+  { path: '/company/team/jobs', name: 'Jobs' },
   { path: '/company/domains', name: 'Domains' },
 ];
 

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { isPlatformAdmin } from '@/lib/platform-admin';
 import { CompanyCreateForm } from '@/components/control-room/company-form';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 
@@ -10,7 +11,7 @@ export default async function NewCompanyPage() {
   } catch {
     redirect('/login');
   }
-  if (tenant.userRole !== 'super_admin' && tenant.userEmail !== 'dinu.sri.m@gmail.com') {
+  if (!isPlatformAdmin(tenant)) {
     redirect('/');
   }
 

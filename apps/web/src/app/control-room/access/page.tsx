@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { listPlatformUsers } from '@/app/actions/platform';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { isPlatformAdmin } from '@/lib/platform-admin';
 import { AccessUsersScreen } from '@/components/control-room/access-users-screen';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 
@@ -10,7 +11,7 @@ export default async function AccessPage() {
   let rows;
   try {
     tenant = await getTenantInfo();
-    if (tenant.userRole !== 'super_admin' && tenant.userEmail !== 'dinu.sri.m@gmail.com') {
+    if (!isPlatformAdmin(tenant)) {
       redirect('/');
     }
     rows = await listPlatformUsers();

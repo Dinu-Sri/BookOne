@@ -2,7 +2,7 @@
 
 > **Purpose:** Exhaustive day-to-day and edge-case scenarios for Playwright automation.
 > **Scope:** Tenant ERP + super-admin Control Room + public surfaces.
-> **Status:** **712 designed** scenarios. A growing subset is automated under `apps/e2e-runner/tests/` with catalog IDs `S-NNNN`. Track coverage: `docs/E2E_COVERAGE.md` (run `pnpm --dir apps/e2e-runner coverage`).
+> **Status:** **714 designed** scenarios. A growing subset is automated under `apps/e2e-runner/tests/` with catalog IDs `S-NNNN`. Track coverage: `docs/E2E_COVERAGE.md` (run `pnpm --dir apps/e2e-runner coverage`).
 > **Depth goal:** Full deep coverage (mutate/balance asserts for money paths; load-only for pure route smoke). Run from `/e2e` against any instance (URL + credentials).
 > **Source:** Routes, server actions, settings, and validations in the BookOne monorepo.
 
@@ -6208,6 +6208,24 @@
 - **Tags:** `@inventory`
 - **Steps:** Open `/inventory/categories`
 - **Expect:** Parent category, optional brand, and optional location fields on the add form.
+
+---
+
+## 31. Team access (RBAC)
+
+### S-0713 — Company → Team loads for owner
+
+- **Priority:** P0
+- **Tags:** `@company`, `@team`
+- **Steps:** Open `/company/team`
+- **Expect:** People list and invite form.
+
+### S-0714 — Jobs screen loads
+
+- **Priority:** P1
+- **Tags:** `@company`, `@team`
+- **Steps:** Open `/company/team/jobs`
+- **Expect:** Job chips and access matrix.
 
 ---
 

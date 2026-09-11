@@ -35,7 +35,11 @@ function LoginContent() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const callbackURL = useMemo(() => searchParams.get('from') || '/', [searchParams]);
+  const callbackURL = useMemo(() => {
+    const from = searchParams.get('from');
+    if (searchParams.get('invite') === '1') return from || '/invite/complete';
+    return from || '/';
+  }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

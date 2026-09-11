@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { listPlatformAudit } from '@/app/actions/platform';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { isPlatformAdmin } from '@/lib/platform-admin';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Card } from '@/components/ui/bookone-ui';
 
@@ -9,7 +10,7 @@ export default async function AuditPage() {
   let rows;
   try {
     tenant = await getTenantInfo();
-    if (tenant.userRole !== 'super_admin' && tenant.userEmail !== 'dinu.sri.m@gmail.com') {
+    if (!isPlatformAdmin(tenant)) {
       redirect('/');
     }
     rows = await listPlatformAudit(80);

@@ -4,6 +4,17 @@
 
 ---
 
+## 2026-09-11 — Tenant Team RBAC (jobs, invites, enforcement)
+
+- Company → **Team** / **Jobs**: invite people, assign a job, edit job matrix (No access / View only / Can edit).
+- Permission catalog `module.screen.action` in `@bookone/auth`; templates Owner, Admin, Accountant, Sales, Purchasing, Warehouse, Cashier, Viewer.
+- Nav hides screens the job cannot read; View only badge; server `assertPermission` on invoices, payments, simple entry, inventory module writes, create company.
+- Invites: `/invite/[token]` → sign in → `/invite/complete` joins the company (does not create a second workspace). Copyable invite link.
+- Migration `031_tenant_rbac.sql`. Workspace switch writes `active_tenant_id`.
+- E2E S-0713, S-0714.
+
+---
+
 ## 2026-09-10 — Category tree, brand/location scope, footer align
 
 - Category **Add / Delete / Save** buttons right-aligned (same footer as locations).

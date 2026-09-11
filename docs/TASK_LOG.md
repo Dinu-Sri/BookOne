@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-09-11 — Product brand and stock location
+
+- Product **Brand** on Identity (All brands = shared). Category brand only prefills if empty.
+- Physical/rental **Opening location** on Stock. Required when opening qty > 0 and locations exist. Edit shows stock by location and can move unassigned stock.
+- Product list columns Brand and Location. Shop-scoped users only see in-scope brands/locations.
+- Existing products stay All brands / Unassigned. Migration `033_product_brand.sql`.
+- E2E S-0738, S-0739.
+
 ## 2026-09-11 — Finish Team users: password reset, restore, URL deny, cashier E2E
 
 - Team person **Set password** (tell them; no email).

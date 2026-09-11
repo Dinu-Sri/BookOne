@@ -315,6 +315,21 @@ test.describe('Parties & products catalog §6 @parties @inventory @product @p0',
     await expect(page.locator('select[name="locationId"]').first()).toBeVisible();
   });
 
+  test('S-0738 Product brand and opening location', async ({ authedPage: page }) => {
+    await go(page, '/inventory/products/new');
+    await expect(page.locator('select[name="brandId"]')).toBeVisible();
+    await expect(page.getByText(/all brands \(shared\)/i).first()).toBeVisible();
+    await page.locator('select[name="productType"]').selectOption('physical');
+    await page.getByRole('tab', { name: /Stock/i }).click();
+    await expect(page.locator('select[name="openingLocationId"]')).toBeVisible();
+  });
+
+  test('S-0739 Product list shows brand and location', async ({ authedPage: page }) => {
+    await go(page, '/inventory/products');
+    await expect(page.getByRole('columnheader', { name: /^brand$/i }).or(page.getByText('Brand', { exact: true })).first()).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /^location$/i }).or(page.getByText('Location', { exact: true })).first()).toBeVisible();
+  });
+
   test('search customer', async ({ authedPage: page }) => {
     test.skip(!customerName, 'no customer');
     await go(page, '/parties/customers');

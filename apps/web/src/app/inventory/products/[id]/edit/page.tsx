@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getProduct, listProducts } from '@/app/actions/inventory';
+import { getProduct, listProductDimensionOptions, listProducts } from '@/app/actions/inventory';
 import { listProductCategories } from '@/app/actions/product-categories';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
@@ -11,14 +11,16 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   let product;
   let rentalCatalog: { id: string; sku: string; name: string }[] = [];
   let categories: Awaited<ReturnType<typeof listProductCategories>> = [];
+  let dims: Awaited<ReturnType<typeof listProductDimensionOptions>> = { brands: [], locations: [] };
   try {
-    [tenant, product, rentalCatalog, categories] = await Promise.all([
+    [tenant, product, rentalCatalog, categories, dims] = await Promise.all([
       getTenantInfo(),
       getProduct(id),
       listProducts({ productType: 'rental', status: 'active' }).then((rows) =>
         rows.map((r) => ({ id: r.id, sku: r.sku, name: r.name })),
       ),
       listProductCategories(),
+      listProductDimensionOptions(),
     ]);
   } catch {
     redirect('/login');
@@ -28,7 +30,14 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   return (
     <BookOneShell active="Products" tenant={tenant}>
       <div className="workspace party-workspace">
-        <ProductForm mode="edit" product={product} rentalCatalog={rentalCatalog} categories={categories} />
+        <ProductForm
+          mode="edit"
+          product={product}
+          rentalCatalog={rentalCatalog}
+          categories={categories}
+          brands={dims.brands}
+          locations={dims.locations}
+        />
       </div>
     </BookOneShell>
   );

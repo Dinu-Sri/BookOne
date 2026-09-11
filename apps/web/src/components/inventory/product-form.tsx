@@ -26,11 +26,15 @@ export function ProductForm({
   product,
   rentalCatalog = [],
   categories = [],
+  brands = [],
+  locations = [],
 }: {
   mode: 'create' | 'edit';
   product?: ProductRow | null;
   rentalCatalog?: { id: string; sku: string; name: string }[];
   categories?: ProductCategoryRow[];
+  brands?: { id: string; name: string }[];
+  locations?: { id: string; name: string; brandId?: string | null }[];
 }) {
   const action = mode === 'edit' ? updateProductFromForm : createProductFromForm;
   const [tab, setTab] = useState<TabId>('identity');
@@ -45,6 +49,8 @@ export function ProductForm({
   const [categoryId, setCategoryId] = useState(
     product?.categoryId ?? categories.find((c) => c.name === product?.category)?.id ?? '',
   );
+  const [brandId, setBrandId] = useState(product?.brandId ?? (brands.length === 1 ? brands[0]!.id : ''));
+  const defaultOpeningLocation = locations.length === 1 ? locations[0]!.id : '';
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [categoryName, setCategoryName] = useState('');
   const [categoryParentId, setCategoryParentId] = useState('');
@@ -268,7 +274,12 @@ export function ProductForm({
                   className="input"
                   name="categoryId"
                   value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCategoryId(next);
+                    const cat = categoryList.find((r) => r.id === next);
+                    if (cat?.brandId && !brandId) setBrandId(cat.brandId);
+                  }}
                   style={{ flex: 1 }}
                 >
                   <option value="">No category</option>
@@ -289,6 +300,22 @@ export function ProductForm({
                 <Link href="/inventory/categories" style={{ fontWeight: 700 }}>
                   Manage categories
                 </Link>
+              </p>
+            </div>
+            <div className="field">
+              <label>Brand</label>
+              <select className="input" name="brandId" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+                <option value="">All brands (shared)</option>
+                {brands.map((b) => (
+                  <option value={b.id} key={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+              <p className="party-hint">
+                {brands.length
+                  ? 'Which company brand this SKU belongs to. Shared items stay on All brands.'
+                  : 'Add brands under Company → Brands to tag products.'}
               </p>
             </div>
             <div className="field">
@@ -457,10 +484,34 @@ export function ProductForm({
           <div className="party-tab-panel" hidden={tab !== 'stock'}>
             <div className="party-tab-grid">
               {mode === 'create' ? (
-                <div className="field">
-                  <label>Opening qty</label>
-                  <input className="input" name="openingQty" inputMode="decimal" defaultValue="0" />
-                </div>
+                <>
+                  <div className="field">
+                    <label>Opening qty</label>
+                    <input className="input" name="openingQty" inputMode="decimal" defaultValue="0" />
+                  </div>
+                  <div className="field">
+                    <label>Opening location</label>
+                    <select className="input" name="openingLocationId" defaultValue={defaultOpeningLocation}>
+                      {locations.length === 0 ? (
+                        <option value="">Unassigned (no locations set up)</option>
+                      ) : (
+                        <>
+                          <option value="">Unassigned</option>
+                          {locations.map((l) => (
+                            <option value={l.id} key={l.id}>
+                              {l.name}
+                            </option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                    <p className="party-hint">
+                      {locations.length
+                        ? 'Required when opening qty is more than 0. Move stock later with a transfer.'
+                        : 'Add locations under Company → Locations to put opening stock in a shop.'}
+                    </p>
+                  </div>
+                </>
               ) : (
                 <input type="hidden" name="openingQty" value="0" />
               )}
@@ -473,10 +524,39 @@ export function ProductForm({
                 <input className="input" name="reorderQty" inputMode="decimal" defaultValue={product?.reorderQty ?? ''} />
               </div>
               {mode === 'edit' ? (
-                <div className="field">
-                  <label>Qty on hand</label>
-                  <input className="input" value={product?.qtyOnHand ?? 0} readOnly />
-                </div>
+                <>
+                  <div className="field">
+                    <label>Qty on hand</label>
+                    <input className="input" value={product?.qtyOnHand ?? 0} readOnly />
+                  </div>
+                  <div className="field field-full">
+                    <label>Stock by location</label>
+                    {product?.stockByLocation?.length ? (
+                      <ul className="muted-line" style={{ display: 'grid', gap: 4, margin: 0, paddingLeft: 18 }}>
+                        {product.stockByLocation.map((s) => (
+                          <li key={s.locationId ?? 'unassigned'}>
+                            {s.locationName}: {s.qty}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="muted-line">No stock rows yet.</p>
+                    )}
+                  </div>
+                  {product?.stockByLocation?.some((s) => !s.locationId && Math.abs(s.qty) > 0.0001) && locations.length ? (
+                    <div className="field">
+                      <label>Move unassigned stock to</label>
+                      <select className="input" name="assignLocationId" defaultValue="">
+                        <option value="">Leave unassigned</option>
+                        {locations.map((l) => (
+                          <option value={l.id} key={l.id}>
+                            {l.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </div>
           </div>

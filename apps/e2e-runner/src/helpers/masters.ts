@@ -190,6 +190,13 @@ export async function createProduct(
   if (type === 'physical' && opts.openingQty) {
     await page.getByRole('tab', { name: /Stock/i }).click();
     await page.locator('input[name="openingQty"]').fill(opts.openingQty);
+    const loc = page.locator('select[name="openingLocationId"]');
+    if (await loc.isVisible().catch(() => false)) {
+      const values = await loc.locator('option').evaluateAll((opts) =>
+        opts.map((o) => (o as HTMLOptionElement).value).filter(Boolean),
+      );
+      if (values[0]) await loc.selectOption(values[0]);
+    }
   }
   await clickPrimary(page, /Save product/i);
   await page.waitForURL(/\/inventory\/products/, { timeout: 45_000 }).catch(() => undefined);

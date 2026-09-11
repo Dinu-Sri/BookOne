@@ -21,6 +21,7 @@ import {
   asc,
   sql,
   or,
+  inArray,
   inventoryProducts,
   inventoryProductCategories,
   inventoryStockLevels,
@@ -33,6 +34,7 @@ import {
   journalLines,
   periodLocks,
   transactions,
+  brands,
   locations,
   withTenantContext,
 } from '@bookone/db';
@@ -55,6 +57,9 @@ const productInputSchema = z.object({
   openingQty: z.number().default(0),
   category: z.string().max(120).optional(),
   categoryId: z.string().uuid().optional().nullable(),
+  brandId: z.string().uuid().optional().nullable(),
+  openingLocationId: z.string().uuid().optional().nullable(),
+  assignLocationId: z.string().uuid().optional().nullable(),
   barcode: z.string().max(80).optional(),
   sellable: z.boolean().default(true),
   purchasable: z.boolean().default(true),
@@ -90,6 +95,10 @@ export interface ProductRow {
   isActive: string;
   category: string | null;
   categoryId: string | null;
+  brandId: string | null;
+  brandName: string | null;
+  stockByLocation: { locationId: string | null; locationName: string; qty: number }[];
+  locationSummary: string;
   barcode: string | null;
   sellable: boolean;
   purchasable: boolean;
@@ -287,6 +296,10 @@ function mapProduct(
       | 'kitComponents'
       | 'tracksSerials'
       | 'serialCodes'
+      | 'brandId'
+      | 'brandName'
+      | 'stockByLocation'
+      | 'locationSummary'
     >
   >,
 ): ProductRow {
@@ -305,6 +318,10 @@ function mapProduct(
     isActive: String(row.isActive ?? '1'),
     category: (row.category as string | null) ?? null,
     categoryId: (row.categoryId as string | null) ?? null,
+    brandId: extras.brandId ?? (row.brandId as string | null) ?? null,
+    brandName: extras.brandName ?? null,
+    stockByLocation: extras.stockByLocation ?? [],
+    locationSummary: extras.locationSummary ?? 'Unassigned',
     barcode: (row.barcode as string | null) ?? null,
     sellable: row.sellable !== '0' && row.sellable !== false,
     purchasable: row.purchasable !== '0' && row.purchasable !== false,
@@ -371,6 +388,7 @@ export async function listProducts(filter?: {
           or lower(${inventoryProducts.sku}) like ${like}
           or lower(coalesce(${inventoryProducts.category}, '')) like ${like}
           or lower(coalesce(${inventoryProducts.barcode}, '')) like ${like}
+          or lower(coalesce(${brands.name}, '')) like ${like}
         )`,
       );
     }
@@ -384,21 +402,48 @@ export async function listProducts(filter?: {
             ? inventoryProducts.sellPrice
             : inventoryProducts.name;
 
+    const scope = await currentDimensionScope();
+    if (scope.brandIds?.length) {
+      conditions.push(
+        or(isNull(inventoryProducts.brandId), inArray(inventoryProducts.brandId, scope.brandIds))!,
+      );
+    }
+
     const rows = await db()
-      .select()
+      .select({
+        product: inventoryProducts,
+        brandName: brands.name,
+      })
       .from(inventoryProducts)
+      .leftJoin(brands, eq(brands.id, inventoryProducts.brandId))
       .where(and(...conditions))
       .orderBy(dir === 'desc' ? desc(orderCol) : asc(orderCol));
 
     const qtyRows = await db()
       .select({
         productId: inventoryStockLevels.productId,
-        qty: sql<string>`coalesce(sum(${inventoryStockLevels.qtyOnHand}::numeric), 0)`,
+        locationId: inventoryStockLevels.locationId,
+        locationName: locations.name,
+        qty: inventoryStockLevels.qtyOnHand,
       })
       .from(inventoryStockLevels)
-      .where(eq(inventoryStockLevels.tenantId, user.tenantId))
-      .groupBy(inventoryStockLevels.productId);
-    const qtyMap = new Map(qtyRows.map((r) => [r.productId, Number(r.qty)]));
+      .leftJoin(locations, eq(locations.id, inventoryStockLevels.locationId))
+      .where(eq(inventoryStockLevels.tenantId, user.tenantId));
+    const stockMap = new Map<string, { locationId: string | null; locationName: string; qty: number }[]>();
+    for (const r of qtyRows) {
+      const list = stockMap.get(r.productId) ?? [];
+      const locId = r.locationId ?? null;
+      if (scope.locationIds?.length && locId && !scope.locationIds.includes(locId)) continue;
+      list.push({
+        locationId: locId,
+        locationName: r.locationName?.trim() || (locId ? 'Location' : 'Unassigned'),
+        qty: Number(r.qty ?? 0),
+      });
+      stockMap.set(r.productId, list);
+    }
+    const qtyMap = new Map(
+      [...stockMap.entries()].map(([id, list]) => [id, list.reduce((s, x) => s + x.qty, 0)]),
+    );
 
     const movRows = await db()
       .select({
@@ -425,15 +470,17 @@ export async function listProducts(filter?: {
     const { resolveProductImageUrl } = await import('@/lib/product-image');
 
     let result = await Promise.all(
-      rows.map(async (row) => {
+      rows.map(async ({ product: row, brandName }) => {
         const mov = movMap.get(row.id) ?? 0;
         const docs = lineMap.get(row.id) ?? 0;
+        const stockByLocation = stockMap.get(row.id) ?? [];
         const qty = qtyMap.get(row.id) ?? 0;
         const reasons: string[] = [];
         if (mov > 0) reasons.push(`Has ${mov} stock movement(s).`);
         if (docs > 0) reasons.push(`Used on ${docs} document line(s).`);
         if (Math.abs(qty) > 0.0001) reasons.push(`Qty on hand is ${qty} (adjust to zero first).`);
         const imageUrl = await resolveProductImageUrl(row.imageKey);
+        const locNames = stockByLocation.filter((s) => Math.abs(s.qty) > 0.0001).map((s) => s.locationName);
         return mapProduct(row as unknown as Record<string, unknown>, {
           qtyOnHand: qty,
           movementCount: mov,
@@ -442,9 +489,21 @@ export async function listProducts(filter?: {
           deleteReasons: reasons,
           typeLocked: mov > 0 || docs > 0,
           imageUrl,
+          brandId: row.brandId ?? null,
+          brandName: brandName ?? null,
+          stockByLocation,
+          locationSummary: locNames.length ? locNames.join(', ') : tracksStockQty(normalizeType(row.productType)) ? 'Unassigned' : '—',
         });
       }),
     );
+
+    if (scope.locationIds?.length) {
+      result = result.filter((p) => {
+        if (!tracksStockQty(p.productType)) return true;
+        if (!p.stockByLocation.length) return true;
+        return p.stockByLocation.some((s) => !s.locationId || scope.locationIds!.includes(s.locationId));
+      });
+    }
 
     if (sort === 'qty') {
       result.sort((a, b) => (dir === 'desc' ? b.qtyOnHand - a.qtyOnHand : a.qtyOnHand - b.qtyOnHand));
@@ -585,6 +644,106 @@ export async function listPhysicalProductOptions(): Promise<
   }));
 }
 
+export async function listProductDimensionOptions(): Promise<{
+  brands: { id: string; name: string }[];
+  locations: { id: string; name: string; brandId: string | null }[];
+}> {
+  const user = await requireTenantContext();
+  const scope = await currentDimensionScope();
+  return withTenantContext(user.tenantId, async () => {
+    const brandRows = await db()
+      .select({ id: brands.id, name: brands.name })
+      .from(brands)
+      .where(and(eq(brands.tenantId, user.tenantId), isNull(brands.voidedAt)))
+      .orderBy(asc(brands.name));
+    const locationRows = await db()
+      .select({
+        id: locations.id,
+        name: locations.name,
+        brandId: locations.brandId,
+        locationType: locations.locationType,
+      })
+      .from(locations)
+      .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)))
+      .orderBy(asc(locations.name));
+    return {
+      brands: brandRows.filter((b) => !scope.brandIds?.length || scope.brandIds.includes(b.id)),
+      locations: locationRows
+        .filter((l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash')
+        .filter((l) => !scope.locationIds?.length || scope.locationIds.includes(l.id))
+        .map((l) => ({ id: l.id, name: l.name, brandId: l.brandId ?? null })),
+    };
+  });
+}
+
+async function assertProductBrandAndLocation(
+  tenantId: string,
+  brandId: string | null,
+  locationId: string | null,
+) {
+  if (brandId) {
+    const [brand] = await db()
+      .select({ id: brands.id })
+      .from(brands)
+      .where(and(eq(brands.id, brandId), eq(brands.tenantId, tenantId), isNull(brands.voidedAt)))
+      .limit(1);
+    if (!brand) throw new Error('Selected brand was not found.');
+  }
+  if (locationId) {
+    const [loc] = await db()
+      .select({ id: locations.id, locationType: locations.locationType })
+      .from(locations)
+      .where(and(eq(locations.id, locationId), eq(locations.tenantId, tenantId), isNull(locations.voidedAt)))
+      .limit(1);
+    if (!loc) throw new Error('Selected location was not found.');
+    if (loc.locationType === 'on_rent' || loc.locationType === 'repair' || loc.locationType === 'wash') {
+      throw new Error('Pick a shop or warehouse, not wash/repair/on-rent.');
+    }
+  }
+  await assertDimensionScope({ brandId, locationId });
+}
+
+async function moveUnassignedStock(tenantId: string, productId: string, locationId: string) {
+  const [unassigned] = await db()
+    .select()
+    .from(inventoryStockLevels)
+    .where(
+      and(
+        eq(inventoryStockLevels.tenantId, tenantId),
+        eq(inventoryStockLevels.productId, productId),
+        sql`${inventoryStockLevels.locationId} is null`,
+      ),
+    )
+    .limit(1);
+  if (!unassigned) return;
+  const [target] = await db()
+    .select()
+    .from(inventoryStockLevels)
+    .where(
+      and(
+        eq(inventoryStockLevels.tenantId, tenantId),
+        eq(inventoryStockLevels.productId, productId),
+        eq(inventoryStockLevels.locationId, locationId),
+      ),
+    )
+    .limit(1);
+  if (target) {
+    await db()
+      .update(inventoryStockLevels)
+      .set({
+        qtyOnHand: (Number(target.qtyOnHand) + Number(unassigned.qtyOnHand)).toFixed(4),
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryStockLevels.id, target.id));
+    await db().delete(inventoryStockLevels).where(eq(inventoryStockLevels.id, unassigned.id));
+  } else {
+    await db()
+      .update(inventoryStockLevels)
+      .set({ locationId, updatedAt: new Date() })
+      .where(eq(inventoryStockLevels.id, unassigned.id));
+  }
+}
+
 async function applyCategory(tenantId: string, parsed: ProductInput): Promise<void> {
   if (parsed.categoryId) {
     const [row] = await db()
@@ -637,6 +796,9 @@ function formToProductInput(formData: FormData): ProductInput {
     openingQty: Number(String(formData.get('openingQty') ?? '0').replace(/[^0-9.-]/g, '')) || 0,
     category: String(formData.get('category') ?? ''),
     categoryId: String(formData.get('categoryId') ?? '').trim() || null,
+    brandId: String(formData.get('brandId') ?? '').trim() || null,
+    openingLocationId: String(formData.get('openingLocationId') ?? '').trim() || null,
+    assignLocationId: String(formData.get('assignLocationId') ?? '').trim() || null,
     barcode: String(formData.get('barcode') ?? ''),
     sellable: formData.get('sellable') === 'on' || formData.get('sellable') === '1' || formData.get('sellable') === 'true',
     purchasable:
@@ -686,6 +848,7 @@ function toProductValues(tenantId: string, parsed: ProductInput) {
     sellPrice: parsed.sellPrice.toFixed(2),
     category: clean(parsed.category),
     categoryId: parsed.categoryId || null,
+    brandId: parsed.brandId || null,
     barcode: clean(parsed.barcode),
     sellable: parsed.sellable ? '1' : '0',
     purchasable: parsed.purchasable ? '1' : '0',
@@ -862,6 +1025,7 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
 
   await withTenantContext(user.tenantId, async () => {
     await applyCategory(user.tenantId, parsed);
+    await assertProductBrandAndLocation(user.tenantId, parsed.brandId ?? null, parsed.openingLocationId ?? null);
     const [dup] = await db()
       .select({ id: inventoryProducts.id })
       .from(inventoryProducts)
@@ -900,10 +1064,22 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
     }
 
     if (tracksStockQty(type)) {
+      const openingLocationId = parsed.openingLocationId || null;
+      const locRows = await db()
+        .select({ id: locations.id, locationType: locations.locationType })
+        .from(locations)
+        .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)));
+      const operational = locRows.filter(
+        (l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash',
+      );
+      if (operational.length > 0 && parsed.openingQty > 0 && !openingLocationId) {
+        throw new Error('Pick a location for opening stock.');
+      }
+      await assertProductBrandAndLocation(user.tenantId, parsed.brandId ?? null, openingLocationId);
       await db().insert(inventoryStockLevels).values({
         tenantId: user.tenantId,
         productId: product.id,
-        locationId: null,
+        locationId: openingLocationId,
         qtyOnHand: parsed.openingQty.toFixed(4),
       });
       if (parsed.openingQty > 0) {
@@ -1062,6 +1238,10 @@ export async function updateProductFromForm(formData: FormData): Promise<void> {
     }
 
     await db().update(inventoryProducts).set(values).where(eq(inventoryProducts.id, id));
+    await assertProductBrandAndLocation(user.tenantId, parsed.brandId ?? null, parsed.assignLocationId ?? null);
+    if (parsed.assignLocationId) {
+      await moveUnassignedStock(user.tenantId, id, parsed.assignLocationId);
+    }
 
     if (type === 'rental') {
       await replaceKitComponents(user.tenantId, id, parseKitComponents(formData));

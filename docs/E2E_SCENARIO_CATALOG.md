@@ -6209,6 +6209,20 @@
 - **Steps:** Open `/inventory/categories`
 - **Expect:** Parent category, optional brand, and optional location fields on the add form.
 
+### S-0738 — Product brand and opening location
+
+- **Priority:** P1
+- **Tags:** `@inventory`, `@product`
+- **Steps:** Open `/inventory/products/new`
+- **Expect:** Brand field on Identity; Opening location on Stock for physical products.
+
+### S-0739 — Product list shows brand and location
+
+- **Priority:** P1
+- **Tags:** `@inventory`, `@product`
+- **Steps:** Open `/inventory/products`
+- **Expect:** Brand and Location columns.
+
 ---
 
 ## 31. Team access (RBAC)

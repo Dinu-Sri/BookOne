@@ -9411,6 +9411,28 @@
     "steps": []
   },
   {
+    "id": "S-0738",
+    "title": "Product brand and opening location",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P1",
+    "tags": [
+      "@inventory",
+      "@product"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0739",
+    "title": "Product list shows brand and location",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P1",
+    "tags": [
+      "@inventory",
+      "@product"
+    ],
+    "steps": []
+  },
+  {
     "id": "S-0713",
     "title": "Company → Team loads for owner",
     "section": "31. Team access (RBAC)",

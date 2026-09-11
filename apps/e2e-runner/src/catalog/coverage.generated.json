@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-11T15:36:04.164Z",
-    "catalog_total": 724,
-    "referenced": 724,
+    "generated_at": "2026-09-11T15:50:09.567Z",
+    "catalog_total": 726,
+    "referenced": 726,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
       "P0": 332,
-      "P1": 305,
+      "P1": 307,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -108,8 +108,8 @@
       "referenced": 16
     },
     "30. Product identity (units, categories, descriptions)": {
-      "total": 5,
-      "referenced": 5
+      "total": 7,
+      "referenced": 7
     },
     "31. Team access (RBAC)": {
       "total": 12,
@@ -10098,6 +10098,34 @@
       ],
       "referenced_in": [
         "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0738",
+      "title": "Product brand and opening location",
+      "section": "30. Product identity (units, categories, descriptions)",
+      "priority": "P1",
+      "tags": [
+        "@inventory",
+        "@product"
+      ],
+      "referenced_in": [
+        "tests/05-parties-products.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0739",
+      "title": "Product list shows brand and location",
+      "section": "30. Product identity (units, categories, descriptions)",
+      "priority": "P1",
+      "tags": [
+        "@inventory",
+        "@product"
+      ],
+      "referenced_in": [
+        "tests/05-parties-products.spec.ts"
       ],
       "status": "referenced"
     }

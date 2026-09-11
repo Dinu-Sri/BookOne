@@ -31,6 +31,8 @@ export const inventoryProducts = pgTable('inventory_products', {
   expenseAccountCode: varchar('expense_account_code', { length: 20 }).notNull().default('6800'),
   category: varchar('category', { length: 120 }),
   categoryId: uuid('category_id').references((): AnyPgColumn => inventoryProductCategories.id),
+  /** Company brand this SKU belongs to. Null = all brands / shared. */
+  brandId: uuid('brand_id').references(() => brands.id),
   barcode: varchar('barcode', { length: 80 }),
   sellable: varchar('sellable', { length: 1 }).notNull().default('1'),
   purchasable: varchar('purchasable', { length: 1 }).notNull().default('1'),

@@ -391,6 +391,8 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                         <SortIcon active={sortKey === 'productType'} dir={sortDir} />
                       </button>
                     </th>
+                    <th>Brand</th>
+                    <th>Location</th>
                     <th>
                       <button
                         type="button"
@@ -454,6 +456,8 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
                       <td>
                         <StatusBadge status={p.productType} />
                       </td>
+                      <td>{p.brandName || 'All brands'}</td>
+                      <td>{p.locationSummary || '—'}</td>
                       <td>
                         {formatLKR(p.unitCost)}
                         {(p.productType === 'physical' || p.productType === 'stocked') && (

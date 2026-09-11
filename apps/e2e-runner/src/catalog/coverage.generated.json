@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-11T02:04:26.276Z",
-    "catalog_total": 714,
-    "referenced": 714,
+    "generated_at": "2026-09-11T07:50:51.384Z",
+    "catalog_total": 717,
+    "referenced": 717,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
       "P0": 329,
-      "P1": 298,
+      "P1": 301,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -112,8 +112,8 @@
       "referenced": 5
     },
     "31. Team access (RBAC)": {
-      "total": 2,
-      "referenced": 2
+      "total": 5,
+      "referenced": 5
     },
     "4. Company masters": {
       "total": 30,
@@ -9950,6 +9950,48 @@
     {
       "id": "S-0714",
       "title": "Jobs screen loads",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0731",
+      "title": "Groups screen loads",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0732",
+      "title": "Access history on Team",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0733",
+      "title": "Person access page loads",
       "section": "31. Team access (RBAC)",
       "priority": "P1",
       "tags": [

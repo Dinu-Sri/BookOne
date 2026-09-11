@@ -6,6 +6,7 @@ import {
   JOB_TEMPLATES,
   PRIVILEGED_KEYS,
   SCREEN_DEFS,
+  loadAccessForUser,
   requireTenantContext,
   seedJobsForTenant,
   type PermissionKey,
@@ -14,7 +15,9 @@ import {
   and,
   auditLog,
   db,
+  desc,
   eq,
+  inArray,
   isNull,
   sql,
   tenantInvites,
@@ -25,15 +28,19 @@ import {
   tenantRoles,
   tenantTeamMembers,
   tenantTeams,
+  tenants,
   users,
   withTenantContext,
 } from '@bookone/db';
 import { assertPermission, getMyAccess } from '@/lib/access';
 import { parseEntityKind } from '@/lib/entity-kind';
+import { teamSeatCap } from '@/lib/team-seats';
+import { grantsHaveBillAndPay, teamSodArmed } from '@/lib/team-sod';
 
 function revalidateTeam() {
-  revalidatePath('/company/team');
+  revalidatePath('/company/team', 'layout');
   revalidatePath('/company/team/jobs');
+  revalidatePath('/company/team/groups');
 }
 
 function tokenHash(token: string) {
@@ -72,7 +79,21 @@ export async function listTeamPeople() {
       .innerJoin(users, eq(users.id, tenantMemberships.userId))
       .leftJoin(tenantRoles, eq(tenantRoles.id, tenantMemberships.primaryRoleId))
       .where(and(eq(tenantMemberships.tenantId, user.tenantId), isNull(tenantMemberships.voidedAt)));
-    return rows;
+    const extras = await db()
+      .select({
+        membershipId: tenantMembershipRoles.membershipId,
+        extraName: tenantRoles.name,
+        extraSlug: tenantRoles.slug,
+      })
+      .from(tenantMembershipRoles)
+      .innerJoin(tenantRoles, eq(tenantRoles.id, tenantMembershipRoles.roleId))
+      .where(and(eq(tenantMembershipRoles.tenantId, user.tenantId), isNull(tenantMembershipRoles.voidedAt)));
+    const extraByMem = new Map(extras.map((e) => [e.membershipId, e]));
+    return rows.map((r) => ({
+      ...r,
+      extraName: extraByMem.get(r.membershipId)?.extraName ?? null,
+      extraSlug: extraByMem.get(r.membershipId)?.extraSlug ?? null,
+    }));
   });
 }
 
@@ -115,9 +136,7 @@ export async function listJobMatrix(roleId: string) {
         .where(and(eq(tenantRolePermissions.roleId, roleId), isNull(tenantRolePermissions.voidedAt)));
       for (const r of rows) grantSet.add(r.permissionKey as PermissionKey);
     }
-    return {
-      role,
-      screens: SCREEN_DEFS.map((s) => {
+    const screens = SCREEN_DEFS.map((s) => {
         const write = grantSet.has(`${s.keyPrefix}.write` as PermissionKey);
         const read = write || grantSet.has(`${s.keyPrefix}.read` as PermissionKey);
         const privileged = (PRIVILEGED_KEYS as readonly string[]).some((k) => k.startsWith(s.keyPrefix));
@@ -126,8 +145,17 @@ export async function listJobMatrix(roleId: string) {
           level: (write ? 'write' : read ? 'read' : 'none') as 'none' | 'read' | 'write',
           locked: privileged,
         };
-      }),
-    };
+      });
+    const grantKeys = screens.flatMap((s) =>
+      s.level === 'write' ? [`${s.keyPrefix}.write`] : s.level === 'read' ? [`${s.keyPrefix}.read`] : [],
+    );
+    const sod =
+      teamSodArmed({
+        templateKey: role.templateKey,
+        customized: Boolean(role.customizedAt),
+        hasExtra: false,
+      }) && grantsHaveBillAndPay(grantKeys);
+    return { role, screens, sod };
   });
 }
 
@@ -290,15 +318,6 @@ export async function deactivateMember(formData: FormData) {
   return { ok: true as const, message: 'Person deactivated.' };
 }
 
-const SEAT_CAPS: Record<string, number> = {
-  personal: 1,
-  sole_lite: 2,
-  sole_full: 5,
-  starter: 5,
-  growth: 15,
-  pro: 50,
-};
-
 export async function inviteTeamMember(formData: FormData) {
   await assertPermission('team.people.write', 'write');
   const user = await requireTenantContext();
@@ -335,10 +354,24 @@ export async function inviteTeamMember(formData: FormData) {
     const [{ total: pending }] = await db()
       .select({ total: sql<number>`count(*)` })
       .from(tenantInvites)
-      .where(and(eq(tenantInvites.tenantId, user.tenantId), eq(tenantInvites.status, 'pending'), isNull(tenantInvites.voidedAt)));
-    const capKey =
-      kind === 'sole_prop' ? (access?.capabilityTier === 'full' ? 'sole_full' : 'sole_lite') : access?.modules ? 'starter' : 'starter';
-    const cap = SEAT_CAPS[capKey] ?? 5;
+      .where(
+        and(
+          eq(tenantInvites.tenantId, user.tenantId),
+          eq(tenantInvites.status, 'pending'),
+          isNull(tenantInvites.voidedAt),
+          sql`${tenantInvites.expiresAt} > now()`,
+        ),
+      );
+    const [tenantRow] = await db()
+      .select({ plan: tenants.plan, entityKind: tenants.entityKind, capabilityTier: tenants.capabilityTier })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1);
+    const cap = teamSeatCap({
+      entityKind: tenantRow?.entityKind ?? access?.entityKind,
+      capabilityTier: tenantRow?.capabilityTier ?? access?.capabilityTier,
+      plan: tenantRow?.plan,
+    });
     if (Number(live ?? 0) + Number(pending ?? 0) >= cap) {
       return { ok: false as const, error: `This workspace can have up to ${cap} people.` };
     }
@@ -380,7 +413,14 @@ export async function listPendingInvites() {
       })
       .from(tenantInvites)
       .leftJoin(tenantRoles, eq(tenantRoles.id, tenantInvites.roleId))
-      .where(and(eq(tenantInvites.tenantId, user.tenantId), eq(tenantInvites.status, 'pending'), isNull(tenantInvites.voidedAt)));
+      .where(
+        and(
+          eq(tenantInvites.tenantId, user.tenantId),
+          eq(tenantInvites.status, 'pending'),
+          isNull(tenantInvites.voidedAt),
+          sql`${tenantInvites.expiresAt} > now()`,
+        ),
+      );
   });
 }
 
@@ -480,9 +520,375 @@ export async function addTeamMember(formData: FormData) {
         roleId: team.roleId,
       });
     }
+    const [already] = await db()
+      .select({ id: tenantTeamMembers.id })
+      .from(tenantTeamMembers)
+      .where(
+        and(
+          eq(tenantTeamMembers.teamId, teamId),
+          eq(tenantTeamMembers.userId, userId),
+          isNull(tenantTeamMembers.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (already) return { ok: true as const, message: 'Already in this team.' };
     await db().insert(tenantTeamMembers).values({ tenantId: user.tenantId, teamId, userId });
     await audit(user.tenantId, user.id, 'CREATE', 'tenant_team_members', teamId, 'Added team member.');
   });
   revalidateTeam();
   return { ok: true as const, message: 'Added to team.' };
+}
+
+async function clearExtraIfMatches(tenantId: string, membershipId: string, roleId: string) {
+  await db()
+    .update(tenantMembershipRoles)
+    .set({ voidedAt: new Date() })
+    .where(
+      and(
+        eq(tenantMembershipRoles.membershipId, membershipId),
+        eq(tenantMembershipRoles.roleId, roleId),
+        isNull(tenantMembershipRoles.voidedAt),
+      ),
+    );
+}
+
+export async function listTeamsWithMembers() {
+  await assertPermission('team.people.read', 'read');
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const teams = await db()
+      .select({
+        id: tenantTeams.id,
+        name: tenantTeams.name,
+        roleId: tenantTeams.roleId,
+        roleName: tenantRoles.name,
+        roleSlug: tenantRoles.slug,
+      })
+      .from(tenantTeams)
+      .leftJoin(tenantRoles, eq(tenantRoles.id, tenantTeams.roleId))
+      .where(and(eq(tenantTeams.tenantId, user.tenantId), isNull(tenantTeams.voidedAt)));
+    const members = await db()
+      .select({
+        id: tenantTeamMembers.id,
+        teamId: tenantTeamMembers.teamId,
+        userId: tenantTeamMembers.userId,
+        name: users.name,
+        email: users.email,
+      })
+      .from(tenantTeamMembers)
+      .innerJoin(users, eq(users.id, tenantTeamMembers.userId))
+      .where(and(eq(tenantTeamMembers.tenantId, user.tenantId), isNull(tenantTeamMembers.voidedAt)));
+    return teams.map((t) => ({
+      ...t,
+      members: members.filter((m) => m.teamId === t.id),
+    }));
+  });
+}
+
+export async function removeTeamMember(formData: FormData) {
+  await assertPermission('team.people.write', 'write');
+  const user = await requireTenantContext();
+  const teamId = String(formData.get('teamId') ?? '');
+  const userId = String(formData.get('userId') ?? '');
+  await withTenantContext(user.tenantId, async () => {
+    const [team] = await db()
+      .select()
+      .from(tenantTeams)
+      .where(and(eq(tenantTeams.id, teamId), eq(tenantTeams.tenantId, user.tenantId)))
+      .limit(1);
+    if (!team) throw new Error('Team not found.');
+    await db()
+      .update(tenantTeamMembers)
+      .set({ voidedAt: new Date() })
+      .where(
+        and(
+          eq(tenantTeamMembers.teamId, teamId),
+          eq(tenantTeamMembers.userId, userId),
+          isNull(tenantTeamMembers.voidedAt),
+        ),
+      );
+    const [membership] = await db()
+      .select({ id: tenantMemberships.id })
+      .from(tenantMemberships)
+      .where(
+        and(
+          eq(tenantMemberships.tenantId, user.tenantId),
+          eq(tenantMemberships.userId, userId),
+          isNull(tenantMemberships.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (membership) await clearExtraIfMatches(user.tenantId, membership.id, team.roleId);
+    await audit(user.tenantId, user.id, 'DELETE', 'tenant_team_members', teamId, 'Removed team member.');
+  });
+  revalidateTeam();
+  return { ok: true as const, message: 'Removed from team.' };
+}
+
+export async function voidTeam(formData: FormData) {
+  await assertPermission('team.people.write', 'write');
+  const user = await requireTenantContext();
+  const teamId = String(formData.get('teamId') ?? '');
+  await withTenantContext(user.tenantId, async () => {
+    const [team] = await db()
+      .select()
+      .from(tenantTeams)
+      .where(and(eq(tenantTeams.id, teamId), eq(tenantTeams.tenantId, user.tenantId), isNull(tenantTeams.voidedAt)))
+      .limit(1);
+    if (!team) throw new Error('Team not found.');
+    const members = await db()
+      .select({ userId: tenantTeamMembers.userId })
+      .from(tenantTeamMembers)
+      .where(and(eq(tenantTeamMembers.teamId, teamId), isNull(tenantTeamMembers.voidedAt)));
+    await db()
+      .update(tenantTeamMembers)
+      .set({ voidedAt: new Date() })
+      .where(and(eq(tenantTeamMembers.teamId, teamId), isNull(tenantTeamMembers.voidedAt)));
+    for (const m of members) {
+      const [membership] = await db()
+        .select({ id: tenantMemberships.id })
+        .from(tenantMemberships)
+        .where(
+          and(
+            eq(tenantMemberships.tenantId, user.tenantId),
+            eq(tenantMemberships.userId, m.userId),
+            isNull(tenantMemberships.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (membership) await clearExtraIfMatches(user.tenantId, membership.id, team.roleId);
+    }
+    await db().update(tenantTeams).set({ voidedAt: new Date(), updatedAt: new Date() }).where(eq(tenantTeams.id, teamId));
+    await audit(user.tenantId, user.id, 'DELETE', 'tenant_teams', teamId, `Removed team ${team.name}.`);
+  });
+  revalidateTeam();
+  return { ok: true as const, message: 'Team removed.' };
+}
+
+export async function setExtraJob(formData: FormData) {
+  await assertPermission('team.people.write', 'write');
+  const user = await requireTenantContext();
+  const membershipId = String(formData.get('membershipId') ?? '');
+  const roleId = String(formData.get('roleId') ?? '');
+  await withTenantContext(user.tenantId, async () => {
+    await db()
+      .update(tenantMembershipRoles)
+      .set({ voidedAt: new Date() })
+      .where(and(eq(tenantMembershipRoles.membershipId, membershipId), isNull(tenantMembershipRoles.voidedAt)));
+    if (!roleId) {
+      await audit(user.tenantId, user.id, 'UPDATE', 'tenant_memberships', membershipId, 'Cleared extra job.');
+      return;
+    }
+    const [job] = await db()
+      .select()
+      .from(tenantRoles)
+      .where(and(eq(tenantRoles.id, roleId), eq(tenantRoles.tenantId, user.tenantId), isNull(tenantRoles.voidedAt)))
+      .limit(1);
+    if (!job) throw new Error('Job not found.');
+    if (job.templateKey === 'owner' || job.templateKey === 'admin') {
+      throw new Error('Owner and Admin cannot be extra jobs.');
+    }
+    await db().insert(tenantMembershipRoles).values({
+      tenantId: user.tenantId,
+      membershipId,
+      roleId,
+    });
+    await audit(user.tenantId, user.id, 'UPDATE', 'tenant_memberships', membershipId, `Extra job ${job.name}.`);
+  });
+  revalidateTeam();
+  return { ok: true as const, message: roleId ? 'Extra job saved.' : 'Extra job cleared.' };
+}
+
+export async function savePersonOverrides(formData: FormData) {
+  await assertPermission('team.people.write', 'write');
+  const actor = await requireTenantContext();
+  const userId = String(formData.get('userId') ?? '');
+  await withTenantContext(actor.tenantId, async () => {
+    await db()
+      .update(tenantPermissionOverrides)
+      .set({ voidedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(tenantPermissionOverrides.tenantId, actor.tenantId),
+          eq(tenantPermissionOverrides.userId, userId),
+          isNull(tenantPermissionOverrides.voidedAt),
+        ),
+      );
+    const rows: { tenantId: string; userId: string; permissionKey: string; effect: string }[] = [];
+    for (const screen of SCREEN_DEFS) {
+      if ((PRIVILEGED_KEYS as readonly string[]).some((k) => k.startsWith(screen.keyPrefix))) continue;
+      const v = String(formData.get(`ex_${screen.keyPrefix}`) ?? 'inherit');
+      if (v === 'allow') {
+        rows.push({
+          tenantId: actor.tenantId,
+          userId,
+          permissionKey: screen.writeable ? `${screen.keyPrefix}.write` : `${screen.keyPrefix}.read`,
+          effect: 'allow',
+        });
+      } else if (v === 'deny') {
+        rows.push({ tenantId: actor.tenantId, userId, permissionKey: `${screen.keyPrefix}.read`, effect: 'deny' });
+        if (screen.writeable) {
+          rows.push({ tenantId: actor.tenantId, userId, permissionKey: `${screen.keyPrefix}.write`, effect: 'deny' });
+        }
+      }
+    }
+    if (rows.length) await db().insert(tenantPermissionOverrides).values(rows);
+    await audit(actor.tenantId, actor.id, 'UPDATE', 'tenant_permission_overrides', userId, 'Updated access exceptions.');
+  });
+  revalidateTeam();
+  return { ok: true as const, message: 'Exceptions saved.' };
+}
+
+export async function getPersonAccess(userId: string) {
+  await assertPermission('team.people.read', 'read');
+  const actor = await requireTenantContext();
+  return withTenantContext(actor.tenantId, async () => {
+    const [person] = await db()
+      .select({
+        membershipId: tenantMemberships.id,
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        status: tenantMemberships.status,
+        role: tenantMemberships.role,
+        primaryRoleId: tenantMemberships.primaryRoleId,
+        usersRole: users.role,
+        jobName: tenantRoles.name,
+        jobSlug: tenantRoles.slug,
+        templateKey: tenantRoles.templateKey,
+        customizedAt: tenantRoles.customizedAt,
+      })
+      .from(tenantMemberships)
+      .innerJoin(users, eq(users.id, tenantMemberships.userId))
+      .leftJoin(tenantRoles, eq(tenantRoles.id, tenantMemberships.primaryRoleId))
+      .where(
+        and(
+          eq(tenantMemberships.tenantId, actor.tenantId),
+          eq(tenantMemberships.userId, userId),
+          isNull(tenantMemberships.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (!person) return null;
+    const [extra] = await db()
+      .select({
+        roleId: tenantMembershipRoles.roleId,
+        name: tenantRoles.name,
+        slug: tenantRoles.slug,
+        templateKey: tenantRoles.templateKey,
+      })
+      .from(tenantMembershipRoles)
+      .innerJoin(tenantRoles, eq(tenantRoles.id, tenantMembershipRoles.roleId))
+      .where(and(eq(tenantMembershipRoles.membershipId, person.membershipId), isNull(tenantMembershipRoles.voidedAt)))
+      .limit(1);
+    const overrideRows = await db()
+      .select({
+        permissionKey: tenantPermissionOverrides.permissionKey,
+        effect: tenantPermissionOverrides.effect,
+      })
+      .from(tenantPermissionOverrides)
+      .where(
+        and(
+          eq(tenantPermissionOverrides.tenantId, actor.tenantId),
+          eq(tenantPermissionOverrides.userId, userId),
+          isNull(tenantPermissionOverrides.voidedAt),
+        ),
+      );
+    const platformRole = person.usersRole === 'super_admin' ? 'super_admin' : 'user';
+    const access = await loadAccessForUser(userId, actor.tenantId, platformRole);
+    const preview = SCREEN_DEFS.map((s) => {
+      const level = access?.allows(`${s.keyPrefix}.write`, 'write')
+        ? 'write'
+        : access?.allows(`${s.keyPrefix}.read`, 'read')
+          ? 'read'
+          : 'none';
+      const privileged = (PRIVILEGED_KEYS as readonly string[]).some((k) => k.startsWith(s.keyPrefix));
+      return { label: s.label, href: s.href, module: s.module, keyPrefix: s.keyPrefix, writeable: s.writeable, level, privileged };
+    });
+    const grantKeys = preview.flatMap((s) =>
+      s.level === 'write' ? [`${s.keyPrefix}.write`] : s.level === 'read' ? [`${s.keyPrefix}.read`] : [],
+    );
+    const sod =
+      teamSodArmed({
+        templateKey: person.templateKey,
+        customized: Boolean(person.customizedAt),
+        hasExtra: Boolean(extra),
+      }) && grantsHaveBillAndPay(grantKeys);
+    const exceptionByPrefix: Record<string, 'allow' | 'deny'> = {};
+    for (const row of overrideRows) {
+      const prefix = row.permissionKey.replace(/\.(read|write)$/, '');
+      if (row.effect === 'deny') exceptionByPrefix[prefix] = 'deny';
+      else if (row.effect === 'allow' && exceptionByPrefix[prefix] !== 'deny') exceptionByPrefix[prefix] = 'allow';
+    }
+    return { person, extra: extra ?? null, exceptionByPrefix, preview, sod };
+  });
+}
+
+export async function getSeatUsage() {
+  await assertPermission('team.people.read', 'read');
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const [tenantRow] = await db()
+      .select({ plan: tenants.plan, entityKind: tenants.entityKind, capabilityTier: tenants.capabilityTier })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1);
+    const [{ total: live }] = await db()
+      .select({ total: sql<number>`count(*)` })
+      .from(tenantMemberships)
+      .where(
+        and(
+          eq(tenantMemberships.tenantId, user.tenantId),
+          isNull(tenantMemberships.voidedAt),
+          eq(tenantMemberships.status, 'active'),
+        ),
+      );
+    const [{ total: pending }] = await db()
+      .select({ total: sql<number>`count(*)` })
+      .from(tenantInvites)
+      .where(
+        and(
+          eq(tenantInvites.tenantId, user.tenantId),
+          eq(tenantInvites.status, 'pending'),
+          isNull(tenantInvites.voidedAt),
+          sql`${tenantInvites.expiresAt} > now()`,
+        ),
+      );
+    const cap = teamSeatCap({
+      entityKind: tenantRow?.entityKind,
+      capabilityTier: tenantRow?.capabilityTier,
+      plan: tenantRow?.plan,
+    });
+    return { used: Number(live ?? 0) + Number(pending ?? 0), cap };
+  });
+}
+
+export async function listAccessHistory() {
+  await assertPermission('team.people.read', 'read');
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const tables = [
+      'tenant_roles',
+      'tenant_memberships',
+      'tenant_invites',
+      'tenant_teams',
+      'tenant_team_members',
+      'tenant_permission_overrides',
+    ];
+    return db()
+      .select({
+        id: auditLog.id,
+        action: auditLog.action,
+        tableName: auditLog.tableName,
+        notes: auditLog.notes,
+        createdAt: auditLog.createdAt,
+        actorName: users.name,
+        actorEmail: users.email,
+      })
+      .from(auditLog)
+      .leftJoin(users, eq(users.id, auditLog.userId))
+      .where(and(eq(auditLog.tenantId, user.tenantId), inArray(auditLog.tableName, tables)))
+      .orderBy(desc(auditLog.createdAt))
+      .limit(40);
+  });
 }

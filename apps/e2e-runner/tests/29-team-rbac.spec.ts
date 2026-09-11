@@ -15,4 +15,28 @@ test.describe('Team RBAC @company @team', () => {
     await expect(page.getByRole('button', { name: /owner/i }).first()).toBeVisible();
     await expectAuthedShell(page);
   });
+
+  test('S-0731 Groups screen loads', async ({ authedPage: page }) => {
+    await go(page, '/company/team/groups');
+    await expect(page.getByRole('button', { name: /add group/i })).toBeVisible();
+    await expect(page.getByText(/shares the|no groups yet|group name/i).first()).toBeVisible();
+    await expectAuthedShell(page);
+  });
+
+  test('S-0732 Access history on Team', async ({ authedPage: page }) => {
+    await go(page, '/company/team');
+    await expect(page.getByText(/access history/i)).toBeVisible();
+    await expectAuthedShell(page);
+  });
+
+  test('S-0733 Person access page loads', async ({ authedPage: page }) => {
+    await go(page, '/company/team');
+    const person = page.locator('table.table tbody tr td a').first();
+    await expect(person).toBeVisible();
+    await person.click();
+    await expect(page.getByText(/also help with/i)).toBeVisible();
+    await expect(page.getByText(/what they can open/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /save exceptions/i })).toBeVisible();
+    await expectAuthedShell(page);
+  });
 });

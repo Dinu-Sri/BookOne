@@ -146,6 +146,7 @@ export async function getTenantInfo(): Promise<TenantInfo> {
   accessByLabel['Low Stock'] = accessByLabel['Stock Levels'] ?? 'none';
   accessByLabel['On rent'] = accessByLabel['Stock Levels'] ?? 'none';
   accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
+  accessByLabel.Groups = accessByLabel.Team ?? 'none';
   return {
     ...t,
     environment: t.environment ?? 'production',

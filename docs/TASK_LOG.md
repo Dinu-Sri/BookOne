@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-09-11 — Team groups, SoD, access history, person extras
+
+- Company → **Groups**: name + a non-Owner/Admin extra job + members. Removing a person (or the group) clears that extra job.
+- Person page `/company/team/[userId]`: job, **Also help with** (one extra), live screen preview, Allow/Block exceptions, SoD banner when a customized/extra job can both book and pay supplier bills.
+- Team **Access history** from `audit_log`. Seat count uses plan (starter 5 / growth 15 / pro 50; sole lite 2 / full 5). Invite job list omits Owner.
+- E2E S-0731…S-0733.
+
 ## 2026-09-11 — Tenant Team RBAC (jobs, invites, enforcement)
 
 - Company → **Team** / **Jobs**: invite people, assign a job, edit job matrix (No access / View only / Can edit).

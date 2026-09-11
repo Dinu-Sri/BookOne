@@ -6227,6 +6227,27 @@
 - **Steps:** Open `/company/team/jobs`
 - **Expect:** Job chips and access matrix.
 
+### S-0731 — Groups screen loads
+
+- **Priority:** P1
+- **Tags:** `@company`, `@team`
+- **Steps:** Open `/company/team/groups`
+- **Expect:** Group name + shared job form, and “Add group”.
+
+### S-0732 — Access history on Team
+
+- **Priority:** P1
+- **Tags:** `@company`, `@team`
+- **Steps:** Open `/company/team`
+- **Expect:** Access history card.
+
+### S-0733 — Person access page loads
+
+- **Priority:** P1
+- **Tags:** `@company`, `@team`
+- **Steps:** Open `/company/team`, click a person name
+- **Expect:** Job, Also help with, screen preview, and Exceptions.
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

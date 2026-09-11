@@ -161,6 +161,7 @@ const navSuites: NavSuite[] = [
       { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },
       { label: 'Team', icon: Users, href: '/company/team' },
       { label: 'Jobs', icon: ShieldCheck, href: '/company/team/jobs' },
+      { label: 'Groups', icon: Users, href: '/company/team/groups' },
     ],
   },
   {
@@ -362,7 +363,7 @@ export function BookOneShell({
           items = items.filter((item) => !isRentalNavItem(item.label));
         }
         if (suite.id === 'company' && entityKind === 'personal') {
-          items = items.filter((item) => item.label !== 'Team' && item.label !== 'Jobs');
+          items = items.filter((item) => item.label !== 'Team' && item.label !== 'Jobs' && item.label !== 'Groups');
         }
         if (tenant?.accessByLabel) {
           items = items.filter((item) => {

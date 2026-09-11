@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { assignJob, deactivateMember } from '@/app/actions/team';
 import { Button, Card, CardBody, CardHeader } from '@/components/ui/bookone-ui';
@@ -14,20 +15,34 @@ type Person = {
   role: string;
   jobName: string | null;
   jobSlug: string | null;
+  extraName?: string | null;
 };
 type Job = { id: string; name: string; slug: string; templateKey: string | null };
 type Invite = { id: string; email: string; status: string; expiresAt: Date; roleName: string | null };
+type HistoryRow = {
+  id: string;
+  action: string;
+  tableName: string;
+  notes: string | null;
+  createdAt: Date;
+  actorName: string | null;
+  actorEmail: string | null;
+};
 
 export function TeamPeopleScreen({
   people,
   jobs,
   invites,
+  seats,
+  history,
   inviteAction,
   revokeAction,
 }: {
   people: Person[];
   jobs: Job[];
   invites: Invite[];
+  seats: { used: number; cap: number };
+  history: HistoryRow[];
   inviteAction: (formData: FormData) => Promise<{ ok: boolean; error?: string; message?: string; url?: string }>;
   revokeAction: (formData: FormData) => Promise<void>;
 }) {
@@ -35,13 +50,14 @@ export function TeamPeopleScreen({
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [inviteUrl, setInviteUrl] = useState('');
+  const inviteJobs = jobs.filter((j) => j.templateKey !== 'owner' && j.slug !== 'owner');
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <Card>
         <CardHeader
           title="Who can use BookOne"
-          subtitle="Invite people and give them a job. A job decides which screens they can view or edit."
+          subtitle={`${seats.used} of ${seats.cap} seats used. Invite people and give them a job.`}
         />
         <CardBody>
           <form
@@ -64,8 +80,8 @@ export function TeamPeopleScreen({
             </div>
             <div className="field">
               <label>Job</label>
-              <select className="input" name="roleId" required defaultValue={jobs.find((j) => j.slug === 'cashier')?.id ?? jobs[0]?.id}>
-                {jobs.map((j) => (
+              <select className="input" name="roleId" required defaultValue={inviteJobs.find((j) => j.slug === 'cashier')?.id ?? inviteJobs[0]?.id}>
+                {inviteJobs.map((j) => (
                   <option value={j.id} key={j.id}>
                     {j.name}
                   </option>
@@ -91,7 +107,7 @@ export function TeamPeopleScreen({
       </Card>
 
       <Card>
-        <CardHeader title="People" subtitle={`${people.length} in this workspace`} />
+        <CardHeader title="People" subtitle={people.length === 1 ? 'You are the only person in this company. Invite a cashier or accountant when you are ready.' : `${people.length} in this workspace`} />
         <CardBody>
           <div className="table-wrap">
             <table className="table">
@@ -100,6 +116,7 @@ export function TeamPeopleScreen({
                   <th>Name</th>
                   <th>Email</th>
                   <th>Job</th>
+                  <th>Also helps with</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -108,7 +125,9 @@ export function TeamPeopleScreen({
                 {people.map((p) => (
                   <tr key={p.membershipId}>
                     <td>
-                      <strong>{p.name}</strong>
+                      <Link href={`/company/team/${p.userId}`}>
+                        <strong>{p.name}</strong>
+                      </Link>
                     </td>
                     <td>{p.email}</td>
                     <td>
@@ -128,6 +147,7 @@ export function TeamPeopleScreen({
                         </select>
                       </form>
                     </td>
+                    <td>{p.extraName ?? '—'}</td>
                     <td>{p.status}</td>
                     <td>
                       <form
@@ -172,6 +192,36 @@ export function TeamPeopleScreen({
           </CardBody>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader title="Access history" subtitle="Invites, job changes, groups, and exceptions in this company." />
+        <CardBody>
+          {history.length === 0 ? (
+            <p className="muted-line">No access changes yet.</p>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Who</th>
+                    <th>What</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.createdAt ? new Date(row.createdAt).toLocaleString() : ''}</td>
+                      <td>{row.actorName || row.actorEmail || '—'}</td>
+                      <td>{row.notes || `${row.action} ${row.tableName}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardBody>
+      </Card>
     </div>
   );
 }

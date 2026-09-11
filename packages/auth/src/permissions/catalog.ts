@@ -158,6 +158,7 @@ export const SCREEN_DEFS: {
 ];
 
 const HREF_ALIASES: Record<string, string> = {
+  '/company/team/groups': 'team.people',
   '/purchase/suppliers': 'parties.vendors',
   '/cashbook/summary': 'accounting.cashbook',
   '/cashbook/settings': 'accounting.cashbook',
@@ -200,6 +201,7 @@ export function navHrefToPermissionPrefix(href: string, label?: string): string 
   if (label === 'On rent') return 'inventory.levels';
   if (label === 'Suppliers') return 'parties.vendors';
   if (label === 'Jobs') return 'team.jobs';
+  if (label === 'Groups') return 'team.people';
   return screenKeyFromHref(href);
 }
 

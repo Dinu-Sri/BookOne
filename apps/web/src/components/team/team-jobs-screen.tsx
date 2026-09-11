@@ -2,10 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import { Button, Card, CardBody, CardHeader } from '@/components/ui/bookone-ui';
+import { TEAM_SOD_MESSAGE } from '@/lib/team-sod';
 
 type Job = { id: string; name: string; slug: string; templateKey: string | null; customizedAt: Date | null };
 type Matrix = {
   role: { id: string; name: string; templateKey: string | null };
+  sod?: boolean;
   screens: {
     keyPrefix: string;
     label: string;
@@ -61,6 +63,7 @@ export function TeamJobsScreen({
         <Card>
           <CardHeader title={matrix.role.name} subtitle="No access / View only / Can edit. Locked rows are Owner or Admin only." />
           <CardBody>
+            {matrix.sod ? <p className="team-sod">{TEAM_SOD_MESSAGE}</p> : null}
             <form
               action={async (fd) => {
                 await saveAction(fd);

@@ -128,10 +128,17 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     .limit(1);
   if (!t) throw new Error('Tenant not found.');
   const { loadAccessForUser, SCREEN_DEFS } = await import('@bookone/auth');
-  const access = await loadAccessForUser(user.id, user.tenantId, user.platformRole);
+  let access = null as Awaited<ReturnType<typeof loadAccessForUser>>;
+  try {
+    access = await loadAccessForUser(user.id, user.tenantId, user.platformRole);
+  } catch {
+    access = null;
+  }
   const accessByLabel: Record<string, 'none' | 'read' | 'write'> = {};
+  const fallbackOpen = !access;
   for (const screen of SCREEN_DEFS) {
-    if (access?.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
+    if (fallbackOpen) accessByLabel[screen.label] = screen.writeable ? 'write' : 'read';
+    else if (access?.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
     else if (access?.allows(`${screen.keyPrefix}.read`, 'read')) accessByLabel[screen.label] = 'read';
     else accessByLabel[screen.label] = 'none';
   }

@@ -1,48 +1,9 @@
 -- Tenant RBAC: jobs, permissions, invites, active workspace.
--- Additive. Does not rewrite users.role. Sets rbac_enforced=true after Owner backfill.
+-- Schema first, then backfill. No min(uuid) — Postgres cannot MIN(uuid).
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS active_tenant_id uuid REFERENCES tenants(id);
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rbac_enforced boolean NOT NULL DEFAULT false;
 ALTER TABLE tenant_memberships ADD COLUMN IF NOT EXISTS primary_role_id uuid;
-
-UPDATE users SET email = lower(btrim(email)) WHERE email IS DISTINCT FROM lower(btrim(email));
-UPDATE users SET active_tenant_id = tenant_id WHERE active_tenant_id IS NULL AND tenant_id IS NOT NULL;
-
-DO $$
-DECLARE
-  keeper uuid;
-  dup uuid;
-BEGIN
-  FOR keeper IN
-    SELECT MIN(id) FROM users WHERE voided_at IS NULL GROUP BY lower(email) HAVING count(*) > 1
-  LOOP
-    NULL;
-  END LOOP;
-  FOR keeper IN
-    SELECT DISTINCT ON (lower(email)) id FROM users WHERE voided_at IS NULL ORDER BY lower(email), created_at ASC
-  LOOP
-    FOR dup IN
-      SELECT u.id FROM users u
-      WHERE u.voided_at IS NULL
-        AND lower(u.email) = (SELECT lower(email) FROM users WHERE id = keeper)
-        AND u.id <> keeper
-    LOOP
-      UPDATE tenant_memberships m
-      SET user_id = keeper
-      WHERE user_id = dup
-        AND NOT EXISTS (
-          SELECT 1 FROM tenant_memberships x
-          WHERE x.tenant_id = m.tenant_id AND x.user_id = keeper AND x.voided_at IS NULL
-        );
-      UPDATE tenant_memberships SET voided_at = now(), status = 'disabled' WHERE user_id = dup AND voided_at IS NULL;
-      UPDATE users SET voided_at = now() WHERE id = dup AND voided_at IS NULL;
-    END LOOP;
-  END LOOP;
-END $$;
-
-CREATE UNIQUE INDEX IF NOT EXISTS users_email_alive_uidx ON users (lower(email)) WHERE voided_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS tenant_memberships_user_alive_uidx
-  ON tenant_memberships (tenant_id, user_id) WHERE voided_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS tenant_roles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -189,7 +150,65 @@ AS $$
   LIMIT 1;
 $$;
 
--- Seed template jobs per tenant (Owner/Admin/…) — permission rows filled by app seedJobsForTenant on next boot/Team visit.
+UPDATE users SET email = lower(btrim(email)) WHERE email IS DISTINCT FROM lower(btrim(email));
+UPDATE users SET active_tenant_id = tenant_id WHERE active_tenant_id IS NULL AND tenant_id IS NOT NULL;
+
+-- Collapse duplicate emails (keep oldest created_at). No min(uuid) — Postgres cannot MIN(uuid).
+DO $$
+DECLARE
+  rec record;
+  dup uuid;
+BEGIN
+  FOR rec IN
+    SELECT DISTINCT ON (lower(email)) id AS keeper, lower(email) AS e
+    FROM users
+    WHERE voided_at IS NULL
+    ORDER BY lower(email), created_at ASC NULLS LAST
+  LOOP
+    FOR dup IN
+      SELECT u.id FROM users u
+      WHERE u.voided_at IS NULL AND lower(u.email) = rec.e AND u.id <> rec.keeper
+    LOOP
+      UPDATE tenant_memberships m
+      SET user_id = rec.keeper
+      WHERE user_id = dup
+        AND NOT EXISTS (
+          SELECT 1 FROM tenant_memberships x
+          WHERE x.tenant_id = m.tenant_id AND x.user_id = rec.keeper AND x.voided_at IS NULL
+        );
+      UPDATE tenant_memberships SET voided_at = now(), status = 'disabled'
+      WHERE user_id = dup AND voided_at IS NULL;
+      UPDATE users SET voided_at = now() WHERE id = dup AND voided_at IS NULL;
+    END LOOP;
+  END LOOP;
+END $$;
+
+-- Keep one live membership per (tenant, user) before the unique index.
+UPDATE tenant_memberships m
+SET voided_at = now(), status = 'disabled'
+FROM (
+  SELECT id,
+    row_number() OVER (PARTITION BY tenant_id, user_id ORDER BY created_at ASC NULLS LAST, id) AS rn
+  FROM tenant_memberships
+  WHERE voided_at IS NULL
+) d
+WHERE m.id = d.id AND d.rn > 1 AND m.voided_at IS NULL;
+
+-- Unique indexes must not abort the rest of this file (postgres.js runs it as one batch).
+DO $$
+BEGIN
+  EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS users_email_alive_uidx ON users (lower(email)) WHERE voided_at IS NULL';
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'users_email_alive_uidx skipped: %', SQLERRM;
+END $$;
+
+DO $$
+BEGIN
+  EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS tenant_memberships_user_alive_uidx ON tenant_memberships (tenant_id, user_id) WHERE voided_at IS NULL';
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'tenant_memberships_user_alive_uidx skipped: %', SQLERRM;
+END $$;
+
 INSERT INTO tenant_roles (tenant_id, name, slug, template_key, template_version, is_locked)
 SELECT t.id, x.name, x.slug, x.slug, '1', CASE WHEN x.slug IN ('owner') THEN '1' ELSE '0' END
 FROM tenants t
@@ -208,7 +227,6 @@ WHERE t.voided_at IS NULL
     SELECT 1 FROM tenant_roles r WHERE r.tenant_id = t.id AND r.slug = x.slug AND r.voided_at IS NULL
   );
 
--- Memberships for users missing one on their home tenant
 INSERT INTO tenant_memberships (tenant_id, user_id, role, status, primary_role_id)
 SELECT u.tenant_id, u.id, 'owner', 'active', r.id
 FROM users u
@@ -239,5 +257,4 @@ SET role = r.slug
 FROM tenant_roles r
 WHERE m.primary_role_id = r.id AND (m.role IS NULL OR m.role = '' OR m.role = 'member');
 
--- Flip enforcement after everyone has an Owner/job so solo companies keep full access.
 UPDATE tenants SET rbac_enforced = true WHERE voided_at IS NULL;

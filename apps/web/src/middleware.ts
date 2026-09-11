@@ -89,10 +89,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated users hitting /login bounce to home.
-  if (isAuthed && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
+  // Do not bounce /login → / here. If home/session is broken, that loop
+  // becomes ERR_TOO_MANY_REDIRECTS. The login page can send signed-in users on.
 
   return NextResponse.next();
 }

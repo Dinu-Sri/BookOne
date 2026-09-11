@@ -88,30 +88,51 @@ async function toSessionUser(row: {
   const tenantId = row.activeTenantId || row.tenantId;
   const platformRole: 'super_admin' | 'user' = row.role === 'super_admin' ? 'super_admin' : 'user';
 
-  const [membership] = await db()
-    .select({
-      id: tenantMemberships.id,
-      role: tenantMemberships.role,
-      status: tenantMemberships.status,
-      primaryRoleId: tenantMemberships.primaryRoleId,
-    })
-    .from(tenantMemberships)
-    .where(
-      andMem(tenantId, row.id),
-    )
-    .limit(1);
-
-  let jobSlug = membership?.role ?? null;
-  let jobId = membership?.primaryRoleId ?? null;
-  if (membership?.primaryRoleId) {
-    const [role] = await db()
-      .select({ slug: tenantRoles.slug, id: tenantRoles.id })
-      .from(tenantRoles)
-      .where(eq(tenantRoles.id, membership.primaryRoleId))
+  let jobSlug: string | null = null;
+  let jobId: string | null = null;
+  try {
+    const [membership] = await db()
+      .select({
+        id: tenantMemberships.id,
+        role: tenantMemberships.role,
+        status: tenantMemberships.status,
+        primaryRoleId: tenantMemberships.primaryRoleId,
+      })
+      .from(tenantMemberships)
+      .where(andMem(tenantId, row.id))
       .limit(1);
-    if (role) {
-      jobSlug = role.slug;
-      jobId = role.id;
+
+    jobSlug = membership?.role ?? null;
+    jobId = membership?.primaryRoleId ?? null;
+    if (membership?.primaryRoleId) {
+      try {
+        const [role] = await db()
+          .select({ slug: tenantRoles.slug, id: tenantRoles.id })
+          .from(tenantRoles)
+          .where(eq(tenantRoles.id, membership.primaryRoleId))
+          .limit(1);
+        if (role) {
+          jobSlug = role.slug;
+          jobId = role.id;
+        }
+      } catch {
+        /* tenant_roles may not exist until migration 031 applies */
+      }
+    }
+  } catch {
+    try {
+      const [membership] = await db()
+        .select({
+          id: tenantMemberships.id,
+          role: tenantMemberships.role,
+          status: tenantMemberships.status,
+        })
+        .from(tenantMemberships)
+        .where(andMem(tenantId, row.id))
+        .limit(1);
+      jobSlug = membership?.role ?? null;
+    } catch {
+      jobSlug = row.role || null;
     }
   }
 
@@ -141,22 +162,15 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
   const normalizedEmail = email.toLowerCase().trim();
   const displayName = name.trim() || normalizedEmail.split('@')[0] || 'BookOne user';
 
-  const [existing] = await db()
-    .select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      tenantId: users.tenantId,
-      activeTenantId: users.activeTenantId,
-      role: users.role,
-      voidedAt: users.voidedAt,
-    })
-    .from(users)
-    .where(andEqEmail(normalizedEmail))
-    .limit(1);
+  const existing = await findBookOneUser(normalizedEmail);
 
   if (existing) {
     if (existing.voidedAt) return null;
+    try {
+      await ensureOwnerMembership(existing.tenantId, existing.id);
+    } catch {
+      /* jobs table may not exist until migration 031 applies */
+    }
     return toSessionUser(existing);
   }
 
@@ -230,17 +244,21 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
     return createdUser;
   });
 
-  await seedJobsForTenant(created.tenantId);
-  const [owner] = await db()
-    .select({ id: tenantRoles.id })
-    .from(tenantRoles)
-    .where(and(eq(tenantRoles.tenantId, created.tenantId), eq(tenantRoles.slug, 'owner'), isNull(tenantRoles.voidedAt)))
-    .limit(1);
-  if (owner) {
-    await db()
-      .update(tenantMemberships)
-      .set({ primaryRoleId: owner.id, role: 'owner' })
-      .where(and(eq(tenantMemberships.userId, created.id), eq(tenantMemberships.tenantId, created.tenantId)));
+  try {
+    await seedJobsForTenant(created.tenantId);
+    const [owner] = await db()
+      .select({ id: tenantRoles.id })
+      .from(tenantRoles)
+      .where(and(eq(tenantRoles.tenantId, created.tenantId), eq(tenantRoles.slug, 'owner'), isNull(tenantRoles.voidedAt)))
+      .limit(1);
+    if (owner) {
+      await db()
+        .update(tenantMemberships)
+        .set({ primaryRoleId: owner.id, role: 'owner' })
+        .where(and(eq(tenantMemberships.userId, created.id), eq(tenantMemberships.tenantId, created.tenantId)));
+    }
+  } catch {
+    /* jobs table may not exist until migration 031 applies */
   }
 
   return toSessionUser(created);
@@ -250,12 +268,58 @@ function andEqEmail(email: string) {
   return sql`lower(${users.email}) = ${email} and ${users.voidedAt} is null`;
 }
 
+async function findBookOneUser(normalizedEmail: string): Promise<{
+  id: string;
+  email: string;
+  name: string;
+  tenantId: string;
+  activeTenantId?: string | null;
+  role: string;
+  voidedAt: Date | null;
+} | null> {
+  try {
+    const [row] = await db()
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        tenantId: users.tenantId,
+        activeTenantId: users.activeTenantId,
+        role: users.role,
+        voidedAt: users.voidedAt,
+      })
+      .from(users)
+      .where(andEqEmail(normalizedEmail))
+      .limit(1);
+    return row ?? null;
+  } catch {
+    const [row] = await db()
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        tenantId: users.tenantId,
+        role: users.role,
+        voidedAt: users.voidedAt,
+      })
+      .from(users)
+      .where(andEqEmail(normalizedEmail))
+      .limit(1);
+    if (!row) return null;
+    return { ...row, activeTenantId: row.tenantId };
+  }
+}
+
 export const getSession = cache(async function getSession(): Promise<Session | null> {
-  const identity = await getAuthIdentity();
-  if (!identity) return null;
-  const user = await ensureBookOneUser(identity.email, identity.name);
-  if (!user) return null;
-  return { user };
+  try {
+    const identity = await getAuthIdentity();
+    if (!identity) return null;
+    const user = await ensureBookOneUser(identity.email, identity.name);
+    if (!user) return null;
+    return { user };
+  } catch {
+    return null;
+  }
 });
 
 export async function requireTenantContext(): Promise<SessionUser> {

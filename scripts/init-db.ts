@@ -35,7 +35,9 @@ async function init() {
       ) {
         console.log(`${file} already applied.`);
       } else {
-        console.log(`${file} note:`, msg);
+        console.error(`${file} FAILED:`, msg);
+        await sql.end();
+        process.exit(1);
       }
     }
   }

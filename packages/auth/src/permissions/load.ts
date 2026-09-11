@@ -36,6 +36,14 @@ function grantsFromTemplate(templateKey: string | null): { key: string; level: A
 }
 
 export async function loadAccessForUser(userId: string, tenantId: string, platformRole: 'super_admin' | 'user'): Promise<LoadedAccess | null> {
+  try {
+    return await loadAccessForUserInner(userId, tenantId, platformRole);
+  } catch {
+    return null;
+  }
+}
+
+async function loadAccessForUserInner(userId: string, tenantId: string, platformRole: 'super_admin' | 'user'): Promise<LoadedAccess | null> {
   const [tenant] = await db()
     .select({
       id: tenants.id,

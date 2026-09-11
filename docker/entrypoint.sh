@@ -45,8 +45,9 @@ fi
 
 echo "[2/3] SQL migrations (packages/db/migrations/*.sql) — no seed..."
 if ! pnpm exec tsx scripts/init-db.ts 2>&1; then
-  echo "ERROR: init-db.ts failed. App may start but schema may be incomplete."
-  echo "Fix DATABASE_URL / Postgres, then redeploy web so entrypoint re-runs."
+  echo "ERROR: init-db.ts failed. Refusing to start with an incomplete schema."
+  echo "Fix the failed migration (see FAILED: above), then redeploy web so entrypoint re-runs."
+  exit 1
 fi
 
 echo "[3/3] Starting BookOne web..."

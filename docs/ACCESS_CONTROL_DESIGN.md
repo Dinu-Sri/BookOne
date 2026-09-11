@@ -6,7 +6,7 @@
 | **Author** | Engineering (draft for review) |
 | **Date** | 2026-09-10 |
 | **Revised** | 2026-09-10 (review round 3) |
-| **Status** | Implemented (v1 shipped 2026-09-11; PR-6 groups/SoD/history 2026-09-11) |
+| **Status** | Implemented (v1 shipped 2026-09-11; PR-6 groups/SoD/history; PR-9 shop scope 2026-09-11) |
 | **Audience** | Senior engineers who know BookOne (`AGENTS.md`, auth, RLS, shell) |
 | **Repo** | https://github.com/Dinu-Sri/BookOne |
 | **Related** | `packages/auth/src/session.ts`, `packages/db/src/schema/users.ts`, `packages/db/src/schema/company-settings.ts`, `apps/web/src/lib/module-access.ts`, `apps/web/src/lib/entity-kind.ts`, `apps/web/src/components/layout/bookone-shell.tsx`, `docs/E2E_GOVERNANCE.md` |

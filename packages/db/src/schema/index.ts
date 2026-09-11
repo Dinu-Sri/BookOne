@@ -59,5 +59,6 @@ export {
   tenantPermissionOverrides,
   tenantTeams,
   tenantTeamMembers,
+  tenantMembershipScopes,
   tenantInvites,
 } from './access';

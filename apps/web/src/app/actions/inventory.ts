@@ -37,6 +37,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { assertModuleWrite } from '@/lib/module-access';
+import { assertDimensionScope, columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import { sanitizeProductHtml } from '@/lib/product-html';
 import { normalizeProductUnit } from '@/lib/product-units';
 
@@ -1143,6 +1144,8 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
   const q = filter?.q?.trim().toLowerCase() ?? '';
   const today = new Date().toISOString().slice(0, 10);
   return withTenantContext(user.tenantId, async () => {
+    const scope = await currentDimensionScope();
+    const locScope = columnInScope(inventoryStockLevels.locationId, scope.locationIds);
     const rows = await db()
       .select({
         id: inventoryStockLevels.id,
@@ -1169,6 +1172,7 @@ export async function listStockLevels(filter?: { q?: string }): Promise<StockLev
             eq(inventoryProducts.productType, 'stocked'),
             eq(inventoryProducts.productType, 'rental'),
           ),
+          locScope ?? sql`true`,
         ),
       )
       .orderBy(asc(inventoryProducts.name));
@@ -1350,6 +1354,7 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
     if (docType === 'adjustment') await assertOpenPeriod(user.tenantId, docDate);
+    await assertDimensionScope({ locationId: fromLocationId ?? toLocationId });
 
     for (const line of lines) {
       const [product] = await db()
@@ -1584,6 +1589,7 @@ export async function createStockTransfer(input: {
     if (lines.length === 0) return { ok: false, error: 'Add at least one transfer line.' };
 
     const user = await requireTenantContext();
+    await assertDimensionScope({ locationId: fromLocationId });
     const result = await withTenantContext(user.tenantId, async () => {
       for (const line of lines) {
         const [product] = await db()

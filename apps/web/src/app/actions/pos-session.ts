@@ -21,6 +21,7 @@ import { getSalesSettings } from '@/app/actions/sales-settings';
 import { listPartyOptions } from '@/app/actions/parties';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { assertModuleWrite } from '@/lib/module-access';
+import { assertDimensionScope } from '@/lib/dimension-scope';
 
 export interface PosProductLite {
   id: string;
@@ -145,6 +146,7 @@ export async function openPosShift(input: {
         )
         .limit(1);
       if (!reg) throw new Error('Register not found or inactive.');
+      await assertDimensionScope({ locationId: reg.locationId });
 
       const [existing] = await db()
         .select({ id: posShifts.id })

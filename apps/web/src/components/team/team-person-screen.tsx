@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { assignJob, savePersonOverrides, setExtraJob } from '@/app/actions/team';
+import { assignJob, savePersonOverrides, savePersonScope, setExtraJob } from '@/app/actions/team';
 import { Button, Card, CardBody, CardHeader } from '@/components/ui/bookone-ui';
 import { TEAM_SOD_MESSAGE } from '@/lib/team-sod';
 
@@ -31,6 +31,11 @@ type PersonAccess = {
   exceptionByPrefix: Record<string, 'allow' | 'deny'>;
   preview: Preview[];
   sod: boolean;
+  scopeLocationIds: string[];
+  scopeBrandIds: string[];
+  brands: { id: string; name: string }[];
+  locations: { id: string; name: string }[];
+  scopeLocked: boolean;
 };
 
 export function TeamPersonScreen({ data, jobs }: { data: PersonAccess; jobs: Job[] }) {
@@ -94,6 +99,66 @@ export function TeamPersonScreen({ data, jobs }: { data: PersonAccess; jobs: Job
             </div>
             <p className="party-hint field-full">One extra job only. Owner and Admin cannot be extra jobs.</p>
           </form>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Shops they can use"
+          subtitle="Leave blank for every shop. Tick shops to limit this person. POS uses the register location."
+        />
+        <CardBody>
+          {data.scopeLocked ? (
+            <p className="muted-line">Owner and Admin always see every shop.</p>
+          ) : data.locations.length === 0 && data.brands.length === 0 ? (
+            <p className="muted-line">Add brands or locations under Company first.</p>
+          ) : (
+            <form
+              action={async (fd) => {
+                await savePersonScope(fd);
+                router.refresh();
+              }}
+            >
+              <input type="hidden" name="membershipId" value={data.person.membershipId} />
+              {data.locations.length ? (
+                <div style={{ marginBottom: 14 }}>
+                  <p className="muted-line" style={{ marginBottom: 8 }}>
+                    Locations
+                  </p>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {data.locations.map((loc) => (
+                      <label key={loc.id} className="auth-check" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input type="checkbox" name="locationId" value={loc.id} defaultChecked={data.scopeLocationIds.includes(loc.id)} />
+                        <span>{loc.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {data.brands.length ? (
+                <div style={{ marginBottom: 14 }}>
+                  <p className="muted-line" style={{ marginBottom: 8 }}>
+                    Brands
+                  </p>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {data.brands.map((b) => (
+                      <label key={b.id} className="auth-check" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input type="checkbox" name="brandId" value={b.id} defaultChecked={data.scopeBrandIds.includes(b.id)} />
+                        <span>{b.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="company-form-footer">
+                <div className="company-form-footer-actions">
+                  <Button variant="primary" type="submit">
+                    Save shops
+                  </Button>
+                </div>
+              </div>
+            </form>
+          )}
         </CardBody>
       </Card>
 

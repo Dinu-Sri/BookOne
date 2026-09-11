@@ -20,6 +20,7 @@ import {
   sql,
 } from '@bookone/db';
 import { requireTenantContext } from '@bookone/auth';
+import { columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import {
   normalizePeriodToken,
   resolvePeriodBounds,
@@ -334,6 +335,11 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
       transactionConditions.push(gte(transactions.date, bounds.from));
       transactionConditions.push(lte(transactions.date, bounds.to));
     }
+    const dashScope = await currentDimensionScope();
+    const dashLoc = columnInScope(transactions.locationId, dashScope.locationIds);
+    const dashBrand = columnInScope(transactions.brandId, dashScope.brandIds);
+    if (dashLoc) transactionConditions.push(dashLoc);
+    if (dashBrand) transactionConditions.push(dashBrand);
 
     const periodTransactions = await db()
       .select({
@@ -501,6 +507,11 @@ export async function listTransactions(input?: string | TransactionFilters): Pro
       conditions.push(gte(transactions.date, bounds.from));
       conditions.push(lte(transactions.date, bounds.to));
     }
+    const scope = await currentDimensionScope();
+    const locScope = columnInScope(transactions.locationId, scope.locationIds);
+    const brandScope = columnInScope(transactions.brandId, scope.brandIds);
+    if (locScope) conditions.push(locScope);
+    if (brandScope) conditions.push(brandScope);
     const rows = await db()
       .select({
         id: transactions.id,
@@ -766,6 +777,11 @@ export async function getReports(period?: string): Promise<ReportsData> {
     transactionConditions.push(gte(transactions.date, bounds.from));
     transactionConditions.push(lte(transactions.date, bounds.to));
   }
+  const reportScope = await currentDimensionScope();
+  const reportLoc = columnInScope(transactions.locationId, reportScope.locationIds);
+  const reportBrand = columnInScope(transactions.brandId, reportScope.brandIds);
+  if (reportLoc) transactionConditions.push(reportLoc);
+  if (reportBrand) transactionConditions.push(reportBrand);
   const periodTransactions = await withTenantContext(user.tenantId, async () => {
     return db()
       .select({ direction: transactions.direction, amount: transactions.amount })

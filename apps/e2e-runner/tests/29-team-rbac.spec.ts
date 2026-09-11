@@ -39,4 +39,14 @@ test.describe('Team RBAC @company @team', () => {
     await expect(page.getByRole('button', { name: /save exceptions/i })).toBeVisible();
     await expectAuthedShell(page);
   });
+
+  test('S-0734 Person shop scope', async ({ authedPage: page }) => {
+    await go(page, '/company/team');
+    const person = page.locator('table.table tbody tr td a').first();
+    await expect(person).toBeVisible();
+    await person.click();
+    await expect(page.getByText(/shops they can use/i)).toBeVisible();
+    await expect(page.getByText(/every shop/i)).toBeVisible();
+    await expectAuthedShell(page);
+  });
 });

@@ -7,6 +7,8 @@ import { listPartyOptions } from '@/app/actions/parties';
 import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { getCompanySettingsData } from '@/app/actions/company-settings';
+import { currentDimensionScope } from '@/lib/dimension-scope';
+import { inDimensionScope } from '@bookone/auth';
 
 export async function requireTenant() {
   try {
@@ -46,6 +48,7 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
       })),
       getCompanySettingsData().catch(() => null),
     ]);
+  const scope = await currentDimensionScope().catch(() => ({ locationIds: null, brandIds: null }));
   return {
     products: products.map((p) => ({
       id: p.id,
@@ -65,13 +68,16 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
     vatRegistered: salesSettings.vatRegistered,
     vatRatePercent: salesSettings.vatRatePercent,
     purchaseSettings,
-    brands: (company?.brands ?? []).map((b) => ({
+    brands: (company?.brands ?? [])
+      .filter((b) => inDimensionScope(scope, { brandId: b.id }))
+      .map((b) => ({
       id: b.id,
       name: b.name,
       code: b.code,
     })),
     locations: (company?.locations ?? [])
       .filter((l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash')
+      .filter((l) => inDimensionScope(scope, { locationId: l.id, brandId: l.brandId }))
       .map((l) => ({
         id: l.id,
         name: l.name,

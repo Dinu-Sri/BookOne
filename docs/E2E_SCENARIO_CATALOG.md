@@ -6248,6 +6248,13 @@
 - **Steps:** Open `/company/team`, click a person name
 - **Expect:** Job, Also help with, screen preview, and Exceptions.
 
+### S-0734 — Person shop scope
+
+- **Priority:** P1
+- **Tags:** `@company`, `@team`
+- **Steps:** Open `/company/team`, click a person name
+- **Expect:** “Shops they can use”. Owner/Admin copy says they always see every shop.
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

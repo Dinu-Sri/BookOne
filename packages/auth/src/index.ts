@@ -17,4 +17,11 @@ export {
 export { JOB_TEMPLATES, templateByKey, type JobTemplateKey } from './permissions/templates';
 export { getRequestAccess, loadAccessForUser, type LoadedAccess } from './permissions/load';
 export { allows, resolveLevel } from './permissions/resolve';
+export {
+  inDimensionScope,
+  isUnrestrictedScope,
+  scopeIgnoresJob,
+  unrestrictedDimensionScope,
+  type DimensionScope,
+} from './permissions/scope';
 export { seedJobsForTenant, ensureOwnerMembership } from './permissions/seed-jobs';

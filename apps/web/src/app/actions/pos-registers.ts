@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
 import { and, asc, db, eq, isNull, locations, posRegisters, withTenantContext } from '@bookone/db';
+import { currentDimensionScope } from '@/lib/dimension-scope';
+import { inDimensionScope } from '@bookone/auth';
 
 export interface PosRegisterRow {
   id: string;
@@ -68,7 +70,13 @@ export async function listPosRegisters(): Promise<PosRegisterRow[]> {
       ];
     }
 
-    return rows.map((r) => ({
+    const scope = await currentDimensionScope();
+    const locRows = await db()
+      .select({ id: locations.id, brandId: locations.brandId })
+      .from(locations)
+      .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)));
+    const brandByLoc = new Map(locRows.map((l) => [l.id, l.brandId ?? null]));
+    const mapped = rows.map((r) => ({
       id: r.id,
       code: r.code,
       name: r.name,
@@ -80,6 +88,12 @@ export async function listPosRegisters(): Promise<PosRegisterRow[]> {
       isActive: r.isActive === '1',
       sortOrder: r.sortOrder,
     }));
+    return mapped.filter((r) =>
+      inDimensionScope(scope, {
+        locationId: r.locationId,
+        brandId: r.locationId ? brandByLoc.get(r.locationId) ?? null : null,
+      }),
+    );
   });
 }
 

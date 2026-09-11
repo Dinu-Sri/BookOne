@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-09-11 — Team shop scope (brand / location)
+
+- Person page **Shops they can use**: tick locations and brands; blank = every shop. Owner/Admin always see all shops.
+- Lists (sales/purchase docs, stock levels, POS registers, transactions) hide other shops. Writes (invoices, simple entry, POS shift, stock moves) blocked outside assigned shops.
+- POS brand still comes from register location → location.brandId.
+- Migration `032_membership_scope.sql`. E2E S-0734.
+
 ## 2026-09-11 — Team groups, SoD, access history, person extras
 
 - Company → **Groups**: name + a non-Owner/Admin extra job + members. Removing a person (or the group) clears that extra job.

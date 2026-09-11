@@ -48,6 +48,7 @@ import { ensureParty } from '@/app/actions/parties';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { getInventorySettings } from '@/app/actions/inventory-settings';
 import { resolveDimensions } from '@/lib/dimensions';
+import { assertDimensionScope, columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import {
   assertHireInvoiceTiming,
   checkRentalAvailability,
@@ -564,6 +565,11 @@ export async function listCommercialDocuments(types: string[], period?: string):
       conditions.push(gte(businessDocuments.issueDate, periodBounds.from));
       conditions.push(lte(businessDocuments.issueDate, periodBounds.to));
     }
+    const scope = await currentDimensionScope();
+    const locScope = columnInScope(businessDocuments.locationId, scope.locationIds);
+    const brandScope = columnInScope(businessDocuments.brandId, scope.brandIds);
+    if (locScope) conditions.push(locScope);
+    if (brandScope) conditions.push(brandScope);
 
     const rows = await db()
       .select({
@@ -673,9 +679,13 @@ export async function createCommercialDocument(
       (parsed.documentType === 'sales_return' && Boolean(parsed.posMode));
     let dimensions: { brandId: string | null; locationId: string | null };
     try {
+      const scope = await currentDimensionScope();
       dimensions = await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId, {
         auto: isPosDoc,
+        allowedLocationIds: scope.locationIds,
+        allowedBrandIds: scope.brandIds,
       });
+      await assertDimensionScope(dimensions);
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Invalid brand/location.' };
     }

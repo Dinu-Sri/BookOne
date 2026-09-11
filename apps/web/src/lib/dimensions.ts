@@ -16,6 +16,8 @@ export type ResolveDimensionsOpts = {
    * single masters, or first active master so cashiers never pick brand on the till.
    */
   auto?: boolean;
+  allowedLocationIds?: string[] | null;
+  allowedBrandIds?: string[] | null;
 };
 
 /**
@@ -32,15 +34,21 @@ export async function resolveDimensions(
   opts?: ResolveDimensionsOpts,
 ): Promise<{ brandId: string | null; locationId: string | null }> {
   return withTenantContext(tenantId, async () => {
-    const brandRows = await db()
+    let brandRows = await db()
       .select({ id: brands.id })
       .from(brands)
       .where(and(eq(brands.tenantId, tenantId), isNull(brands.voidedAt)));
 
-    const locationRows = await db()
+    let locationRows = await db()
       .select({ id: locations.id, brandId: locations.brandId, locationType: locations.locationType })
       .from(locations)
       .where(and(eq(locations.tenantId, tenantId), isNull(locations.voidedAt)));
+    if (opts?.allowedBrandIds?.length) {
+      brandRows = brandRows.filter((b) => opts.allowedBrandIds!.includes(b.id));
+    }
+    if (opts?.allowedLocationIds?.length) {
+      locationRows = locationRows.filter((l) => opts.allowedLocationIds!.includes(l.id));
+    }
     const operationalLocationRows = locationRows.filter(
       (l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash',
     );

@@ -95,6 +95,18 @@ export const tenantTeamMembers = pgTable('tenant_team_members', {
   voidedAt: timestamp('voided_at', { withTimezone: true }),
 });
 
+export const tenantMembershipScopes = pgTable('tenant_membership_scopes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  membershipId: uuid('membership_id').notNull(),
+  scopeType: varchar('scope_type', { length: 20 }).notNull(),
+  targetId: uuid('target_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
 export const tenantInvites = pgTable('tenant_invites', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id')

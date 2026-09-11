@@ -8,6 +8,7 @@ import {
   SCREEN_DEFS,
   loadAccessForUser,
   requireTenantContext,
+  scopeIgnoresJob,
   seedJobsForTenant,
   type PermissionKey,
 } from '@bookone/auth';
@@ -26,10 +27,13 @@ import {
   tenantPermissionOverrides,
   tenantRolePermissions,
   tenantRoles,
+  tenantMembershipScopes,
   tenantTeamMembers,
   tenantTeams,
   tenants,
   users,
+  brands,
+  locations,
   withTenantContext,
 } from '@bookone/db';
 import { assertPermission, getMyAccess } from '@/lib/access';
@@ -820,8 +824,86 @@ export async function getPersonAccess(userId: string) {
       if (row.effect === 'deny') exceptionByPrefix[prefix] = 'deny';
       else if (row.effect === 'allow' && exceptionByPrefix[prefix] !== 'deny') exceptionByPrefix[prefix] = 'allow';
     }
-    return { person, extra: extra ?? null, exceptionByPrefix, preview, sod };
+    let scopeRows: { scopeType: string; targetId: string }[] = [];
+    try {
+      scopeRows = await db()
+        .select({
+          scopeType: tenantMembershipScopes.scopeType,
+          targetId: tenantMembershipScopes.targetId,
+        })
+        .from(tenantMembershipScopes)
+        .where(and(eq(tenantMembershipScopes.membershipId, person.membershipId), isNull(tenantMembershipScopes.voidedAt)));
+    } catch {
+      scopeRows = [];
+    }
+    const scopeLocationIds = scopeRows.filter((r) => r.scopeType === 'location').map((r) => r.targetId);
+    const scopeBrandIds = scopeRows.filter((r) => r.scopeType === 'brand').map((r) => r.targetId);
+    const brandRows = await db()
+      .select({ id: brands.id, name: brands.name })
+      .from(brands)
+      .where(and(eq(brands.tenantId, actor.tenantId), isNull(brands.voidedAt)));
+    const locationRows = await db()
+      .select({ id: locations.id, name: locations.name, locationType: locations.locationType })
+      .from(locations)
+      .where(and(eq(locations.tenantId, actor.tenantId), isNull(locations.voidedAt)));
+    const shopLocations = locationRows.filter(
+      (l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash',
+    );
+    return {
+      person,
+      extra: extra ?? null,
+      exceptionByPrefix,
+      preview,
+      sod,
+      scopeLocationIds,
+      scopeBrandIds,
+      brands: brandRows,
+      locations: shopLocations.map((l) => ({ id: l.id, name: l.name })),
+      scopeLocked: scopeIgnoresJob(person.templateKey),
+    };
   });
+}
+
+export async function savePersonScope(formData: FormData) {
+  await assertPermission('team.people.write', 'write');
+  const actor = await requireTenantContext();
+  const membershipId = String(formData.get('membershipId') ?? '');
+  const locationIds = formData.getAll('locationId').map(String).filter(Boolean);
+  const brandIds = formData.getAll('brandId').map(String).filter(Boolean);
+  await withTenantContext(actor.tenantId, async () => {
+    const [membership] = await db()
+      .select({ id: tenantMemberships.id, templateKey: tenantRoles.templateKey })
+      .from(tenantMemberships)
+      .leftJoin(tenantRoles, eq(tenantRoles.id, tenantMemberships.primaryRoleId))
+      .where(and(eq(tenantMemberships.id, membershipId), eq(tenantMemberships.tenantId, actor.tenantId)))
+      .limit(1);
+    if (!membership) throw new Error('Person not found.');
+    if (scopeIgnoresJob(membership.templateKey)) {
+      throw new Error('Owner and Admin always see every shop.');
+    }
+    await db()
+      .update(tenantMembershipScopes)
+      .set({ voidedAt: new Date() })
+      .where(and(eq(tenantMembershipScopes.membershipId, membershipId), isNull(tenantMembershipScopes.voidedAt)));
+    const rows = [
+      ...locationIds.map((id) => ({
+        tenantId: actor.tenantId,
+        membershipId,
+        scopeType: 'location' as const,
+        targetId: id,
+      })),
+      ...brandIds.map((id) => ({
+        tenantId: actor.tenantId,
+        membershipId,
+        scopeType: 'brand' as const,
+        targetId: id,
+      })),
+    ];
+    if (rows.length) await db().insert(tenantMembershipScopes).values(rows);
+    await audit(actor.tenantId, actor.id, 'UPDATE', 'tenant_membership_scopes', membershipId, 'Updated shop scope.');
+  });
+  revalidateTeam();
+  return { ok: true as const, message: 'Shops saved.' };
 }
 
 export async function getSeatUsage() {
@@ -874,6 +956,7 @@ export async function listAccessHistory() {
       'tenant_teams',
       'tenant_team_members',
       'tenant_permission_overrides',
+      'tenant_membership_scopes',
     ];
     return db()
       .select({

@@ -7,6 +7,7 @@ import {
   tenantMembershipRoles,
   tenantMemberships,
   tenantPermissionOverrides,
+  tenantMembershipScopes,
   tenantRolePermissions,
   tenantRoles,
   tenants,
@@ -16,6 +17,7 @@ import type { ModuleWriteKey } from './ceiling';
 import { allows, type ResolveInput } from './resolve';
 import { templateByKey } from './templates';
 import type { PermissionKey } from './catalog';
+import { scopeIgnoresJob } from './scope';
 
 export type LoadedAccess = ResolveInput & {
   tenantId: string;
@@ -23,6 +25,10 @@ export type LoadedAccess = ResolveInput & {
   jobId: string | null;
   jobSlug: string | null;
   jobName: string | null;
+  /** null = every location */
+  locationIds: string[] | null;
+  /** null = every brand */
+  brandIds: string[] | null;
   allows: (key: string, need: 'read' | 'write') => boolean;
 };
 
@@ -169,6 +175,29 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
     legacyRole: membership.role,
   };
 
+  let locationIds: string[] | null = null;
+  let brandIds: string[] | null = null;
+  if (!scopeIgnoresJob(primary?.templateKey ?? primary?.slug) && platformRole !== 'super_admin') {
+    try {
+      const scopeRows = await db()
+        .select({
+          scopeType: tenantMembershipScopes.scopeType,
+          targetId: tenantMembershipScopes.targetId,
+        })
+        .from(tenantMembershipScopes)
+        .where(
+          and(eq(tenantMembershipScopes.membershipId, membership.id), isNull(tenantMembershipScopes.voidedAt)),
+        );
+      const loc = scopeRows.filter((r) => r.scopeType === 'location').map((r) => r.targetId);
+      const br = scopeRows.filter((r) => r.scopeType === 'brand').map((r) => r.targetId);
+      locationIds = loc.length ? loc : null;
+      brandIds = br.length ? br : null;
+    } catch {
+      locationIds = null;
+      brandIds = null;
+    }
+  }
+
   return {
     ...input,
     tenantId,
@@ -176,6 +205,8 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
     jobId: primary?.id ?? null,
     jobSlug: primary?.slug ?? membership.role ?? null,
     jobName: primary?.name ?? null,
+    locationIds,
+    brandIds,
     allows: (key, need) => allows(input, key as PermissionKey, need),
   };
 }

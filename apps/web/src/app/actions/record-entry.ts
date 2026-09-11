@@ -23,6 +23,7 @@ import {
 } from '@bookone/db';
 import { entrySchema, type EntryInput } from '@/lib/entry-schema';
 import { resolveDimensions } from '@/lib/dimensions';
+import { assertDimensionScope, currentDimensionScope } from '@/lib/dimension-scope';
 import { parseEntityKind, resolveBookDomain } from '@/lib/entity-kind';
 
 export interface RecordEntryResult {
@@ -78,12 +79,18 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
     });
     const entityKind = parseEntityKind(tenantRow?.entityKind);
     const bookDomain = resolveBookDomain(entityKind, parsed.bookDomain ?? null);
+    const scope = await currentDimensionScope();
     const dimensions =
       entityKind === 'personal' || entityKind === 'pending'
         ? { brandId: null as string | null, locationId: null as string | null }
         : await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId, {
             auto: true,
+            allowedLocationIds: scope.locationIds,
+            allowedBrandIds: scope.brandIds,
           }).catch(() => ({ brandId: null as string | null, locationId: null as string | null }));
+    if (entityKind !== 'personal' && entityKind !== 'pending') {
+      await assertDimensionScope(dimensions);
+    }
 
     const [lock] = await withTenantContext(user.tenantId, async () => {
       return db()

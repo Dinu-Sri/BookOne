@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { assignJob, deactivateMember } from '@/app/actions/team';
+import { assignJob, deactivateMember, restoreMember } from '@/app/actions/team';
 import { Button, Card, CardBody, CardHeader } from '@/components/ui/bookone-ui';
 
 type Person = {
@@ -208,19 +208,41 @@ export function TeamPeopleScreen({
                       </form>
                     </td>
                     <td>{p.extraName ?? '—'}</td>
-                    <td>{p.status}</td>
+                    <td>{p.status === 'disabled' ? 'Removed' : p.status}</td>
                     <td>
-                      <form
-                        action={async (fd) => {
-                          await deactivateMember(fd);
-                          router.refresh();
-                        }}
-                      >
-                        <input type="hidden" name="membershipId" value={p.membershipId} />
-                        <Button variant="secondary" type="submit">
-                          Remove
-                        </Button>
-                      </form>
+                      {p.status === 'disabled' ? (
+                        <form
+                          action={async (fd) => {
+                            setErr('');
+                            setMsg('');
+                            const res = await restoreMember(fd);
+                            if (!res.ok) setErr(res.error ?? 'Could not restore.');
+                            else setMsg(res.message ?? 'Restored.');
+                            router.refresh();
+                          }}
+                        >
+                          <input type="hidden" name="membershipId" value={p.membershipId} />
+                          <Button variant="primary" type="submit">
+                            Restore
+                          </Button>
+                        </form>
+                      ) : (
+                        <form
+                          action={async (fd) => {
+                            setErr('');
+                            setMsg('');
+                            const res = await deactivateMember(fd);
+                            if (!res.ok) setErr(res.error ?? 'Could not remove.');
+                            else setMsg(res.message ?? 'Removed.');
+                            router.refresh();
+                          }}
+                        >
+                          <input type="hidden" name="membershipId" value={p.membershipId} />
+                          <Button variant="secondary" type="submit">
+                            Remove
+                          </Button>
+                        </form>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -6262,6 +6262,41 @@
 - **Steps:** Open `/company/team`
 - **Expect:** Add person form with name, email, password, job (no email is sent).
 
+### S-0717 — Cashier POS ok; Pay Vendors URL denied
+
+- **Priority:** P0
+- **Tags:** `@company`, `@team`
+- **Steps:** Add a Cashier with password, sign in as them, open `/pos`, then type `/purchase/payments`
+- **Expect:** POS loads. Pay Vendors URL does not stay on that screen.
+
+### S-0720 — Last owner cannot be removed
+
+- **Priority:** P0
+- **Tags:** `@company`, `@team`
+- **Steps:** On Team, Remove the last Owner
+- **Expect:** Error that the last owner cannot be removed.
+
+### S-0730 — Cashier typed Pay Vendors URL is blocked
+
+- **Priority:** P0
+- **Tags:** `@company`, `@team`
+- **Steps:** Sign in as Cashier, open `/purchase/payments`
+- **Expect:** Redirect away from Pay Vendors (not `error.tsx`).
+
+### S-0736 — Set password on person page
+
+- **Priority:** P1
+- **Tags:** `@company`, `@team`
+- **Steps:** Open a person from Team
+- **Expect:** Set password fields. No email is sent.
+
+### S-0737 — Remove then restore a helper
+
+- **Priority:** P1
+- **Tags:** `@company`, `@team`
+- **Steps:** Add a Viewer, Remove, Restore
+- **Expect:** Restore brings them back; Remove is available again.
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

@@ -9486,5 +9486,60 @@
       "@team"
     ],
     "steps": []
+  },
+  {
+    "id": "S-0717",
+    "title": "Cashier POS ok; Pay Vendors URL denied",
+    "section": "31. Team access (RBAC)",
+    "priority": "P0",
+    "tags": [
+      "@company",
+      "@team"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0720",
+    "title": "Last owner cannot be removed",
+    "section": "31. Team access (RBAC)",
+    "priority": "P0",
+    "tags": [
+      "@company",
+      "@team"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0730",
+    "title": "Cashier typed Pay Vendors URL is blocked",
+    "section": "31. Team access (RBAC)",
+    "priority": "P0",
+    "tags": [
+      "@company",
+      "@team"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0736",
+    "title": "Set password on person page",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company",
+      "@team"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0737",
+    "title": "Remove then restore a helper",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company",
+      "@team"
+    ],
+    "steps": []
   }
 ]

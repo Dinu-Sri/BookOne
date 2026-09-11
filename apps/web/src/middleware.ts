@@ -92,7 +92,9 @@ export function middleware(request: NextRequest) {
   // Do not bounce /login → / here. If home/session is broken, that loop
   // becomes ERR_TOO_MANY_REDIRECTS. The login page can send signed-in users on.
 
-  return NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-bookone-pathname', pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

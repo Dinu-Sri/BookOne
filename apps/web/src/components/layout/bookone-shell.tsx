@@ -332,7 +332,9 @@ export function BookOneShell({
     if (!tenant?.accessByLabel || !active || isSuperAdmin) return;
     if (active === 'Documentation' || active === 'Control Room') return;
     if (tenant.accessByLabel[active] === 'none') {
-      router.replace('/?denied=1');
+      const dest = tenant.landingHref || '/';
+      if (dest === '/' && active === 'Simple Entry') return;
+      router.replace(`${dest}?denied=1`);
     }
   }, [tenant?.accessByLabel, active, isSuperAdmin, router]);
 

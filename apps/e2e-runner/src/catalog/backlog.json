@@ -57,11 +57,11 @@
       "related_scenarios": ["S-0715", "S-0716", "S-0717", "S-0718", "S-0719", "S-0720"],
       "title": "Team RBAC mutate: invite, cashier deny, last-owner, extras",
       "priority": "P1",
-      "status": "planned",
+      "status": "automated_mutate",
       "target_depth": "mutate",
       "feature_ref": "docs/ACCESS_CONTROL_DESIGN.md",
       "added_at": "2026-09-11",
-      "notes": "Load coverage S-0713/S-0714/S-0731–S-0733. Second-user cashier fixture still needed for deny paths."
+      "notes": "S-0717/S-0720/S-0730 cashier deny + last owner automated. Remaining invite-email/Google accept still later."
     }
   ]
 }

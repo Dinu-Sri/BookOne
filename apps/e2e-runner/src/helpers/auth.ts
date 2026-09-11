@@ -17,6 +17,20 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+export async function loginWithCredentials(page: Page, email: string, password: string) {
+  await page.context().clearCookies();
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('login-email').fill(email);
+  await page.getByTestId('login-password').fill(password);
+  await page.getByTestId('login-submit').click();
+  await page.waitForURL((url) => !url.pathname.includes('/login'), {
+    timeout: 60_000,
+    waitUntil: 'domcontentloaded',
+  });
+  await waitForAppShell(page);
+}
+
 /** Login via UI and wait for app shell. Reuses session; backs off on rate-limit style failures. */
 export async function loginAsE2eUser(page: Page, opts: LoginOpts = {}) {
   const { email, password } = requireE2eAuth();

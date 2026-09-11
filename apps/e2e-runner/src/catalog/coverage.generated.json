@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-11T11:14:31.467Z",
-    "catalog_total": 719,
-    "referenced": 719,
+    "generated_at": "2026-09-11T15:36:04.164Z",
+    "catalog_total": 724,
+    "referenced": 724,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
-      "P0": 329,
-      "P1": 303,
+      "P0": 332,
+      "P1": 305,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -112,8 +112,8 @@
       "referenced": 5
     },
     "31. Team access (RBAC)": {
-      "total": 7,
-      "referenced": 7
+      "total": 12,
+      "referenced": 12
     },
     "4. Company masters": {
       "total": 30,
@@ -9962,6 +9962,48 @@
       "status": "referenced"
     },
     {
+      "id": "S-0717",
+      "title": "Cashier POS ok; Pay Vendors URL denied",
+      "section": "31. Team access (RBAC)",
+      "priority": "P0",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0720",
+      "title": "Last owner cannot be removed",
+      "section": "31. Team access (RBAC)",
+      "priority": "P0",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0730",
+      "title": "Cashier typed Pay Vendors URL is blocked",
+      "section": "31. Team access (RBAC)",
+      "priority": "P0",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
       "id": "S-0731",
       "title": "Groups screen loads",
       "section": "31. Team access (RBAC)",
@@ -10020,6 +10062,34 @@
     {
       "id": "S-0735",
       "title": "Add person with password",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0736",
+      "title": "Set password on person page",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0737",
+      "title": "Remove then restore a helper",
       "section": "31. Team access (RBAC)",
       "priority": "P1",
       "tags": [

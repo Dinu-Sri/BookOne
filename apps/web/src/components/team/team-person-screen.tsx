@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { assignJob, savePersonOverrides, savePersonScope, setExtraJob } from '@/app/actions/team';
+import { assignJob, savePersonOverrides, savePersonScope, setExtraJob, setTeamMemberPassword } from '@/app/actions/team';
 import { Button, Card, CardBody, CardHeader } from '@/components/ui/bookone-ui';
 import { TEAM_SOD_MESSAGE } from '@/lib/team-sod';
 
@@ -40,6 +41,8 @@ type PersonAccess = {
 
 export function TeamPersonScreen({ data, jobs }: { data: PersonAccess; jobs: Job[] }) {
   const router = useRouter();
+  const [pwdMsg, setPwdMsg] = useState('');
+  const [pwdErr, setPwdErr] = useState('');
   const extraJobs = jobs.filter((j) => j.templateKey !== 'owner' && j.templateKey !== 'admin' && j.slug !== 'owner' && j.slug !== 'admin');
   const exceptionScreens = data.preview.filter((s) => !s.privileged);
   const visible = data.preview.filter((s) => s.level !== 'none');
@@ -98,6 +101,39 @@ export function TeamPersonScreen({ data, jobs }: { data: PersonAccess; jobs: Job
               </select>
             </div>
             <p className="party-hint field-full">One extra job only. Owner and Admin cannot be extra jobs.</p>
+          </form>
+
+          <form
+            className="company-inline-form is-edit"
+            style={{ marginTop: 12 }}
+            action={async (fd) => {
+              setPwdErr('');
+              setPwdMsg('');
+              const res = await setTeamMemberPassword(fd);
+              if (!res.ok) setPwdErr(res.error ?? 'Could not set password.');
+              else setPwdMsg(res.message ?? 'Password updated.');
+              router.refresh();
+            }}
+          >
+            <input type="hidden" name="userId" value={data.person.userId} />
+            <div className="field">
+              <label>New password</label>
+              <input className="input" name="password" type="password" required minLength={8} placeholder="At least 8 characters" />
+            </div>
+            <div className="field">
+              <label>Confirm password</label>
+              <input className="input" name="confirmPassword" type="password" required minLength={8} />
+            </div>
+            <div className="company-form-footer field-full">
+              {pwdErr ? <span className="form-error inline">{pwdErr}</span> : null}
+              {pwdMsg ? <span className="entry-result success inline">{pwdMsg}</span> : null}
+              <div className="company-form-footer-actions">
+                <Button variant="secondary" type="submit">
+                  Set password
+                </Button>
+              </div>
+            </div>
+            <p className="party-hint field-full">No email is sent. Tell them the new password.</p>
           </form>
         </CardBody>
       </Card>

@@ -8,6 +8,7 @@ import {
   SCREEN_DEFS,
   createCredentialLogin,
   loadAccessForUser,
+  setCredentialPassword,
   requireTenantContext,
   scopeIgnoresJob,
   seedJobsForTenant,
@@ -21,6 +22,7 @@ import {
   eq,
   inArray,
   isNull,
+  or,
   sql,
   tenantInvites,
   tenantMembershipRoles,
@@ -83,7 +85,12 @@ export async function listTeamPeople() {
       .from(tenantMemberships)
       .innerJoin(users, eq(users.id, tenantMemberships.userId))
       .leftJoin(tenantRoles, eq(tenantRoles.id, tenantMemberships.primaryRoleId))
-      .where(and(eq(tenantMemberships.tenantId, user.tenantId), isNull(tenantMemberships.voidedAt)));
+      .where(
+        and(
+          eq(tenantMemberships.tenantId, user.tenantId),
+          or(isNull(tenantMemberships.voidedAt), eq(tenantMemberships.status, 'disabled')),
+        ),
+      );
     const extras = await db()
       .select({
         membershipId: tenantMembershipRoles.membershipId,
@@ -285,7 +292,7 @@ export async function deactivateMember(formData: FormData) {
   await assertPermission('team.people.write', 'write');
   const user = await requireTenantContext();
   const membershipId = String(formData.get('membershipId') ?? '');
-  await withTenantContext(user.tenantId, async () => {
+  const result = await withTenantContext(user.tenantId, async () => {
     const [row] = await db()
       .select({
         id: tenantMemberships.id,
@@ -296,9 +303,9 @@ export async function deactivateMember(formData: FormData) {
       .leftJoin(tenantRoles, eq(tenantRoles.id, tenantMemberships.primaryRoleId))
       .where(and(eq(tenantMemberships.id, membershipId), eq(tenantMemberships.tenantId, user.tenantId)))
       .limit(1);
-    if (!row) throw new Error('Person not found.');
+    if (!row) return { ok: false as const, error: 'Person not found.' };
     if (row.templateKey === 'owner') {
-      if (user.jobSlug !== 'owner') throw new Error('Only the owner can deactivate another owner.');
+      if (user.jobSlug !== 'owner') return { ok: false as const, error: 'Only the owner can remove another owner.' };
       const [owners] = await db()
         .select({ total: sql<number>`count(*)` })
         .from(tenantMemberships)
@@ -311,16 +318,105 @@ export async function deactivateMember(formData: FormData) {
             eq(tenantRoles.templateKey, 'owner'),
           ),
         );
-      if (Number(owners?.total ?? 0) <= 1) throw new Error('The last owner cannot be deactivated.');
+      if (Number(owners?.total ?? 0) <= 1) {
+        return { ok: false as const, error: 'The last owner cannot be removed.' };
+      }
     }
     await db()
       .update(tenantMemberships)
-      .set({ status: 'disabled', voidedAt: new Date(), updatedAt: new Date() })
+      .set({ status: 'disabled', updatedAt: new Date() })
       .where(eq(tenantMemberships.id, membershipId));
     await audit(user.tenantId, user.id, 'DELETE', 'tenant_memberships', membershipId, 'Deactivated team member.');
+    return { ok: true as const, message: 'Person removed. You can restore them later.' };
   });
-  revalidateTeam();
-  return { ok: true as const, message: 'Person deactivated.' };
+  if (result.ok) revalidateTeam();
+  return result;
+}
+
+export async function restoreMember(formData: FormData) {
+  await assertPermission('team.people.write', 'write');
+  const user = await requireTenantContext();
+  const membershipId = String(formData.get('membershipId') ?? '');
+  const access = await getMyAccess();
+  return withTenantContext(user.tenantId, async () => {
+    const [row] = await db()
+      .select({
+        id: tenantMemberships.id,
+        status: tenantMemberships.status,
+        userId: tenantMemberships.userId,
+      })
+      .from(tenantMemberships)
+      .where(and(eq(tenantMemberships.id, membershipId), eq(tenantMemberships.tenantId, user.tenantId)))
+      .limit(1);
+    if (!row) return { ok: false as const, error: 'Person not found.' };
+    const [{ total: live }] = await db()
+      .select({ total: sql<number>`count(*)` })
+      .from(tenantMemberships)
+      .where(
+        and(
+          eq(tenantMemberships.tenantId, user.tenantId),
+          isNull(tenantMemberships.voidedAt),
+          eq(tenantMemberships.status, 'active'),
+        ),
+      );
+    const [tenantRow] = await db()
+      .select({ plan: tenants.plan, entityKind: tenants.entityKind, capabilityTier: tenants.capabilityTier })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1);
+    const cap = teamSeatCap({
+      entityKind: tenantRow?.entityKind ?? access?.entityKind,
+      capabilityTier: tenantRow?.capabilityTier ?? access?.capabilityTier,
+      plan: tenantRow?.plan,
+    });
+    if (Number(live ?? 0) >= cap) {
+      return { ok: false as const, error: `This workspace can have up to ${cap} people.` };
+    }
+    await db()
+      .update(tenantMemberships)
+      .set({ status: 'active', voidedAt: null, updatedAt: new Date() })
+      .where(eq(tenantMemberships.id, membershipId));
+    await audit(user.tenantId, user.id, 'UPDATE', 'tenant_memberships', membershipId, 'Restored team member.');
+    revalidateTeam();
+    return { ok: true as const, message: 'Person restored.' };
+  });
+}
+
+export async function setTeamMemberPassword(formData: FormData) {
+  await assertPermission('team.people.write', 'write');
+  const actor = await requireTenantContext();
+  const userId = String(formData.get('userId') ?? '');
+  const password = String(formData.get('password') ?? '');
+  const confirm = String(formData.get('confirmPassword') ?? '');
+  if (password.length < 8) return { ok: false as const, error: 'Password must be at least 8 characters.' };
+  if (password !== confirm) return { ok: false as const, error: 'Passwords do not match.' };
+  return withTenantContext(actor.tenantId, async () => {
+    const [row] = await db()
+      .select({
+        email: users.email,
+        name: users.name,
+        templateKey: tenantRoles.templateKey,
+      })
+      .from(tenantMemberships)
+      .innerJoin(users, eq(users.id, tenantMemberships.userId))
+      .leftJoin(tenantRoles, eq(tenantRoles.id, tenantMemberships.primaryRoleId))
+      .where(
+        and(
+          eq(tenantMemberships.tenantId, actor.tenantId),
+          eq(tenantMemberships.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!row) return { ok: false as const, error: 'Person not found.' };
+    if (row.templateKey === 'owner' && actor.jobSlug !== 'owner') {
+      return { ok: false as const, error: 'Only the owner can change an owner password.' };
+    }
+    const result = await setCredentialPassword(row.email, password);
+    if (!result.ok) return { ok: false as const, error: result.error };
+    await audit(actor.tenantId, actor.id, 'UPDATE', 'users', userId, `Set password for ${row.email}.`);
+    revalidateTeam();
+    return { ok: true as const, message: `Password updated. Tell ${row.name} the new password.` };
+  });
 }
 
 export async function inviteTeamMember(formData: FormData) {

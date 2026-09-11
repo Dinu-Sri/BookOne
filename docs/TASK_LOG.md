@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-09-11 — Finish Team users: password reset, restore, URL deny, cashier E2E
+
+- Team person **Set password** (tell them; no email).
+- **Restore** a removed person (Remove no longer voids the row). Last owner cannot be removed.
+- Typed URLs the job cannot read redirect to their first allowed screen (`?denied=1`). Cashier home is POS, not Simple Entry.
+- E2E S-0717, S-0720, S-0730, S-0736, S-0737.
+
 ## 2026-09-11 — Add team person with password (no email)
 
 - Company → Team **Add person**: name, email, password, job. Creates a login immediately. Tell them the email and password; they sign in at `/login`.

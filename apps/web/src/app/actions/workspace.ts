@@ -51,6 +51,8 @@ export interface TenantInfo {
   platformRole?: 'super_admin' | 'user';
   jobSlug?: string | null;
   accessByLabel?: Record<string, 'none' | 'read' | 'write'>;
+  /** First screen this job can open; used when a typed URL is denied. */
+  landingHref?: string;
 }
 
 export interface AccountBalance {
@@ -148,6 +150,7 @@ export async function getTenantInfo(): Promise<TenantInfo> {
   accessByLabel['On rent'] = accessByLabel['Stock Levels'] ?? 'none';
   accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
   accessByLabel.Groups = accessByLabel.Team ?? 'none';
+  const { landingHrefForAccess } = await import('@/lib/access');
   return {
     ...t,
     environment: t.environment ?? 'production',
@@ -160,6 +163,7 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     platformRole: user.platformRole,
     jobSlug: user.jobSlug,
     accessByLabel,
+    landingHref: landingHrefForAccess(access),
   };
 }
 

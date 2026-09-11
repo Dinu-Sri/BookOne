@@ -6,6 +6,7 @@ import {
   JOB_TEMPLATES,
   PRIVILEGED_KEYS,
   SCREEN_DEFS,
+  createCredentialLogin,
   loadAccessForUser,
   requireTenantContext,
   scopeIgnoresJob,
@@ -400,6 +401,114 @@ export async function inviteTeamMember(formData: FormData) {
     const base = process.env.AUTH_URL || process.env.APP_URL || '';
     const url = `${base.replace(/\/$/, '')}/invite/${token}`;
     return { ok: true as const, message: 'Invite created. Share this link with them.', url };
+  });
+}
+
+export async function createTeamMember(formData: FormData) {
+  await assertPermission('team.people.write', 'write');
+  const actor = await requireTenantContext();
+  const name = String(formData.get('name') ?? '').trim();
+  const email = String(formData.get('email') ?? '')
+    .toLowerCase()
+    .trim();
+  const password = String(formData.get('password') ?? '');
+  const confirm = String(formData.get('confirmPassword') ?? '');
+  const roleId = String(formData.get('roleId') ?? '');
+  if (!name) return { ok: false as const, error: 'Enter their name.' };
+  if (!email || !email.includes('@')) return { ok: false as const, error: 'Enter a valid email.' };
+  if (password.length < 8) return { ok: false as const, error: 'Password must be at least 8 characters.' };
+  if (password !== confirm) return { ok: false as const, error: 'Passwords do not match.' };
+  const access = await getMyAccess();
+  const kind = parseEntityKind(access?.entityKind);
+  if (kind === 'personal') return { ok: false as const, error: 'Personal books cannot add a team.' };
+
+  return withTenantContext(actor.tenantId, async () => {
+    const [job] = await db()
+      .select()
+      .from(tenantRoles)
+      .where(and(eq(tenantRoles.id, roleId), eq(tenantRoles.tenantId, actor.tenantId), isNull(tenantRoles.voidedAt)))
+      .limit(1);
+    if (!job) return { ok: false as const, error: 'Pick a job.' };
+    if (job.templateKey === 'owner' && actor.jobSlug !== 'owner') {
+      return { ok: false as const, error: 'Only the owner can add another owner.' };
+    }
+
+    const [already] = await db()
+      .select({ id: users.id })
+      .from(users)
+      .where(sql`lower(${users.email}) = ${email} and ${users.voidedAt} is null`)
+      .limit(1);
+    if (already) return { ok: false as const, error: 'That email is already in BookOne. Use an invite link instead.' };
+
+    const [{ total: live }] = await db()
+      .select({ total: sql<number>`count(*)` })
+      .from(tenantMemberships)
+      .where(
+        and(
+          eq(tenantMemberships.tenantId, actor.tenantId),
+          isNull(tenantMemberships.voidedAt),
+          eq(tenantMemberships.status, 'active'),
+        ),
+      );
+    const [{ total: pending }] = await db()
+      .select({ total: sql<number>`count(*)` })
+      .from(tenantInvites)
+      .where(
+        and(
+          eq(tenantInvites.tenantId, actor.tenantId),
+          eq(tenantInvites.status, 'pending'),
+          isNull(tenantInvites.voidedAt),
+          sql`${tenantInvites.expiresAt} > now()`,
+        ),
+      );
+    const [tenantRow] = await db()
+      .select({ plan: tenants.plan, entityKind: tenants.entityKind, capabilityTier: tenants.capabilityTier })
+      .from(tenants)
+      .where(eq(tenants.id, actor.tenantId))
+      .limit(1);
+    const cap = teamSeatCap({
+      entityKind: tenantRow?.entityKind ?? access?.entityKind,
+      capabilityTier: tenantRow?.capabilityTier ?? access?.capabilityTier,
+      plan: tenantRow?.plan,
+    });
+    if (Number(live ?? 0) + Number(pending ?? 0) >= cap) {
+      return { ok: false as const, error: `This workspace can have up to ${cap} people.` };
+    }
+
+    const [created] = await db()
+      .insert(users)
+      .values({
+        tenantId: actor.tenantId,
+        activeTenantId: actor.tenantId,
+        email,
+        name,
+        passwordHash: 'better-auth-managed',
+        role: 'member',
+      })
+      .returning({ id: users.id });
+    if (!created) return { ok: false as const, error: 'Could not add this person.' };
+    await db().insert(tenantMemberships).values({
+      tenantId: actor.tenantId,
+      userId: created.id,
+      role: job.slug,
+      primaryRoleId: job.id,
+      status: 'active',
+    });
+    const login = await createCredentialLogin({ email, name, password });
+    if (!login.ok) {
+      await db()
+        .update(tenantMemberships)
+        .set({ voidedAt: new Date(), status: 'disabled', updatedAt: new Date() })
+        .where(and(eq(tenantMemberships.userId, created.id), eq(tenantMemberships.tenantId, actor.tenantId)));
+      await db().update(users).set({ voidedAt: new Date(), updatedAt: new Date() }).where(eq(users.id, created.id));
+      return { ok: false as const, error: login.error };
+    }
+    await audit(actor.tenantId, actor.id, 'CREATE', 'tenant_memberships', created.id, `Added ${email} as ${job.name}.`);
+    revalidateTeam();
+    return {
+      ok: true as const,
+      message: `${name} can sign in at BookOne with ${email} and the password you set.`,
+    };
   });
 }
 

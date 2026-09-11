@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-09-11 — Add team person with password (no email)
+
+- Company → Team **Add person**: name, email, password, job. Creates a login immediately. Tell them the email and password; they sign in at `/login`.
+- Invite link remains as a second option if they should pick their own password.
+- E2E S-0735.
+
 ## 2026-09-11 — Team shop scope (brand / location)
 
 - Person page **Shops they can use**: tick locations and brands; blank = every shop. Owner/Admin always see all shops.

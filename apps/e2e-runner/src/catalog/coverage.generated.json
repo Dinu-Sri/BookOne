@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-11T11:11:07.713Z",
-    "catalog_total": 718,
-    "referenced": 718,
+    "generated_at": "2026-09-11T11:14:31.467Z",
+    "catalog_total": 719,
+    "referenced": 719,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
       "P0": 329,
-      "P1": 302,
+      "P1": 303,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -112,8 +112,8 @@
       "referenced": 5
     },
     "31. Team access (RBAC)": {
-      "total": 6,
-      "referenced": 6
+      "total": 7,
+      "referenced": 7
     },
     "4. Company masters": {
       "total": 30,
@@ -10006,6 +10006,20 @@
     {
       "id": "S-0734",
       "title": "Person shop scope",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@company",
+        "@team"
+      ],
+      "referenced_in": [
+        "tests/29-team-rbac.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0735",
+      "title": "Add person with password",
       "section": "31. Team access (RBAC)",
       "priority": "P1",
       "tags": [

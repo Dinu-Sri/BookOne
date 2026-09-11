@@ -6255,6 +6255,13 @@
 - **Steps:** Open `/company/team`, click a person name
 - **Expect:** “Shops they can use”. Owner/Admin copy says they always see every shop.
 
+### S-0735 — Add person with password
+
+- **Priority:** P1
+- **Tags:** `@company`, `@team`
+- **Steps:** Open `/company/team`
+- **Expect:** Add person form with name, email, password, job (no email is sent).
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

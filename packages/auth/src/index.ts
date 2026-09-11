@@ -1,5 +1,6 @@
 export { auth } from './auth';
 export { migrateLegacyCredentials } from './legacy-login';
+export { createCredentialLogin } from './create-login';
 export { signOut } from './sign-out';
 export { getSession, requireTenantContext, withTenantAuth, getAuthIdentity, INVITE_COOKIE } from './session';
 export type { Session, SessionUser, AuthIdentity } from './session';

@@ -49,4 +49,11 @@ test.describe('Team RBAC @company @team', () => {
     await expect(page.getByText(/every shop/i)).toBeVisible();
     await expectAuthedShell(page);
   });
+
+  test('S-0735 Add person with password', async ({ authedPage: page }) => {
+    await go(page, '/company/team');
+    await expect(page.getByRole('button', { name: /add person/i })).toBeVisible();
+    await expect(page.getByText(/no email is sent/i)).toBeVisible();
+    await expectAuthedShell(page);
+  });
 });

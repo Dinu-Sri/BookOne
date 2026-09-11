@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getTenantInfo } from '@/app/actions/workspace';
-import { getSeatUsage, inviteTeamMember, listAccessHistory, listPendingInvites, listTeamJobs, listTeamPeople, revokeInvite } from '@/app/actions/team';
+import { createTeamMember, getSeatUsage, inviteTeamMember, listAccessHistory, listPendingInvites, listTeamJobs, listTeamPeople, revokeInvite } from '@/app/actions/team';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { TeamPeopleScreen } from '@/components/team/team-people-screen';
 
@@ -29,6 +29,7 @@ export default async function TeamPeoplePage() {
           invites={invites}
           seats={seats}
           history={history}
+          createAction={createTeamMember}
           inviteAction={inviteTeamMember}
           revokeAction={revokeInvite}
         />

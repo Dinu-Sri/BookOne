@@ -35,6 +35,7 @@ export function TeamPeopleScreen({
   invites,
   seats,
   history,
+  createAction,
   inviteAction,
   revokeAction,
 }: {
@@ -43,12 +44,15 @@ export function TeamPeopleScreen({
   invites: Invite[];
   seats: { used: number; cap: number };
   history: HistoryRow[];
+  createAction: (formData: FormData) => Promise<{ ok: boolean; error?: string; message?: string }>;
   inviteAction: (formData: FormData) => Promise<{ ok: boolean; error?: string; message?: string; url?: string }>;
   revokeAction: (formData: FormData) => Promise<void>;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [inviteMsg, setInviteMsg] = useState('');
+  const [inviteErr, setInviteErr] = useState('');
   const [inviteUrl, setInviteUrl] = useState('');
   const inviteJobs = jobs.filter((j) => j.templateKey !== 'owner' && j.slug !== 'owner');
 
@@ -57,18 +61,74 @@ export function TeamPeopleScreen({
       <Card>
         <CardHeader
           title="Who can use BookOne"
-          subtitle={`${seats.used} of ${seats.cap} seats used. Invite people and give them a job.`}
+          subtitle={`${seats.used} of ${seats.cap} seats used. Add a person with a password, or send an invite link.`}
         />
         <CardBody>
+          <p className="muted-line" style={{ marginBottom: 8 }}>
+            Add person — they sign in with this email and password. No email is sent.
+          </p>
           <form
             className="company-inline-form is-create"
             action={async (fd) => {
               setErr('');
               setMsg('');
-              const res = await inviteAction(fd);
-              if (!res.ok) setErr(res.error ?? 'Could not invite.');
+              const res = await createAction(fd);
+              if (!res.ok) setErr(res.error ?? 'Could not add this person.');
               else {
-                setMsg(res.message ?? 'Invited.');
+                setMsg(res.message ?? 'Person added.');
+                router.refresh();
+              }
+            }}
+          >
+            <div className="field">
+              <label>Name</label>
+              <input className="input" name="name" required placeholder="Nimal Perera" />
+            </div>
+            <div className="field">
+              <label>Email</label>
+              <input className="input" name="email" type="email" required placeholder="nimal@shop.lk" />
+            </div>
+            <div className="field">
+              <label>Password</label>
+              <input className="input" name="password" type="password" required minLength={8} placeholder="At least 8 characters" />
+            </div>
+            <div className="field">
+              <label>Confirm password</label>
+              <input className="input" name="confirmPassword" type="password" required minLength={8} />
+            </div>
+            <div className="field">
+              <label>Job</label>
+              <select className="input" name="roleId" required defaultValue={inviteJobs.find((j) => j.slug === 'cashier')?.id ?? inviteJobs[0]?.id}>
+                {inviteJobs.map((j) => (
+                  <option value={j.id} key={j.id}>
+                    {j.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="company-form-footer field-full">
+              {err ? <span className="form-error inline">{err}</span> : null}
+              {msg ? <span className="entry-result success inline">{msg}</span> : null}
+              <div className="company-form-footer-actions">
+                <Button variant="primary" type="submit">
+                  Add person
+                </Button>
+              </div>
+            </div>
+          </form>
+
+          <p className="muted-line" style={{ margin: '18px 0 8px' }}>
+            Or send an invite link — they pick their own password.
+          </p>
+          <form
+            className="company-inline-form is-create"
+            action={async (fd) => {
+              setInviteErr('');
+              setInviteMsg('');
+              const res = await inviteAction(fd);
+              if (!res.ok) setInviteErr(res.error ?? 'Could not invite.');
+              else {
+                setInviteMsg(res.message ?? 'Invited.');
                 setInviteUrl(res.url ?? '');
                 router.refresh();
               }
@@ -89,10 +149,10 @@ export function TeamPeopleScreen({
               </select>
             </div>
             <div className="company-form-footer field-full">
-              {err ? <span className="form-error inline">{err}</span> : null}
-              {msg ? <span className="entry-result success inline">{msg}</span> : null}
+              {inviteErr ? <span className="form-error inline">{inviteErr}</span> : null}
+              {inviteMsg ? <span className="entry-result success inline">{inviteMsg}</span> : null}
               <div className="company-form-footer-actions">
-                <Button variant="primary" type="submit">
+                <Button variant="secondary" type="submit">
                   Send invite
                 </Button>
               </div>

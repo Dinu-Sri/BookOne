@@ -1,12 +1,12 @@
 {
   "summary": {
-    "generated_at": "2026-09-11T15:50:09.567Z",
-    "catalog_total": 726,
-    "referenced": 726,
+    "generated_at": "2026-09-12T08:55:19.907Z",
+    "catalog_total": 727,
+    "referenced": 727,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
-      "P0": 332,
+      "P0": 333,
       "P1": 307,
       "P2": 74,
       "P3": 13,
@@ -108,8 +108,8 @@
       "referenced": 16
     },
     "30. Product identity (units, categories, descriptions)": {
-      "total": 7,
-      "referenced": 7
+      "total": 8,
+      "referenced": 8
     },
     "31. Team access (RBAC)": {
       "total": 12,
@@ -10126,6 +10126,20 @@
       ],
       "referenced_in": [
         "tests/05-parties-products.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0740",
+      "title": "FIFO costing method",
+      "section": "30. Product identity (units, categories, descriptions)",
+      "priority": "P0",
+      "tags": [
+        "@inventory",
+        "@company"
+      ],
+      "referenced_in": [
+        "tests/12-settings-save.spec.ts"
       ],
       "status": "referenced"
     }

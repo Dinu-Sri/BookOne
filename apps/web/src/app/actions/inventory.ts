@@ -42,6 +42,12 @@ import { assertModuleWrite } from '@/lib/module-access';
 import { assertDimensionScope, columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import { sanitizeProductHtml } from '@/lib/product-html';
 import { normalizeProductUnit } from '@/lib/product-units';
+import {
+  consumeCostLayers,
+  listOpenLots,
+  receiveCostLayer,
+  transferCostLayers,
+} from '@/lib/inventory-costing';
 
 const productTypeSchema = z.enum(['physical', 'digital', 'service', 'stocked', 'rental']);
 
@@ -131,6 +137,7 @@ export interface ProductRow {
   }[];
   tracksSerials: boolean;
   serialCodes: string[];
+  openLots: { id: string; locationId: string | null; qtyRemaining: number; unitCost: number; receivedOn: string }[];
 }
 
 export interface StockLevelRow {
@@ -300,6 +307,7 @@ function mapProduct(
       | 'brandName'
       | 'stockByLocation'
       | 'locationSummary'
+      | 'openLots'
     >
   >,
 ): ProductRow {
@@ -322,6 +330,7 @@ function mapProduct(
     brandName: extras.brandName ?? null,
     stockByLocation: extras.stockByLocation ?? [],
     locationSummary: extras.locationSummary ?? 'Unassigned',
+    openLots: extras.openLots ?? [],
     barcode: (row.barcode as string | null) ?? null,
     sellable: row.sellable !== '0' && row.sellable !== false,
     purchasable: row.purchasable !== '0' && row.purchasable !== false,
@@ -627,7 +636,11 @@ async function replaceSerials(tenantId: string, productId: string, codes: string
 
 export async function getProduct(id: string): Promise<ProductRow | null> {
   const rows = await listProducts({ status: 'all' });
-  return rows.find((r) => r.id === id) ?? null;
+  const found = rows.find((r) => r.id === id) ?? null;
+  if (!found) return null;
+  const user = await requireTenantContext();
+  const openLots = await withTenantContext(user.tenantId, () => listOpenLots(user.tenantId, id));
+  return { ...found, openLots };
 }
 
 export async function listPhysicalProductOptions(): Promise<
@@ -1084,6 +1097,16 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
       });
       if (parsed.openingQty > 0) {
         const openDate = new Date().toISOString().slice(0, 10);
+        await receiveCostLayer({
+          tenantId: user.tenantId,
+          productId: product.id,
+          locationId: openingLocationId,
+          qty: parsed.openingQty,
+          unitCost: parsed.unitCost,
+          date: openDate,
+          sourceType: 'opening',
+          sourceId: product.id,
+        });
         await db().insert(inventoryMovements).values({
           tenantId: user.tenantId,
           userId: user.id,
@@ -1681,6 +1704,17 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
       });
 
       if (docType === 'transfer') {
+        await transferCostLayers({
+          tenantId: user.tenantId,
+          productId: line.productId,
+          fromLocationId,
+          toLocationId,
+          qty: Math.abs(line.quantity),
+          date: docDate,
+          sourceId: doc.id,
+          fallbackUnitCost: unitCost,
+          blockNegative: blockNeg,
+        });
         await applyQtyDelta(user.tenantId, line.productId, -Math.abs(line.quantity), fromLocationId, {
           blockNegative: blockNeg,
         });
@@ -1700,7 +1734,32 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
           movementDate: docDate,
         });
       } else {
-        await applyQtyDelta(user.tenantId, line.productId, line.quantity, null, {
+        const adjLoc = fromLocationId || toLocationId || null;
+        if (line.quantity > 0) {
+          await receiveCostLayer({
+            tenantId: user.tenantId,
+            productId: line.productId,
+            locationId: adjLoc,
+            qty: line.quantity,
+            unitCost,
+            date: docDate,
+            sourceType: 'adjustment',
+            sourceId: doc.id,
+          });
+        } else if (line.quantity < 0) {
+          await consumeCostLayers({
+            tenantId: user.tenantId,
+            productId: line.productId,
+            locationId: adjLoc,
+            qty: Math.abs(line.quantity),
+            date: docDate,
+            sourceType: 'adjustment',
+            sourceId: doc.id,
+            fallbackUnitCost: unitCost,
+            blockNegative: blockNeg,
+          });
+        }
+        await applyQtyDelta(user.tenantId, line.productId, line.quantity, adjLoc, {
           blockNegative: blockNeg,
         });
         await db().insert(inventoryMovements).values({
@@ -1834,6 +1893,17 @@ export async function createStockTransfer(input: {
           unitCost: unitCost.toFixed(2),
         });
 
+        await transferCostLayers({
+          tenantId: user.tenantId,
+          productId: line.productId,
+          fromLocationId,
+          toLocationId,
+          qty: line.quantity,
+          date: docDate,
+          sourceId: doc.id,
+          fallbackUnitCost: unitCost,
+          blockNegative: blockNeg,
+        });
         await applyQtyDelta(user.tenantId, line.productId, -line.quantity, fromLocationId, {
           blockNegative: blockNeg,
         });

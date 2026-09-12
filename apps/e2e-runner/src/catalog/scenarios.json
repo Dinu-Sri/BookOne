@@ -9433,6 +9433,17 @@
     "steps": []
   },
   {
+    "id": "S-0740",
+    "title": "FIFO costing method",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P0",
+    "tags": [
+      "@inventory",
+      "@company"
+    ],
+    "steps": []
+  },
+  {
     "id": "S-0713",
     "title": "Company → Team loads for owner",
     "section": "31. Team access (RBAC)",

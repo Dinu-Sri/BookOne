@@ -7,12 +7,12 @@ import { db, eq, inventorySettings, withTenantContext } from '@bookone/db';
 
 const schema = z.object({
   negativeStockPolicy: z.enum(['allow', 'block']),
-  costingMethod: z.enum(['last', 'average']),
+  costingMethod: z.enum(['last', 'average', 'fifo']),
 });
 
 export interface InventorySettingsRow {
   negativeStockPolicy: 'allow' | 'block';
-  costingMethod: 'last' | 'average';
+  costingMethod: 'last' | 'average' | 'fifo';
 }
 
 const DEFAULTS: InventorySettingsRow = {
@@ -32,7 +32,8 @@ export async function getInventorySettings(): Promise<InventorySettingsRow> {
     return {
       negativeStockPolicy:
         row.negativeStockPolicy === 'block' ? 'block' : 'allow',
-      costingMethod: row.costingMethod === 'average' ? 'average' : 'last',
+      costingMethod:
+        row.costingMethod === 'average' ? 'average' : row.costingMethod === 'fifo' ? 'fifo' : 'last',
     };
   });
 }
@@ -41,8 +42,12 @@ export async function saveInventorySettingsFromForm(formData: FormData): Promise
   const parsed = schema.parse({
     negativeStockPolicy:
       String(formData.get('negativeStockPolicy') ?? 'allow') === 'block' ? 'block' : 'allow',
-    costingMethod:
-      String(formData.get('costingMethod') ?? 'last') === 'average' ? 'average' : 'last',
+    costingMethod: ((): 'last' | 'average' | 'fifo' => {
+      const v = String(formData.get('costingMethod') ?? 'last');
+      if (v === 'average') return 'average';
+      if (v === 'fifo') return 'fifo';
+      return 'last';
+    })(),
   });
 
   const user = await requireTenantContext();
@@ -63,6 +68,10 @@ export async function saveInventorySettingsFromForm(formData: FormData): Promise
       await db().update(inventorySettings).set(values).where(eq(inventorySettings.id, existing.id));
     } else {
       await db().insert(inventorySettings).values({ tenantId: user.tenantId, ...values });
+    }
+    if (parsed.costingMethod === 'fifo') {
+      const { seedAllProductLots } = await import('@/lib/inventory-costing');
+      await seedAllProductLots(user.tenantId, new Date().toISOString().slice(0, 10));
     }
   });
 

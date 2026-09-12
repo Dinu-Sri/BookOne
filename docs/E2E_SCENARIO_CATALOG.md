@@ -6223,6 +6223,13 @@
 - **Steps:** Open `/inventory/products`
 - **Expect:** Brand and Location columns.
 
+### S-0740 — FIFO costing method
+
+- **Priority:** P0
+- **Tags:** `@inventory`, `@company`
+- **Steps:** Open `/company/inventory`
+- **Expect:** Costing method includes Last cost, Weighted average, and FIFO lots.
+
 ---
 
 ## 31. Team access (RBAC)

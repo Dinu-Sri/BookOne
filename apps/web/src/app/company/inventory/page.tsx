@@ -43,14 +43,18 @@ export default async function CompanyInventorySettingsPage() {
                     name="costingMethod"
                     defaultValue={settings.costingMethod}
                   >
-                    <option value="last">Last cost (purchase/GRN price overwrites unit cost)</option>
+                    <option value="last">Last cost — newest buy price becomes the product cost</option>
                     <option value="average">
-                      Weighted average (blends existing stock value with new receipt)
+                      Weighted average — blends old stock value with the new receipt
+                    </option>
+                    <option value="fifo">
+                      FIFO lots — each carton keeps its price; sales take the oldest carton first
                     </option>
                   </select>
                   <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    Used for product master unit cost and COGS on sales. Average weights by total qty
-                    on hand before the receipt.
+                    Last and average update the product cost used for COGS. FIFO keeps separate lots
+                    (e.g. 10 @ 500 then 20 @ 450); the first 10 sold use 500, then 450. Physical and
+                    rental fleet qty use lots. Digital and service items do not.
                   </p>
                 </div>
                 <div className="field field-full">

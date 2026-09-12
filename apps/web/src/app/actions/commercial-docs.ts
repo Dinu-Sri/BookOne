@@ -50,6 +50,11 @@ import { getInventorySettings } from '@/app/actions/inventory-settings';
 import { resolveDimensions } from '@/lib/dimensions';
 import { assertDimensionScope, columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import {
+  consumeCostLayers,
+  receiveCostLayer,
+  syncFifoMasterCost,
+} from '@/lib/inventory-costing';
+import {
   assertHireInvoiceTiming,
   checkRentalAvailability,
   loadRentalEventForDocument,
@@ -1121,6 +1126,25 @@ export async function createCommercialDocument(
       let docTaxTotal = vatTotal;
       let docTotal = total;
 
+      const outboundTypes = ['sales_invoice', 'pos_sale', 'customer_invoice', 'purchase_return'];
+      if (outboundTypes.includes(parsed.documentType)) {
+        for (const line of enriched) {
+          if (!line.productId || !isPhysicalProduct(line.productType) || line.quantity <= 0) continue;
+          const used = await consumeCostLayers({
+            tenantId: user.tenantId,
+            productId: line.productId,
+            locationId: dimensions.locationId,
+            qty: line.quantity,
+            date: parsed.issueDate,
+            sourceType: parsed.documentType,
+            sourceId: null,
+            fallbackUnitCost: line.unitCost,
+            blockNegative,
+          });
+          if (costingMethod === 'fifo') line.unitCost = used.unitCost;
+        }
+      }
+
       // Defer GL until Approve when purchase settings require bill approval
       // GRN optionally posts GRNI when purchase setting enabled
       const isGrnDoc = parsed.documentType === 'goods_receipt';
@@ -1645,8 +1669,24 @@ export async function createCommercialDocument(
               blockNegative: blockNegative && delta < 0,
             });
 
+            if (delta > 0) {
+              await receiveCostLayer({
+                tenantId: user.tenantId,
+                productId: line.productId,
+                locationId: dimensions.locationId,
+                qty: delta,
+                unitCost: line.unitCost,
+                date: parsed.issueDate,
+                sourceType: parsed.documentType,
+                sourceId: document.id,
+              });
+            }
+            if (costingMethod === 'fifo') {
+              await syncFifoMasterCost(user.tenantId, line.productId);
+            }
+
             // Costing: last cost or weighted average on physical purchase/GRN stock-in
-            if ((isPurchase || isGrn) && line.unitCost > 0 && delta > 0) {
+            if ((isPurchase || isGrn) && line.unitCost > 0 && delta > 0 && costingMethod !== 'fifo') {
               const newCost =
                 costingMethod === 'average'
                   ? weightedAverageUnitCost(qtyBefore, costBefore, delta, line.unitCost)
@@ -3034,7 +3074,22 @@ export async function approvePurchaseDocument(
             memo: doc.documentNumber,
             locationId: doc.locationId ?? null,
           });
-          if (line.unitCost > 0 && stockQty > 0) {
+          if (stockQty > 0) {
+            await receiveCostLayer({
+              tenantId: user.tenantId,
+              productId: line.productId,
+              locationId: doc.locationId ?? null,
+              qty: stockQty,
+              unitCost: line.unitCost,
+              date: doc.issueDate,
+              sourceType: doc.documentType,
+              sourceId: doc.id,
+            });
+          }
+          if (invCfg.costingMethod === 'fifo') {
+            await syncFifoMasterCost(user.tenantId, line.productId);
+          }
+          if (line.unitCost > 0 && stockQty > 0 && invCfg.costingMethod !== 'fifo') {
             const newCost =
               invCfg.costingMethod === 'average'
                 ? weightedAverageUnitCost(qtyBefore, costBefore, stockQty, line.unitCost)

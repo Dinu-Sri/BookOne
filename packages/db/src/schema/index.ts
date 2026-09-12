@@ -42,6 +42,8 @@ export {
   inventoryStockDocs,
   inventoryStockDocLines,
   inventoryMovements,
+  inventoryCostLayers,
+  inventoryCostLayerConsumptions,
 } from './inventory';
 export { salesDiscounts } from './sales-discounts';
 export { salesSettings, taxInvoiceSequences, salesInvoiceSources } from './sales-settings';

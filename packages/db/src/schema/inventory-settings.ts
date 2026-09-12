@@ -10,7 +10,7 @@ export const inventorySettings = pgTable('inventory_settings', {
     .unique(),
   /** allow | block — block prevents stock movements that would drive qty negative */
   negativeStockPolicy: varchar('negative_stock_policy', { length: 10 }).notNull().default('allow'),
-  /** last | average — how product.unitCost updates on purchase/GRN */
+  /** last | average | fifo — master cost + COGS. FIFO consumes oldest lots first. */
   costingMethod: varchar('costing_method', { length: 20 }).notNull().default('last'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

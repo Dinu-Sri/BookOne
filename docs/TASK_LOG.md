@@ -4,6 +4,15 @@
 
 ---
 
+## 2026-09-12 — FIFO cost lots (keep last + average)
+
+- Company → Inventory Settings costing: **Last cost**, **Weighted average**, **FIFO lots**.
+- FIFO: each purchase/GRN/opening is a carton at its price. Sales, POS, and purchase returns take the **oldest carton first**. Example: 10 @ 500 then 20 @ 450 → first 10 sold COGS 500, then 450.
+- Lots apply to **physical** (and rental fleet qty moves). Digital and service have no lots.
+- Last/average still update product cost as before; lots are still maintained so you can switch to FIFO later. Switching to FIFO seeds remaining on-hand as lots at current cost.
+- Product edit Stock tab lists open lots. Migration `034_cost_layers.sql`.
+- E2E S-0740.
+
 ## 2026-09-11 — Product brand and stock location
 
 - Product **Brand** on Identity (All brands = shared). Category brand only prefills if empty.

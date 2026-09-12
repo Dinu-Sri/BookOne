@@ -64,4 +64,14 @@ test.describe('Company settings save catalog §27 @settings @p0', () => {
     await toggleFirstSettingAndReload(page, '/company/inventory');
     await expectAuthedShell(page);
   });
+
+  test('S-0740 FIFO costing method option', async ({ authedPage: page }) => {
+    await go(page, '/company/inventory');
+    const method = page.locator('select[name="costingMethod"]');
+    await expect(method).toBeVisible();
+    await expect(method.locator('option[value="last"]')).toHaveCount(1);
+    await expect(method.locator('option[value="average"]')).toHaveCount(1);
+    await expect(method.locator('option[value="fifo"]')).toHaveCount(1);
+    await expectAuthedShell(page);
+  });
 });

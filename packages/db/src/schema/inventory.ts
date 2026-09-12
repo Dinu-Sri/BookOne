@@ -120,6 +120,44 @@ export const inventoryStockDocLines = pgTable('inventory_stock_doc_lines', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const inventoryCostLayers = pgTable('inventory_cost_layers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  productId: uuid('product_id')
+    .notNull()
+    .references(() => inventoryProducts.id),
+  locationId: uuid('location_id').references(() => locations.id),
+  qtyReceived: numeric('qty_received', { precision: 18, scale: 4 }).notNull(),
+  qtyRemaining: numeric('qty_remaining', { precision: 18, scale: 4 }).notNull(),
+  unitCost: numeric('unit_cost', { precision: 18, scale: 2 }).notNull().default('0'),
+  receivedOn: varchar('received_on', { length: 10 }).notNull(),
+  sourceType: varchar('source_type', { length: 40 }),
+  sourceId: uuid('source_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+export const inventoryCostLayerConsumptions = pgTable('inventory_cost_layer_consumptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  layerId: uuid('layer_id')
+    .notNull()
+    .references(() => inventoryCostLayers.id),
+  productId: uuid('product_id')
+    .notNull()
+    .references(() => inventoryProducts.id),
+  qty: numeric('qty', { precision: 18, scale: 4 }).notNull(),
+  unitCost: numeric('unit_cost', { precision: 18, scale: 2 }).notNull().default('0'),
+  sourceType: varchar('source_type', { length: 40 }),
+  sourceId: uuid('source_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const inventoryMovements = pgTable('inventory_movements', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),

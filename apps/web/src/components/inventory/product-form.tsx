@@ -543,6 +543,18 @@ export function ProductForm({
                       <p className="muted-line">No stock rows yet.</p>
                     )}
                   </div>
+                  {product?.openLots?.length ? (
+                    <div className="field field-full">
+                      <label>Cost lots (oldest sold first when FIFO is on)</label>
+                      <ul className="muted-line" style={{ display: 'grid', gap: 4, margin: 0, paddingLeft: 18 }}>
+                        {product.openLots.map((lot) => (
+                          <li key={lot.id}>
+                            {lot.receivedOn}: {lot.qtyRemaining} @ {lot.unitCost}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {product?.stockByLocation?.some((s) => !s.locationId && Math.abs(s.qty) > 0.0001) && locations.length ? (
                     <div className="field">
                       <label>Move unassigned stock to</label>

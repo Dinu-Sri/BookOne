@@ -129,7 +129,8 @@ services:
       - bookone_network
 
   minio:
-    image: minio/minio:latest
+    # Docker Hub no longer serves minio/minio (pull denied). Official image is on Quay.
+    image: quay.io/minio/minio:latest
     container_name: bookone-minio
     command: server /data
     environment:

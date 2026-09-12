@@ -6230,6 +6230,13 @@
 - **Steps:** Open `/company/inventory`
 - **Expect:** Costing method includes Last cost, Weighted average, and FIFO lots.
 
+### S-0741 — Purchase line is lot cost not sell price
+
+- **Priority:** P0
+- **Tags:** `@purchase`
+- **Steps:** Open `/purchase/purchases/new`
+- **Expect:** Line column “Lot cost” (not sell Unit price).
+
 ---
 
 ## 31. Team access (RBAC)

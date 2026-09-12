@@ -28,6 +28,7 @@ export type ProductPick = {
     name: string;
     qty: number;
     sellPrice: number;
+    unitCost?: number;
   }[];
 };
 

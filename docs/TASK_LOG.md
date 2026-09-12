@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-09-12 — Purchase line lot cost (not sell price)
+
+- Purchase / GRN / import / cash purchase lines use **Lot cost** (this carton’s buy price). Adding a catalog SKU fills last cost, not sell price. Hint shows last cost and sell price so they are not mixed.
+- Sales quotes/invoices still use Unit price = sell price.
+- E2E S-0741.
+
 ## 2026-09-12 — FIFO cost lots (keep last + average)
 
 - Company → Inventory Settings costing: **Last cost**, **Weighted average**, **FIFO lots**.

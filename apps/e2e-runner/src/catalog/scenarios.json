@@ -9444,6 +9444,16 @@
     "steps": []
   },
   {
+    "id": "S-0741",
+    "title": "Purchase line is lot cost not sell price",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P0",
+    "tags": [
+      "@purchase"
+    ],
+    "steps": []
+  },
+  {
     "id": "S-0713",
     "title": "Company → Team loads for owner",
     "section": "31. Team access (RBAC)",

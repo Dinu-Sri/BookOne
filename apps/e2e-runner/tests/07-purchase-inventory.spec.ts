@@ -130,6 +130,12 @@ test.describe('Purchase lifecycle catalog §9 @purchase @inventory @journey @p0'
     }
   });
 
+  test('S-0741 Purchase line is lot cost not sell price', async ({ authedPage: page }) => {
+    await go(page, '/purchase/purchases/new');
+    await expect(page.getByText(/lot cost/i).first()).toBeVisible();
+    await expectAuthedShell(page);
+  });
+
   test('S-0251 Bill without GRN when required fails', async ({ authedPage: page }) => {
     await go(page, '/purchase/purchases/new');
     await fillBrandLocationIfPresent(page);

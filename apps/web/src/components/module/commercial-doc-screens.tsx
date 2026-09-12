@@ -479,7 +479,16 @@ export function CommercialDocNewForm({
             onCatalogProduct={(p) =>
               setCatalog((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))
             }
-            hint="Search catalog · free text · Save as product (service default)"
+            linePriceMode={
+              /purchase|vendor_bill|goods_receipt|import_purchase|cash_purchase/.test(documentType)
+                ? 'cost'
+                : 'sell'
+            }
+            hint={
+              /purchase|vendor_bill|goods_receipt|import_purchase|cash_purchase/.test(documentType)
+                ? 'Lot cost is what you paid this time — not the sell price. FIFO keeps each carton.'
+                : 'Search catalog · free text · Save as product (service default)'
+            }
           />
 
           {/* Apply expense account to each line for purchase GL */}

@@ -50,6 +50,8 @@ export function DocumentLinesEditor({
   onCatalogProduct,
   onSearchActive,
   hint = 'Search catalog · or Enter free text if no match',
+  /** purchase/GRN: line amount is this lot's buy cost, not sell price */
+  linePriceMode = 'sell',
 }: {
   products: ProductPick[];
   lines: DocLineState[];
@@ -58,6 +60,7 @@ export function DocumentLinesEditor({
   onCatalogProduct?: (p: ProductPick) => void;
   onSearchActive?: (active: boolean) => void;
   hint?: string;
+  linePriceMode?: 'sell' | 'cost';
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const amounts = computeLineAmounts(lines);
@@ -79,7 +82,7 @@ export function DocumentLinesEditor({
           productId: c.productId,
           description: c.name,
           quantity: String(c.qty),
-          unitPrice: String(c.sellPrice),
+          unitPrice: String(linePriceMode === 'cost' ? c.unitCost ?? c.sellPrice : c.sellPrice),
           sku: c.sku,
           isManual: false,
         })),
@@ -97,7 +100,7 @@ export function DocumentLinesEditor({
         productId: p.id,
         description: p.name,
         quantity: '1',
-        unitPrice: String(p.sellPrice),
+        unitPrice: String(linePriceMode === 'cost' ? p.unitCost : p.sellPrice),
         sku: p.sku,
         isManual: false,
       },
@@ -127,8 +130,10 @@ export function DocumentLinesEditor({
       const res = await createQuickProduct({
         name: line.description.trim() || 'Item',
         productType: line.saveAsType ?? 'service',
-        sellPrice: Number(String(line.unitPrice).replace(/[^0-9.-]/g, '')) || 0,
-        unitCost: 0,
+        sellPrice:
+          linePriceMode === 'cost' ? 0 : Number(String(line.unitPrice).replace(/[^0-9.-]/g, '')) || 0,
+        unitCost:
+          linePriceMode === 'cost' ? Number(String(line.unitPrice).replace(/[^0-9.-]/g, '')) || 0 : 0,
       });
       if (!res.ok || !res.product) {
         pushStatusToast({ kind: 'error', message: res.error ?? 'Could not save product' });
@@ -174,7 +179,7 @@ export function DocumentLinesEditor({
               <th className="col-item">SKU</th>
               <th>Description</th>
               <th className="col-qty">Qty</th>
-              <th className="col-price">Unit price</th>
+              <th className="col-price">{linePriceMode === 'cost' ? 'Lot cost' : 'Unit price'}</th>
               <th className="col-amt">Amount</th>
               <th style={{ minWidth: 150 }}>Save as product</th>
               <th style={{ width: 40 }} />
@@ -212,8 +217,26 @@ export function DocumentLinesEditor({
                     inputMode="decimal"
                     value={line.unitPrice}
                     onChange={(e) => updateLine(line.key, { unitPrice: e.target.value })}
-                    placeholder={line.isManual ? 'Set price' : undefined}
+                    placeholder={
+                      linePriceMode === 'cost'
+                        ? 'This lot’s buy cost'
+                        : line.isManual
+                          ? 'Set price'
+                          : undefined
+                    }
                   />
+                  {linePriceMode === 'cost' && line.productId
+                    ? (() => {
+                        const p = products.find((x) => x.id === line.productId);
+                        if (!p) return null;
+                        return (
+                          <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 4, fontWeight: 600 }}>
+                            Last cost {money(p.unitCost)}
+                            {p.sellPrice ? ` · sell ${money(p.sellPrice)}` : ''}
+                          </div>
+                        );
+                      })()
+                    : null}
                 </td>
                 <td className="num">{money(amounts[i] ?? 0)}</td>
                 <td>

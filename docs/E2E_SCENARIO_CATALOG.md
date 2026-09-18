@@ -6237,6 +6237,20 @@
 - **Steps:** Open `/purchase/purchases/new`
 - **Expect:** Line column “Lot cost” (not sell Unit price).
 
+### S-0742 — Document styles screen
+
+- **Priority:** P1
+- **Tags:** `@company`
+- **Steps:** Open `/company/document-styles`
+- **Expect:** New style button and empty-state or style list.
+
+### S-0743 — Invoice print uses document sheet
+
+- **Priority:** P1
+- **Tags:** `@sales`
+- **Steps:** Open an invoice print URL from the invoices list
+- **Expect:** Print sheet with company name and Print button.
+
 ---
 
 ## 31. Team access (RBAC)

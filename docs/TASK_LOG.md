@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-09-12 — Document styles (print themes)
+
+- Company → **Document styles**: logo, accent colour, columns, TIN/phone/email/bank, footer. One **active** style per document kind (quote / invoice / tax invoice / receipt) and optional brand.
+- Saving increments **version**. First print of a document **snapshots** the style so old invoices do not change.
+- Tax invoice always prints TIN, tax invoice no., VAT, amount in words.
+- Quotes, invoices, and payment receipts share one print engine.
+- Migration `035_document_styles.sql`. E2E S-0742, S-0743.
+
 ## 2026-09-12 — Purchase line lot cost (not sell price)
 
 - Purchase / GRN / import / cash purchase lines use **Lot cost** (this carton’s buy price). Adding a catalog SKU fills last cost, not sell price. Hint shows last cost and sell price so they are not mixed.

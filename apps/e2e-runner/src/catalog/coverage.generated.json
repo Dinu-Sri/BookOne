@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-12T15:19:34.498Z",
-    "catalog_total": 728,
-    "referenced": 728,
+    "generated_at": "2026-09-18T06:58:55.857Z",
+    "catalog_total": 730,
+    "referenced": 730,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
       "P0": 334,
-      "P1": 307,
+      "P1": 309,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -108,8 +108,8 @@
       "referenced": 16
     },
     "30. Product identity (units, categories, descriptions)": {
-      "total": 9,
-      "referenced": 9
+      "total": 11,
+      "referenced": 11
     },
     "31. Team access (RBAC)": {
       "total": 12,
@@ -10153,6 +10153,32 @@
       ],
       "referenced_in": [
         "tests/07-purchase-inventory.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0742",
+      "title": "Document styles screen",
+      "section": "30. Product identity (units, categories, descriptions)",
+      "priority": "P1",
+      "tags": [
+        "@company"
+      ],
+      "referenced_in": [
+        "tests/12-settings-save.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0743",
+      "title": "Invoice print uses document sheet",
+      "section": "30. Product identity (units, categories, descriptions)",
+      "priority": "P1",
+      "tags": [
+        "@sales"
+      ],
+      "referenced_in": [
+        "tests/06-sales-journey.spec.ts"
       ],
       "status": "referenced"
     }

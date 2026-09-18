@@ -9454,6 +9454,26 @@
     "steps": []
   },
   {
+    "id": "S-0742",
+    "title": "Document styles screen",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P1",
+    "tags": [
+      "@company"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0743",
+    "title": "Invoice print uses document sheet",
+    "section": "30. Product identity (units, categories, descriptions)",
+    "priority": "P1",
+    "tags": [
+      "@sales"
+    ],
+    "steps": []
+  },
+  {
     "id": "S-0713",
     "title": "Company → Team loads for owner",
     "section": "31. Team access (RBAC)",

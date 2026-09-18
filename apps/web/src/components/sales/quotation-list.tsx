@@ -14,6 +14,7 @@ export function QuotationList({ rows }: { rows: CommercialDocRow[] }) {
         newLabel: 'New quotation',
         editHrefPattern: '/sales/quotations/:id/edit',
         detailHrefPattern: '/sales/quotations/:id',
+        printHrefPattern: '/sales/quotations/:id/print',
         convertTo: 'sales_order',
         convertLabel: 'Convert to order',
       }}

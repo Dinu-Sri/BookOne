@@ -111,6 +111,18 @@ test.describe('Sales lifecycle catalog §8 @sales @journey @p0', () => {
     await expect(page.locator('table, .workspace, .empty-state').first()).toBeVisible();
   });
 
+  test('S-0743 Invoice print uses document sheet', async ({ authedPage: page }) => {
+    await go(page, '/sales/invoices');
+    const printLink = page.getByRole('link', { name: /^print$/i }).first();
+    if (!(await printLink.isVisible().catch(() => false))) {
+      await expect(page.locator('table, .workspace, .empty-state').first()).toBeVisible();
+      return;
+    }
+    await printLink.click();
+    await expect(page.locator('.doc-print-sheet')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /^print$/i })).toBeVisible();
+  });
+
   test('S-0193 Multi-SO same customer one invoice', async ({ authedPage: page }) => {
     // UI may support multi-select convert; open invoice new as baseline
     await createSalesDocMarked(page, 'order', { party: customer, line: `SO2 ${seed()}` });

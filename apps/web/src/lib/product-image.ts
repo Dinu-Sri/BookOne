@@ -17,6 +17,15 @@ export async function processProductPhoto(input: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
+/** Letterhead logo — wide, keep aspect, max 640×160. */
+export async function processLetterheadLogo(input: Buffer): Promise<Buffer> {
+  return sharp(input)
+    .rotate()
+    .resize(640, 160, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 82, effort: 4 })
+    .toBuffer();
+}
+
 /** Fit inside 1600×1600 WebP — keeps aspect for return inspection evidence. */
 export async function processInspectPhoto(input: Buffer): Promise<Buffer> {
   return sharp(input)
@@ -95,6 +104,37 @@ export async function saveProductPhoto(opts: {
   const absDir = path.join(publicRoot, relDir);
   await mkdir(absDir, { recursive: true });
   const filename = `${opts.productId}-${randomUUID().slice(0, 8)}.webp`;
+  await writeFile(path.join(absDir, filename), webp);
+  return { imageKey: `/${relDir.replace(/\\/g, '/')}/${filename}` };
+}
+
+export async function saveLetterheadLogo(opts: {
+  tenantId: string;
+  styleId: string;
+  file: File;
+}): Promise<{ imageKey: string }> {
+  if (opts.file.size > MAX_INPUT_BYTES) throw new Error('Image too large (max 12 MB).');
+  const raw = Buffer.from(await opts.file.arrayBuffer());
+  const webp = await processLetterheadLogo(raw);
+  if (s3Configured()) {
+    const key = `tenants/${opts.tenantId}/styles/${opts.styleId}-${randomUUID().slice(0, 8)}.webp`;
+    const client = makeS3Client();
+    await client.send(
+      new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET!,
+        Key: key,
+        Body: webp,
+        ContentType: 'image/webp',
+        ContentLength: webp.length,
+      }),
+    );
+    return { imageKey: key };
+  }
+  const relDir = path.join('styles', 'uploads', opts.tenantId);
+  const publicRoot = path.join(process.cwd(), 'public');
+  const absDir = path.join(publicRoot, relDir);
+  await mkdir(absDir, { recursive: true });
+  const filename = `${opts.styleId}-${randomUUID().slice(0, 8)}.webp`;
   await writeFile(path.join(absDir, filename), webp);
   return { imageKey: `/${relDir.replace(/\\/g, '/')}/${filename}` };
 }

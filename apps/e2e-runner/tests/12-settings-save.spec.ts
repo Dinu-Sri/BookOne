@@ -74,4 +74,10 @@ test.describe('Company settings save catalog §27 @settings @p0', () => {
     await expect(method.locator('option[value="fifo"]')).toHaveCount(1);
     await expectAuthedShell(page);
   });
+
+  test('S-0742 Document styles screen', async ({ authedPage: page }) => {
+    await go(page, '/company/document-styles');
+    await expect(page.getByRole('button', { name: /new style/i })).toBeVisible();
+    await expectAuthedShell(page);
+  });
 });

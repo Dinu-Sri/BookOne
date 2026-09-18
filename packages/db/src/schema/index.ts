@@ -26,6 +26,7 @@ export {
   bankReconciliationSnapshots,
 } from './reconciliation';
 export { businessDocuments, businessDocumentLines } from './business-documents';
+export { documentStyles } from './document-styles';
 export {
   tenantMemberships,
   companyProfiles,

@@ -37,6 +37,7 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
               </span>
             </Link>
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Link href={`/sales/quotations/${doc.id}/print`}>Print</Link>
               <strong style={{ fontSize: 14 }}>{doc.documentNumber}</strong>
               <StatusBadge status={doc.status} />
             </div>

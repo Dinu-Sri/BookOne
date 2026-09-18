@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { listCommercialDocuments } from '@/app/actions/commercial-docs';
+import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { QuotationList } from '@/components/sales/quotation-list';
@@ -8,8 +9,13 @@ import { QuotationList } from '@/components/sales/quotation-list';
 export default async function QuotationsPage() {
   let tenant;
   let rows;
+  let settings;
   try {
-    [tenant, rows] = await Promise.all([getTenantInfo(), listCommercialDocuments(['quotation'])]);
+    [tenant, rows, settings] = await Promise.all([
+      getTenantInfo(),
+      listCommercialDocuments(['quotation']),
+      getSalesSettings(),
+    ]);
   } catch {
     redirect('/login');
   }
@@ -25,7 +31,7 @@ export default async function QuotationsPage() {
           </div>
         }
       >
-        <QuotationList rows={rows} />
+        <QuotationList rows={rows} editLockDays={settings.editLockDays} />
       </Suspense>
     </BookOneShell>
   );

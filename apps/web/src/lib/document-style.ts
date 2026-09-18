@@ -17,6 +17,11 @@ export type DocumentStyleSnapshot = {
   bankDetails: string;
   footerNotes: string;
   fontFamily: string;
+  showQr: boolean;
+  typeScale: string;
+  baseFontPx: number;
+  publicUrl?: string | null;
+  qrDataUrl?: string | null;
 };
 
 export function defaultDocumentStyle(kind: DocumentStyleKind): DocumentStyleSnapshot {
@@ -37,7 +42,23 @@ export function defaultDocumentStyle(kind: DocumentStyleKind): DocumentStyleSnap
     bankDetails: '',
     footerNotes: tax ? 'This is a tax invoice for VAT purposes.' : '',
     fontFamily: 'Arial, Helvetica, sans-serif',
+    showQr: false,
+    typeScale: 'major_second',
+    baseFontPx: 11,
   };
+}
+
+export const TYPE_SCALES: { key: string; label: string; ratio: number }[] = [
+  { key: 'minor_second', label: 'Minor second (1.067)', ratio: 1.067 },
+  { key: 'major_second', label: 'Major second (1.125)', ratio: 1.125 },
+  { key: 'minor_third', label: 'Minor third (1.200)', ratio: 1.2 },
+  { key: 'major_third', label: 'Major third (1.250)', ratio: 1.25 },
+  { key: 'perfect_fourth', label: 'Perfect fourth (1.333)', ratio: 1.333 },
+  { key: 'golden', label: 'Golden ratio (1.618)', ratio: 1.618 },
+];
+
+export function scaleRatio(key: string | undefined): number {
+  return TYPE_SCALES.find((s) => s.key === key)?.ratio ?? 1.125;
 }
 
 export function parseStyleSnapshot(raw: string | null | undefined, kind: DocumentStyleKind): DocumentStyleSnapshot {
@@ -59,6 +80,9 @@ export function parseStyleSnapshot(raw: string | null | undefined, kind: Documen
       bankDetails: String(j.bankDetails ?? ''),
       footerNotes: String(j.footerNotes ?? ''),
       fontFamily: String(j.fontFamily || base.fontFamily),
+      showQr: j.showQr === true,
+      typeScale: String(j.typeScale || base.typeScale),
+      baseFontPx: Number(j.baseFontPx) || base.baseFontPx,
       version: Number(j.version) || 1,
       name: String(j.name || base.name),
       logoImageKey: j.logoImageKey ?? null,

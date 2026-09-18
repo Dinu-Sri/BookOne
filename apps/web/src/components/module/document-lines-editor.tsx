@@ -17,6 +17,8 @@ export type DocLineState = {
   description: string;
   quantity: string;
   unitPrice: string;
+  discountType?: 'percent' | 'fixed';
+  discountValue?: string;
   sku?: string;
   isManual?: boolean;
   /** Pending save-as-product type before linking */
@@ -35,11 +37,22 @@ export function emptyDocLines(): DocLineState[] {
   return [];
 }
 
+export function lineDiscountAmount(line: DocLineState): number {
+  const qty = Number(String(line.quantity).replace(/[^0-9.-]/g, '')) || 0;
+  const price = Number(String(line.unitPrice).replace(/[^0-9.-]/g, '')) || 0;
+  const gross = Math.round(qty * price * 100) / 100;
+  const v = Number(String(line.discountValue ?? '0').replace(/[^0-9.-]/g, '')) || 0;
+  if (v <= 0) return 0;
+  if (line.discountType === 'percent') return Math.min(gross, Math.round(((gross * v) / 100) * 100) / 100);
+  return Math.min(gross, Math.round(v * 100) / 100);
+}
+
 export function computeLineAmounts(lines: DocLineState[]) {
   return lines.map((line) => {
     const qty = Number(String(line.quantity).replace(/[^0-9.-]/g, '')) || 0;
     const price = Number(String(line.unitPrice).replace(/[^0-9.-]/g, '')) || 0;
-    return Math.round(qty * price * 100) / 100;
+    const gross = Math.round(qty * price * 100) / 100;
+    return Math.max(0, Math.round((gross - lineDiscountAmount(line)) * 100) / 100);
   });
 }
 
@@ -180,6 +193,7 @@ export function DocumentLinesEditor({
               <th>Description</th>
               <th className="col-qty">Qty</th>
               <th className="col-price">{linePriceMode === 'cost' ? 'Lot cost' : 'Unit price'}</th>
+              {linePriceMode === 'sell' ? <th className="col-disc">Discount</th> : null}
               <th className="col-amt">Amount</th>
               <th style={{ minWidth: 150 }}>Save as product</th>
               <th style={{ width: 40 }} />
@@ -238,6 +252,34 @@ export function DocumentLinesEditor({
                       })()
                     : null}
                 </td>
+                {linePriceMode === 'sell' ? (
+                  <td>
+                    <div className="cluster" style={{ gap: 4 }}>
+                      <select
+                        className="input"
+                        name={`line_${i}_discountType`}
+                        value={line.discountType ?? 'percent'}
+                        onChange={(e) =>
+                          updateLine(line.key, { discountType: e.target.value as 'percent' | 'fixed' })
+                        }
+                        style={{ minWidth: 64 }}
+                      >
+                        <option value="percent">%</option>
+                        <option value="fixed">LKR</option>
+                      </select>
+                      <input
+                        className="input"
+                        name={`line_${i}_discountValue`}
+                        inputMode="decimal"
+                        value={line.discountValue ?? ''}
+                        onChange={(e) => updateLine(line.key, { discountValue: e.target.value })}
+                        placeholder="0"
+                        style={{ minWidth: 64 }}
+                      />
+                    </div>
+                    <input type="hidden" name={`line_${i}_discount`} value={String(lineDiscountAmount(line))} />
+                  </td>
+                ) : null}
                 <td className="num">{money(amounts[i] ?? 0)}</td>
                 <td>
                   {line.isManual && !line.productId ? (

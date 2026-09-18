@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { activateDocumentStyle, saveDocumentStyle, type DocumentStyleRow } from '@/app/actions/document-styles';
-import { DOCUMENT_STYLE_KINDS, kindLabel, type DocumentStyleKind } from '@/lib/document-style';
+import { DOCUMENT_STYLE_KINDS, TYPE_SCALES, kindLabel, type DocumentStyleKind } from '@/lib/document-style';
 import { Button } from '@/components/ui/bookone-ui';
 
 export function DocumentStyleForm({
@@ -62,7 +62,29 @@ export function DocumentStyleForm({
             <option value="Arial, Helvetica, sans-serif">Arial</option>
             <option value="Georgia, serif">Georgia</option>
             <option value="Trebuchet MS, sans-serif">Trebuchet</option>
+            <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
+            <option value="'Segoe UI', system-ui, sans-serif">Segoe UI</option>
+            <option value="'Times New Roman', Times, serif">Times New Roman</option>
           </select>
+        </div>
+        <div className="field">
+          <label>Type scale</label>
+          <select className="input" name="typeScale" defaultValue={style?.typeScale ?? 'major_second'}>
+            {TYPE_SCALES.map((s) => (
+              <option value={s.key} key={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Base size (px)</label>
+          <input className="input" name="baseFontPx" inputMode="numeric" defaultValue={style?.baseFontPx ?? 11} />
+        </div>
+        <label className="auth-check" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" name="showQr" defaultChecked={style?.showQr ?? false} />
+          QR code to online invoice
+        </label>
         </div>
         <div className="field field-full">
           <label>Letterhead logo</label>

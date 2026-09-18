@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
 import { requireTenantContext } from '@bookone/auth';
 import {
   and,
@@ -56,6 +57,7 @@ export type DocumentPrintModel = {
     description: string;
     quantity: number;
     unitPrice: number;
+    discount: number;
     amount: number;
   }[];
   totals: {
@@ -76,15 +78,18 @@ function titleFor(kind: DocumentStyleKind) {
   return 'INVOICE';
 }
 
-export async function getDocumentPrintModel(documentId: string): Promise<DocumentPrintModel | null> {
-  const user = await requireTenantContext();
-  return withTenantContext(user.tenantId, async () => {
+export async function getDocumentPrintModel(
+  documentId: string,
+  opts?: { tenantId?: string },
+): Promise<DocumentPrintModel | null> {
+  const tenantId = opts?.tenantId ?? (await requireTenantContext()).tenantId;
+  return withTenantContext(tenantId, async () => {
     const [doc] = await db()
       .select()
       .from(businessDocuments)
       .where(
         and(
-          eq(businessDocuments.tenantId, user.tenantId),
+          eq(businessDocuments.tenantId, tenantId),
           eq(businessDocuments.id, documentId),
           isNull(businessDocuments.voidedAt),
         ),
@@ -101,11 +106,11 @@ export async function getDocumentPrintModel(documentId: string): Promise<Documen
     const [company] = await db()
       .select()
       .from(companyProfiles)
-      .where(eq(companyProfiles.tenantId, user.tenantId))
+      .where(eq(companyProfiles.tenantId, tenantId))
       .limit(1);
-    const [tax] = await db().select().from(taxProfiles).where(eq(taxProfiles.tenantId, user.tenantId)).limit(1);
+    const [tax] = await db().select().from(taxProfiles).where(eq(taxProfiles.tenantId, tenantId)).limit(1);
 
-    const live = await resolveActiveStyleSnapshot(user.tenantId, kind, doc.brandId ?? null);
+    const live = await resolveActiveStyleSnapshot(tenantId, kind, doc.brandId ?? null);
     const stored = doc.printStyleSnapshot ? parseStyleSnapshot(doc.printStyleSnapshot, kind) : null;
     const storedIsDefault = !stored || stored.name === 'BookOne default';
     let style = storedIsDefault ? live : stored;
@@ -123,6 +128,23 @@ export async function getDocumentPrintModel(documentId: string): Promise<Documen
       } catch {
         /* column may not exist until 035 */
       }
+    }
+
+    let token = doc.publicToken;
+    if (!token) {
+      token = randomUUID().replace(/-/g, '').slice(0, 16);
+      try {
+        await db().update(businessDocuments).set({ publicToken: token, updatedAt: new Date() }).where(eq(businessDocuments.id, doc.id));
+      } catch {
+        token = null;
+      }
+    }
+    const origin = (process.env.AUTH_URL || process.env.BETTER_AUTH_URL || '').replace(/\/$/, '');
+    const publicUrl = token && origin ? `${origin}/i/${token}` : null;
+    if (style.showQr && publicUrl) {
+      const { toQrDataUrl } = await import('@/lib/qr-dataurl');
+      style.qrDataUrl = await toQrDataUrl(publicUrl);
+      style.publicUrl = publicUrl;
     }
 
     const companyName = company?.legalName || company?.tradingName || 'Company';
@@ -165,6 +187,7 @@ export async function getDocumentPrintModel(documentId: string): Promise<Documen
         description: l.description,
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
+        discount: Number(l.discountAmount ?? 0),
         amount: Number(l.lineTotal),
       })),
       totals: {
@@ -178,6 +201,18 @@ export async function getDocumentPrintModel(documentId: string): Promise<Documen
       notes: doc.additionalInfo || doc.notes,
     };
   });
+}
+
+export async function getPublicPrintModel(token: string): Promise<DocumentPrintModel | null> {
+  const clean = token.trim();
+  if (!clean) return null;
+  const [hit] = await db()
+    .select({ id: businessDocuments.id, tenantId: businessDocuments.tenantId })
+    .from(businessDocuments)
+    .where(and(eq(businessDocuments.publicToken, clean), isNull(businessDocuments.voidedAt)))
+    .limit(1);
+  if (!hit) return null;
+  return getDocumentPrintModel(hit.id, { tenantId: hit.tenantId });
 }
 
 export async function getReceiptPrintModel(opts: {
@@ -234,6 +269,7 @@ export async function getReceiptPrintModel(opts: {
         description: r.customer,
         quantity: 1,
         unitPrice: r.amount,
+        discount: 0,
         amount: r.amount,
       })),
       totals: {

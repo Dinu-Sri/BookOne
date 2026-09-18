@@ -51,6 +51,8 @@ export function InvoiceDocumentForm({
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
   const [saleChannel, setSaleChannel] = useState('local');
   const [invoiceKind, setInvoiceKind] = useState('commercial');
+  const [headerDiscount, setHeaderDiscount] = useState('0');
+  const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>('percent');
   const showExportFields = saleChannel === 'export';
   const showTaxFields = invoiceKind === 'tax_invoice';
   const showHireFields = documentHasRentalLines(lines, catalog);
@@ -67,15 +69,24 @@ export function InvoiceDocumentForm({
     [pinDetailsExpanded],
   );
 
-  const subtotal = useMemo(() => {
+  const computed = useMemo(() => {
     const amts = computeLineAmounts(lines);
-    return Math.round(amts.reduce((s, a) => s + a, 0) * 100) / 100;
-  }, [lines]);
+    const subtotal = Math.round(amts.reduce((s, a) => s + a, 0) * 100) / 100;
+    const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
+    const discountAmt = Math.min(
+      subtotal,
+      headerDiscountType === 'percent'
+        ? Math.round(((subtotal * v) / 100) * 100) / 100
+        : Math.round(v * 100) / 100,
+    );
+    return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
+  }, [lines, headerDiscount, headerDiscountType]);
 
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">
       <input type="hidden" name="documentType" value="sales_invoice" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
+      <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
 
       <div className="party-form-top">
         <Link href="/sales/invoices" className="party-back-btn">
@@ -268,10 +279,41 @@ export function InvoiceDocumentForm({
             </label>
             <input className="input" name="notes" />
           </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Invoice discount</label>
+            <div className="cluster" style={{ gap: 6 }}>
+              <select
+                className="input"
+                value={headerDiscountType}
+                onChange={(e) => setHeaderDiscountType(e.target.value as 'percent' | 'fixed')}
+                style={{ maxWidth: 90 }}
+              >
+                <option value="percent">%</option>
+                <option value="fixed">LKR</option>
+              </select>
+              <input
+                className="input"
+                inputMode="decimal"
+                value={headerDiscount}
+                onChange={(e) => setHeaderDiscount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+          </div>
           <div className="doc-totals">
+            <div className="doc-totals-row">
+              <span>Subtotal</span>
+              <strong>LKR {money(computed.subtotal)}</strong>
+            </div>
+            {computed.discountAmt > 0 ? (
+              <div className="doc-totals-row">
+                <span>Discount</span>
+                <strong>− LKR {money(computed.discountAmt)}</strong>
+              </div>
+            ) : null}
             <div className="doc-totals-row is-total">
-              <span>Lines total (ex-VAT)</span>
-              <strong>LKR {money(subtotal)}</strong>
+              <span>Total (ex-VAT)</span>
+              <strong>LKR {money(computed.total)}</strong>
             </div>
           </div>
         </div>

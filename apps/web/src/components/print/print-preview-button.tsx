@@ -9,6 +9,43 @@ export function PrintPreviewModal({ documentId, onClose }: { documentId: string;
   const [model, setModel] = useState<DocumentPrintModel | null>(null);
   const [error, setError] = useState('');
 
+  function printSheet() {
+    const sheet = document.querySelector('.doc-print-sheet');
+    if (!sheet) {
+      window.print();
+      return;
+    }
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument;
+    if (!doc) {
+      window.print();
+      return;
+    }
+    const styles = Array.from(document.querySelectorAll('.doc-print-root style'))
+      .map((s) => s.innerHTML)
+      .join('\n');
+    doc.open();
+    doc.write(
+      `<!doctype html><html><head><title>Print</title><style>@page{margin:12mm}body{margin:0}${styles}</style></head><body>${sheet.outerHTML}</body></html>`,
+    );
+    doc.close();
+    const run = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => iframe.remove(), 1000);
+    };
+    iframe.onload = run;
+    setTimeout(run, 250);
+  }
+
   useEffect(() => {
     let alive = true;
     getDocumentPrintModel(documentId)
@@ -30,7 +67,7 @@ export function PrintPreviewModal({ documentId, onClose }: { documentId: string;
       <div className="doc-print-modal-bar no-print">
         <strong>Print preview</strong>
         <div className="cluster" style={{ gap: 8 }}>
-          <Button variant="primary" type="button" onClick={() => window.print()} disabled={!model}>
+          <Button variant="primary" type="button" onClick={() => printSheet()} disabled={!model}>
             Print
           </Button>
           <Button variant="secondary" type="button" onClick={onClose}>

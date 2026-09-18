@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Eye } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Eye, Printer } from 'lucide-react';
 import {
   archiveCommercialDocument,
   convertDocumentAction,
@@ -54,6 +54,8 @@ export type CommercialListConfig = {
   showTaxCols?: boolean;
   /** Example: `/sales/invoices/:id/print` */
   printHrefPattern?: string;
+  /** 0 = unlimited. Days after issue date when Edit is hidden. */
+  editLockDays?: number;
   /** Example: `/purchase/payments/new?documentId=:id` */
   payHrefPattern?: string;
   /** Detail page for eye/view deep link optional */
@@ -325,7 +327,16 @@ export function CommercialDocumentList({
   }
 
   function canEdit(row: CommercialDocRow) {
-    return row.status !== 'converted' && row.status !== 'void' && row.status !== 'fully_invoiced';
+    if (row.status === 'converted' || row.status === 'void' || row.status === 'fully_invoiced' || row.status === 'paid') {
+      return false;
+    }
+    const days = config.editLockDays ?? 0;
+    if (days > 0 && row.issueDate) {
+      const issued = new Date(`${row.issueDate}T00:00:00`);
+      const age = Math.floor((Date.now() - issued.getTime()) / 86400000);
+      if (age > days) return false;
+    }
+    return true;
   }
 
   // Prefer pageRows so open menu always resolves even if list filtered/sorted
@@ -390,23 +401,7 @@ export function CommercialDocumentList({
         </Link>,
       );
     }
-    if (config.printHrefPattern) {
-      items.push(
-        <button
-          key="print"
-          type="button"
-          className="doc-action-item"
-          role="menuitem"
-          onClick={() => {
-            setOpenMenuId(null);
-            setMenuPos(null);
-            setPrintDocId(row.id);
-          }}
-        >
-          Print
-        </button>,
-      );
-    }
+    /* Print is an icon on the row, not in Actions. */
     const detailTo = hrefFromPattern(config.detailHrefPattern, row.id);
     if (detailTo) {
       items.push(
@@ -618,6 +613,19 @@ export function CommercialDocumentList({
                           >
                             <Eye size={16} />
                           </Button>
+                          {config.printHrefPattern ? (
+                            <Button
+                              variant="ghost"
+                              className="icon"
+                              type="button"
+                              aria-label={`Print ${row.documentNumber}`}
+                              title="Print"
+                              disabled={busy}
+                              onClick={() => setPrintDocId(row.id)}
+                            >
+                              <Printer size={16} />
+                            </Button>
+                          ) : null}
 
                           <div className="doc-action-menu">
                             <Button

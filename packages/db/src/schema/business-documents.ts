@@ -68,6 +68,7 @@ export const businessDocuments = pgTable('business_documents', {
   postedAt: timestamp('posted_at', { withTimezone: true }),
   printStyleId: uuid('print_style_id'),
   printStyleSnapshot: text('print_style_snapshot'),
+  publicToken: varchar('public_token', { length: 40 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),

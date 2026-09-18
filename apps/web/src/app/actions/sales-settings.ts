@@ -13,6 +13,7 @@ const schema = z.object({
   defaultSaleChannel: z.enum(['local', 'export']),
   defaultInvoiceKind: z.enum(['commercial', 'tax_invoice']),
   enforceCreditLimit: z.boolean(),
+  editLockDays: z.number().int().min(0).max(3650),
 });
 
 export interface SalesSettingsRow {
@@ -23,6 +24,7 @@ export interface SalesSettingsRow {
   defaultSaleChannel: string;
   defaultInvoiceKind: string;
   enforceCreditLimit: boolean;
+  editLockDays: number;
 }
 
 const DEFAULTS: SalesSettingsRow = {
@@ -33,6 +35,7 @@ const DEFAULTS: SalesSettingsRow = {
   defaultSaleChannel: 'local',
   defaultInvoiceKind: 'commercial',
   enforceCreditLimit: false,
+  editLockDays: 0,
 };
 
 export async function getSalesSettings(): Promise<SalesSettingsRow> {
@@ -52,6 +55,7 @@ export async function getSalesSettings(): Promise<SalesSettingsRow> {
       defaultSaleChannel: row.defaultSaleChannel,
       defaultInvoiceKind: row.defaultInvoiceKind,
       enforceCreditLimit: row.enforceCreditLimit === '1',
+      editLockDays: Number(row.editLockDays ?? 0) || 0,
     };
   });
 }
@@ -66,6 +70,7 @@ export async function saveSalesSettingsFromForm(formData: FormData): Promise<voi
     defaultInvoiceKind: String(formData.get('defaultInvoiceKind') ?? 'commercial'),
     enforceCreditLimit:
       formData.get('enforceCreditLimit') === 'on' || formData.get('enforceCreditLimit') === '1',
+    editLockDays: Math.max(0, parseInt(String(formData.get('editLockDays') ?? '0'), 10) || 0),
   });
 
   const user = await requireTenantContext();
@@ -85,6 +90,7 @@ export async function saveSalesSettingsFromForm(formData: FormData): Promise<voi
       defaultSaleChannel: parsed.defaultSaleChannel,
       defaultInvoiceKind: parsed.defaultInvoiceKind,
       enforceCreditLimit: parsed.enforceCreditLimit ? '1' : '0',
+      editLockDays: parsed.editLockDays,
       updatedAt: new Date(),
     };
 

@@ -41,6 +41,9 @@ export type DocumentStyleRow = {
   bankDetails: string;
   footerNotes: string;
   fontFamily: string;
+  showQr: boolean;
+  typeScale: string;
+  baseFontPx: number;
 };
 
 function asKind(v: string): DocumentStyleKind {
@@ -85,6 +88,9 @@ export async function listDocumentStyles(): Promise<DocumentStyleRow[]> {
         bankDetails: style.bankDetails ?? '',
         footerNotes: style.footerNotes ?? '',
         fontFamily: style.fontFamily,
+        showQr: style.showQr === '1',
+        typeScale: style.typeScale ?? 'major_second',
+        baseFontPx: style.baseFontPx ?? 11,
       })),
     );
   });
@@ -130,6 +136,9 @@ export async function saveDocumentStyle(formData: FormData) {
           bankDetails: String(formData.get('bankDetails') ?? ''),
           footerNotes: String(formData.get('footerNotes') ?? ''),
           fontFamily,
+          showQr: onOff(formData.get('showQr')),
+          typeScale: String(formData.get('typeScale') ?? 'major_second'),
+          baseFontPx: Math.min(16, Math.max(9, Number(formData.get('baseFontPx') ?? 11) || 11)),
           version: existing.version + 1,
           updatedAt: new Date(),
         })
@@ -187,6 +196,9 @@ export async function saveDocumentStyle(formData: FormData) {
         bankDetails: String(formData.get('bankDetails') ?? ''),
         footerNotes: String(formData.get('footerNotes') ?? ''),
         fontFamily,
+        showQr: onOff(formData.get('showQr')),
+        typeScale: String(formData.get('typeScale') ?? 'major_second'),
+        baseFontPx: Math.min(16, Math.max(9, Number(formData.get('baseFontPx') ?? 11) || 11)),
         isActive: formData.get('makeActive') ? '1' : '0',
         version: 1,
       })
@@ -261,6 +273,9 @@ export async function styleToSnapshot(row: DocumentStyleRow): Promise<DocumentSt
     bankDetails: row.bankDetails,
     footerNotes: row.footerNotes,
     fontFamily: row.fontFamily,
+    showQr: row.showQr,
+    typeScale: row.typeScale,
+    baseFontPx: row.baseFontPx,
   };
 }
 
@@ -318,5 +333,8 @@ export async function resolveActiveStyleSnapshot(
     bankDetails: row.bankDetails ?? '',
     footerNotes: row.footerNotes ?? '',
     fontFamily: row.fontFamily,
+    showQr: row.showQr === '1',
+    typeScale: row.typeScale ?? 'major_second',
+    baseFontPx: row.baseFontPx ?? 11,
   };
 }

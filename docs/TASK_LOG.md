@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-09-12 — Print studio polish, QR, discounts, edit lock
+
+- Browser print uses an iframe so the page is not blank. Sheet is a cleaner letterhead; TIN only on tax invoices.
+- Document style: QR to public `/i/{token}`, type scale (minor/major second, thirds, fourth, golden), more fonts.
+- Quote/invoice lines: % or LKR discount. Document-level % or LKR discount.
+- List: printer icon next to view; Print removed from Actions; Edit added for invoices (lock after N days in Sales settings, 0 = unlimited).
+
 ## 2026-09-12 — Print preview popup + live styles
 
 - Print opens an on-page A4 preview (Print / Close). No extra navigation.

@@ -115,6 +115,19 @@ export default async function CompanySalesSettingsPage() {
                     Set limits on the customer party master.
                   </p>
                 </div>
+                <div className="field">
+                  <label>Lock edits after (days)</label>
+                  <input
+                    className="input"
+                    name="editLockDays"
+                    inputMode="numeric"
+                    defaultValue={settings.editLockDays ?? 0}
+                  />
+                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                    0 = invoices and quotations can be edited anytime. Any other number hides Edit
+                    after that many days from the document date.
+                  </p>
+                </div>
               </div>
             </div>
             <div className="party-form-footer">

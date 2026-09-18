@@ -3,7 +3,7 @@
 import type { CommercialDocRow } from '@/app/actions/commercial-docs';
 import { CommercialDocumentList } from '@/components/sales/commercial-document-list';
 
-export function QuotationList({ rows }: { rows: CommercialDocRow[] }) {
+export function QuotationList({ rows, editLockDays = 0 }: { rows: CommercialDocRow[]; editLockDays?: number }) {
   return (
     <CommercialDocumentList
       rows={rows}
@@ -15,6 +15,7 @@ export function QuotationList({ rows }: { rows: CommercialDocRow[] }) {
         editHrefPattern: '/sales/quotations/:id/edit',
         detailHrefPattern: '/sales/quotations/:id',
         printHrefPattern: '/sales/quotations/:id/print',
+        editLockDays,
         convertTo: 'sales_order',
         convertLabel: 'Convert to order',
       }}

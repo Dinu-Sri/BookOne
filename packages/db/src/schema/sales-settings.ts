@@ -14,6 +14,8 @@ export const salesSettings = pgTable('sales_settings', {
   defaultInvoiceKind: varchar('default_invoice_kind', { length: 20 }).notNull().default('commercial'),
   /** When '1', block sales invoices that would exceed party creditLimit */
   enforceCreditLimit: varchar('enforce_credit_limit', { length: 1 }).notNull().default('0'),
+  /** 0 = edit anytime. Otherwise lock invoice/quote edits after this many days. */
+  editLockDays: integer('edit_lock_days').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

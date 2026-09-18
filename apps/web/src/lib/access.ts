@@ -44,6 +44,7 @@ export function levelForPrefix(access: LoadedAccess | null, prefix: string): Acc
 
 function isPublicPath(pathname: string): boolean {
   if (pathname === '/login' || pathname === '/reset-password') return true;
+  if (pathname === '/i' || pathname.startsWith('/i/')) return true;
   if (pathname === '/invite' || pathname.startsWith('/invite/')) return true;
   if (pathname === '/docs' || pathname.startsWith('/docs/')) return true;
   if (pathname === '/e2e' || pathname.startsWith('/e2e/')) return true;

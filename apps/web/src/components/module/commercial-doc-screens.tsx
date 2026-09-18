@@ -231,6 +231,7 @@ export function CommercialDocNewForm({
     '6800';
   const [expenseCode, setExpenseCode] = useState(preferredExpense);
   const [headerDiscount, setHeaderDiscount] = useState('0');
+  const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>('percent');
   const [discountId, setDiscountId] = useState('');
 
   const handleSearchActive = useCallback(
@@ -248,7 +249,7 @@ export function CommercialDocNewForm({
   const computed = useMemo(() => {
     const lineAmounts = computeLineAmounts(lines);
     const subtotal = Math.round(lineAmounts.reduce((s, a) => s + a, 0) * 100) / 100;
-    let discountAmt = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
+    let discountAmt = 0;
     if (discountId && discounts) {
       const d = discounts.find((x) => x.id === discountId);
       if (d) {
@@ -257,10 +258,16 @@ export function CommercialDocNewForm({
             ? Math.round(((subtotal * Number(d.value)) / 100) * 100) / 100
             : Number(d.value);
       }
+    } else {
+      const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
+      discountAmt =
+        headerDiscountType === 'percent'
+          ? Math.round(((subtotal * v) / 100) * 100) / 100
+          : v;
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
-  }, [lines, headerDiscount, discountId, discounts]);
+  }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
 
   return (
     <div className="workspace party-workspace">
@@ -403,14 +410,14 @@ export function CommercialDocNewForm({
             ) : null}
             {discounts && discounts.length > 0 ? (
               <div className="field">
-                <label>Discount</label>
+                <label>Saved discount</label>
                 <select
                   className="input"
                   name="discountId"
                   value={discountId}
                   onChange={(e) => setDiscountId(e.target.value)}
                 >
-                  <option value="">None</option>
+                  <option value="">None — use values below</option>
                   {discounts.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name} (
@@ -419,18 +426,30 @@ export function CommercialDocNewForm({
                   ))}
                 </select>
               </div>
-            ) : (
-              <div className="field">
-                <label>Header discount (LKR)</label>
+            ) : null}
+            <div className="field">
+              <label>Invoice discount</label>
+              <div className="cluster" style={{ gap: 6 }}>
+                <select
+                  className="input"
+                  value={headerDiscountType}
+                  onChange={(e) => setHeaderDiscountType(e.target.value as 'percent' | 'fixed')}
+                  disabled={Boolean(discountId)}
+                  style={{ maxWidth: 90 }}
+                >
+                  <option value="percent">%</option>
+                  <option value="fixed">LKR</option>
+                </select>
                 <input
                   className="input"
                   inputMode="decimal"
                   value={headerDiscount}
                   onChange={(e) => setHeaderDiscount(e.target.value)}
                   placeholder="0"
+                  disabled={Boolean(discountId)}
                 />
               </div>
-            )}
+            </div>
             {showPaymentAccount && paymentAccounts ? (
               <div className="field">
                 <label>Payment account</label>

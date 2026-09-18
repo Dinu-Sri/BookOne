@@ -3504,16 +3504,15 @@ export async function updateCommercialDocumentHeaderFromForm(formData: FormData)
       )
       .limit(1);
     if (!doc) throw new Error('Document not found.');
-    if (doc.transactionId) throw new Error('Posted documents cannot be edited here.');
     if (doc.status === 'converted' || doc.status === 'fully_invoiced') {
       throw new Error('Converted documents cannot be edited.');
     }
-
+    const posted = Boolean(doc.transactionId);
     await db()
       .update(businessDocuments)
       .set({
-        status: status || doc.status,
-        issueDate: /^\d{4}-\d{2}-\d{2}$/.test(issueDate) ? issueDate : doc.issueDate,
+        status: posted ? doc.status : status || doc.status,
+        issueDate: posted ? doc.issueDate : /^\d{4}-\d{2}-\d{2}$/.test(issueDate) ? issueDate : doc.issueDate,
         dueDate: dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate) ? dueDate : dueDate === '' ? null : doc.dueDate,
         notes: notes || null,
         updatedAt: new Date(),
@@ -3523,9 +3522,11 @@ export async function updateCommercialDocumentHeaderFromForm(formData: FormData)
 
   revalidatePath('/sales/quotations');
   revalidatePath('/sales/orders');
+  revalidatePath('/sales/invoices');
   const { redirect } = await import('next/navigation');
   const type = String(formData.get('documentType') ?? 'quotation');
   if (type === 'sales_order') redirect('/sales/orders?flash=saved');
+  if (type === 'sales_invoice') redirect('/sales/invoices?flash=saved');
   redirect('/sales/quotations?flash=saved');
 }
 

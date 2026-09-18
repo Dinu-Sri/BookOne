@@ -5,7 +5,7 @@
  */
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createCommercialDocumentFromForm,
   loadInvoiceForReturn,
@@ -83,6 +83,8 @@ export function SalesDocumentForm({
   const [sourceInvoiceId, setSourceInvoiceId] = useState('');
   const [sourceInvoiceLabel, setSourceInvoiceLabel] = useState('');
   const [invoiceSearching, setInvoiceSearching] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const invoiceSearchRef = useRef<HTMLDivElement>(null);
   const [partyName, setPartyName] = useState(partyOptions[0]?.name ?? '');
   const [loadedBrandId, setLoadedBrandId] = useState('');
   const [loadedLocationId, setLoadedLocationId] = useState('');
@@ -97,20 +99,42 @@ export function SalesDocumentForm({
 
   useEffect(() => {
     if (!isReturn) return;
-    if (sourceInvoiceId && invoiceQuery.trim() === sourceInvoiceLabel) {
+    const q = invoiceQuery.trim();
+    if (q.length < 2 || (sourceInvoiceId && q === sourceInvoiceLabel)) {
       setInvoiceHits([]);
+      setInvoiceSearching(false);
       return;
     }
-    const q = invoiceQuery.trim();
     const handle = window.setTimeout(() => {
       setInvoiceSearching(true);
       searchInvoicesForReturn(q)
-        .then(setInvoiceHits)
+        .then((hits) => {
+          setInvoiceHits(hits);
+          setInvoiceOpen(true);
+        })
         .catch(() => setInvoiceHits([]))
         .finally(() => setInvoiceSearching(false));
     }, 250);
     return () => window.clearTimeout(handle);
   }, [invoiceQuery, isReturn, sourceInvoiceId, sourceInvoiceLabel]);
+
+  useEffect(() => {
+    if (!invoiceOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (!invoiceSearchRef.current?.contains(e.target as Node)) setInvoiceOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [invoiceOpen]);
+
+  function clearSourceInvoice() {
+    setSourceInvoiceId('');
+    setSourceInvoiceLabel('');
+    setInvoiceQuery('');
+    setInvoiceHits([]);
+    setInvoiceOpen(false);
+    setLines([]);
+  }
 
   async function pickSourceInvoice(id: string, label: string) {
     const loaded = await loadInvoiceForReturn(id);
@@ -122,6 +146,7 @@ export function SalesDocumentForm({
     setLoadedLocationId(loaded.locationId ?? '');
     setInvoiceQuery(loaded.documentNumber);
     setInvoiceHits([]);
+    setInvoiceOpen(false);
     setLines(
       loaded.lines.map((l) => ({
         key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -212,41 +237,65 @@ export function SalesDocumentForm({
 
         <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
           {isReturn ? (
-            <div className="field field-span-2 invoice-return-search">
-              <label>Find invoice to return</label>
-              <input
-                className="input"
-                type="search"
-                value={invoiceQuery}
-                onChange={(e) => setInvoiceQuery(e.target.value)}
-                placeholder="Type invoice number or customer…"
-                autoComplete="off"
-              />
+            <div className="field invoice-return-search" ref={invoiceSearchRef}>
+              <label htmlFor="invoice-return-q">Find invoice to return</label>
+              <div className="invoice-return-row">
+                <input
+                  id="invoice-return-q"
+                  className="input"
+                  type="search"
+                  value={invoiceQuery}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setInvoiceQuery(next);
+                    if (sourceInvoiceId && next.trim() !== sourceInvoiceLabel) {
+                      setSourceInvoiceId('');
+                      setSourceInvoiceLabel('');
+                    }
+                  }}
+                  onFocus={() => {
+                    if (invoiceHits.length > 0) setInvoiceOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setInvoiceOpen(false);
+                  }}
+                  placeholder="Type invoice number or customer name…"
+                  autoComplete="off"
+                />
+                {sourceInvoiceId ? (
+                  <Button variant="secondary" type="button" onClick={clearSourceInvoice}>
+                    Clear
+                  </Button>
+                ) : null}
+                {invoiceOpen && invoiceHits.length > 0 ? (
+                  <ul className="invoice-return-hits" role="listbox">
+                    {invoiceHits.map((hit) => (
+                      <li key={hit.id}>
+                        <button
+                          type="button"
+                          onClick={() => pickSourceInvoice(hit.id, hit.documentNumber)}
+                        >
+                          <strong>{hit.documentNumber}</strong>
+                          {hit.taxInvoiceNumber ? <span> · {hit.taxInvoiceNumber}</span> : null}
+                          <span>
+                            {hit.partyName} · {hit.issueDate} · LKR {money(hit.total)}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {invoiceOpen && invoiceQuery.trim().length >= 2 && !invoiceSearching && invoiceHits.length === 0 ? (
+                  <div className="invoice-return-hits invoice-return-empty">No matching invoices</div>
+                ) : null}
+              </div>
               {invoiceSearching ? <small className="muted-line">Searching…</small> : null}
-              {sourceInvoiceId ? (
+              {!invoiceSearching && sourceInvoiceId ? (
                 <small className="muted-line">
                   Loaded {sourceInvoiceLabel}. All lines copied — change qty for a partial return.
                 </small>
-              ) : (
-                <small className="muted-line">Select an invoice to copy customer, brand, location, and every line.</small>
-              )}
-              {invoiceHits.length > 0 ? (
-                <ul className="invoice-return-hits">
-                  {invoiceHits.map((hit) => (
-                    <li key={hit.id}>
-                      <button
-                        type="button"
-                        onClick={() => pickSourceInvoice(hit.id, hit.documentNumber)}
-                      >
-                        <strong>{hit.documentNumber}</strong>
-                        {hit.taxInvoiceNumber ? <span> · {hit.taxInvoiceNumber}</span> : null}
-                        <span>
-                          {hit.partyName} · {hit.issueDate} · LKR {money(hit.total)}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              ) : !invoiceSearching ? (
+                <small className="muted-line">Type at least 2 characters. Selecting copies customer, brand, location, and lines.</small>
               ) : null}
             </div>
           ) : null}

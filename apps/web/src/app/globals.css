@@ -3100,17 +3100,39 @@ textarea.input {
 }
 
 .invoice-return-search {
+  grid-column: 1 / -1;
+  z-index: 4;
+}
+.invoice-return-row {
   position: relative;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.invoice-return-row .input {
+  flex: 1;
+  min-width: 0;
 }
 .invoice-return-hits {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
   list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
+  margin: 0;
+  padding: 4px 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface, #fff);
-  max-height: 220px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+  max-height: 240px;
   overflow: auto;
+}
+.invoice-return-empty {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--ink-soft);
 }
 .invoice-return-hits button {
   display: flex;
@@ -3119,7 +3141,7 @@ textarea.input {
   gap: 2px;
   width: 100%;
   text-align: left;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 0;
   background: none;
   cursor: pointer;

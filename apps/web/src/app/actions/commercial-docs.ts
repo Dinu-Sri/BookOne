@@ -590,7 +590,7 @@ export async function searchInvoicesForReturn(query: string): Promise<
       )
       .orderBy(desc(businessDocuments.issueDate))
       .limit(40);
-    if (!q) return rows.slice(0, 12).map((r) => ({ ...r, total: Number(r.total) }));
+    if (q.length < 2) return [];
     return rows
       .filter(
         (r) =>

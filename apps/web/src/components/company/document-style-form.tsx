@@ -85,7 +85,6 @@ export function DocumentStyleForm({
           <input type="checkbox" name="showQr" defaultChecked={style?.showQr ?? false} />
           QR code to online invoice
         </label>
-        </div>
         <div className="field field-full">
           <label>Letterhead logo</label>
           <input className="input" name="logo" type="file" accept="image/*" />

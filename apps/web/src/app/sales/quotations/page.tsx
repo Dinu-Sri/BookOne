@@ -31,7 +31,7 @@ export default async function QuotationsPage() {
           </div>
         }
       >
-        <QuotationList rows={rows} editLockDays={settings.editLockDays} />
+        <QuotationList rows={rows} editLockDays={settings?.editLockDays ?? 0} />
       </Suspense>
     </BookOneShell>
   );

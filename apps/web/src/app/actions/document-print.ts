@@ -130,11 +130,12 @@ export async function getDocumentPrintModel(
       }
     }
 
-    let token = doc.publicToken;
+    let token: string | null = doc.publicToken ?? null;
     if (!token) {
-      token = randomUUID().replace(/-/g, '').slice(0, 16);
+      const created = randomUUID().replace(/-/g, '').slice(0, 16);
       try {
-        await db().update(businessDocuments).set({ publicToken: token, updatedAt: new Date() }).where(eq(businessDocuments.id, doc.id));
+        await db().update(businessDocuments).set({ publicToken: created, updatedAt: new Date() }).where(eq(businessDocuments.id, doc.id));
+        token = created;
       } catch {
         token = null;
       }

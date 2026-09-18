@@ -4,7 +4,7 @@ import { createMDX } from 'fumadocs-mdx/next';
 const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
-  serverExternalPackages: ['bcryptjs', 'postgres', 'sharp'],
+  serverExternalPackages: ['bcryptjs', 'postgres', 'sharp', 'qrcode'],
   // Product photo uploads send the original image; server compresses to 400x400 WebP.
   // Default Server Action body limit is 1MB — too small for phone photos.
   experimental: {

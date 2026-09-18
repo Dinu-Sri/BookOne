@@ -34,7 +34,7 @@ export default async function SalesInvoicesPage() {
             printHrefPattern: '/sales/invoices/:id/print',
             detailHrefPattern: '/sales/invoices/:id',
             editHrefPattern: '/sales/invoices/:id/edit',
-            editLockDays: settings.editLockDays,
+            editLockDays: settings?.editLockDays ?? 0,
             payHrefPattern: '/sales/payments/new?documentId=:id',
           }}
         />

@@ -12,6 +12,7 @@
 services:
   traefik:
     image: traefik:v3
+    pull_policy: missing
     container_name: bookone-traefik
     command:
       - "--providers.docker=true"
@@ -28,6 +29,7 @@ services:
       - "letsencrypt_data:/letsencrypt"
     networks:
       - bookone_network
+    restart: unless-stopped
 
   # Slim ERP image — no Chromium
   web:
@@ -100,6 +102,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    pull_policy: missing
     container_name: bookone-postgres
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -114,9 +117,11 @@ services:
       retries: 5
     networks:
       - bookone_network
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    pull_policy: missing
     container_name: bookone-redis
     volumes:
       - redis_data:/data
@@ -127,10 +132,13 @@ services:
       retries: 5
     networks:
       - bookone_network
+    restart: unless-stopped
 
   minio:
-    # Docker Hub no longer serves minio/minio (pull denied). Official image is on Quay.
-    image: quay.io/minio/minio:latest
+    # Keep the image already on the host. Docker Hub denies minio/minio now;
+    # Portainer "Pull stack" must not try to re-download it (that hung the server).
+    image: minio/minio:latest
+    pull_policy: never
     container_name: bookone-minio
     command: server /data
     environment:
@@ -140,9 +148,11 @@ services:
       - minio_data:/data
     networks:
       - bookone_network
+    restart: unless-stopped
 
   cloudflared:
     image: cloudflare/cloudflared:latest
+    pull_policy: missing
     container_name: bookone-cloudflared
     command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     networks:

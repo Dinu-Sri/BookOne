@@ -167,7 +167,8 @@ services:
       - bookone_network
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: minio/minio:latest
+    pull_policy: never
     container_name: bookone-staging-minio
     command: server /data
     environment:

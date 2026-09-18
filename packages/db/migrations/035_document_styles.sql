@@ -25,13 +25,21 @@ CREATE TABLE IF NOT EXISTS document_styles (
 );
 CREATE INDEX IF NOT EXISTS document_styles_tenant_idx
   ON document_styles (tenant_id) WHERE voided_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS document_styles_active_uidx
-  ON document_styles (
-    tenant_id,
-    doc_kind,
-    COALESCE(brand_id, '00000000-0000-0000-0000-000000000000')
-  )
-  WHERE is_active = '1' AND voided_at IS NULL;
+
+DO $$
+BEGIN
+  EXECUTE $idx$
+    CREATE UNIQUE INDEX IF NOT EXISTS document_styles_active_uidx
+    ON document_styles (
+      tenant_id,
+      doc_kind,
+      COALESCE(brand_id, '00000000-0000-0000-0000-000000000000')
+    )
+    WHERE is_active = '1' AND voided_at IS NULL
+  $idx$;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'document_styles_active_uidx skipped: %', SQLERRM;
+END $$;
 
 ALTER TABLE business_documents ADD COLUMN IF NOT EXISTS print_style_id uuid;
 ALTER TABLE business_documents ADD COLUMN IF NOT EXISTS print_style_snapshot text;

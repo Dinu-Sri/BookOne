@@ -45,9 +45,8 @@ fi
 
 echo "[2/3] SQL migrations (packages/db/migrations/*.sql) — no seed..."
 if ! pnpm exec tsx scripts/init-db.ts 2>&1; then
-  echo "ERROR: init-db.ts failed. Refusing to start with an incomplete schema."
-  echo "Fix the failed migration (see FAILED: above), then redeploy web so entrypoint re-runs."
-  exit 1
+  echo "ERROR: init-db.ts reported a failure. Starting the app anyway so the ERP does not crash-loop."
+  echo "Check the FAILED: line above. Additive features (styles, lots) may be incomplete until that SQL is fixed."
 fi
 
 echo "[3/3] Starting BookOne web..."

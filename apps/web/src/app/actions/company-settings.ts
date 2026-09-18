@@ -50,6 +50,7 @@ const companyProfileSchema = z.object({
   postalCode: z.string().max(40).optional(),
   phone: z.string().max(30).optional(),
   email: z.string().email().or(z.literal('')).optional(),
+  website: z.string().max(320).optional(),
 });
 
 const taxProfileSchema = z.object({
@@ -74,6 +75,8 @@ const brandSchema = z.object({
   name: z.string().min(1).max(255),
   code: z.string().max(40).optional(),
   notes: z.string().max(1000).optional(),
+  website: z.string().max(320).optional(),
+  bankDetails: z.string().max(2000).optional(),
 });
 
 const locationSchema = z.object({
@@ -113,6 +116,7 @@ export interface CompanySettingsData {
     postalCode: string | null;
     phone: string | null;
     email: string | null;
+    website: string | null;
   } | null;
   tax: {
     tin: string | null;
@@ -136,6 +140,8 @@ export interface CompanySettingsData {
     name: string;
     code: string | null;
     notes: string | null;
+    website: string | null;
+    bankDetails: string | null;
   }[];
   locations: {
     id: string;
@@ -214,6 +220,7 @@ export async function getCompanySettingsData(): Promise<CompanySettingsData> {
         postalCode: companyProfiles.postalCode,
         phone: companyProfiles.phone,
         email: companyProfiles.email,
+        website: companyProfiles.website,
       })
       .from(companyProfiles)
       .where(and(eq(companyProfiles.tenantId, user.tenantId), isNull(companyProfiles.voidedAt)))
@@ -247,7 +254,14 @@ export async function getCompanySettingsData(): Promise<CompanySettingsData> {
       .orderBy(asc(financialYears.startDate));
 
     const brandRows = await db()
-      .select({ id: brands.id, name: brands.name, code: brands.code, notes: brands.notes })
+      .select({
+        id: brands.id,
+        name: brands.name,
+        code: brands.code,
+        notes: brands.notes,
+        website: brands.website,
+        bankDetails: brands.bankDetails,
+      })
       .from(brands)
       .where(and(eq(brands.tenantId, user.tenantId), isNull(brands.voidedAt)))
       .orderBy(asc(brands.name));
@@ -305,6 +319,7 @@ export async function saveCompanyProfile(formData: FormData): Promise<void> {
     postalCode: String(formData.get('postalCode') ?? ''),
     phone: String(formData.get('phone') ?? ''),
     email: String(formData.get('email') ?? ''),
+    website: String(formData.get('website') ?? ''),
   });
 
   await withTenantContext(user.tenantId, async () => {
@@ -327,6 +342,7 @@ export async function saveCompanyProfile(formData: FormData): Promise<void> {
       postalCode: nullable(parsed.postalCode),
       phone: nullable(parsed.phone),
       email: nullable(parsed.email),
+      website: nullable(parsed.website),
       updatedAt: new Date(),
     };
 
@@ -340,6 +356,7 @@ export async function saveCompanyProfile(formData: FormData): Promise<void> {
   });
 
   revalidatePath('/settings');
+  revalidatePath('/company/details');
 }
 
 export async function saveTaxProfile(formData: FormData): Promise<void> {
@@ -405,6 +422,8 @@ export async function createBrand(formData: FormData): Promise<void> {
     name: String(formData.get('name') ?? ''),
     code: String(formData.get('code') ?? ''),
     notes: String(formData.get('notes') ?? ''),
+    website: String(formData.get('website') ?? ''),
+    bankDetails: String(formData.get('bankDetails') ?? ''),
   });
 
   await withTenantContext(user.tenantId, async () => {
@@ -413,6 +432,8 @@ export async function createBrand(formData: FormData): Promise<void> {
       name: parsed.name.trim(),
       code: nullable(parsed.code),
       notes: nullable(parsed.notes),
+      website: nullable(parsed.website),
+      bankDetails: nullable(parsed.bankDetails),
     });
   });
   revalidatePath('/settings');
@@ -425,6 +446,8 @@ export async function saveBrandForm(_state: CompanyActionState = emptyActionStat
     name: formString(formData, 'name'),
     code: formString(formData, 'code'),
     notes: formString(formData, 'notes'),
+    website: formString(formData, 'website'),
+    bankDetails: formString(formData, 'bankDetails'),
   });
 
   if (!parsed.success) {
@@ -434,6 +457,8 @@ export async function saveBrandForm(_state: CompanyActionState = emptyActionStat
   const name = parsed.data.name.trim();
   const code = nullable(parsed.data.code)?.toUpperCase() ?? null;
   const notes = nullable(parsed.data.notes);
+  const website = nullable(parsed.data.website);
+  const bankDetails = nullable(parsed.data.bankDetails);
 
   try {
     await withTenantContext(user.tenantId, async () => {
@@ -456,9 +481,12 @@ export async function saveBrandForm(_state: CompanyActionState = emptyActionStat
       if (sameCode) throw new Error('DUPLICATE_CODE');
 
       if (editing) {
-        await db().update(brands).set({ name, code, notes, updatedAt: new Date() }).where(eq(brands.id, id));
+        await db()
+          .update(brands)
+          .set({ name, code, notes, website, bankDetails, updatedAt: new Date() })
+          .where(eq(brands.id, id));
       } else {
-        await db().insert(brands).values({ tenantId: user.tenantId, name, code, notes });
+        await db().insert(brands).values({ tenantId: user.tenantId, name, code, notes, website, bankDetails });
       }
     });
   } catch (error) {

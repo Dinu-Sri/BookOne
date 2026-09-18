@@ -25,6 +25,24 @@ function money(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+type DraftInvoice = {
+  id: string;
+  documentNumber: string;
+  partyName: string;
+  issueDate: string;
+  dueDate: string | null;
+  deliveryDate: string | null;
+  saleChannel: string;
+  invoiceKind: string;
+  paymentMode: string | null;
+  notes: string | null;
+  additionalInfo?: string | null;
+  brandId: string | null;
+  locationId: string | null;
+  headerDiscount: number;
+  lines: { id: string; productId: string | null; description: string; quantity: number; unitPrice: number }[];
+};
+
 export function InvoiceDocumentForm({
   products: initialProducts,
   partyOptions,
@@ -32,6 +50,7 @@ export function InvoiceDocumentForm({
   openOrders,
   brands,
   locations,
+  draft,
 }: {
   products: ProductPick[];
   partyOptions: PartyOpt[];
@@ -44,15 +63,30 @@ export function InvoiceDocumentForm({
   openOrders: OrderOpt[];
   brands?: BrandOption[];
   locations?: LocationOption[];
+  draft?: DraftInvoice;
 }) {
-  const [lines, setLines] = useState<DocLineState[]>([]);
+  const [lines, setLines] = useState<DocLineState[]>(() =>
+    draft
+      ? draft.lines.map((l) => ({
+          key: l.id,
+          productId: l.productId ?? '',
+          description: l.description,
+          quantity: String(l.quantity),
+          unitPrice: String(l.unitPrice),
+        }))
+      : [],
+  );
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
-  const [saleChannel, setSaleChannel] = useState('local');
-  const [invoiceKind, setInvoiceKind] = useState('commercial');
-  const [headerDiscount, setHeaderDiscount] = useState('0');
-  const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [saleChannel, setSaleChannel] = useState(draft?.saleChannel || 'local');
+  const [invoiceKind, setInvoiceKind] = useState(draft?.invoiceKind || 'commercial');
+  const [headerDiscount, setHeaderDiscount] = useState(
+    draft && draft.headerDiscount > 0 ? String(draft.headerDiscount) : '0',
+  );
+  const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>(
+    draft && draft.headerDiscount > 0 ? 'fixed' : 'percent',
+  );
   const showExportFields = saleChannel === 'export';
   const showTaxFields = invoiceKind === 'tax_invoice';
   const showHireFields = documentHasRentalLines(lines, catalog);
@@ -87,6 +121,7 @@ export function InvoiceDocumentForm({
       <input type="hidden" name="documentType" value="sales_invoice" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
+      {draft ? <input type="hidden" name="existingDraftId" value={draft.id} /> : null}
 
       <div className="party-form-top">
         <Link href="/sales/invoices" className="party-back-btn">
@@ -97,7 +132,9 @@ export function InvoiceDocumentForm({
           </span>
         </Link>
         <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-          Posts to ledger · commercial default
+          {draft
+            ? `Draft ${draft.documentNumber} · edit lines, then Post`
+            : 'Save draft to edit later · Post writes stock and ledger'}
         </div>
       </div>
 
@@ -150,7 +187,15 @@ export function InvoiceDocumentForm({
           <div className="field field-span-2">
             <label>Customer *</label>
             {partyOptions.length > 0 ? (
-              <select className="input" name="partyName" defaultValue={partyOptions[0]?.name ?? ''} required>
+              <select
+                className="input"
+                name="partyName"
+                defaultValue={draft?.partyName || partyOptions[0]?.name || ''}
+                required
+              >
+                {draft?.partyName && !partyOptions.some((p) => p.name === draft.partyName) ? (
+                  <option value={draft.partyName}>{draft.partyName}</option>
+                ) : null}
                 {partyOptions.map((p) => (
                   <option key={p.id} value={p.name}>
                     {p.code ? `${p.code} — ` : ''}
@@ -159,7 +204,13 @@ export function InvoiceDocumentForm({
                 ))}
               </select>
             ) : (
-              <input className="input" name="partyName" required placeholder="Customer name" />
+              <input
+                className="input"
+                name="partyName"
+                required
+                placeholder="Customer name"
+                defaultValue={draft?.partyName ?? ''}
+              />
             )}
           </div>
           <div className="field">
@@ -168,21 +219,37 @@ export function InvoiceDocumentForm({
           </div>
           <div className="field">
             <label>Invoice date *</label>
-            <input className="input" name="issueDate" type="date" defaultValue={todayString()} required />
+            <input
+              className="input"
+              name="issueDate"
+              type="date"
+              defaultValue={draft?.issueDate || todayString()}
+              required
+            />
           </div>
           <div className="field">
             <label>Date of delivery</label>
-            <input className="input" name="deliveryDate" type="date" defaultValue={todayString()} />
+            <input
+              className="input"
+              name="deliveryDate"
+              type="date"
+              defaultValue={draft?.deliveryDate || todayString()}
+            />
           </div>
           <div className="field">
             <label>Due date</label>
-            <input className="input" name="dueDate" type="date" />
+            <input className="input" name="dueDate" type="date" defaultValue={draft?.dueDate ?? ''} />
           </div>
-          <BrandLocationFields brands={brands} locations={locations} />
+          <BrandLocationFields
+            brands={brands}
+            locations={locations}
+            defaultBrandId={draft?.brandId ?? ''}
+            defaultLocationId={draft?.locationId ?? ''}
+          />
           <EventHireFields visible={showHireFields} />
           <div className="field">
             <label>Mode of payment</label>
-            <select className="input" name="paymentMode" defaultValue="Credit">
+            <select className="input" name="paymentMode" defaultValue={draft?.paymentMode || 'Credit'}>
               <option value="Credit">Credit</option>
               <option value="Cash">Cash</option>
               <option value="Bank">Bank</option>
@@ -273,11 +340,11 @@ export function InvoiceDocumentForm({
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)' }}>
               Additional information
             </label>
-            <input className="input" name="additionalInfo" />
+            <input className="input" name="additionalInfo" defaultValue={draft?.additionalInfo ?? ''} />
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)', marginTop: 8 }}>
               Notes
             </label>
-            <input className="input" name="notes" />
+            <input className="input" name="notes" defaultValue={draft?.notes ?? ''} />
           </div>
           <div className="field" style={{ margin: 0 }}>
             <label>Invoice discount</label>
@@ -325,8 +392,14 @@ export function InvoiceDocumentForm({
             Cancel
           </Button>
         </Link>
-        <Button variant="primary" type="submit" disabled={lines.length === 0}>
-          Save invoice
+        <Button variant="secondary" type="submit" name="intent" value="draft" disabled={lines.length === 0}>
+          Save draft
+        </Button>
+        <Button variant="primary" type="submit" name="intent" value="post" disabled={lines.length === 0}>
+          Post
+        </Button>
+        <Button variant="primary" type="submit" name="intent" value="post_print" disabled={lines.length === 0}>
+          Post & print
         </Button>
       </div>
     </form>

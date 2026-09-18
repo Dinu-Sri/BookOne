@@ -3091,11 +3091,47 @@ textarea.input {
 .doc-form-footer {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 10px 14px;
   border-top: 1px solid var(--line);
   background: var(--surface-muted);
   flex-shrink: 0;
+}
+
+.invoice-return-search {
+  position: relative;
+}
+.invoice-return-hits {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  max-height: 220px;
+  overflow: auto;
+}
+.invoice-return-hits button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+.invoice-return-hits button:hover,
+.invoice-return-hits button:focus {
+  background: var(--surface-muted, #f8fafc);
+}
+.invoice-return-hits span {
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
 @media (max-width: 900px) {
@@ -8248,6 +8284,7 @@ a.bih-card:hover {
   top: 0;
   z-index: 2;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;

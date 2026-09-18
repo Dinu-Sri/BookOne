@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { requireTenantContext } from '@bookone/auth';
 import {
   and,
+  brands,
   businessDocumentLines,
   businessDocuments,
   companyProfiles,
@@ -32,6 +33,8 @@ export type DocumentPrintModel = {
     phone: string;
     email: string;
     tin: string;
+    registrationNumber: string;
+    website: string;
   };
   party: {
     name: string;
@@ -153,6 +156,22 @@ export async function getDocumentPrintModel(
       .filter(Boolean)
       .join(', ');
 
+    let website = company?.website ?? '';
+    if (doc.brandId) {
+      const [brand] = await db()
+        .select({
+          website: brands.website,
+          bankDetails: brands.bankDetails,
+        })
+        .from(brands)
+        .where(and(eq(brands.id, doc.brandId), eq(brands.tenantId, tenantId), isNull(brands.voidedAt)))
+        .limit(1);
+      if (brand?.website) website = brand.website;
+      if (brand?.bankDetails?.trim()) {
+        style = { ...style, showBank: true, bankDetails: brand.bankDetails };
+      }
+    }
+
     return {
       kind,
       title: titleFor(kind),
@@ -163,6 +182,8 @@ export async function getDocumentPrintModel(
         phone: company?.phone ?? '',
         email: company?.email ?? '',
         tin: tax?.tin ?? '',
+        registrationNumber: company?.registrationNumber ?? '',
+        website,
       },
       party: {
         name: party?.legalName || party?.displayName || party?.name || doc.partyName || '',
@@ -245,6 +266,8 @@ export async function getReceiptPrintModel(opts: {
         phone: company?.phone ?? '',
         email: company?.email ?? '',
         tin: tax?.tin ?? '',
+        registrationNumber: company?.registrationNumber ?? '',
+        website: company?.website ?? '',
       },
       party: {
         name: opts.customer,

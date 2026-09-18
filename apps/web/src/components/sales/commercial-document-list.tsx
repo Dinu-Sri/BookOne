@@ -79,6 +79,7 @@ export function CommercialDocumentList({
   const searchParams = useSearchParams();
   const fromParam = searchParams.get('from') ?? '';
   const toParam = searchParams.get('to') ?? '';
+  const printParam = searchParams.get('print') ?? '';
 
   const [rows, setRows] = useState(initialRows);
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
@@ -107,6 +108,14 @@ export function CommercialDocumentList({
 
   useEffect(() => setMounted(true), []);
   useEffect(() => setRows(initialRows), [initialRows]);
+  useEffect(() => {
+    if (!printParam) return;
+    setPrintDocId(printParam);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('print');
+    const next = params.toString();
+    router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+  }, [printParam, pathname, router, searchParams]);
 
   // Debounce search → URL
   useEffect(() => {
@@ -327,6 +336,7 @@ export function CommercialDocumentList({
   }
 
   function canEdit(row: CommercialDocRow) {
+    if (row.status === 'draft') return true;
     if (row.status === 'converted' || row.status === 'void' || row.status === 'fully_invoiced' || row.status === 'paid') {
       return false;
     }
@@ -382,6 +392,7 @@ export function CommercialDocumentList({
       payTo &&
       Number(row.balanceDue) > 0.005 &&
       row.status !== 'void' &&
+      row.status !== 'draft' &&
       row.status !== 'converted' &&
       row.status !== 'pending_approval' &&
       row.status !== 'rejected'

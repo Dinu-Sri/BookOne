@@ -32,9 +32,10 @@ export function PrintPreviewModal({ documentId, onClose }: { documentId: string;
     const styles = Array.from(document.querySelectorAll('.doc-print-root style'))
       .map((s) => s.innerHTML)
       .join('\n');
+    const title = (sheet.getAttribute('data-print-title') || model?.meta.number || ' ').replace(/[<>]/g, '');
     doc.open();
     doc.write(
-      `<!doctype html><html><head><title>Print</title><style>@page{margin:12mm}body{margin:0}${styles}</style></head><body>${sheet.outerHTML}</body></html>`,
+      `<!doctype html><html><head><title>${title}</title><style>@page{size:A4;margin:10mm}html,body{margin:0}body{background:#fff}</style><style>${styles}</style></head><body>${sheet.outerHTML}</body></html>`,
     );
     doc.close();
     const run = () => {
@@ -66,6 +67,9 @@ export function PrintPreviewModal({ documentId, onClose }: { documentId: string;
     <div className="doc-print-modal" role="dialog" aria-modal="true">
       <div className="doc-print-modal-bar no-print">
         <strong>Print preview</strong>
+        <span className="muted-line" style={{ fontSize: 12 }}>
+          Turn off Headers and footers in the print dialog
+        </span>
         <div className="cluster" style={{ gap: 8 }}>
           <Button variant="primary" type="button" onClick={() => printSheet()} disabled={!model}>
             Print

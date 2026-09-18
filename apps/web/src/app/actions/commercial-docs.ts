@@ -146,6 +146,8 @@ const createSchema = z.object({
   overlapOverrideReason: z.string().max(500).optional(),
   invoiceTiming: z.enum(INVOICE_TIMINGS).optional(),
   confirmTimingOverride: z.boolean().optional(),
+  intent: z.enum(['draft', 'post', 'post_print']).optional().default('post'),
+  existingDraftId: z.string().uuid().optional().nullable(),
   lines: z.array(lineSchema).min(1),
 });
 
@@ -555,6 +557,102 @@ export interface CommercialDocRow {
   sourceDocumentId: string | null;
 }
 
+export async function searchInvoicesForReturn(query: string): Promise<
+  {
+    id: string;
+    documentNumber: string;
+    taxInvoiceNumber: string | null;
+    partyName: string;
+    issueDate: string;
+    total: number;
+  }[]
+> {
+  const user = await requireTenantContext();
+  const q = query.trim().toLowerCase();
+  return withTenantContext(user.tenantId, async () => {
+    const rows = await db()
+      .select({
+        id: businessDocuments.id,
+        documentNumber: businessDocuments.documentNumber,
+        taxInvoiceNumber: businessDocuments.taxInvoiceNumber,
+        partyName: parties.name,
+        issueDate: businessDocuments.issueDate,
+        total: businessDocuments.total,
+      })
+      .from(businessDocuments)
+      .innerJoin(parties, eq(parties.id, businessDocuments.partyId))
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          inArray(businessDocuments.documentType, ['sales_invoice', 'customer_invoice', 'pos_sale']),
+          isNull(businessDocuments.voidedAt),
+        ),
+      )
+      .orderBy(desc(businessDocuments.issueDate))
+      .limit(40);
+    if (!q) return rows.slice(0, 12).map((r) => ({ ...r, total: Number(r.total) }));
+    return rows
+      .filter(
+        (r) =>
+          r.documentNumber.toLowerCase().includes(q) ||
+          (r.taxInvoiceNumber ?? '').toLowerCase().includes(q) ||
+          (r.partyName ?? '').toLowerCase().includes(q),
+      )
+      .slice(0, 12)
+      .map((r) => ({ ...r, total: Number(r.total) }));
+  });
+}
+
+export async function loadInvoiceForReturn(invoiceId: string): Promise<{
+  partyName: string;
+  brandId: string | null;
+  locationId: string | null;
+  documentNumber: string;
+  lines: {
+    productId: string;
+    description: string;
+    quantity: string;
+    unitPrice: string;
+    sku?: string;
+    discountAmount?: string;
+  }[];
+} | null> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const [doc] = await db()
+      .select()
+      .from(businessDocuments)
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          eq(businessDocuments.id, invoiceId),
+          isNull(businessDocuments.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (!doc) return null;
+    const [party] = await db().select({ name: parties.name }).from(parties).where(eq(parties.id, doc.partyId)).limit(1);
+    const lines = await db()
+      .select()
+      .from(businessDocumentLines)
+      .where(and(eq(businessDocumentLines.documentId, doc.id), isNull(businessDocumentLines.voidedAt)));
+    return {
+      partyName: party?.name ?? '',
+      brandId: doc.brandId,
+      locationId: doc.locationId,
+      documentNumber: doc.documentNumber,
+      lines: lines.map((l) => ({
+        productId: l.productId ?? '',
+        description: l.description,
+        quantity: String(l.quantity),
+        unitPrice: String(l.unitPrice),
+        sku: l.lineRef ?? undefined,
+        discountAmount: Number(l.discountAmount ?? 0) > 0 ? String(l.discountAmount) : undefined,
+      })),
+    };
+  });
+}
+
 export async function listCommercialDocuments(types: string[], period?: string): Promise<CommercialDocRow[]> {
   const user = await requireTenantContext();
   const { resolvePeriodBounds } = await import('@/lib/period-range');
@@ -792,7 +890,7 @@ export async function createCommercialDocument(
         }
       }
 
-      if (postsToGl(parsed.documentType) && !needsApproval) {
+      if (postsToGl(parsed.documentType) && !needsApproval && parsed.intent !== 'draft') {
         await assertOpenPeriod(user.tenantId, parsed.issueDate);
       }
 
@@ -809,7 +907,7 @@ export async function createCommercialDocument(
         isSales &&
         ['sales_invoice', 'customer_invoice'].includes(parsed.documentType) &&
         !parsed.paymentAccountCode;
-      if (postsAr) {
+      if (postsAr && parsed.intent !== 'draft') {
         const [salesCfg] = await db()
           .select()
           .from(salesSettings)
@@ -1089,13 +1187,48 @@ export async function createCommercialDocument(
       // Document total includes landed extras + VAT (landed not VAT'd for simplicity)
       const total = Math.round((supplyExVat + landedExtra + vatTotal) * 100) / 100;
 
-      const documentNumber = await nextDocumentNumber(user.tenantId, parsed.documentType, parsed.issueDate);
+      let documentNumber: string;
+      if (parsed.existingDraftId) {
+        const [draftRow] = await db()
+          .select({
+            id: businessDocuments.id,
+            documentNumber: businessDocuments.documentNumber,
+            status: businessDocuments.status,
+            transactionId: businessDocuments.transactionId,
+            documentType: businessDocuments.documentType,
+          })
+          .from(businessDocuments)
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.id, parsed.existingDraftId),
+              isNull(businessDocuments.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (!draftRow) throw new Error('Draft not found.');
+        if (draftRow.status !== 'draft' || draftRow.transactionId) {
+          throw new Error('Only unposted drafts can be rewritten.');
+        }
+        if (draftRow.documentType !== parsed.documentType) {
+          throw new Error('Draft type does not match this form.');
+        }
+        documentNumber = draftRow.documentNumber;
+      } else {
+        documentNumber = await nextDocumentNumber(user.tenantId, parsed.documentType, parsed.issueDate);
+      }
       let taxInvoiceNumber: string | null = null;
-      if (appliesSalesVat && invoiceKind === 'tax_invoice') {
+      if (appliesSalesVat && invoiceKind === 'tax_invoice' && parsed.intent !== 'draft') {
         taxInvoiceNumber = await nextTaxInvoiceNumber(user.tenantId, parsed.issueDate, vatCfg.dept);
       }
 
-      let status = defaultStatus(parsed.documentType);
+      const asDraft =
+        parsed.intent === 'draft' &&
+        (parsed.documentType === 'sales_invoice' || parsed.documentType === 'quotation');
+      let status = asDraft ? 'draft' : defaultStatus(parsed.documentType);
+      if (parsed.documentType === 'quotation' && parsed.intent !== 'draft') {
+        status = 'sent';
+      }
       const settled =
         parsed.documentType === 'pos_sale' ||
         parsed.documentType === 'cash_purchase' ||
@@ -1127,7 +1260,7 @@ export async function createCommercialDocument(
       let docTotal = total;
 
       const outboundTypes = ['sales_invoice', 'pos_sale', 'customer_invoice', 'purchase_return'];
-      if (outboundTypes.includes(parsed.documentType)) {
+      if (!asDraft && outboundTypes.includes(parsed.documentType)) {
         for (const line of enriched) {
           if (!line.productId || !isPhysicalProduct(line.productType) || line.quantity <= 0) continue;
           const used = await consumeCostLayers({
@@ -1149,7 +1282,7 @@ export async function createCommercialDocument(
       // GRN optionally posts GRNI when purchase setting enabled
       const isGrnDoc = parsed.documentType === 'goods_receipt';
       const postGrni = isGrnDoc && purchaseCfg.postGrniOnReceipt;
-      if ((postsToGl(parsed.documentType) && !needsApproval) || postGrni) {
+      if (!asDraft && ((postsToGl(parsed.documentType) && !needsApproval) || postGrni)) {
         const saleLines = enriched.map((l) => ({
           description: l.description,
           quantity: l.quantity,
@@ -1455,78 +1588,105 @@ export async function createCommercialDocument(
         }
       }
 
-      const [document] = await db()
-        .insert(businessDocuments)
-        .values({
-          tenantId: user.tenantId,
-          userId: user.id,
-          partyId: party.id,
-          transactionId,
-          documentType: parsed.documentType,
-          documentNumber,
-          issueDate: parsed.issueDate,
-          dueDate: parsed.dueDate || null,
-          status,
-          sourceDocumentId: parsed.sourceDocumentId ?? null,
-          discountId: parsed.discountId ?? null,
-          discountTotal: headerDiscount.toFixed(2),
-          brandId: dimensions.brandId,
-          locationId: dimensions.locationId,
-          subtotal: supplyExVat.toFixed(2),
-          taxTotal: docTaxTotal.toFixed(2),
-          total: docTotal.toFixed(2),
-          paidAmount:
-            settled || parsed.documentType === 'pos_sale' || parsed.documentType === 'cash_purchase'
-              ? docTotal.toFixed(2)
-              : '0',
-          balanceDue:
-            settled ||
-            parsed.documentType === 'pos_sale' ||
-            parsed.documentType === 'cash_purchase' ||
-            parsed.documentType === 'goods_receipt'
-              ? '0'
-              : docTotal.toFixed(2),
-          currency: 'LKR',
-          notes: parsed.notes ?? null,
-          saleChannel,
-          invoiceKind:
-            appliesSalesVat || appliesPurchaseVat ? invoiceKind : 'commercial',
-          deliveryDate: parsed.deliveryDate || null,
-          placeOfSupply: parsed.placeOfSupply || null,
-          paymentMode: parsed.paymentMode || null,
-          taxInvoiceNumber,
-          supplierInvoiceNumber: parsed.supplierInvoiceNumber?.trim() || null,
-          exportCountry: saleChannel === 'export' ? parsed.exportCountry || null : null,
-          exportRef: saleChannel === 'export' ? parsed.exportRef || null : null,
-          additionalInfo: parsed.additionalInfo || null,
-          freightAmount: freightAmount.toFixed(2),
-          dutyAmount: dutyAmount.toFixed(2),
-          otherCharges: otherCharges.toFixed(2),
-          vatRate:
-            parsed.documentType === 'sales_return' && docTaxTotal > 0
-              ? // store rate implied by return
-                (supplyExVat > 0 ? ((docTaxTotal / supplyExVat) * 100).toFixed(2) : effectiveVatRate.toFixed(2))
-              : effectiveVatRate.toFixed(2),
-          amountInWords:
-            amountInWords ??
-            (appliesSalesVat ||
-            appliesPurchaseVat ||
-            isPosSale ||
-            (parsed.documentType === 'sales_return' && settled)
-              ? amountInWordsLkr(docTotal)
-              : null),
-          purchaserTin: parsed.purchaserTin || party.tin || null,
-          purchaserPhone: parsed.purchaserPhone || party.phoneMobile || party.phone || null,
-          purchaserAddress: parsed.purchaserAddress || party.addressLine1 || party.address || null,
-          registerId: parsed.registerId ?? null,
-          shiftId: parsed.shiftId ?? null,
-          posMode:
-            parsed.posMode ??
-            (isPosSale ? 'sale' : parsed.documentType === 'sales_return' ? 'return' : null),
-          sourcePosSaleId: parsed.sourcePosSaleId ?? null,
-          postedAt,
-        })
-        .returning({ id: businessDocuments.id });
+      const headerValues = {
+        userId: user.id,
+        partyId: party.id,
+        transactionId,
+        documentType: parsed.documentType,
+        documentNumber,
+        issueDate: parsed.issueDate,
+        dueDate: parsed.dueDate || null,
+        status,
+        sourceDocumentId: parsed.sourceDocumentId ?? null,
+        discountId: parsed.discountId ?? null,
+        discountTotal: headerDiscount.toFixed(2),
+        brandId: dimensions.brandId,
+        locationId: dimensions.locationId,
+        subtotal: supplyExVat.toFixed(2),
+        taxTotal: docTaxTotal.toFixed(2),
+        total: docTotal.toFixed(2),
+        paidAmount:
+          settled || parsed.documentType === 'pos_sale' || parsed.documentType === 'cash_purchase'
+            ? docTotal.toFixed(2)
+            : '0',
+        balanceDue:
+          settled ||
+          parsed.documentType === 'pos_sale' ||
+          parsed.documentType === 'cash_purchase' ||
+          parsed.documentType === 'goods_receipt'
+            ? '0'
+            : docTotal.toFixed(2),
+        currency: 'LKR',
+        notes: parsed.notes ?? null,
+        saleChannel,
+        invoiceKind: appliesSalesVat || appliesPurchaseVat ? invoiceKind : 'commercial',
+        deliveryDate: parsed.deliveryDate || null,
+        placeOfSupply: parsed.placeOfSupply || null,
+        paymentMode: parsed.paymentMode || null,
+        taxInvoiceNumber,
+        supplierInvoiceNumber: parsed.supplierInvoiceNumber?.trim() || null,
+        exportCountry: saleChannel === 'export' ? parsed.exportCountry || null : null,
+        exportRef: saleChannel === 'export' ? parsed.exportRef || null : null,
+        additionalInfo: parsed.additionalInfo || null,
+        freightAmount: freightAmount.toFixed(2),
+        dutyAmount: dutyAmount.toFixed(2),
+        otherCharges: otherCharges.toFixed(2),
+        vatRate:
+          parsed.documentType === 'sales_return' && docTaxTotal > 0
+            ? supplyExVat > 0
+              ? ((docTaxTotal / supplyExVat) * 100).toFixed(2)
+              : effectiveVatRate.toFixed(2)
+            : effectiveVatRate.toFixed(2),
+        amountInWords:
+          amountInWords ??
+          (appliesSalesVat ||
+          appliesPurchaseVat ||
+          isPosSale ||
+          (parsed.documentType === 'sales_return' && settled)
+            ? amountInWordsLkr(docTotal)
+            : null),
+        purchaserTin: parsed.purchaserTin || party.tin || null,
+        purchaserPhone: parsed.purchaserPhone || party.phoneMobile || party.phone || null,
+        purchaserAddress: parsed.purchaserAddress || party.addressLine1 || party.address || null,
+        registerId: parsed.registerId ?? null,
+        shiftId: parsed.shiftId ?? null,
+        posMode:
+          parsed.posMode ??
+          (isPosSale ? 'sale' : parsed.documentType === 'sales_return' ? 'return' : null),
+        sourcePosSaleId: parsed.sourcePosSaleId ?? null,
+        postedAt,
+      };
+
+      let document: { id: string };
+      if (parsed.existingDraftId) {
+        await db()
+          .update(businessDocuments)
+          .set({ ...headerValues, updatedAt: new Date() })
+          .where(
+            and(
+              eq(businessDocuments.id, parsed.existingDraftId),
+              eq(businessDocuments.tenantId, user.tenantId),
+            ),
+          );
+        await db()
+          .update(businessDocumentLines)
+          .set({ voidedAt: new Date(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(businessDocumentLines.documentId, parsed.existingDraftId),
+              eq(businessDocumentLines.tenantId, user.tenantId),
+              isNull(businessDocumentLines.voidedAt),
+            ),
+          );
+        document = { id: parsed.existingDraftId };
+      } else {
+        const [inserted] = await db()
+          .insert(businessDocuments)
+          .values({ tenantId: user.tenantId, ...headerValues })
+          .returning({ id: businessDocuments.id });
+        if (!inserted) throw new Error('Could not create document.');
+        document = inserted;
+      }
 
       // Multi sales-order → invoice links
       const orderIds = [
@@ -1534,7 +1694,7 @@ export async function createCommercialDocument(
         ...(parsed.sourceDocumentId ? [parsed.sourceDocumentId] : []),
       ].filter((v, i, a) => a.indexOf(v) === i);
 
-      if (isSalesInvoiceType && orderIds.length > 0) {
+      if (isSalesInvoiceType && orderIds.length > 0 && !asDraft) {
         for (const orderId of orderIds) {
           await db().insert(salesInvoiceSources).values({
             tenantId: user.tenantId,
@@ -1596,7 +1756,7 @@ export async function createCommercialDocument(
 
         // Stock qty for physical products: sales/returns, GRN, purchases (respect GRN match)
         // Pending-approval bills skip stock until approved
-        if (line.productId && isPhysicalProduct(line.productType) && !needsApproval) {
+        if (line.productId && isPhysicalProduct(line.productType) && !needsApproval && !asDraft) {
           const isSalesReturn = parsed.documentType === 'sales_return';
           const isSale = ['sales_invoice', 'pos_sale', 'customer_invoice'].includes(parsed.documentType);
           const isPurchase = isStockInPurchaseType(parsed.documentType);
@@ -1733,6 +1893,7 @@ export async function createCommercialDocument(
 
       // Mark source converted only for true conversions (not returns / credits)
       if (
+        !asDraft &&
         parsed.sourceDocumentId &&
         !['sales_return', 'purchase_return'].includes(parsed.documentType)
       ) {
@@ -1936,8 +2097,14 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     deliverAt: String(formData.get('deliverAt') ?? ''),
     collectAt: String(formData.get('collectAt') ?? ''),
     packingNotes: String(formData.get('packingNotes') ?? ''),
+    existingDraftId: String(formData.get('existingDraftId') ?? '') || null,
     confirmOverlap: formData.get('confirmOverlap') === 'on',
     overlapOverrideReason: String(formData.get('overlapOverrideReason') ?? ''),
+    intent: ((): 'draft' | 'post' | 'post_print' => {
+      const v = String(formData.get('intent') ?? 'post');
+      if (v === 'draft' || v === 'post_print') return v;
+      return 'post';
+    })(),
     invoiceTiming: (() => {
       const v = String(formData.get('invoiceTiming') ?? '');
       return (INVOICE_TIMINGS as readonly string[]).includes(v) ? (v as (typeof INVOICE_TIMINGS)[number]) : undefined;
@@ -1965,7 +2132,12 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     purchase_return: '/purchase/returns',
     vendor_bill: '/purchase/purchases',
   };
-  redirect(listPath[documentType] ?? '/sales/invoices');
+  const intent = String(formData.get('intent') ?? 'post');
+  const base = listPath[documentType] ?? '/sales/invoices';
+  if (intent === 'post_print' && result.id) {
+    redirect(`${base}?print=${result.id}`);
+  }
+  redirect(base);
 }
 
 function lineKey(productId: string | null, description: string) {

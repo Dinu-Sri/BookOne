@@ -62,6 +62,18 @@
       "feature_ref": "docs/ACCESS_CONTROL_DESIGN.md",
       "added_at": "2026-09-11",
       "notes": "S-0717/S-0720/S-0730 cashier deny + last owner automated. Remaining invite-email/Google accept still later."
+    },
+    {
+      "id": "BL-0006",
+      "kind": "new_scenario",
+      "related_scenarios": ["S-0744", "S-0745", "S-0746", "S-0747", "S-0748", "S-0749", "S-0750"],
+      "title": "Invoice draft/post/print + sales return from invoice + brand website/bank",
+      "priority": "P0",
+      "status": "planned",
+      "target_depth": "mutate",
+      "feature_ref": "apps/web/src/components/sales/invoice-document-form.tsx",
+      "added_at": "2026-09-18",
+      "notes": "Catalog added. S-0750 quotation view page is in tests/06-sales-journey.spec.ts. Remaining: draft vs post, return picker, print polish."
     }
   ]
 }

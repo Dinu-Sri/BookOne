@@ -161,6 +161,25 @@ function BrandForm({ brand }: { brand?: Brand }) {
         <label>Code</label>
         <input name="code" className="input" defaultValue={brand?.code ?? ''} placeholder="BOOK" />
       </div>
+      <div className="field">
+        <label>Website</label>
+        <input
+          name="website"
+          className="input"
+          defaultValue={brand?.website ?? ''}
+          placeholder="https://brand.example.com"
+        />
+      </div>
+      <div className="field field-full">
+        <label>Bank details</label>
+        <textarea
+          name="bankDetails"
+          className="input"
+          rows={3}
+          defaultValue={brand?.bankDetails ?? ''}
+          placeholder="Bank, account name, number — used on this brand’s invoices and quotes"
+        />
+      </div>
       <div className="field field-full">
         <label>Notes</label>
         <textarea name="notes" className="input" rows={2} defaultValue={brand?.notes ?? ''} />

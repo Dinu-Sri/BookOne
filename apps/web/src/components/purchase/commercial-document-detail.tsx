@@ -41,6 +41,7 @@ export function CommercialDocumentDetail({
   payHref,
   payLabel = 'Pay',
   printHref,
+  editHref,
   convertTo,
   convertLabel,
   returnFromBill,
@@ -53,6 +54,7 @@ export function CommercialDocumentDetail({
   payHref?: string | null;
   payLabel?: string;
   printHref?: string | null;
+  editHref?: string | null;
   convertTo?: 'sales_order' | 'sales_invoice' | 'purchase' | 'vendor_bill';
   convertLabel?: string;
   /** Show "Create return" for purchase bills */
@@ -162,6 +164,13 @@ export function CommercialDocumentDetail({
             </Link>
           ) : null}
           {printHref ? <PrintPreviewButton documentId={doc.id} /> : null}
+          {editHref ? (
+            <Link href={editHref}>
+              <Button variant="secondary" type="button">
+                Edit
+              </Button>
+            </Link>
+          ) : null}
           {canReturn ? (
             <form action={createReturnFromBillAction}>
               <input type="hidden" name="sourceId" value={doc.id} />

@@ -31,6 +31,7 @@ export default async function CompanyDetailsPage() {
               <Field label="Timezone" name="timezone" defaultValue={profile?.timezone ?? 'Asia/Colombo'} />
               <Field label="Phone" name="phone" defaultValue={profile?.phone} />
               <Field label="Email" name="email" type="email" defaultValue={profile?.email} />
+              <Field label="Website" name="website" defaultValue={profile?.website} placeholder="https://example.com" />
               <Field label="Address line 1" name="addressLine1" defaultValue={profile?.addressLine1} wide />
               <Field label="Address line 2" name="addressLine2" defaultValue={profile?.addressLine2} wide />
               <Field label="City" name="city" defaultValue={profile?.city} />

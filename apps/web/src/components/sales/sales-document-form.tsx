@@ -5,8 +5,12 @@
  */
 
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
-import { createCommercialDocumentFromForm } from '@/app/actions/commercial-docs';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  createCommercialDocumentFromForm,
+  loadInvoiceForReturn,
+  searchInvoicesForReturn,
+} from '@/app/actions/commercial-docs';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
@@ -65,12 +69,73 @@ export function SalesDocumentForm({
   brands?: BrandOption[];
   locations?: LocationOption[];
 }) {
+  const [invoiceQuery, setInvoiceQuery] = useState('');
+  const [invoiceHits, setInvoiceHits] = useState<
+    {
+      id: string;
+      documentNumber: string;
+      taxInvoiceNumber: string | null;
+      partyName: string;
+      issueDate: string;
+      total: number;
+    }[]
+  >([]);
+  const [sourceInvoiceId, setSourceInvoiceId] = useState('');
+  const [sourceInvoiceLabel, setSourceInvoiceLabel] = useState('');
+  const [invoiceSearching, setInvoiceSearching] = useState(false);
+  const [partyName, setPartyName] = useState(partyOptions[0]?.name ?? '');
+  const [loadedBrandId, setLoadedBrandId] = useState('');
+  const [loadedLocationId, setLoadedLocationId] = useState('');
+  const isReturn = documentType === 'sales_return';
+
   const [headerDiscount, setHeaderDiscount] = useState('0');
   const [discountId, setDiscountId] = useState('');
   const [lines, setLines] = useState<DocLineState[]>([]);
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!isReturn) return;
+    if (sourceInvoiceId && invoiceQuery.trim() === sourceInvoiceLabel) {
+      setInvoiceHits([]);
+      return;
+    }
+    const q = invoiceQuery.trim();
+    const handle = window.setTimeout(() => {
+      setInvoiceSearching(true);
+      searchInvoicesForReturn(q)
+        .then(setInvoiceHits)
+        .catch(() => setInvoiceHits([]))
+        .finally(() => setInvoiceSearching(false));
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [invoiceQuery, isReturn, sourceInvoiceId, sourceInvoiceLabel]);
+
+  async function pickSourceInvoice(id: string, label: string) {
+    const loaded = await loadInvoiceForReturn(id);
+    if (!loaded) return;
+    setSourceInvoiceId(id);
+    setSourceInvoiceLabel(loaded.documentNumber || label);
+    setPartyName(loaded.partyName);
+    setLoadedBrandId(loaded.brandId ?? '');
+    setLoadedLocationId(loaded.locationId ?? '');
+    setInvoiceQuery(loaded.documentNumber);
+    setInvoiceHits([]);
+    setLines(
+      loaded.lines.map((l) => ({
+        key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        productId: l.productId,
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        sku: l.sku,
+        isManual: !l.productId,
+        discountType: l.discountAmount ? 'fixed' : 'percent',
+        discountValue: l.discountAmount ?? '',
+      })),
+    );
+  }
 
   const handleSearchActive = useCallback(
     (active: boolean) => {
@@ -108,6 +173,7 @@ export function SalesDocumentForm({
       <input type="hidden" name="invoiceKind" value="commercial" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
+      {sourceInvoiceId ? <input type="hidden" name="sourceDocumentId" value={sourceInvoiceId} /> : null}
 
       <div className="party-form-top">
         <Link href={backHref} className="party-back-btn">
@@ -145,10 +211,58 @@ export function SalesDocumentForm({
         ) : null}
 
         <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
+          {isReturn ? (
+            <div className="field field-span-2 invoice-return-search">
+              <label>Find invoice to return</label>
+              <input
+                className="input"
+                type="search"
+                value={invoiceQuery}
+                onChange={(e) => setInvoiceQuery(e.target.value)}
+                placeholder="Type invoice number or customer…"
+                autoComplete="off"
+              />
+              {invoiceSearching ? <small className="muted-line">Searching…</small> : null}
+              {sourceInvoiceId ? (
+                <small className="muted-line">
+                  Loaded {sourceInvoiceLabel}. All lines copied — change qty for a partial return.
+                </small>
+              ) : (
+                <small className="muted-line">Select an invoice to copy customer, brand, location, and every line.</small>
+              )}
+              {invoiceHits.length > 0 ? (
+                <ul className="invoice-return-hits">
+                  {invoiceHits.map((hit) => (
+                    <li key={hit.id}>
+                      <button
+                        type="button"
+                        onClick={() => pickSourceInvoice(hit.id, hit.documentNumber)}
+                      >
+                        <strong>{hit.documentNumber}</strong>
+                        {hit.taxInvoiceNumber ? <span> · {hit.taxInvoiceNumber}</span> : null}
+                        <span>
+                          {hit.partyName} · {hit.issueDate} · LKR {money(hit.total)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
           <div className="field field-span-2">
             <label>Customer *</label>
             {partyOptions.length > 0 ? (
-              <select className="input" name="partyName" defaultValue={partyOptions[0]?.name ?? ''} required>
+              <select
+                className="input"
+                name="partyName"
+                value={partyName}
+                onChange={(e) => setPartyName(e.target.value)}
+                required
+              >
+                {partyName && !partyOptions.some((p) => p.name === partyName) ? (
+                  <option value={partyName}>{partyName}</option>
+                ) : null}
                 {partyOptions.map((p) => (
                   <option key={p.id} value={p.name}>
                     {p.code ? `${p.code} — ` : ''}
@@ -157,7 +271,14 @@ export function SalesDocumentForm({
                 ))}
               </select>
             ) : (
-              <input className="input" name="partyName" required placeholder="Customer name" />
+              <input
+                className="input"
+                name="partyName"
+                required
+                placeholder="Customer name"
+                value={partyName}
+                onChange={(e) => setPartyName(e.target.value)}
+              />
             )}
           </div>
           <div className="field">
@@ -213,7 +334,13 @@ export function SalesDocumentForm({
               </select>
             </div>
           ) : null}
-          <BrandLocationFields brands={brands} locations={locations} />
+          <BrandLocationFields
+            key={`${sourceInvoiceId}-${loadedBrandId}-${loadedLocationId}`}
+            brands={brands}
+            locations={locations}
+            defaultBrandId={loadedBrandId}
+            defaultLocationId={loadedLocationId}
+          />
           {documentType === 'sales_order' || documentType === 'sales_invoice' ? (
             <EventHireFields visible={documentHasRentalLines(lines, catalog)} />
           ) : null}

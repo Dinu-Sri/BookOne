@@ -289,8 +289,11 @@ export function QuotationForm({
             Cancel
           </Button>
         </Link>
-        <Button variant="primary" type="submit" disabled={lines.length === 0}>
+        <Button variant="secondary" type="submit" name="intent" value="draft" disabled={lines.length === 0}>
           Save quotation
+        </Button>
+        <Button variant="primary" type="submit" name="intent" value="post_print" disabled={lines.length === 0}>
+          Save & print
         </Button>
       </div>
     </form>

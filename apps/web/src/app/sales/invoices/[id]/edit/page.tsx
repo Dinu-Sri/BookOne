@@ -2,12 +2,15 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import {
   getCommercialDocument,
+  listCommercialDocuments,
   updateCommercialDocumentHeaderFromForm,
 } from '@/app/actions/commercial-docs';
 import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { loadSalesFormData } from '@/lib/module-page-helpers';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
+import { InvoiceDocumentForm } from '@/components/sales/invoice-document-form';
 import { Button } from '@/components/ui/bookone-ui';
 import { PrintPreviewButton } from '@/components/print/print-preview-button';
 
@@ -29,10 +32,62 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     redirect('/sales/invoices');
   }
   if (doc.status === 'void' || doc.status === 'paid') redirect(`/sales/invoices/${doc.id}`);
-  if (settings.editLockDays > 0) {
+  if (doc.status !== 'draft' && settings.editLockDays > 0) {
     const issued = new Date(`${doc.issueDate}T00:00:00`);
     const age = Math.floor((Date.now() - issued.getTime()) / 86400000);
     if (age > settings.editLockDays) redirect(`/sales/invoices/${doc.id}`);
+  }
+
+  if (doc.status === 'draft') {
+    let form;
+    let openOrders;
+    try {
+      [form, openOrders] = await Promise.all([
+        loadSalesFormData('customer'),
+        listCommercialDocuments(['sales_order']),
+      ]);
+    } catch {
+      redirect('/login');
+    }
+    const orders = openOrders
+      .filter((o) => o.status !== 'fully_invoiced' && o.status !== 'converted')
+      .map((o) => ({
+        id: o.id,
+        documentNumber: o.documentNumber,
+        partyName: o.partyName,
+        total: o.total,
+        status: o.status,
+      }));
+    return (
+      <BookOneShell active="Sales Invoices" tenant={tenant}>
+        <div className="workspace party-workspace">
+          <InvoiceDocumentForm
+            products={form.products}
+            partyOptions={form.partyOptions}
+            settings={settings}
+            openOrders={orders}
+            brands={form.brands}
+            locations={form.locations}
+            draft={{
+              id: doc.id,
+              documentNumber: doc.documentNumber,
+              partyName: doc.partyName,
+              issueDate: doc.issueDate,
+              dueDate: doc.dueDate,
+              deliveryDate: doc.deliveryDate,
+              saleChannel: doc.saleChannel,
+              invoiceKind: doc.invoiceKind,
+              paymentMode: doc.paymentMode,
+              notes: doc.notes,
+              brandId: doc.brandId,
+              locationId: doc.locationId,
+              headerDiscount: doc.discountTotal,
+              lines: doc.lines,
+            }}
+          />
+        </div>
+      </BookOneShell>
+    );
   }
 
   return (

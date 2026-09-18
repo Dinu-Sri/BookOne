@@ -126,6 +126,25 @@ test.describe('Sales lifecycle catalog §8 @sales @journey @p0', () => {
     await expect(page.locator('.doc-print-sheet, .doc-print-modal')).toBeVisible({ timeout: 20_000 });
   });
 
+  test('S-0750 Quotation view page loads', async ({ authedPage: page }) => {
+    await go(page, '/sales/quotations');
+    const viewBtn = page.getByRole('button', { name: /view/i }).first();
+    if (!(await viewBtn.isVisible().catch(() => false))) {
+      await expect(page.locator('table, .workspace, .empty-state').first()).toBeVisible();
+      return;
+    }
+    await viewBtn.click();
+    await page.waitForURL(/\/sales\/quotations\/[0-9a-f-]{8,}/i, { timeout: 15_000 }).catch(() => undefined);
+    await expectNoAppCrash(page);
+    const url = page.url();
+    expect(url).not.toMatch(/\/404(?:\?|$)/);
+    const text = (await page.locator('body').innerText().catch(() => '')).toLowerCase();
+    expect(text).not.toContain('this page could not be found');
+    if (/\/sales\/quotations\/[0-9a-f-]{8,}/i.test(url)) {
+      await expect(page.getByText(/back to list/i).first()).toBeVisible();
+    }
+  });
+
   test('S-0193 Multi-SO same customer one invoice', async ({ authedPage: page }) => {
     // UI may support multi-select convert; open invoice new as baseline
     await createSalesDocMarked(page, 'order', { party: customer, line: `SO2 ${seed()}` });

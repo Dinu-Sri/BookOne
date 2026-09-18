@@ -9604,5 +9604,84 @@
       "@team"
     ],
     "steps": []
+  },
+  {
+    "id": "S-0744",
+    "title": "Invoice Save draft does not post ledger",
+    "section": "31. Team access (RBAC)",
+    "priority": "P0",
+    "tags": [
+      "@sales",
+      "@invoice"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0745",
+    "title": "Invoice Post & print opens print preview",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@sales",
+      "@invoice",
+      "@print"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0746",
+    "title": "Sales return loads invoice lines from search",
+    "section": "31. Team access (RBAC)",
+    "priority": "P0",
+    "tags": [
+      "@sales",
+      "@returns"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0747",
+    "title": "Print invoice shows one title, register no, website",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@sales",
+      "@print"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0748",
+    "title": "Brand website and bank on brand invoices",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company",
+      "@print"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0749",
+    "title": "Public QR invoice is mobile readable",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@sales",
+      "@print",
+      "@public"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0750",
+    "title": "Quotation view page loads",
+    "section": "31. Team access (RBAC)",
+    "priority": "P0",
+    "tags": [
+      "@sales",
+      "@quotations"
+    ],
+    "steps": []
   }
 ]

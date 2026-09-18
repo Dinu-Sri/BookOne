@@ -6339,6 +6339,55 @@
 - **Steps:** Add a Viewer, Remove, Restore
 - **Expect:** Restore brings them back; Remove is available again.
 
+### S-0744 — Invoice Save draft does not post ledger
+
+- **Priority:** P0
+- **Tags:** `@sales`, `@invoice`
+- **Steps:** Open `/sales/invoices/new`, add a line, click Save draft
+- **Expect:** Invoice appears as draft. Lines still editable. No journal or stock movement until Post.
+
+### S-0745 — Invoice Post & print opens print preview
+
+- **Priority:** P1
+- **Tags:** `@sales`, `@invoice`, `@print`
+- **Steps:** Create invoice, click Post & print
+- **Expect:** Invoice is posted and print preview opens.
+
+### S-0746 — Sales return loads invoice lines from search
+
+- **Priority:** P0
+- **Tags:** `@sales`, `@returns`
+- **Steps:** Open `/sales/returns/new`, search an existing invoice, select it
+- **Expect:** Customer, brand, location, and all invoice lines are copied.
+
+### S-0747 — Print invoice shows one title, register no, website
+
+- **Priority:** P1
+- **Tags:** `@sales`, `@print`
+- **Steps:** Open an invoice print preview
+- **Expect:** Single INVOICE heading (no duplicate kicker). Company registration and website appear when set. Payment credit/local line is absent.
+
+### S-0748 — Brand website and bank on brand invoices
+
+- **Priority:** P1
+- **Tags:** `@company`, `@print`
+- **Steps:** Set brand website and bank details, print a branded invoice
+- **Expect:** Brand website and bank details appear on that invoice.
+
+### S-0749 — Public QR invoice is mobile readable
+
+- **Priority:** P1
+- **Tags:** `@sales`, `@print`, `@public`
+- **Steps:** Open `/i/{token}` on a narrow viewport
+- **Expect:** Document fits without cropping; header, lines, and QR remain readable.
+
+### S-0750 — Quotation view page loads
+
+- **Priority:** P0
+- **Tags:** `@sales`, `@quotations`
+- **Steps:** Open `/sales/quotations`, click the view (eye) icon
+- **Expect:** Quotation detail page at `/sales/quotations/:id` (not 404). Number, customer, lines, and Convert to order.
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

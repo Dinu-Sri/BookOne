@@ -8,6 +8,7 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { Button } from '@/components/ui/bookone-ui';
+import { PrintPreviewButton } from '@/components/print/print-preview-button';
 
 export default async function EditQuotationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,7 +38,7 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
               </span>
             </Link>
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Link href={`/sales/quotations/${doc.id}/print`}>Print</Link>
+              <PrintPreviewButton documentId={doc.id} />
               <strong style={{ fontSize: 14 }}>{doc.documentNumber}</strong>
               <StatusBadge status={doc.status} />
             </div>

@@ -113,14 +113,17 @@ test.describe('Sales lifecycle catalog §8 @sales @journey @p0', () => {
 
   test('S-0743 Invoice print uses document sheet', async ({ authedPage: page }) => {
     await go(page, '/sales/invoices');
-    const printLink = page.getByRole('link', { name: /^print$/i }).first();
-    if (!(await printLink.isVisible().catch(() => false))) {
+    const printHit = page.getByRole('button', { name: /^print$/i }).or(page.getByRole('link', { name: /^print$/i })).first();
+    if (!(await printHit.isVisible().catch(() => false))) {
+      await page.getByRole('button', { name: /actions/i }).first().click().catch(() => undefined);
+    }
+    const printItem = page.getByRole('menuitem', { name: /^print$/i }).or(page.getByRole('button', { name: /^print$/i })).first();
+    if (!(await printItem.isVisible().catch(() => false))) {
       await expect(page.locator('table, .workspace, .empty-state').first()).toBeVisible();
       return;
     }
-    await printLink.click();
-    await expect(page.locator('.doc-print-sheet')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('button', { name: /^print$/i })).toBeVisible();
+    await printItem.click();
+    await expect(page.locator('.doc-print-sheet, .doc-print-modal')).toBeVisible({ timeout: 20_000 });
   });
 
   test('S-0193 Multi-SO same customer one invoice', async ({ authedPage: page }) => {

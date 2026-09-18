@@ -105,9 +105,16 @@ export async function getDocumentPrintModel(documentId: string): Promise<Documen
       .limit(1);
     const [tax] = await db().select().from(taxProfiles).where(eq(taxProfiles.tenantId, user.tenantId)).limit(1);
 
-    let style = parseStyleSnapshot(doc.printStyleSnapshot, kind);
-    if (!doc.printStyleSnapshot) {
-      style = await resolveActiveStyleSnapshot(user.tenantId, kind, doc.brandId ?? null);
+    const live = await resolveActiveStyleSnapshot(user.tenantId, kind, doc.brandId ?? null);
+    const stored = doc.printStyleSnapshot ? parseStyleSnapshot(doc.printStyleSnapshot, kind) : null;
+    const storedIsDefault = !stored || stored.name === 'BookOne default';
+    let style = storedIsDefault ? live : stored;
+    const { resolveProductImageUrl } = await import('@/lib/product-image');
+    style = {
+      ...style,
+      logoUrl: (await resolveProductImageUrl(style.logoImageKey ?? null)) || style.logoUrl,
+    };
+    if (storedIsDefault && live.name !== 'BookOne default') {
       try {
         await db()
           .update(businessDocuments)

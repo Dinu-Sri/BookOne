@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-09-12 — Print preview popup + live styles
+
+- Print opens an on-page A4 preview (Print / Close). No extra navigation.
+- Styles apply if they are **active**; first save now defaults to Make active. Default snapshot is not frozen, so logo/bank/footer show after you activate.
+- Logo URL is resolved at print time (signed S3 URLs do not expire on the copy).
+
 ## 2026-09-12 — Document styles (print themes)
 
 - Company → **Document styles**: logo, accent colour, columns, TIN/phone/email/bank, footer. One **active** style per document kind (quote / invoice / tax invoice / receipt) and optional brand.

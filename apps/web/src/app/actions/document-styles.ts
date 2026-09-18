@@ -139,7 +139,35 @@ export async function saveDocumentStyle(formData: FormData) {
         const { imageKey } = await saveLetterheadLogo({ tenantId: user.tenantId, styleId: id, file: logo });
         await db().update(documentStyles).set({ logoImageKey: imageKey, updatedAt: new Date() }).where(eq(documentStyles.id, id));
       }
+      if (formData.get('makeActive')) {
+        await db()
+          .update(documentStyles)
+          .set({ isActive: '0', updatedAt: new Date() })
+          .where(
+            and(
+              eq(documentStyles.tenantId, user.tenantId),
+              eq(documentStyles.docKind, docKind),
+              brandId ? eq(documentStyles.brandId, brandId) : sql`${documentStyles.brandId} is null`,
+              isNull(documentStyles.voidedAt),
+            ),
+          );
+        await db().update(documentStyles).set({ isActive: '1', updatedAt: new Date() }).where(eq(documentStyles.id, id));
+      }
       return id;
+    }
+
+    if (formData.get('makeActive')) {
+      await db()
+        .update(documentStyles)
+        .set({ isActive: '0', updatedAt: new Date() })
+        .where(
+          and(
+            eq(documentStyles.tenantId, user.tenantId),
+            eq(documentStyles.docKind, docKind),
+            brandId ? eq(documentStyles.brandId, brandId) : sql`${documentStyles.brandId} is null`,
+            isNull(documentStyles.voidedAt),
+          ),
+        );
     }
 
     const [created] = await db()
@@ -159,7 +187,7 @@ export async function saveDocumentStyle(formData: FormData) {
         bankDetails: String(formData.get('bankDetails') ?? ''),
         footerNotes: String(formData.get('footerNotes') ?? ''),
         fontFamily,
-        isActive: '0',
+        isActive: formData.get('makeActive') ? '1' : '0',
         version: 1,
       })
       .returning({ id: documentStyles.id });
@@ -222,6 +250,7 @@ export async function styleToSnapshot(row: DocumentStyleRow): Promise<DocumentSt
     docKind: row.docKind,
     version: row.version,
     accentColor: row.accentColor,
+    logoImageKey: row.logoImageKey,
     logoUrl: row.logoUrl,
     logoPosition: row.logoPosition,
     showSku: row.showSku,
@@ -278,6 +307,7 @@ export async function resolveActiveStyleSnapshot(
     docKind: kind,
     version: row.version,
     accentColor: row.accentColor,
+    logoImageKey: row.logoImageKey,
     logoUrl: await resolveProductImageUrl(row.logoImageKey),
     logoPosition: (row.logoPosition as DocumentStyleSnapshot['logoPosition']) || 'left',
     showSku: row.showSku === '1',

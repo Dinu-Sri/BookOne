@@ -6,6 +6,7 @@ export type DocumentStyleSnapshot = {
   docKind: DocumentStyleKind;
   version: number;
   accentColor: string;
+  logoImageKey?: string | null;
   logoUrl: string | null;
   logoPosition: 'left' | 'center' | 'right';
   showSku: boolean;
@@ -25,6 +26,7 @@ export function defaultDocumentStyle(kind: DocumentStyleKind): DocumentStyleSnap
     docKind: kind,
     version: 1,
     accentColor: '#1e3a8a',
+    logoImageKey: null,
     logoUrl: null,
     logoPosition: 'left',
     showSku: kind !== 'tax_invoice' && kind !== 'receipt',
@@ -59,6 +61,7 @@ export function parseStyleSnapshot(raw: string | null | undefined, kind: Documen
       fontFamily: String(j.fontFamily || base.fontFamily),
       version: Number(j.version) || 1,
       name: String(j.name || base.name),
+      logoImageKey: j.logoImageKey ?? null,
       logoUrl: j.logoUrl ?? null,
     };
   } catch {

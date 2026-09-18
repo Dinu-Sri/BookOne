@@ -97,6 +97,10 @@ export function DocumentStyleForm({
           <label>Bank details</label>
           <textarea className="input" name="bankDetails" rows={3} defaultValue={style?.bankDetails ?? ''} />
         </div>
+        <label className="auth-check field-full" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" name="makeActive" defaultChecked />
+          Make this the active style for this document type
+        </label>
         <div className="field field-full">
           <label>Footer notes</label>
           <textarea className="input" name="footerNotes" rows={3} defaultValue={style?.footerNotes ?? ''} />

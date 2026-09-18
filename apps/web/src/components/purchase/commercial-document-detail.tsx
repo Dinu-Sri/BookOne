@@ -15,6 +15,7 @@ import {
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { PrintPreviewButton } from '@/components/print/print-preview-button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -160,13 +161,7 @@ export function CommercialDocumentDetail({
               </Button>
             </Link>
           ) : null}
-          {printHref ? (
-            <Link href={printHref}>
-              <Button variant="secondary" type="button">
-                Print
-              </Button>
-            </Link>
-          ) : null}
+          {printHref ? <PrintPreviewButton documentId={doc.id} /> : null}
           {canReturn ? (
             <form action={createReturnFromBillAction}>
               <input type="hidden" name="sourceId" value={doc.id} />

@@ -20,6 +20,7 @@ import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { QuotationSnapshotDialog } from '@/components/sales/quotation-snapshot';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { PrintPreviewModal } from '@/components/print/print-preview-button';
 
 const PAGE_SIZE = 10;
 
@@ -88,6 +89,7 @@ export function CommercialDocumentList({
   );
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [printDocId, setPrintDocId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; openUp: boolean } | null>(
     null,
   );
@@ -388,21 +390,21 @@ export function CommercialDocumentList({
         </Link>,
       );
     }
-    const printTo = hrefFromPattern(config.printHrefPattern, row.id);
-    if (printTo) {
+    if (config.printHrefPattern) {
       items.push(
-        <Link
+        <button
           key="print"
-          href={printTo}
+          type="button"
           className="doc-action-item"
           role="menuitem"
           onClick={() => {
             setOpenMenuId(null);
             setMenuPos(null);
+            setPrintDocId(row.id);
           }}
         >
           Print
-        </Link>,
+        </button>,
       );
     }
     const detailTo = hrefFromPattern(config.detailHrefPattern, row.id);
@@ -683,6 +685,7 @@ export function CommercialDocumentList({
       {menuPortal}
 
       {preview ? <QuotationSnapshotDialog doc={preview} onClose={() => setPreview(null)} /> : null}
+      {printDocId ? <PrintPreviewModal documentId={printDocId} onClose={() => setPrintDocId(null)} /> : null}
 
       <ConfirmDialog
         open={Boolean(confirm)}

@@ -10,10 +10,12 @@ export function DocumentPrintSheet({
   model,
   backHref,
   backLabel,
+  embedded = false,
 }: {
   model: DocumentPrintModel;
-  backHref: string;
-  backLabel: string;
+  backHref?: string;
+  backLabel?: string;
+  embedded?: boolean;
 }) {
   const { style, company, party, meta, lines, totals, kind } = model;
   const taxLocked = kind === 'tax_invoice';
@@ -25,17 +27,14 @@ export function DocumentPrintSheet({
 
   return (
     <div className="doc-print-root" style={{ fontFamily: style.fontFamily }}>
+      {!embedded && backHref ? (
       <div className="doc-print-toolbar no-print">
         <Link href={backHref}>← {backLabel}</Link>
-        <button type="button" id="doc-print-btn">
+        <button type="button" onClick={() => window.print()}>
           Print
         </button>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `document.getElementById('doc-print-btn')?.addEventListener('click',function(){window.print();});`,
-          }}
-        />
       </div>
+      ) : null}
 
       <article className="doc-print-sheet">
         <header
@@ -216,7 +215,7 @@ export function DocumentPrintSheet({
           </p>
         ) : null}
         {style.footerNotes ? <p className="doc-print-footer">{style.footerNotes}</p> : null}
-        <p className="doc-print-version">
+        <p className="doc-print-version no-print">
           {style.name} · v{style.version}
         </p>
       </article>

@@ -2686,6 +2686,31 @@ textarea.input {
   flex-wrap: wrap;
 }
 
+.doc-totals-live {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 700;
+}
+.doc-totals-live span {
+  color: var(--ink-soft);
+  margin-right: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.doc-totals-live strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.doc-totals-live .is-total strong {
+  font-size: 16px;
+  color: var(--brand-ink, var(--brand));
+}
+
 .party-back {
   color: var(--brand);
   font-size: 13px;

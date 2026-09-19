@@ -6444,6 +6444,13 @@
 - **Steps:** Open a reconciliation session from bank imports
 - **Expect:** Two columns labelled BookOne and Bank sheet, Match and Add to BookOne actions. Not the eight-tab classic workbench by default.
 
+### S-0759 — Invoice combines same-customer sales orders
+
+- **Priority:** P1
+- **Tags:** `@sales`, `@invoice`
+- **Steps:** Open `/sales/invoices/new` with open sales orders for a customer
+- **Expect:** Combine sales orders list. Ticking orders for the same customer loads their lines. Totals stay in the top bar. One Notes field (no Additional information).
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

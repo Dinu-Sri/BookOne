@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-19T03:22:23.247Z",
-    "catalog_total": 745,
-    "referenced": 745,
+    "generated_at": "2026-09-19T06:03:25.531Z",
+    "catalog_total": 746,
+    "referenced": 746,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
       "P0": 337,
-      "P1": 321,
+      "P1": 322,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -112,8 +112,8 @@
       "referenced": 11
     },
     "31. Team access (RBAC)": {
-      "total": 27,
-      "referenced": 27
+      "total": 28,
+      "referenced": 28
     },
     "4. Company masters": {
       "total": 30,
@@ -10390,6 +10390,20 @@
       ],
       "referenced_in": [
         "tests/08-accounting.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0759",
+      "title": "Invoice combines same-customer sales orders",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@sales",
+        "@invoice"
+      ],
+      "referenced_in": [
+        "tests/06-sales-journey.spec.ts"
       ],
       "status": "referenced"
     }

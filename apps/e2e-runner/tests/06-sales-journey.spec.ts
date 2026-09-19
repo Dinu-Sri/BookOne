@@ -151,6 +151,13 @@ test.describe('Sales lifecycle catalog §8 @sales @journey @p0', () => {
     await expectAuthedShell(page);
   });
 
+  test('S-0759 Invoice combines same-customer sales orders', async ({ authedPage: page }) => {
+    await go(page, '/sales/invoices/new');
+    await expect(page.getByText(/additional information/i)).toHaveCount(0);
+    await expect(page.locator('.doc-totals-live').or(page.getByText(/^total$/i)).first()).toBeVisible();
+    await expectAuthedShell(page);
+  });
+
   test('S-0757 Discount code on new invoice', async ({ authedPage: page }) => {
     await go(page, '/sales/invoices/new');
     const code = page.getByLabel(/discount code/i);

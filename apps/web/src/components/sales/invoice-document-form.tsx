@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
-import { createCommercialDocumentFromForm } from '@/app/actions/commercial-docs';
+import { createCommercialDocumentFromForm, loadOrdersForInvoice } from '@/app/actions/commercial-docs';
 import { todayString } from '@/components/module/list-page';
+import { pushStatusToast } from '@/components/layout/status-toast';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
@@ -91,6 +92,10 @@ export function InvoiceDocumentForm({
     draft && draft.headerDiscount > 0 ? 'fixed' : 'percent',
   );
   const [discountId, setDiscountId] = useState('');
+  const [partyName, setPartyName] = useState(draft?.partyName || partyOptions[0]?.name || '');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [loadedBrandId, setLoadedBrandId] = useState(draft?.brandId ?? '');
+  const [loadedLocationId, setLoadedLocationId] = useState(draft?.locationId ?? '');
   const showExportFields = saleChannel === 'export';
   const showTaxFields = invoiceKind === 'tax_invoice';
   const showHireFields = documentHasRentalLines(lines, catalog);
@@ -132,6 +137,43 @@ export function InvoiceDocumentForm({
     return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
   }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
 
+  const ordersForCustomer = useMemo(
+    () => openOrders.filter((o) => !partyName || o.partyName === partyName),
+    [openOrders, partyName],
+  );
+
+  async function toggleOrder(id: string, checked: boolean) {
+    const next = checked ? [...selectedOrderIds, id] : selectedOrderIds.filter((x) => x !== id);
+    setSelectedOrderIds(next);
+    if (next.length === 0) {
+      setLines([]);
+      return;
+    }
+    const loaded = await loadOrdersForInvoice(next);
+    if (!loaded) return;
+    if (loaded.error) {
+      pushStatusToast({ kind: 'error', message: loaded.error });
+      setSelectedOrderIds(selectedOrderIds);
+      return;
+    }
+    if (loaded.partyName) setPartyName(loaded.partyName);
+    setLoadedBrandId(loaded.brandId ?? '');
+    setLoadedLocationId(loaded.locationId ?? '');
+    setLines(
+      loaded.lines.map((l) => ({
+        key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        productId: l.productId,
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        sku: l.sku,
+        isManual: !l.productId,
+        discountType: l.discountAmount ? 'fixed' : 'percent',
+        discountValue: l.discountAmount ?? '',
+      })),
+    );
+  }
+
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">
       <input type="hidden" name="documentType" value="sales_invoice" />
@@ -147,10 +189,21 @@ export function InvoiceDocumentForm({
             <small>Sales invoices</small>
           </span>
         </Link>
-        <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-          {draft
-            ? `Draft ${draft.documentNumber} · edit lines, then Post`
-            : 'Save draft to edit later · Post writes stock and ledger'}
+        <div className="doc-totals-live" aria-live="polite">
+          <div>
+            <span>Subtotal</span>
+            <strong>LKR {money(computed.subtotal)}</strong>
+          </div>
+          {computed.discountAmt > 0 ? (
+            <div>
+              <span>Discount</span>
+              <strong>− LKR {money(computed.discountAmt)}</strong>
+            </div>
+          ) : null}
+          <div className="is-total">
+            <span>Total</span>
+            <strong>LKR {money(computed.total)}</strong>
+          </div>
         </div>
       </div>
 
@@ -206,11 +259,15 @@ export function InvoiceDocumentForm({
               <select
                 className="input"
                 name="partyName"
-                defaultValue={draft?.partyName || partyOptions[0]?.name || ''}
+                value={partyName}
+                onChange={(e) => {
+                  setPartyName(e.target.value);
+                  setSelectedOrderIds([]);
+                }}
                 required
               >
-                {draft?.partyName && !partyOptions.some((p) => p.name === draft.partyName) ? (
-                  <option value={draft.partyName}>{draft.partyName}</option>
+                {partyName && !partyOptions.some((p) => p.name === partyName) ? (
+                  <option value={partyName}>{partyName}</option>
                 ) : null}
                 {partyOptions.map((p) => (
                   <option key={p.id} value={p.name}>
@@ -225,7 +282,8 @@ export function InvoiceDocumentForm({
                 name="partyName"
                 required
                 placeholder="Customer name"
-                defaultValue={draft?.partyName ?? ''}
+                value={partyName}
+                onChange={(e) => setPartyName(e.target.value)}
               />
             )}
           </div>
@@ -257,10 +315,11 @@ export function InvoiceDocumentForm({
             <input className="input" name="dueDate" type="date" defaultValue={draft?.dueDate ?? ''} />
           </div>
           <BrandLocationFields
+            key={`${loadedBrandId}-${loadedLocationId}`}
             brands={brands}
             locations={locations}
-            defaultBrandId={draft?.brandId ?? ''}
-            defaultLocationId={draft?.locationId ?? ''}
+            defaultBrandId={loadedBrandId || draft?.brandId || ''}
+            defaultLocationId={loadedLocationId || draft?.locationId || ''}
           />
           <EventHireFields visible={showHireFields} />
           <div className="field">
@@ -305,12 +364,29 @@ export function InvoiceDocumentForm({
               </div>
             </>
           ) : null}
+          <div className="field field-span-2">
+            <label>Notes</label>
+            <input className="input" name="notes" defaultValue={draft?.notes ?? ''} placeholder="Optional notes on the invoice" />
+          </div>
+          <DiscountPicker
+            discounts={discounts}
+            discountId={discountId}
+            onDiscountId={setDiscountId}
+            headerDiscount={headerDiscount}
+            headerDiscountType={headerDiscountType}
+            onHeaderDiscount={setHeaderDiscount}
+            onHeaderDiscountType={setHeaderDiscountType}
+            amountLabel="Invoice discount"
+          />
         </div>
 
-        {openOrders.length > 0 ? (
-          <div className="doc-lines-card" style={{ minHeight: 0, maxHeight: 140, marginBottom: 12 }}>
+        {ordersForCustomer.length > 0 ? (
+          <div className="doc-lines-card" style={{ minHeight: 0, maxHeight: 160 }}>
             <div className="doc-lines-head">
-              <span>Link sales orders (optional)</span>
+              <span>Combine sales orders</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)' }}>
+                Same customer only — tick orders to pull all lines onto this invoice
+              </span>
             </div>
             <div className="doc-lines-scroll">
               <table className="doc-lines-table">
@@ -323,10 +399,16 @@ export function InvoiceDocumentForm({
                   </tr>
                 </thead>
                 <tbody>
-                  {openOrders.map((o) => (
+                  {ordersForCustomer.map((o) => (
                     <tr key={o.id}>
                       <td>
-                        <input type="checkbox" name="sourceOrderIds" value={o.id} />
+                        <input
+                          type="checkbox"
+                          name="sourceOrderIds"
+                          value={o.id}
+                          checked={selectedOrderIds.includes(o.id)}
+                          onChange={(e) => toggleOrder(o.id, e.target.checked)}
+                        />
                       </td>
                       <td>
                         <strong>{o.documentNumber}</strong>
@@ -350,47 +432,6 @@ export function InvoiceDocumentForm({
             setCatalog((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))
           }
         />
-
-        <div className="doc-form-bottom">
-          <div className="field" style={{ margin: 0 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)' }}>
-              Additional information
-            </label>
-            <input className="input" name="additionalInfo" defaultValue={draft?.additionalInfo ?? ''} />
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)', marginTop: 8 }}>
-              Notes
-            </label>
-            <input className="input" name="notes" defaultValue={draft?.notes ?? ''} />
-          </div>
-          <div className="field" style={{ margin: 0 }}>
-            <DiscountPicker
-              discounts={discounts}
-              discountId={discountId}
-              onDiscountId={setDiscountId}
-              headerDiscount={headerDiscount}
-              headerDiscountType={headerDiscountType}
-              onHeaderDiscount={setHeaderDiscount}
-              onHeaderDiscountType={setHeaderDiscountType}
-              amountLabel="Invoice discount"
-            />
-          </div>
-          <div className="doc-totals">
-            <div className="doc-totals-row">
-              <span>Subtotal</span>
-              <strong>LKR {money(computed.subtotal)}</strong>
-            </div>
-            {computed.discountAmt > 0 ? (
-              <div className="doc-totals-row">
-                <span>Discount</span>
-                <strong>− LKR {money(computed.discountAmt)}</strong>
-              </div>
-            ) : null}
-            <div className="doc-totals-row is-total">
-              <span>Total (ex-VAT)</span>
-              <strong>LKR {money(computed.total)}</strong>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="doc-form-footer">

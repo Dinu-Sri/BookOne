@@ -685,6 +685,87 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
   });
 }
 
+export async function loadOrdersForInvoice(orderIds: string[]): Promise<{
+  partyName: string;
+  brandId: string | null;
+  locationId: string | null;
+  lines: {
+    productId: string;
+    description: string;
+    quantity: string;
+    unitPrice: string;
+    sku?: string;
+    discountAmount?: string;
+  }[];
+  error?: string;
+} | null> {
+  const ids = [...new Set(orderIds.filter(Boolean))];
+  if (ids.length === 0) return { partyName: '', brandId: null, locationId: null, lines: [] };
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const orders = await db()
+      .select({
+        id: businessDocuments.id,
+        partyId: businessDocuments.partyId,
+        brandId: businessDocuments.brandId,
+        locationId: businessDocuments.locationId,
+        status: businessDocuments.status,
+        partyName: parties.name,
+      })
+      .from(businessDocuments)
+      .innerJoin(parties, eq(parties.id, businessDocuments.partyId))
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          inArray(businessDocuments.id, ids),
+          eq(businessDocuments.documentType, 'sales_order'),
+          isNull(businessDocuments.voidedAt),
+        ),
+      );
+    if (orders.length === 0) return { partyName: '', brandId: null, locationId: null, lines: [], error: 'No sales orders found.' };
+    const partyId = orders[0]!.partyId;
+    if (orders.some((o) => o.partyId !== partyId)) {
+      return {
+        partyName: orders[0]!.partyName,
+        brandId: orders[0]!.brandId,
+        locationId: orders[0]!.locationId,
+        lines: [],
+        error: 'Pick orders for the same customer only.',
+      };
+    }
+    const lines: {
+      productId: string;
+      description: string;
+      quantity: string;
+      unitPrice: string;
+      sku?: string;
+      discountAmount?: string;
+    }[] = [];
+    for (const order of orders) {
+      const orderLines = await db()
+        .select()
+        .from(businessDocumentLines)
+        .where(and(eq(businessDocumentLines.documentId, order.id), isNull(businessDocumentLines.voidedAt)));
+      for (const l of orderLines) {
+        lines.push({
+          productId: l.productId ?? '',
+          description: l.description,
+          quantity: String(l.quantity),
+          unitPrice: String(l.unitPrice),
+          sku: l.lineRef ?? undefined,
+          discountAmount: Number(l.discountAmount ?? 0) > 0 ? String(l.discountAmount) : undefined,
+        });
+      }
+    }
+    return {
+      partyName: orders[0]!.partyName,
+      brandId: orders[0]!.brandId,
+      locationId: orders[0]!.locationId,
+      lines,
+    };
+  });
+}
+
 export async function listCommercialDocuments(types: string[], period?: string): Promise<CommercialDocRow[]> {
   const user = await requireTenantContext();
   const { resolvePeriodBounds } = await import('@/lib/period-range');

@@ -9770,5 +9770,16 @@
       "@reconciliation"
     ],
     "steps": []
+  },
+  {
+    "id": "S-0759",
+    "title": "Invoice combines same-customer sales orders",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@sales",
+      "@invoice"
+    ],
+    "steps": []
   }
 ]

@@ -90,7 +90,7 @@
     {
       "id": "BL-0008",
       "kind": "new_scenario",
-      "related_scenarios": ["S-0754", "S-0755", "S-0756", "S-0757"],
+      "related_scenarios": ["S-0754", "S-0755", "S-0756", "S-0757", "S-0759"],
       "title": "Status help, sales numbering, company TIN, invoice discount codes",
       "priority": "P1",
       "status": "planned",

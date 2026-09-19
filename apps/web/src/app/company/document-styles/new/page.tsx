@@ -18,7 +18,10 @@ export default async function NewDocumentStylePage() {
     <BookOneShell active="Document styles" tenant={tenant}>
       <div className="workspace">
         <Card>
-          <CardHeader title="New document style" subtitle="Does not change prints until you Make active." />
+          <CardHeader
+            title="New document style"
+            subtitle="Choose All documents to use this look on quotes, invoices, and receipts. Optional brand limits it to that brand. Make active to apply."
+          />
           <CardBody>
             <DocumentStyleForm brands={masters.brands.map((b) => ({ id: b.id, name: b.name }))} />
           </CardBody>

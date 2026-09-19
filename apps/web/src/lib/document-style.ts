@@ -1,6 +1,10 @@
 export const DOCUMENT_STYLE_KINDS = ['quotation', 'invoice', 'tax_invoice', 'receipt'] as const;
 export type DocumentStyleKind = (typeof DOCUMENT_STYLE_KINDS)[number];
 
+/** Stored on a style row. `all` applies to every print kind unless a more specific style is active. */
+export const DOCUMENT_STYLE_SCOPES = ['all', ...DOCUMENT_STYLE_KINDS] as const;
+export type DocumentStyleScope = (typeof DOCUMENT_STYLE_SCOPES)[number];
+
 export type DocumentStyleSnapshot = {
   name: string;
   docKind: DocumentStyleKind;
@@ -101,9 +105,18 @@ export function kindFromDocument(documentType: string, invoiceKind?: string | nu
   return 'invoice';
 }
 
-export function kindLabel(kind: DocumentStyleKind): string {
+export function kindLabel(kind: DocumentStyleKind | DocumentStyleScope): string {
+  if (kind === 'all') return 'All documents';
   if (kind === 'quotation') return 'Quotation';
   if (kind === 'tax_invoice') return 'Tax invoice';
   if (kind === 'receipt') return 'Receipt';
   return 'Invoice';
+}
+
+export function isDocumentStyleKind(v: string): v is DocumentStyleKind {
+  return (DOCUMENT_STYLE_KINDS as readonly string[]).includes(v);
+}
+
+export function isDocumentStyleScope(v: string): v is DocumentStyleScope {
+  return (DOCUMENT_STYLE_SCOPES as readonly string[]).includes(v);
 }

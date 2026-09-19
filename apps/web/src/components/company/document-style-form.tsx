@@ -1,8 +1,19 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { activateDocumentStyle, saveDocumentStyle, type DocumentStyleRow } from '@/app/actions/document-styles';
-import { DOCUMENT_STYLE_KINDS, TYPE_SCALES, kindLabel, type DocumentStyleKind } from '@/lib/document-style';
+import {
+  activateDocumentStyle,
+  duplicateDocumentStyle,
+  saveDocumentStyle,
+  type DocumentStyleRow,
+} from '@/app/actions/document-styles';
+import {
+  DOCUMENT_STYLE_KINDS,
+  TYPE_SCALES,
+  kindLabel,
+  type DocumentStyleScope,
+} from '@/lib/document-style';
 import { Button } from '@/components/ui/bookone-ui';
 
 export function DocumentStyleForm({
@@ -12,8 +23,8 @@ export function DocumentStyleForm({
   style?: DocumentStyleRow | null;
   brands: { id: string; name: string }[];
 }) {
-  const kind = (style?.docKind ?? 'invoice') as DocumentStyleKind;
-  const taxLocked = kind === 'tax_invoice' || !style;
+  const [scope, setScope] = useState<DocumentStyleScope>(style?.docKind ?? 'all');
+  const taxLocked = scope === 'tax_invoice';
 
   return (
     <form action={saveDocumentStyle} className="party-form-body" style={{ padding: 16 }}>
@@ -25,16 +36,27 @@ export function DocumentStyleForm({
         </div>
         <div className="field">
           <label>Document</label>
-          <select className="input" name="docKind" defaultValue={style?.docKind ?? 'invoice'}>
+          <select
+            className="input"
+            name="docKind"
+            value={scope}
+            onChange={(e) => setScope(e.target.value as DocumentStyleScope)}
+          >
+            <option value="all">All documents</option>
             {DOCUMENT_STYLE_KINDS.map((k) => (
               <option value={k} key={k}>
                 {kindLabel(k)}
               </option>
             ))}
           </select>
+          <p className="party-hint">
+            {scope === 'all'
+              ? 'Applies to quotations, invoices, tax invoices, and receipts unless a more specific style is active.'
+              : `Only ${kindLabel(scope).toLowerCase()} prints.`}
+          </p>
         </div>
         <div className="field">
-          <label>Brand (optional)</label>
+          <label>Brand</label>
           <select className="input" name="brandId" defaultValue={style?.brandId ?? ''}>
             <option value="">All brands</option>
             {brands.map((b) => (
@@ -43,6 +65,7 @@ export function DocumentStyleForm({
               </option>
             ))}
           </select>
+          <p className="party-hint">Pick a brand to use this design only on that brand’s documents.</p>
         </div>
         <div className="field">
           <label>Accent colour</label>
@@ -98,10 +121,10 @@ export function DocumentStyleForm({
           Show SKU / ref column
         </label>
         <label className="auth-check" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="checkbox" name="showTin" defaultChecked={style?.showTin ?? true} disabled={taxLocked && kind === 'tax_invoice'} />
+          <input type="checkbox" name="showTin" defaultChecked={style?.showTin ?? true} disabled={taxLocked} />
           Show TIN
         </label>
-        {kind === 'tax_invoice' ? <input type="hidden" name="showTin" value="1" /> : null}
+        {taxLocked ? <input type="hidden" name="showTin" value="1" /> : null}
         <label className="auth-check" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="checkbox" name="showPhone" defaultChecked={style?.showPhone ?? true} />
           Show phone
@@ -120,12 +143,14 @@ export function DocumentStyleForm({
         </div>
         <label className="auth-check field-full" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="checkbox" name="makeActive" defaultChecked />
-          Make this the active style for this document type
+          {scope === 'all'
+            ? 'Make this the active style for all documents'
+            : `Make this the active style for ${kindLabel(scope).toLowerCase()}`}
         </label>
         <div className="field field-full">
           <label>Footer notes</label>
           <textarea className="input" name="footerNotes" rows={3} defaultValue={style?.footerNotes ?? ''} />
-          {kind === 'tax_invoice' ? (
+          {taxLocked ? (
             <p className="party-hint">Tax invoice always prints supplier/purchaser TIN, tax invoice number, VAT, and amount in words. Those blocks cannot be turned off.</p>
           ) : null}
         </div>
@@ -135,6 +160,11 @@ export function DocumentStyleForm({
           <Link href="/company/document-styles" className="btn-secondary" style={{ padding: '8px 12px' }}>
             Cancel
           </Link>
+          {style ? (
+            <Button variant="secondary" type="submit" formAction={duplicateDocumentStyle} formNoValidate>
+              Duplicate
+            </Button>
+          ) : null}
           <Button variant="primary" type="submit">
             {style ? 'Save style' : 'Create style'}
           </Button>
@@ -154,6 +184,17 @@ export function ActivateStyleButton({ id, active }: { id: string; active: boolea
       <input type="hidden" name="id" value={id} />
       <Button variant="secondary" type="submit">
         Make active
+      </Button>
+    </form>
+  );
+}
+
+export function DuplicateStyleButton({ id }: { id: string }) {
+  return (
+    <form action={duplicateDocumentStyle}>
+      <input type="hidden" name="id" value={id} />
+      <Button variant="secondary" type="submit">
+        Duplicate
       </Button>
     </form>
   );

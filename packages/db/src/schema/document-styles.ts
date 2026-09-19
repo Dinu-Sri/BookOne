@@ -9,7 +9,7 @@ export const documentStyles = pgTable('document_styles', {
     .notNull()
     .references(() => tenants.id),
   name: varchar('name', { length: 120 }).notNull(),
-  /** quotation | invoice | tax_invoice | receipt */
+  /** all | quotation | invoice | tax_invoice | receipt */
   docKind: varchar('doc_kind', { length: 30 }).notNull(),
   brandId: uuid('brand_id').references(() => brands.id),
   isActive: varchar('is_active', { length: 1 }).notNull().default('0'),

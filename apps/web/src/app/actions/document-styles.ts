@@ -9,14 +9,16 @@ import {
   documentStyles,
   eq,
   isNull,
+  not,
   sql,
   withTenantContext,
 } from '@bookone/db';
 import { assertPermission } from '@/lib/access';
 import {
-  DOCUMENT_STYLE_KINDS,
   defaultDocumentStyle,
+  isDocumentStyleScope,
   type DocumentStyleKind,
+  type DocumentStyleScope,
   type DocumentStyleSnapshot,
 } from '@/lib/document-style';
 import { resolveProductImageUrl, saveLetterheadLogo } from '@/lib/product-image';
@@ -24,7 +26,7 @@ import { resolveProductImageUrl, saveLetterheadLogo } from '@/lib/product-image'
 export type DocumentStyleRow = {
   id: string;
   name: string;
-  docKind: DocumentStyleKind;
+  docKind: DocumentStyleScope;
   brandId: string | null;
   brandName: string | null;
   isActive: boolean;
@@ -46,8 +48,53 @@ export type DocumentStyleRow = {
   baseFontPx: number;
 };
 
-function asKind(v: string): DocumentStyleKind {
-  return (DOCUMENT_STYLE_KINDS as readonly string[]).includes(v) ? (v as DocumentStyleKind) : 'invoice';
+function asScope(v: string): DocumentStyleScope {
+  return isDocumentStyleScope(v) ? v : 'invoice';
+}
+
+function brandScope(brandId: string | null) {
+  return brandId ? eq(documentStyles.brandId, brandId) : sql`${documentStyles.brandId} is null`;
+}
+
+/** When `all` is made active, it takes over every kind in that brand scope. */
+async function clearActivePeers(
+  tenantId: string,
+  docKind: DocumentStyleScope,
+  brandId: string | null,
+  exceptId?: string,
+) {
+  const filters = [
+    eq(documentStyles.tenantId, tenantId),
+    brandScope(brandId),
+    isNull(documentStyles.voidedAt),
+  ];
+  if (docKind !== 'all') filters.push(eq(documentStyles.docKind, docKind));
+  if (exceptId) filters.push(not(eq(documentStyles.id, exceptId)));
+  await db()
+    .update(documentStyles)
+    .set({ isActive: '0', updatedAt: new Date() })
+    .where(and(...filters));
+}
+
+async function findActiveRow(tenantId: string, kind: DocumentStyleKind, brandId: string | null) {
+  const brandClause = brandId ? eq(documentStyles.brandId, brandId) : sql`${documentStyles.brandId} is null`;
+  for (const scope of [kind, 'all'] as const) {
+    const [row] = await db()
+      .select()
+      .from(documentStyles)
+      .where(
+        and(
+          eq(documentStyles.tenantId, tenantId),
+          eq(documentStyles.docKind, scope),
+          brandClause,
+          eq(documentStyles.isActive, '1'),
+          isNull(documentStyles.voidedAt),
+        ),
+      )
+      .limit(1);
+    if (row) return row;
+  }
+  return null;
 }
 
 function onOff(v: FormDataEntryValue | null) {
@@ -71,7 +118,7 @@ export async function listDocumentStyles(): Promise<DocumentStyleRow[]> {
       rows.map(async ({ style, brandName }) => ({
         id: style.id,
         name: style.name,
-        docKind: asKind(style.docKind),
+        docKind: asScope(style.docKind),
         brandId: style.brandId,
         brandName: brandName ?? null,
         isActive: style.isActive === '1',
@@ -106,7 +153,7 @@ export async function saveDocumentStyle(formData: FormData) {
   const user = await requireTenantContext();
   const id = String(formData.get('id') ?? '');
   const name = String(formData.get('name') ?? '').trim() || 'Untitled style';
-  const docKind = asKind(String(formData.get('docKind') ?? 'invoice'));
+  const docKind = asScope(String(formData.get('docKind') ?? 'all'));
   const brandId = String(formData.get('brandId') ?? '').trim() || null;
   const accentColor = String(formData.get('accentColor') ?? '#1e3a8a');
   const logoPosition = String(formData.get('logoPosition') ?? 'left');
@@ -149,34 +196,14 @@ export async function saveDocumentStyle(formData: FormData) {
         await db().update(documentStyles).set({ logoImageKey: imageKey, updatedAt: new Date() }).where(eq(documentStyles.id, id));
       }
       if (formData.get('makeActive')) {
-        await db()
-          .update(documentStyles)
-          .set({ isActive: '0', updatedAt: new Date() })
-          .where(
-            and(
-              eq(documentStyles.tenantId, user.tenantId),
-              eq(documentStyles.docKind, docKind),
-              brandId ? eq(documentStyles.brandId, brandId) : sql`${documentStyles.brandId} is null`,
-              isNull(documentStyles.voidedAt),
-            ),
-          );
+        await clearActivePeers(user.tenantId, docKind, brandId, id);
         await db().update(documentStyles).set({ isActive: '1', updatedAt: new Date() }).where(eq(documentStyles.id, id));
       }
       return id;
     }
 
     if (formData.get('makeActive')) {
-      await db()
-        .update(documentStyles)
-        .set({ isActive: '0', updatedAt: new Date() })
-        .where(
-          and(
-            eq(documentStyles.tenantId, user.tenantId),
-            eq(documentStyles.docKind, docKind),
-            brandId ? eq(documentStyles.brandId, brandId) : sql`${documentStyles.brandId} is null`,
-            isNull(documentStyles.voidedAt),
-          ),
-        );
+      await clearActivePeers(user.tenantId, docKind, brandId);
     }
 
     const [created] = await db()
@@ -227,20 +254,56 @@ export async function activateDocumentStyle(formData: FormData) {
       .where(and(eq(documentStyles.id, id), eq(documentStyles.tenantId, user.tenantId), isNull(documentStyles.voidedAt)))
       .limit(1);
     if (!row) throw new Error('Style not found.');
-    await db()
-      .update(documentStyles)
-      .set({ isActive: '0', updatedAt: new Date() })
-      .where(
-        and(
-          eq(documentStyles.tenantId, user.tenantId),
-          eq(documentStyles.docKind, row.docKind),
-          row.brandId ? eq(documentStyles.brandId, row.brandId) : sql`${documentStyles.brandId} is null`,
-          isNull(documentStyles.voidedAt),
-        ),
-      );
+    await clearActivePeers(user.tenantId, asScope(row.docKind), row.brandId, row.id);
     await db().update(documentStyles).set({ isActive: '1', updatedAt: new Date() }).where(eq(documentStyles.id, id));
   });
   revalidatePath('/company/document-styles');
+}
+
+export async function duplicateDocumentStyle(formData: FormData) {
+  await assertPermission('company.document_styles.write', 'write');
+  const user = await requireTenantContext();
+  const id = String(formData.get('id') ?? '');
+  const createdId = await withTenantContext(user.tenantId, async () => {
+    const [row] = await db()
+      .select()
+      .from(documentStyles)
+      .where(and(eq(documentStyles.id, id), eq(documentStyles.tenantId, user.tenantId), isNull(documentStyles.voidedAt)))
+      .limit(1);
+    if (!row) throw new Error('Style not found.');
+    const base = row.name.replace(/\s*\(copy(?: \d+)?\)\s*$/i, '').trim() || row.name;
+    const copyName = `${base} (copy)`.slice(0, 120);
+    const [created] = await db()
+      .insert(documentStyles)
+      .values({
+        tenantId: user.tenantId,
+        name: copyName,
+        docKind: row.docKind,
+        brandId: row.brandId,
+        isActive: '0',
+        version: 1,
+        accentColor: row.accentColor,
+        logoImageKey: row.logoImageKey,
+        logoPosition: row.logoPosition,
+        showSku: row.showSku,
+        showTin: row.showTin,
+        showPhone: row.showPhone,
+        showEmail: row.showEmail,
+        showBank: row.showBank,
+        bankDetails: row.bankDetails,
+        footerNotes: row.footerNotes,
+        fontFamily: row.fontFamily,
+        showQr: row.showQr,
+        typeScale: row.typeScale,
+        baseFontPx: row.baseFontPx,
+      })
+      .returning({ id: documentStyles.id });
+    if (!created) throw new Error('Could not duplicate style.');
+    return created.id;
+  });
+  revalidatePath('/company/document-styles');
+  const { redirect } = await import('next/navigation');
+  redirect(`/company/document-styles/${createdId}`);
 }
 
 export async function voidDocumentStyle(formData: FormData) {
@@ -256,17 +319,18 @@ export async function voidDocumentStyle(formData: FormData) {
   revalidatePath('/company/document-styles');
 }
 
-export async function styleToSnapshot(row: DocumentStyleRow): Promise<DocumentStyleSnapshot> {
+export async function styleToSnapshot(row: DocumentStyleRow, printKind?: DocumentStyleKind): Promise<DocumentStyleSnapshot> {
+  const kind: DocumentStyleKind = printKind ?? (row.docKind === 'all' ? 'invoice' : row.docKind);
   return {
     name: row.name,
-    docKind: row.docKind,
+    docKind: kind,
     version: row.version,
     accentColor: row.accentColor,
     logoImageKey: row.logoImageKey,
     logoUrl: row.logoUrl,
     logoPosition: row.logoPosition,
     showSku: row.showSku,
-    showTin: row.docKind === 'tax_invoice' ? true : row.showTin,
+    showTin: kind === 'tax_invoice' ? true : row.showTin,
     showPhone: row.showPhone,
     showEmail: row.showEmail,
     showBank: row.showBank,
@@ -284,38 +348,9 @@ export async function resolveActiveStyleSnapshot(
   kind: DocumentStyleKind,
   brandId: string | null,
 ): Promise<DocumentStyleSnapshot> {
-  const brandMatch = brandId
-    ? await db()
-        .select()
-        .from(documentStyles)
-        .where(
-          and(
-            eq(documentStyles.tenantId, tenantId),
-            eq(documentStyles.docKind, kind),
-            eq(documentStyles.brandId, brandId),
-            eq(documentStyles.isActive, '1'),
-            isNull(documentStyles.voidedAt),
-          ),
-        )
-        .limit(1)
-    : [];
-  const [row] =
-    brandMatch[0] ??
-    (
-      await db()
-        .select()
-        .from(documentStyles)
-        .where(
-          and(
-            eq(documentStyles.tenantId, tenantId),
-            eq(documentStyles.docKind, kind),
-            sql`${documentStyles.brandId} is null`,
-            eq(documentStyles.isActive, '1'),
-            isNull(documentStyles.voidedAt),
-          ),
-        )
-        .limit(1)
-    );
+  const row =
+    (brandId ? await findActiveRow(tenantId, kind, brandId) : null) ??
+    (await findActiveRow(tenantId, kind, null));
   if (!row) return defaultDocumentStyle(kind);
   return {
     name: row.name,

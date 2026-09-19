@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { listDocumentStyles, voidDocumentStyle } from '@/app/actions/document-styles';
 import { getTenantInfo } from '@/app/actions/workspace';
-import { ActivateStyleButton } from '@/components/company/document-style-form';
+import { ActivateStyleButton, DuplicateStyleButton } from '@/components/company/document-style-form';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Button, Card, CardBody, CardHeader } from '@/components/ui/bookone-ui';
 import { kindLabel } from '@/lib/document-style';
@@ -22,7 +22,7 @@ export default async function DocumentStylesPage() {
         <Card>
           <CardHeader
             title="Document styles"
-            subtitle="Logo, colour, and footer for quotes, invoices, tax invoices, and receipts. One active style per document (and optional brand)."
+            subtitle="Logo, colour, and footer for quotes, invoices, and receipts. Use All documents for one design everywhere, or pick a brand for a brand-only look. Duplicate to start from an existing style."
             action={
               <Link href="/company/document-styles/new">
                 <Button variant="primary" type="button">
@@ -64,6 +64,7 @@ export default async function DocumentStylesPage() {
                         <td className="td-actions">
                           <div className="cluster" style={{ gap: 8 }}>
                             <ActivateStyleButton id={s.id} active={s.isActive} />
+                            <DuplicateStyleButton id={s.id} />
                             <Link href={`/company/document-styles/${s.id}`}>Edit</Link>
                             <form action={voidDocumentStyle}>
                               <input type="hidden" name="id" value={s.id} />

@@ -239,8 +239,9 @@ export async function saveDocumentStyle(formData: FormData) {
   });
 
   revalidatePath('/company/document-styles');
+  revalidatePath(`/company/document-styles/${idOut}`);
   const { redirect } = await import('next/navigation');
-  redirect(`/company/document-styles/${idOut}`);
+  redirect('/company/document-styles');
 }
 
 export async function activateDocumentStyle(formData: FormData) {

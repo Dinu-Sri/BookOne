@@ -65,7 +65,11 @@ export default async function DocumentStylesPage() {
                           <div className="cluster" style={{ gap: 8 }}>
                             <ActivateStyleButton id={s.id} active={s.isActive} />
                             <DuplicateStyleButton id={s.id} />
-                            <Link href={`/company/document-styles/${s.id}`}>Edit</Link>
+                            <Link href={`/company/document-styles/${s.id}`}>
+                              <Button variant="secondary" type="button">
+                                Edit
+                              </Button>
+                            </Link>
                             <form action={voidDocumentStyle}>
                               <input type="hidden" name="id" value={s.id} />
                               <Button variant="secondary" type="submit">

@@ -178,7 +178,7 @@ export function DocumentStyleForm({
 }
 
 export function ActivateStyleButton({ id, active }: { id: string; active: boolean }) {
-  if (active) return <span className="muted-line">Active</span>;
+  if (active) return null;
   return (
     <form action={activateDocumentStyle}>
       <input type="hidden" name="id" value={id} />

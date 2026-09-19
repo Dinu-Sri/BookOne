@@ -11,7 +11,7 @@ import {
   loadInvoiceForReturn,
   searchInvoicesForReturn,
 } from '@/app/actions/commercial-docs';
-import { formatLKR, todayString } from '@/components/module/list-page';
+import { todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
@@ -25,6 +25,7 @@ import {
 } from '@/components/module/brand-location-fields';
 import { documentHasRentalLines, EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
+import { DiscountPicker } from '@/components/sales/discount-picker';
 
 type PartyOpt = {
   id: string;
@@ -91,6 +92,7 @@ export function SalesDocumentForm({
   const isReturn = documentType === 'sales_return';
 
   const [headerDiscount, setHeaderDiscount] = useState('0');
+  const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>('fixed');
   const [discountId, setDiscountId] = useState('');
   const [lines, setLines] = useState<DocLineState[]>([]);
   const [catalog, setCatalog] = useState(initialProducts);
@@ -177,7 +179,7 @@ export function SalesDocumentForm({
   const computed = useMemo(() => {
     const lineAmounts = computeLineAmounts(lines);
     const subtotal = Math.round(lineAmounts.reduce((s, a) => s + a, 0) * 100) / 100;
-    let discountAmt = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
+    let discountAmt = 0;
     if (discountId) {
       const d = discounts.find((x) => x.id === discountId);
       if (d) {
@@ -186,10 +188,18 @@ export function SalesDocumentForm({
             ? Math.round(((subtotal * Number(d.value)) / 100) * 100) / 100
             : Number(d.value);
       }
+    } else {
+      const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
+      if (v > 0) {
+        discountAmt =
+          headerDiscountType === 'percent'
+            ? Math.round(((subtotal * v) / 100) * 100) / 100
+            : v;
+      }
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
-  }, [lines, headerDiscount, discountId, discounts]);
+  }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
 
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">
@@ -342,35 +352,16 @@ export function SalesDocumentForm({
             <label>Due date</label>
             <input className="input" name="dueDate" type="date" />
           </div>
-          {discounts.length > 0 ? (
-            <div className="field">
-              <label>Discount</label>
-              <select
-                className="input"
-                name="discountId"
-                value={discountId}
-                onChange={(e) => setDiscountId(e.target.value)}
-              >
-                <option value="">None</option>
-                {discounts.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} ({d.discountType === 'percent' ? `${d.value}%` : formatLKR(Number(d.value))})
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="field">
-              <label>Header discount (LKR)</label>
-              <input
-                className="input"
-                inputMode="decimal"
-                value={headerDiscount}
-                onChange={(e) => setHeaderDiscount(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-          )}
+          <DiscountPicker
+            discounts={discounts}
+            discountId={discountId}
+            onDiscountId={setDiscountId}
+            headerDiscount={headerDiscount}
+            headerDiscountType={headerDiscountType}
+            onHeaderDiscount={setHeaderDiscount}
+            onHeaderDiscountType={setHeaderDiscountType}
+            amountLabel="Header discount"
+          />
           {showPaymentAccount && paymentAccounts ? (
             <div className="field">
               <label>Payment account</label>

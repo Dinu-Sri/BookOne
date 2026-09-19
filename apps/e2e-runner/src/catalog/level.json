@@ -5,13 +5,13 @@
   "released_at": "2026-07-22",
   "git_ref_hint": "master after feat(e2e): full catalog automation",
   "catalog": {
-    "scenario_count": 737,
-    "last_scenario_id": "S-0750",
+    "scenario_count": 744,
+    "last_scenario_id": "S-0757",
     "source_md": "docs/E2E_SCENARIO_CATALOG.md",
     "source_json": "apps/e2e-runner/src/catalog/scenarios.json"
   },
   "coverage": {
-    "ids_referenced": 737,
+    "ids_referenced": 744,
     "ids_missing": 0,
     "coverage_pct": 100,
     "note": "ID presence only — not all asserts are deep (mutate/balance)."

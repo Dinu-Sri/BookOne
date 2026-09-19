@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import { createCommercialDocumentFromForm } from '@/app/actions/commercial-docs';
-import { formatLKR, todayString } from '@/components/module/list-page';
+import { todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
@@ -17,6 +17,7 @@ import {
 } from '@/components/module/brand-location-fields';
 import { documentHasRentalLines, EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
+import { DiscountPicker } from '@/components/sales/discount-picker';
 
 type PartyOpt = {
   id: string;
@@ -208,47 +209,16 @@ export function QuotationForm({
           </div>
           <BrandLocationFields brands={brands} locations={locations} />
           <EventHireFields visible={documentHasRentalLines(lines, catalog)} />
-          {discounts.length > 0 ? (
-            <div className="field">
-              <label>Saved discount</label>
-              <select
-                className="input"
-                name="discountId"
-                value={discountId}
-                onChange={(e) => setDiscountId(e.target.value)}
-              >
-                <option value="">None — use values below</option>
-                {discounts.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} ({d.discountType === 'percent' ? `${d.value}%` : formatLKR(Number(d.value))})
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-          <div className="field">
-            <label>Quote discount</label>
-            <div className="cluster" style={{ gap: 6 }}>
-              <select
-                className="input"
-                value={headerDiscountType}
-                onChange={(e) => setHeaderDiscountType(e.target.value as 'percent' | 'fixed')}
-                disabled={Boolean(discountId)}
-                style={{ maxWidth: 90 }}
-              >
-                <option value="percent">%</option>
-                <option value="fixed">LKR</option>
-              </select>
-              <input
-                className="input"
-                inputMode="decimal"
-                value={headerDiscount}
-                onChange={(e) => setHeaderDiscount(e.target.value)}
-                placeholder="0"
-                disabled={Boolean(discountId)}
-              />
-            </div>
-          </div>
+          <DiscountPicker
+            discounts={discounts}
+            discountId={discountId}
+            onDiscountId={setDiscountId}
+            headerDiscount={headerDiscount}
+            headerDiscountType={headerDiscountType}
+            onHeaderDiscount={setHeaderDiscount}
+            onHeaderDiscountType={setHeaderDiscountType}
+            amountLabel="Quote discount"
+          />
         </div>
 
         <DocumentLinesEditor

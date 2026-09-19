@@ -9683,5 +9683,81 @@
       "@quotations"
     ],
     "steps": []
+  },
+  {
+    "id": "S-0751",
+    "title": "Document style All documents option",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company",
+      "@print"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0752",
+    "title": "Duplicate document style",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company",
+      "@print"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0753",
+    "title": "Brand-specific document style",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company",
+      "@print"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0754",
+    "title": "Invoice status help on list",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@sales",
+      "@invoice"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0755",
+    "title": "Sales numbering settings",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company",
+      "@sales"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0756",
+    "title": "Company details TIN",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@company"
+    ],
+    "steps": []
+  },
+  {
+    "id": "S-0757",
+    "title": "Discount code on new invoice",
+    "section": "31. Team access (RBAC)",
+    "priority": "P1",
+    "tags": [
+      "@sales",
+      "@invoice"
+    ],
+    "steps": []
   }
 ]

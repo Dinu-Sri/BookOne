@@ -16,6 +16,7 @@ export default async function CompanyDetailsPage() {
   }
 
   const profile = data.profile;
+  const tax = data.tax;
 
   return (
     <BookOneShell active="Company Details" tenant={tenant}>
@@ -26,6 +27,7 @@ export default async function CompanyDetailsPage() {
               <Field label="Legal name" name="legalName" defaultValue={profile?.legalName ?? tenant.name} wide />
               <Field label="Trading name" name="tradingName" defaultValue={profile?.tradingName} />
               <Field label="Registration no." name="registrationNumber" defaultValue={profile?.registrationNumber} />
+              <Field label="TIN" name="tin" defaultValue={tax?.tin} placeholder="Used on invoices and quotations" />
               <Field label="Country" name="country" defaultValue={profile?.country ?? 'Sri Lanka'} />
               <Field label="Currency" name="baseCurrency" defaultValue={profile?.baseCurrency ?? 'LKR'} />
               <Field label="Timezone" name="timezone" defaultValue={profile?.timezone ?? 'Asia/Colombo'} />

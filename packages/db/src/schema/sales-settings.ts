@@ -16,6 +16,15 @@ export const salesSettings = pgTable('sales_settings', {
   enforceCreditLimit: varchar('enforce_credit_limit', { length: 1 }).notNull().default('0'),
   /** 0 = edit anytime. Otherwise lock invoice/quote edits after this many days. */
   editLockDays: integer('edit_lock_days').notNull().default(0),
+  invoicePrefix: varchar('invoice_prefix', { length: 20 }).notNull().default('INV'),
+  invoicePostfix: varchar('invoice_postfix', { length: 20 }).notNull().default(''),
+  invoicePad: integer('invoice_pad').notNull().default(4),
+  invoiceReset: varchar('invoice_reset', { length: 20 }).notNull().default('monthly'),
+  quotePrefix: varchar('quote_prefix', { length: 20 }).notNull().default('QT'),
+  quotePostfix: varchar('quote_postfix', { length: 20 }).notNull().default(''),
+  quotePad: integer('quote_pad').notNull().default(4),
+  quoteReset: varchar('quote_reset', { length: 20 }).notNull().default('monthly'),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

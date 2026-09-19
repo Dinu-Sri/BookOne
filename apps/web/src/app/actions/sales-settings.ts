@@ -14,6 +14,14 @@ const schema = z.object({
   defaultInvoiceKind: z.enum(['commercial', 'tax_invoice']),
   enforceCreditLimit: z.boolean(),
   editLockDays: z.number().int().min(0).max(3650),
+  invoicePrefix: z.string().max(20).optional(),
+  invoicePostfix: z.string().max(20).optional(),
+  invoicePad: z.number().int().min(2).max(8).optional(),
+  invoiceReset: z.enum(['monthly', 'yearly', 'never']).optional(),
+  quotePrefix: z.string().max(20).optional(),
+  quotePostfix: z.string().max(20).optional(),
+  quotePad: z.number().int().min(2).max(8).optional(),
+  quoteReset: z.enum(['monthly', 'yearly', 'never']).optional(),
 });
 
 export interface SalesSettingsRow {
@@ -25,6 +33,14 @@ export interface SalesSettingsRow {
   defaultInvoiceKind: string;
   enforceCreditLimit: boolean;
   editLockDays: number;
+  invoicePrefix: string;
+  invoicePostfix: string;
+  invoicePad: number;
+  invoiceReset: string;
+  quotePrefix: string;
+  quotePostfix: string;
+  quotePad: number;
+  quoteReset: string;
 }
 
 const DEFAULTS: SalesSettingsRow = {
@@ -36,6 +52,14 @@ const DEFAULTS: SalesSettingsRow = {
   defaultInvoiceKind: 'commercial',
   enforceCreditLimit: false,
   editLockDays: 0,
+  invoicePrefix: 'INV',
+  invoicePostfix: '',
+  invoicePad: 4,
+  invoiceReset: 'monthly',
+  quotePrefix: 'QT',
+  quotePostfix: '',
+  quotePad: 4,
+  quoteReset: 'monthly',
 };
 
 export async function getSalesSettings(): Promise<SalesSettingsRow> {
@@ -56,6 +80,14 @@ export async function getSalesSettings(): Promise<SalesSettingsRow> {
       defaultInvoiceKind: row.defaultInvoiceKind,
       enforceCreditLimit: row.enforceCreditLimit === '1',
       editLockDays: Number(row.editLockDays ?? 0) || 0,
+      invoicePrefix: row.invoicePrefix || 'INV',
+      invoicePostfix: row.invoicePostfix || '',
+      invoicePad: Number(row.invoicePad ?? 4) || 4,
+      invoiceReset: row.invoiceReset || 'monthly',
+      quotePrefix: row.quotePrefix || 'QT',
+      quotePostfix: row.quotePostfix || '',
+      quotePad: Number(row.quotePad ?? 4) || 4,
+      quoteReset: row.quoteReset || 'monthly',
     };
   });
 }
@@ -71,6 +103,14 @@ export async function saveSalesSettingsFromForm(formData: FormData): Promise<voi
     enforceCreditLimit:
       formData.get('enforceCreditLimit') === 'on' || formData.get('enforceCreditLimit') === '1',
     editLockDays: Math.max(0, parseInt(String(formData.get('editLockDays') ?? '0'), 10) || 0),
+    invoicePrefix: String(formData.get('invoicePrefix') ?? 'INV'),
+    invoicePostfix: String(formData.get('invoicePostfix') ?? ''),
+    invoicePad: Math.min(8, Math.max(2, parseInt(String(formData.get('invoicePad') ?? '4'), 10) || 4)),
+    invoiceReset: String(formData.get('invoiceReset') ?? 'monthly'),
+    quotePrefix: String(formData.get('quotePrefix') ?? 'QT'),
+    quotePostfix: String(formData.get('quotePostfix') ?? ''),
+    quotePad: Math.min(8, Math.max(2, parseInt(String(formData.get('quotePad') ?? '4'), 10) || 4)),
+    quoteReset: String(formData.get('quoteReset') ?? 'monthly'),
   });
 
   const user = await requireTenantContext();
@@ -91,6 +131,14 @@ export async function saveSalesSettingsFromForm(formData: FormData): Promise<voi
       defaultInvoiceKind: parsed.defaultInvoiceKind,
       enforceCreditLimit: parsed.enforceCreditLimit ? '1' : '0',
       editLockDays: parsed.editLockDays,
+      invoicePrefix: (parsed.invoicePrefix ?? 'INV').trim() || 'INV',
+      invoicePostfix: (parsed.invoicePostfix ?? '').trim(),
+      invoicePad: parsed.invoicePad ?? 4,
+      invoiceReset: parsed.invoiceReset ?? 'monthly',
+      quotePrefix: (parsed.quotePrefix ?? 'QT').trim() || 'QT',
+      quotePostfix: (parsed.quotePostfix ?? '').trim(),
+      quotePad: parsed.quotePad ?? 4,
+      quoteReset: parsed.quoteReset ?? 'monthly',
       updatedAt: new Date(),
     };
 

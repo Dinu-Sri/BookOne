@@ -17,6 +17,7 @@ import {
 } from '@/components/module/brand-location-fields';
 import { documentHasRentalLines, EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
+import { DiscountPicker, type DiscountPick } from '@/components/sales/discount-picker';
 
 type PartyOpt = { id: string; name: string; code: string | null };
 type OrderOpt = { id: string; documentNumber: string; partyName: string; total: number; status: string };
@@ -50,6 +51,7 @@ export function InvoiceDocumentForm({
   openOrders,
   brands,
   locations,
+  discounts = [],
   draft,
 }: {
   products: ProductPick[];
@@ -63,6 +65,7 @@ export function InvoiceDocumentForm({
   openOrders: OrderOpt[];
   brands?: BrandOption[];
   locations?: LocationOption[];
+  discounts?: DiscountPick[];
   draft?: DraftInvoice;
 }) {
   const [lines, setLines] = useState<DocLineState[]>(() =>
@@ -87,6 +90,7 @@ export function InvoiceDocumentForm({
   const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>(
     draft && draft.headerDiscount > 0 ? 'fixed' : 'percent',
   );
+  const [discountId, setDiscountId] = useState('');
   const showExportFields = saleChannel === 'export';
   const showTaxFields = invoiceKind === 'tax_invoice';
   const showHireFields = documentHasRentalLines(lines, catalog);
@@ -106,15 +110,27 @@ export function InvoiceDocumentForm({
   const computed = useMemo(() => {
     const amts = computeLineAmounts(lines);
     const subtotal = Math.round(amts.reduce((s, a) => s + a, 0) * 100) / 100;
-    const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
-    const discountAmt = Math.min(
-      subtotal,
-      headerDiscountType === 'percent'
-        ? Math.round(((subtotal * v) / 100) * 100) / 100
-        : Math.round(v * 100) / 100,
-    );
+    let discountAmt = 0;
+    if (discountId) {
+      const d = discounts.find((x) => x.id === discountId);
+      if (d) {
+        discountAmt =
+          d.discountType === 'percent'
+            ? Math.round(((subtotal * Number(d.value)) / 100) * 100) / 100
+            : Number(d.value);
+      }
+    } else {
+      const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
+      if (v > 0) {
+        discountAmt =
+          headerDiscountType === 'percent'
+            ? Math.round(((subtotal * v) / 100) * 100) / 100
+            : Math.round(v * 100) / 100;
+      }
+    }
+    discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
-  }, [lines, headerDiscount, headerDiscountType]);
+  }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
 
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">
@@ -347,25 +363,16 @@ export function InvoiceDocumentForm({
             <input className="input" name="notes" defaultValue={draft?.notes ?? ''} />
           </div>
           <div className="field" style={{ margin: 0 }}>
-            <label>Invoice discount</label>
-            <div className="cluster" style={{ gap: 6 }}>
-              <select
-                className="input"
-                value={headerDiscountType}
-                onChange={(e) => setHeaderDiscountType(e.target.value as 'percent' | 'fixed')}
-                style={{ maxWidth: 90 }}
-              >
-                <option value="percent">%</option>
-                <option value="fixed">LKR</option>
-              </select>
-              <input
-                className="input"
-                inputMode="decimal"
-                value={headerDiscount}
-                onChange={(e) => setHeaderDiscount(e.target.value)}
-                placeholder="0"
-              />
-            </div>
+            <DiscountPicker
+              discounts={discounts}
+              discountId={discountId}
+              onDiscountId={setDiscountId}
+              headerDiscount={headerDiscount}
+              headerDiscountType={headerDiscountType}
+              onHeaderDiscount={setHeaderDiscount}
+              onHeaderDiscountType={setHeaderDiscountType}
+              amountLabel="Invoice discount"
+            />
           </div>
           <div className="doc-totals">
             <div className="doc-totals-row">

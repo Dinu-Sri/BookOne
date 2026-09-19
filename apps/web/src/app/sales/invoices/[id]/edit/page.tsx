@@ -68,6 +68,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
             openOrders={orders}
             brands={form.brands}
             locations={form.locations}
+            discounts={form.discounts}
             draft={{
               id: doc.id,
               documentNumber: doc.documentNumber,

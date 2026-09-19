@@ -12,7 +12,9 @@ import {
   rejectPurchaseDocumentAction,
   type CommercialDocDetail,
 } from '@/app/actions/commercial-docs';
-import { formatLKR, StatusBadge } from '@/components/module/list-page';
+import { formatLKR } from '@/components/module/list-page';
+import { StatusBadge } from '@/components/ui/status-help';
+import { statusFamilyFromDocType } from '@/lib/status-guide';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { PrintPreviewButton } from '@/components/print/print-preview-button';
@@ -208,7 +210,7 @@ export function CommercialDocumentDetail({
               <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>{title}</p>
               <h1 style={{ margin: '4px 0 8px', fontSize: 22 }}>{doc.documentNumber}</h1>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <StatusBadge status={doc.status} />
+                <StatusBadge status={doc.status} family={statusFamilyFromDocType(doc.documentType)} />
                 <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{doc.partyName}</span>
               </div>
               {doc.status === 'pending_approval' ? (

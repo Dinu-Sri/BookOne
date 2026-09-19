@@ -16,7 +16,9 @@ import {
 } from '@/app/actions/commercial-docs';
 import { DateRangePicker } from '@/components/layout/date-range-picker';
 import { pushStatusToast } from '@/components/layout/status-toast';
-import { formatLKR, StatusBadge } from '@/components/module/list-page';
+import { formatLKR } from '@/components/module/list-page';
+import { StatusBadge, StatusColumnHelp } from '@/components/ui/status-help';
+import { statusFamilyFromTitle } from '@/lib/status-guide';
 import { QuotationSnapshotDialog } from '@/components/sales/quotation-snapshot';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -103,6 +105,7 @@ export function CommercialDocumentList({
     null | { type: 'archive' | 'delete' | 'restore'; row: CommercialDocRow }
   >(null);
   const [mounted, setMounted] = useState(false);
+  const statusFamily = statusFamilyFromTitle(config.title);
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const menuPanelRef = useRef<HTMLDivElement | null>(null);
 
@@ -574,10 +577,13 @@ export function CommercialDocumentList({
                       </button>
                     </th>
                     <th>
-                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('status')}>
-                        Status
-                        <SortIcon active={sortKey === 'status'} dir={sortDir} />
-                      </button>
+                      <span className="th-status">
+                        <button type="button" className="th-sort-btn" onClick={() => toggleSort('status')}>
+                          Status
+                          <SortIcon active={sortKey === 'status'} dir={sortDir} />
+                        </button>
+                        <StatusColumnHelp family={statusFamily} />
+                      </span>
                     </th>
                     <th>
                       <button type="button" className="th-sort-btn" onClick={() => toggleSort('total')}>
@@ -608,7 +614,7 @@ export function CommercialDocumentList({
                       <td>{row.partyName}</td>
                       <td>{row.issueDate}</td>
                       <td>
-                        <StatusBadge status={row.status} />
+                        <StatusBadge status={row.status} family={statusFamily} />
                       </td>
                       <td>{formatLKR(row.total)}</td>
                       <td className="td-actions">

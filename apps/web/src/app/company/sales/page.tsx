@@ -10,6 +10,7 @@ import { getCompanySettingsData } from '@/app/actions/company-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Button } from '@/components/ui/bookone-ui';
+import { formatDocumentNumber } from '@/lib/document-number';
 
 export default async function CompanySalesSettingsPage() {
   let tenant;
@@ -113,6 +114,83 @@ export default async function CompanySalesSettingsPage() {
                   <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
                     When on, invoices that would push open AR above the party credit limit are blocked.
                     Set limits on the customer party master.
+                  </p>
+                </div>
+                <div className="field field-full">
+                  <p style={{ fontSize: 13, fontWeight: 800, margin: '8px 0 0' }}>Invoice numbering</p>
+                  <p className="party-hint">Used for commercial invoices (not tax invoice serials). Sequence counts documents in the reset window.</p>
+                </div>
+                <div className="field">
+                  <label>Invoice prefix</label>
+                  <input className="input" name="invoicePrefix" defaultValue={settings.invoicePrefix} placeholder="INV" />
+                </div>
+                <div className="field">
+                  <label>Invoice postfix</label>
+                  <input className="input" name="invoicePostfix" defaultValue={settings.invoicePostfix} placeholder="optional e.g. /WLK" />
+                </div>
+                <div className="field">
+                  <label>Invoice digits</label>
+                  <input className="input" name="invoicePad" inputMode="numeric" defaultValue={settings.invoicePad} />
+                </div>
+                <div className="field">
+                  <label>Invoice reset</label>
+                  <select className="input" name="invoiceReset" defaultValue={settings.invoiceReset}>
+                    <option value="monthly">Each month</option>
+                    <option value="yearly">Each year</option>
+                    <option value="never">Never (keep counting)</option>
+                  </select>
+                </div>
+                <div className="field field-full">
+                  <p className="party-hint">
+                    Example:{' '}
+                    <code>
+                      {formatDocumentNumber({
+                        prefix: settings.invoicePrefix,
+                        postfix: settings.invoicePostfix,
+                        pad: settings.invoicePad,
+                        reset: settings.invoiceReset === 'yearly' || settings.invoiceReset === 'never' ? settings.invoiceReset : 'monthly',
+                        date: new Date().toISOString().slice(0, 10),
+                        sequence: 1,
+                      })}
+                    </code>
+                  </p>
+                </div>
+                <div className="field field-full">
+                  <p style={{ fontSize: 13, fontWeight: 800, margin: '8px 0 0' }}>Quotation numbering</p>
+                </div>
+                <div className="field">
+                  <label>Quote prefix</label>
+                  <input className="input" name="quotePrefix" defaultValue={settings.quotePrefix} placeholder="QT" />
+                </div>
+                <div className="field">
+                  <label>Quote postfix</label>
+                  <input className="input" name="quotePostfix" defaultValue={settings.quotePostfix} placeholder="optional" />
+                </div>
+                <div className="field">
+                  <label>Quote digits</label>
+                  <input className="input" name="quotePad" inputMode="numeric" defaultValue={settings.quotePad} />
+                </div>
+                <div className="field">
+                  <label>Quote reset</label>
+                  <select className="input" name="quoteReset" defaultValue={settings.quoteReset}>
+                    <option value="monthly">Each month</option>
+                    <option value="yearly">Each year</option>
+                    <option value="never">Never (keep counting)</option>
+                  </select>
+                </div>
+                <div className="field field-full">
+                  <p className="party-hint">
+                    Example:{' '}
+                    <code>
+                      {formatDocumentNumber({
+                        prefix: settings.quotePrefix,
+                        postfix: settings.quotePostfix,
+                        pad: settings.quotePad,
+                        reset: settings.quoteReset === 'yearly' || settings.quoteReset === 'never' ? settings.quoteReset : 'monthly',
+                        date: new Date().toISOString().slice(0, 10),
+                        sequence: 1,
+                      })}
+                    </code>
                   </p>
                 </div>
                 <div className="field">

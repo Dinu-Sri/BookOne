@@ -353,10 +353,23 @@ export async function saveCompanyProfile(formData: FormData): Promise<void> {
     }
 
     await db().update(tenants).set({ name: parsed.legalName.trim(), updatedAt: new Date() }).where(eq(tenants.id, user.tenantId));
+
+    const tin = nullable(String(formData.get('tin') ?? ''));
+    const [taxRow] = await db()
+      .select({ id: taxProfiles.id })
+      .from(taxProfiles)
+      .where(and(eq(taxProfiles.tenantId, user.tenantId), isNull(taxProfiles.voidedAt)))
+      .limit(1);
+    if (taxRow) {
+      await db().update(taxProfiles).set({ tin, updatedAt: new Date() }).where(eq(taxProfiles.id, taxRow.id));
+    } else if (tin) {
+      await db().insert(taxProfiles).values({ tenantId: user.tenantId, tin });
+    }
   });
 
   revalidatePath('/settings');
   revalidatePath('/company/details');
+  revalidatePath('/company/tax');
 }
 
 export async function saveTaxProfile(formData: FormData): Promise<void> {

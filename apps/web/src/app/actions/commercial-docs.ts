@@ -61,6 +61,7 @@ import {
   persistRentalBookings,
 } from '@/app/actions/rental-bookings';
 import { INVOICE_TIMINGS, resolveHireWindow, type RentalEventInput } from '@/lib/rental-core';
+import { formatDocumentNumber, numberingWindow, type NumberReset } from '@/lib/document-number';
 
 export type CommercialDocType =
   | 'quotation'
@@ -443,22 +444,53 @@ async function assertOpenPeriod(tenantId: string, date: string) {
 }
 
 async function nextDocumentNumber(tenantId: string, type: string, date: string) {
-  const prefix = PREFIX[type] ?? 'DOC';
-  const compactDate = date.replace(/-/g, '');
+  let prefix = PREFIX[type] ?? 'DOC';
+  let postfix = '';
+  let pad = 4;
+  let reset: NumberReset = 'monthly';
+  if (type === 'sales_invoice' || type === 'customer_invoice' || type === 'quotation') {
+    const [ss] = await db()
+      .select()
+      .from(salesSettings)
+      .where(eq(salesSettings.tenantId, tenantId))
+      .limit(1);
+    if (ss) {
+      if (type === 'quotation') {
+        prefix = ss.quotePrefix || prefix;
+        postfix = ss.quotePostfix || '';
+        pad = Number(ss.quotePad ?? 4) || 4;
+        reset = (ss.quoteReset as NumberReset) || 'monthly';
+      } else {
+        prefix = ss.invoicePrefix || prefix;
+        postfix = ss.invoicePostfix || '';
+        pad = Number(ss.invoicePad ?? 4) || 4;
+        reset = (ss.invoiceReset as NumberReset) || 'monthly';
+      }
+    }
+  }
   const types = type === 'sales_invoice' ? ['sales_invoice', 'customer_invoice'] : [type];
+  const window = numberingWindow(reset, date);
+  const conditions = [
+    eq(businessDocuments.tenantId, tenantId),
+    inArray(businessDocuments.documentType, types),
+    isNull(businessDocuments.voidedAt),
+  ];
+  if (window.from && window.to) {
+    conditions.push(gte(businessDocuments.issueDate, window.from));
+    conditions.push(lte(businessDocuments.issueDate, window.to));
+  }
   const [{ total }] = await db()
     .select({ total: sql<number>`count(*)` })
     .from(businessDocuments)
-    .where(
-      and(
-        eq(businessDocuments.tenantId, tenantId),
-        inArray(businessDocuments.documentType, types),
-        gte(businessDocuments.issueDate, `${date.slice(0, 7)}-01`),
-        lte(businessDocuments.issueDate, `${date.slice(0, 7)}-31`),
-        isNull(businessDocuments.voidedAt),
-      ),
-    );
-  return `${prefix}-${compactDate}-${String(Number(total ?? 0) + 1).padStart(4, '0')}`;
+    .where(and(...conditions));
+  return formatDocumentNumber({
+    prefix,
+    postfix,
+    pad,
+    reset,
+    date,
+    sequence: Number(total ?? 0) + 1,
+  });
 }
 
 async function adjustStock(params: {

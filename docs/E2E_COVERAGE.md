@@ -7,11 +7,11 @@
 
 | Metric | Value |
 |--------|------:|
-| Catalog total | 737 |
-| IDs referenced in code | 737 |
+| Catalog total | 744 |
+| IDs referenced in code | 744 |
 | IDs missing | 0 |
 | Coverage (ID presence) | 100% |
-| Generated at | 2026-09-18T16:00:59.479Z |
+| Generated at | 2026-09-19T03:04:34.520Z |
 
 status=referenced means the catalog ID string appears in tests/ or src/ (execute handlers). It does not yet certify deep mutate/balance assertions — see docs/E2E_AUTOMATION.md phases.
 
@@ -31,10 +31,10 @@ status=referenced means the catalog ID string appears in tests/ or src/ (execute
 | 17. Validation error catalog (one per class) | 30 | 30 | 0 |
 | 5. Settings behavior matrix | 27 | 27 | 0 |
 | 12. Full business-day journeys | 26 | 26 | 0 |
+| 31. Team access (RBAC) | 26 | 26 | 0 |
 | 23. Quantity/price micro-matrix | 23 | 23 | 0 |
 | 14. Control Room / platform | 21 | 21 | 0 |
 | 1. Authentication & session | 20 | 20 | 0 |
-| 31. Team access (RBAC) | 19 | 19 | 0 |
 | 16. Numeric & data edges | 17 | 17 | 0 |
 | 3. Shell, navigation, period, module gating | 16 | 16 | 0 |
 | 15. Security & tenancy | 15 | 15 | 0 |

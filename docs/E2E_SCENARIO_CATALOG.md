@@ -6388,6 +6388,55 @@
 - **Steps:** Open `/sales/quotations`, click the view (eye) icon
 - **Expect:** Quotation detail page at `/sales/quotations/:id` (not 404). Number, customer, lines, and Convert to order.
 
+### S-0751 — Document style All documents option
+
+- **Priority:** P1
+- **Tags:** `@company`, `@print`
+- **Steps:** Open `/company/document-styles/new`
+- **Expect:** Document dropdown includes All documents (default). Brand dropdown lists All brands plus each brand.
+
+### S-0752 — Duplicate document style
+
+- **Priority:** P1
+- **Tags:** `@company`, `@print`
+- **Steps:** Open `/company/document-styles` with at least one style, click Duplicate
+- **Expect:** New style named “(copy)”, not active, edit screen opens.
+
+### S-0753 — Brand-specific document style
+
+- **Priority:** P1
+- **Tags:** `@company`, `@print`
+- **Steps:** New style, pick a brand, save and make active
+- **Expect:** List shows that brand. Prints for that brand use this style.
+
+### S-0754 — Invoice status help on list
+
+- **Priority:** P1
+- **Tags:** `@sales`, `@invoice`
+- **Steps:** Open `/sales/invoices`
+- **Expect:** Status column has a help icon. Hovering a status chip shows a meaning tooltip.
+
+### S-0755 — Sales numbering settings
+
+- **Priority:** P1
+- **Tags:** `@company`, `@sales`
+- **Steps:** Open `/company/sales`
+- **Expect:** Invoice and quotation prefix, postfix, digits, and reset fields.
+
+### S-0756 — Company details TIN
+
+- **Priority:** P1
+- **Tags:** `@company`
+- **Steps:** Open `/company/details`
+- **Expect:** TIN field on the company details form.
+
+### S-0757 — Discount code on new invoice
+
+- **Priority:** P1
+- **Tags:** `@sales`, `@invoice`
+- **Steps:** Open `/sales/invoices/new`
+- **Expect:** Discount code field and/or saved discount list plus % / LKR amount.
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

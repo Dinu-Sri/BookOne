@@ -145,6 +145,20 @@ test.describe('Sales lifecycle catalog §8 @sales @journey @p0', () => {
     }
   });
 
+  test('S-0754 Invoice status help on list', async ({ authedPage: page }) => {
+    await go(page, '/sales/invoices');
+    await expect(page.getByRole('button', { name: /invoice statuses/i })).toBeVisible();
+    await expectAuthedShell(page);
+  });
+
+  test('S-0757 Discount code on new invoice', async ({ authedPage: page }) => {
+    await go(page, '/sales/invoices/new');
+    const code = page.getByLabel(/discount code/i);
+    const amount = page.getByLabel(/invoice discount/i);
+    await expect(code.or(amount).first()).toBeVisible();
+    await expectAuthedShell(page);
+  });
+
   test('S-0193 Multi-SO same customer one invoice', async ({ authedPage: page }) => {
     // UI may support multi-select convert; open invoice new as baseline
     await createSalesDocMarked(page, 'order', { party: customer, line: `SO2 ${seed()}` });

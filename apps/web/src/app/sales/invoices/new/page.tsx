@@ -42,6 +42,7 @@ export default async function NewSalesInvoicePage() {
           openOrders={orders}
           brands={form.brands}
           locations={form.locations}
+          discounts={form.discounts}
         />
       </div>
     </BookOneShell>

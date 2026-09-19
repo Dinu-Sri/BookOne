@@ -74,6 +74,30 @@
       "feature_ref": "apps/web/src/components/sales/invoice-document-form.tsx",
       "added_at": "2026-09-18",
       "notes": "Catalog added. S-0750 quotation view page is in tests/06-sales-journey.spec.ts. Remaining: draft vs post, return picker, print polish."
+    },
+    {
+      "id": "BL-0007",
+      "kind": "new_scenario",
+      "related_scenarios": ["S-0751", "S-0752", "S-0753"],
+      "title": "Document style All documents, brand scope, and duplicate",
+      "priority": "P1",
+      "status": "planned",
+      "target_depth": "mutate",
+      "feature_ref": "apps/web/src/components/company/document-style-form.tsx",
+      "added_at": "2026-09-19",
+      "notes": "S-0751 load coverage in tests/12-settings-save.spec.ts. Duplicate and brand-specific mutate later."
+    },
+    {
+      "id": "BL-0008",
+      "kind": "new_scenario",
+      "related_scenarios": ["S-0754", "S-0755", "S-0756", "S-0757"],
+      "title": "Status help, sales numbering, company TIN, invoice discount codes",
+      "priority": "P1",
+      "status": "planned",
+      "target_depth": "mutate",
+      "feature_ref": "apps/web/src/components/ui/status-help.tsx",
+      "added_at": "2026-09-19",
+      "notes": "Load checks in 06-sales-journey and 12-settings-save. Numbering mutate and TIN persist later."
     }
   ]
 }

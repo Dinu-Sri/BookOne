@@ -80,4 +80,40 @@ test.describe('Company settings save catalog §27 @settings @p0', () => {
     await expect(page.getByRole('button', { name: /new style/i })).toBeVisible();
     await expectAuthedShell(page);
   });
+
+  test('S-0751 Document style All documents option', async ({ authedPage: page }) => {
+    await go(page, '/company/document-styles/new');
+    const kind = page.locator('select[name="docKind"]');
+    await expect(kind).toBeVisible();
+    await expect(kind).toHaveValue('all');
+    await expect(kind.locator('option[value="all"]')).toHaveCount(1);
+    await expect(page.locator('select[name="brandId"] option').first()).toHaveText(/all brands/i);
+    await expectAuthedShell(page);
+  });
+
+  test('S-0752 Duplicate document style', async ({ authedPage: page }) => {
+    await go(page, '/company/document-styles');
+    const dup = page.getByRole('button', { name: /^duplicate$/i }).first();
+    if (!(await dup.isVisible().catch(() => false))) {
+      await expect(page.getByRole('button', { name: /new style/i })).toBeVisible();
+      return;
+    }
+    await dup.click();
+    await page.waitForURL(/\/company\/document-styles\/[0-9a-f-]{8,}/i, { timeout: 15_000 }).catch(() => undefined);
+    await expectAuthedShell(page);
+    await expect(page.locator('input[name="name"]')).toHaveValue(/\(copy\)/i);
+  });
+
+  test('S-0755 Sales numbering settings', async ({ authedPage: page }) => {
+    await go(page, '/company/sales');
+    await expect(page.locator('input[name="invoicePrefix"]')).toBeVisible();
+    await expect(page.locator('input[name="quotePrefix"]')).toBeVisible();
+    await expectAuthedShell(page);
+  });
+
+  test('S-0756 Company details TIN', async ({ authedPage: page }) => {
+    await go(page, '/company/details');
+    await expect(page.locator('input[name="tin"]')).toBeVisible();
+    await expectAuthedShell(page);
+  });
 });

@@ -153,8 +153,13 @@ test.describe('Sales lifecycle catalog §8 @sales @journey @p0', () => {
 
   test('S-0759 Invoice combines same-customer sales orders', async ({ authedPage: page }) => {
     await go(page, '/sales/invoices/new');
+    const combine = page.getByRole('button', { name: /combine sales orders/i });
+    if (await combine.isVisible().catch(() => false)) {
+      await combine.click();
+      await expect(page.getByRole('heading', { name: /combine sales orders/i })).toBeVisible();
+      await page.getByRole('button', { name: /cancel/i }).click();
+    }
     await expect(page.getByText(/additional information/i)).toHaveCount(0);
-    await expect(page.locator('.doc-totals-live').or(page.getByText(/^total$/i)).first()).toBeVisible();
     await expectAuthedShell(page);
   });
 

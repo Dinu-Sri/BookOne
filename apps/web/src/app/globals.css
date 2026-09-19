@@ -3141,9 +3141,22 @@ textarea.input {
 
 .doc-form-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.7fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.9fr) minmax(200px, 0.7fr);
   gap: 12px;
   align-items: start;
+}
+
+.combine-so-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-muted, #f8fafc);
 }
 
 .doc-notes .input {

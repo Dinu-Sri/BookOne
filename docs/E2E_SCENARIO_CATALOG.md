@@ -6448,8 +6448,8 @@
 
 - **Priority:** P1
 - **Tags:** `@sales`, `@invoice`
-- **Steps:** Open `/sales/invoices/new` with open sales orders for a customer
-- **Expect:** Combine sales orders list. Ticking orders for the same customer loads their lines. Totals stay in the top bar. One Notes field (no Additional information).
+- **Steps:** Open `/sales/invoices/new`, click Combine sales orders near Back to list
+- **Expect:** Popup to pick customer, list that customer’s open orders, OK appends lines. Notes and discounts stay in the bottom of the invoice form.
 
 ---
 

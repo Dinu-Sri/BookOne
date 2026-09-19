@@ -96,6 +96,10 @@ export function InvoiceDocumentForm({
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [loadedBrandId, setLoadedBrandId] = useState(draft?.brandId ?? '');
   const [loadedLocationId, setLoadedLocationId] = useState(draft?.locationId ?? '');
+  const [combineOpen, setCombineOpen] = useState(false);
+  const [combineCustomer, setCombineCustomer] = useState('');
+  const [combinePicked, setCombinePicked] = useState<string[]>([]);
+  const [combineBusy, setCombineBusy] = useState(false);
   const showExportFields = saleChannel === 'export';
   const showTaxFields = invoiceKind === 'tax_invoice';
   const showHireFields = documentHasRentalLines(lines, catalog);
@@ -137,41 +141,62 @@ export function InvoiceDocumentForm({
     return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
   }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
 
-  const ordersForCustomer = useMemo(
-    () => openOrders.filter((o) => !partyName || o.partyName === partyName),
-    [openOrders, partyName],
+  const combineCustomers = useMemo(() => {
+    const names = [...new Set(openOrders.map((o) => o.partyName).filter(Boolean))];
+    names.sort((a, b) => a.localeCompare(b));
+    return names;
+  }, [openOrders]);
+
+  const combineOrders = useMemo(
+    () => (combineCustomer ? openOrders.filter((o) => o.partyName === combineCustomer) : []),
+    [openOrders, combineCustomer],
   );
 
-  async function toggleOrder(id: string, checked: boolean) {
-    const next = checked ? [...selectedOrderIds, id] : selectedOrderIds.filter((x) => x !== id);
-    setSelectedOrderIds(next);
-    if (next.length === 0) {
-      setLines([]);
+  function openCombine() {
+    setCombineCustomer(partyName && openOrders.some((o) => o.partyName === partyName) ? partyName : combineCustomers[0] ?? '');
+    setCombinePicked([]);
+    setCombineOpen(true);
+  }
+
+  async function applyCombinedOrders() {
+    if (combinePicked.length === 0) {
+      pushStatusToast({ kind: 'error', message: 'Tick at least one sales order.' });
       return;
     }
-    const loaded = await loadOrdersForInvoice(next);
-    if (!loaded) return;
-    if (loaded.error) {
-      pushStatusToast({ kind: 'error', message: loaded.error });
-      setSelectedOrderIds(selectedOrderIds);
-      return;
+    setCombineBusy(true);
+    try {
+      const loaded = await loadOrdersForInvoice(combinePicked);
+      if (!loaded) return;
+      if (loaded.error) {
+        pushStatusToast({ kind: 'error', message: loaded.error });
+        return;
+      }
+      if (loaded.partyName) setPartyName(loaded.partyName);
+      setLoadedBrandId(loaded.brandId ?? '');
+      setLoadedLocationId(loaded.locationId ?? '');
+      setSelectedOrderIds([...new Set([...selectedOrderIds, ...combinePicked])]);
+      setLines((prev) => [
+        ...prev,
+        ...loaded.lines.map((l) => ({
+          key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          productId: l.productId,
+          description: l.description,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          sku: l.sku,
+          isManual: !l.productId,
+          discountType: l.discountAmount ? ('fixed' as const) : ('percent' as const),
+          discountValue: l.discountAmount ?? '',
+        })),
+      ]);
+      setCombineOpen(false);
+      pushStatusToast({
+        kind: 'success',
+        message: `Added ${loaded.lines.length} line${loaded.lines.length === 1 ? '' : 's'} from ${combinePicked.length} order${combinePicked.length === 1 ? '' : 's'}.`,
+      });
+    } finally {
+      setCombineBusy(false);
     }
-    if (loaded.partyName) setPartyName(loaded.partyName);
-    setLoadedBrandId(loaded.brandId ?? '');
-    setLoadedLocationId(loaded.locationId ?? '');
-    setLines(
-      loaded.lines.map((l) => ({
-        key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        productId: l.productId,
-        description: l.description,
-        quantity: l.quantity,
-        unitPrice: l.unitPrice,
-        sku: l.sku,
-        isManual: !l.productId,
-        discountType: l.discountAmount ? 'fixed' : 'percent',
-        discountValue: l.discountAmount ?? '',
-      })),
-    );
   }
 
   return (
@@ -180,6 +205,9 @@ export function InvoiceDocumentForm({
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
       {draft ? <input type="hidden" name="existingDraftId" value={draft.id} /> : null}
+      {selectedOrderIds.map((id) => (
+        <input key={id} type="hidden" name="sourceOrderIds" value={id} />
+      ))}
 
       <div className="party-form-top">
         <Link href="/sales/invoices" className="party-back-btn">
@@ -189,21 +217,15 @@ export function InvoiceDocumentForm({
             <small>Sales invoices</small>
           </span>
         </Link>
-        <div className="doc-totals-live" aria-live="polite">
-          <div>
-            <span>Subtotal</span>
-            <strong>LKR {money(computed.subtotal)}</strong>
-          </div>
-          {computed.discountAmt > 0 ? (
-            <div>
-              <span>Discount</span>
-              <strong>− LKR {money(computed.discountAmt)}</strong>
-            </div>
-          ) : null}
-          <div className="is-total">
-            <span>Total</span>
-            <strong>LKR {money(computed.total)}</strong>
-          </div>
+        {openOrders.length > 0 ? (
+          <Button variant="secondary" type="button" onClick={openCombine}>
+            Combine sales orders
+          </Button>
+        ) : null}
+        <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
+          {draft
+            ? `Draft ${draft.documentNumber} · edit lines, then Post`
+            : 'Save draft to edit later · Post writes stock and ledger'}
         </div>
       </div>
 
@@ -364,64 +386,7 @@ export function InvoiceDocumentForm({
               </div>
             </>
           ) : null}
-          <div className="field field-span-2">
-            <label>Notes</label>
-            <input className="input" name="notes" defaultValue={draft?.notes ?? ''} placeholder="Optional notes on the invoice" />
-          </div>
-          <DiscountPicker
-            discounts={discounts}
-            discountId={discountId}
-            onDiscountId={setDiscountId}
-            headerDiscount={headerDiscount}
-            headerDiscountType={headerDiscountType}
-            onHeaderDiscount={setHeaderDiscount}
-            onHeaderDiscountType={setHeaderDiscountType}
-            amountLabel="Invoice discount"
-          />
         </div>
-
-        {ordersForCustomer.length > 0 ? (
-          <div className="doc-lines-card" style={{ minHeight: 0, maxHeight: 160 }}>
-            <div className="doc-lines-head">
-              <span>Combine sales orders</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)' }}>
-                Same customer only — tick orders to pull all lines onto this invoice
-              </span>
-            </div>
-            <div className="doc-lines-scroll">
-              <table className="doc-lines-table">
-                <thead>
-                  <tr>
-                    <th />
-                    <th>Number</th>
-                    <th>Customer</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ordersForCustomer.map((o) => (
-                    <tr key={o.id}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          name="sourceOrderIds"
-                          value={o.id}
-                          checked={selectedOrderIds.includes(o.id)}
-                          onChange={(e) => toggleOrder(o.id, e.target.checked)}
-                        />
-                      </td>
-                      <td>
-                        <strong>{o.documentNumber}</strong>
-                      </td>
-                      <td>{o.partyName}</td>
-                      <td>LKR {o.total.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : null}
 
         <DocumentLinesEditor
           products={catalog}
@@ -432,6 +397,41 @@ export function InvoiceDocumentForm({
             setCatalog((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))
           }
         />
+
+        <div className="doc-form-bottom">
+          <div className="field" style={{ margin: 0 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-muted)' }}>Notes</label>
+            <input className="input" name="notes" defaultValue={draft?.notes ?? ''} />
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <DiscountPicker
+              discounts={discounts}
+              discountId={discountId}
+              onDiscountId={setDiscountId}
+              headerDiscount={headerDiscount}
+              headerDiscountType={headerDiscountType}
+              onHeaderDiscount={setHeaderDiscount}
+              onHeaderDiscountType={setHeaderDiscountType}
+              amountLabel="Invoice discount"
+            />
+          </div>
+          <div className="doc-totals">
+            <div className="doc-totals-row">
+              <span>Subtotal</span>
+              <strong>LKR {money(computed.subtotal)}</strong>
+            </div>
+            {computed.discountAmt > 0 ? (
+              <div className="doc-totals-row">
+                <span>Discount</span>
+                <strong>− LKR {money(computed.discountAmt)}</strong>
+              </div>
+            ) : null}
+            <div className="doc-totals-row is-total">
+              <span>Total (ex-VAT)</span>
+              <strong>LKR {money(computed.total)}</strong>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="doc-form-footer">
@@ -450,6 +450,85 @@ export function InvoiceDocumentForm({
           Post & print
         </Button>
       </div>
+
+      {combineOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!combineBusy) setCombineOpen(false);
+          }}
+        >
+          <div
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="combine-so-title"
+            style={{ width: 'min(560px, 100%)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="combine-so-title" className="modal-title">
+              Combine sales orders
+            </h2>
+            <p className="modal-message">Pick a customer, tick their open orders, then OK to add those lines to this invoice.</p>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Customer</label>
+              <select
+                className="input"
+                value={combineCustomer}
+                onChange={(e) => {
+                  setCombineCustomer(e.target.value);
+                  setCombinePicked([]);
+                }}
+              >
+                {combineCustomers.length === 0 ? <option value="">No open orders</option> : null}
+                {combineCustomers.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="combine-so-list">
+              {combineOrders.length === 0 ? (
+                <p className="muted-line">No open sales orders for this customer.</p>
+              ) : (
+                combineOrders.map((o) => (
+                  <label key={o.id} className="party-check">
+                    <input
+                      type="checkbox"
+                      checked={combinePicked.includes(o.id)}
+                      onChange={(e) => {
+                        setCombinePicked((prev) =>
+                          e.target.checked ? [...prev, o.id] : prev.filter((id) => id !== o.id),
+                        );
+                      }}
+                    />
+                    <span>
+                      <strong>{o.documentNumber}</strong>
+                      {' · '}
+                      LKR {o.total.toLocaleString()}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="cluster" style={{ justifyContent: 'flex-end', marginTop: 16, gap: 8 }}>
+              <Button variant="secondary" type="button" disabled={combineBusy} onClick={() => setCombineOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                disabled={combineBusy || combinePicked.length === 0}
+                onClick={() => applyCombinedOrders()}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }

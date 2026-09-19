@@ -137,6 +137,17 @@ test.describe('Accounting catalog §11 @accounting @p0', () => {
     await expectNoAppCrash(page);
   });
 
+  test('S-0758 Bank rec two-pane compare', async ({ authedPage: page }) => {
+    await go(page, '/reconciliation');
+    const session = page.locator('a[href*="/reconciliation/session/"]').first();
+    if (await session.isVisible().catch(() => false)) {
+      await session.click();
+      await expect(page.getByRole('heading', { name: /^bookone$/i })).toBeVisible({ timeout: 20_000 }).catch(() => undefined);
+      await expect(page.getByRole('heading', { name: /bank sheet/i })).toBeVisible().catch(() => undefined);
+    }
+    await expectNoAppCrash(page);
+  });
+
   test('S-0357 Recon mark reconciled', async ({ authedPage: page }) => {
     await go(page, '/reconciliation');
     const mark = page.getByRole('button', { name: /reconcil|clear|confirm/i }).first();

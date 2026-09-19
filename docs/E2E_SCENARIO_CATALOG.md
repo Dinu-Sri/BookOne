@@ -6437,6 +6437,13 @@
 - **Steps:** Open `/sales/invoices/new`
 - **Expect:** Discount code field and/or saved discount list plus % / LKR amount.
 
+### S-0758 — Bank rec two-pane compare
+
+- **Priority:** P1
+- **Tags:** `@cashbook`, `@reconciliation`
+- **Steps:** Open a reconciliation session from bank imports
+- **Expect:** Two columns labelled BookOne and Bank sheet, Match and Add to BookOne actions. Not the eight-tab classic workbench by default.
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

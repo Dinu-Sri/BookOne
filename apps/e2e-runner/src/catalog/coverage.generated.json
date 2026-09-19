@@ -1,13 +1,13 @@
 {
   "summary": {
-    "generated_at": "2026-09-19T03:04:34.520Z",
-    "catalog_total": 744,
-    "referenced": 744,
+    "generated_at": "2026-09-19T03:22:23.247Z",
+    "catalog_total": 745,
+    "referenced": 745,
     "missing": 0,
     "coverage_pct": 100,
     "by_priority_referenced": {
       "P0": 337,
-      "P1": 320,
+      "P1": 321,
       "P2": 74,
       "P3": 13,
       "other": 0
@@ -112,8 +112,8 @@
       "referenced": 11
     },
     "31. Team access (RBAC)": {
-      "total": 26,
-      "referenced": 26
+      "total": 27,
+      "referenced": 27
     },
     "4. Company masters": {
       "total": 30,
@@ -10376,6 +10376,20 @@
       ],
       "referenced_in": [
         "tests/06-sales-journey.spec.ts"
+      ],
+      "status": "referenced"
+    },
+    {
+      "id": "S-0758",
+      "title": "Bank rec two-pane compare",
+      "section": "31. Team access (RBAC)",
+      "priority": "P1",
+      "tags": [
+        "@cashbook",
+        "@reconciliation"
+      ],
+      "referenced_in": [
+        "tests/08-accounting.spec.ts"
       ],
       "status": "referenced"
     }

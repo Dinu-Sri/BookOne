@@ -2028,7 +2028,9 @@ export async function createCaseEntry(input: {
         )
         .limit(1);
       if (!c) throw new Error('Case not found.');
-      if (c.caseType !== 'create_entry') throw new Error('This item is not an Add-to-BookOne case.');
+      if (c.caseType !== 'create_entry' && c.caseType !== 'transfer') {
+        throw new Error('This item is not an Add-to-BookOne case.');
+      }
       if (c.state === 'confirmed') throw new Error('Already added.');
 
       const [session] = await db()
@@ -3077,6 +3079,444 @@ export async function exportReconciliationSummary(
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Export failed.' };
+  }
+}
+
+// ─── Simple two-pane compare ─────────────────────────────────────────
+
+export type CompareSideRow = {
+  caseId: string;
+  bankLineId: string | null;
+  transactionId: string | null;
+  date: string;
+  description: string;
+  amount: number;
+  kind: 'suggested' | 'open';
+  hint: string | null;
+  pairCaseId: string | null;
+};
+
+export type CompareBoard = {
+  session: ReconSessionDetail['session'];
+  review: ReconReviewSummary;
+  bank: CompareSideRow[];
+  book: CompareSideRow[];
+  obviousCount: number;
+};
+
+const OPEN_CASE_STATES = ['suggested', 'needs_review', 'deferred', 'reopened'] as const;
+
+export async function getCompareBoard(
+  sessionId: string,
+): Promise<{ ok: true; board: CompareBoard } | { ok: false; error: string }> {
+  const opened = await openReconciliationSession(sessionId, { tab: 'all', page: 1, pageSize: 1 });
+  if (!opened.ok) return opened;
+  const user = await requireTenantContext();
+  try {
+    return await withTenantContext(user.tenantId, async () => {
+      const id = opened.detail.session.id;
+      const bankRows = await db()
+        .select({
+          caseId: bankReconciliationCases.id,
+          caseType: bankReconciliationCases.caseType,
+          state: bankReconciliationCases.state,
+          confidence: bankReconciliationCases.confidence,
+          explanation: bankReconciliationCases.explanation,
+          bankLineId: bankReconciliationCaseBankLines.bankLineId,
+          date: bankStatementLines.transactionDate,
+          description: bankStatementLines.description,
+          amount: bankStatementLines.amount,
+        })
+        .from(bankReconciliationCases)
+        .innerJoin(
+          bankReconciliationCaseBankLines,
+          and(
+            eq(bankReconciliationCaseBankLines.caseId, bankReconciliationCases.id),
+            isNull(bankReconciliationCaseBankLines.voidedAt),
+          ),
+        )
+        .innerJoin(bankStatementLines, eq(bankStatementLines.id, bankReconciliationCaseBankLines.bankLineId))
+        .where(
+          and(
+            eq(bankReconciliationCases.sessionId, id),
+            eq(bankReconciliationCases.tenantId, user.tenantId),
+            isNull(bankReconciliationCases.voidedAt),
+            inArray(bankReconciliationCases.caseType, ['match_1_1', 'create_entry', 'transfer', 'group_match']),
+            inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+          ),
+        )
+        .orderBy(desc(bankStatementLines.transactionDate));
+
+      const bookRows = await db()
+        .select({
+          caseId: bankReconciliationCases.id,
+          caseType: bankReconciliationCases.caseType,
+          state: bankReconciliationCases.state,
+          confidence: bankReconciliationCases.confidence,
+          explanation: bankReconciliationCases.explanation,
+          transactionId: bankReconciliationCaseBookTransactions.transactionId,
+          date: transactions.date,
+          description: transactions.description,
+          amount: transactions.amount,
+          direction: transactions.direction,
+          paymentAccountId: transactions.paymentAccountId,
+          transferSourceAccountId: transactions.transferSourceAccountId,
+        })
+        .from(bankReconciliationCases)
+        .innerJoin(
+          bankReconciliationCaseBookTransactions,
+          and(
+            eq(bankReconciliationCaseBookTransactions.caseId, bankReconciliationCases.id),
+            isNull(bankReconciliationCaseBookTransactions.voidedAt),
+          ),
+        )
+        .innerJoin(transactions, eq(transactions.id, bankReconciliationCaseBookTransactions.transactionId))
+        .where(
+          and(
+            eq(bankReconciliationCases.sessionId, id),
+            eq(bankReconciliationCases.tenantId, user.tenantId),
+            isNull(bankReconciliationCases.voidedAt),
+            inArray(bankReconciliationCases.caseType, ['outstanding_book', 'match_1_1']),
+            inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+          ),
+        )
+        .orderBy(desc(transactions.date));
+
+      const bank: CompareSideRow[] = bankRows.map((r) => {
+        const suggested = r.caseType === 'match_1_1';
+        return {
+          caseId: r.caseId,
+          bankLineId: r.bankLineId,
+          transactionId: null,
+          date: r.date,
+          description: r.description || 'Bank line',
+          amount: Number(r.amount),
+          kind: suggested ? 'suggested' : 'open',
+          hint: suggested
+            ? r.explanation || 'Looks like a BookOne entry'
+            : r.caseType === 'transfer'
+              ? 'May be a transfer — match it or add to BookOne'
+              : 'Not in BookOne yet',
+          pairCaseId: suggested ? r.caseId : null,
+        };
+      });
+
+      const bankAccountId = opened.detail.session.bankAccountId;
+      const book: CompareSideRow[] = bookRows.map((r) => {
+        const signed =
+          bookSignedAmount(
+            r.direction,
+            Number(r.amount),
+            r.paymentAccountId,
+            r.transferSourceAccountId,
+            bankAccountId,
+          ) ?? Number(r.amount);
+        const suggested = r.caseType === 'match_1_1';
+        return {
+          caseId: r.caseId,
+          bankLineId: null,
+          transactionId: r.transactionId,
+          date: r.date,
+          description: r.description || 'BookOne entry',
+          amount: signed,
+          kind: suggested ? 'suggested' : 'open',
+          hint: suggested
+            ? r.explanation || 'Looks like a bank line'
+            : 'On the books, not on this statement',
+          pairCaseId: suggested ? r.caseId : null,
+        };
+      });
+
+      const obviousCount = bankRows.filter(
+        (r) => r.caseType === 'match_1_1' && r.confidence === 'strong' && r.state === 'suggested',
+      ).length;
+
+      return {
+        ok: true as const,
+        board: {
+          session: opened.detail.session,
+          review: opened.detail.review ?? {
+            bankLines: opened.detail.session.bankLineCount,
+            matched: 0,
+            added: 0,
+            transfers: 0,
+            waiting: 0,
+            duplicates: 0,
+            groups: 0,
+            needsAttention: bank.length + book.filter((b) => b.kind === 'open').length,
+            bankClosing: opened.detail.session.statementClosingBalance,
+            bookClosing: opened.detail.session.bookClosingBalance,
+            outstandingNet: opened.detail.session.outstandingNet,
+            difference: opened.detail.session.differenceAmount,
+            canFinish: false,
+            finishBlockers: [],
+            status: opened.detail.session.status,
+          },
+          bank,
+          book,
+          obviousCount,
+        },
+      };
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not load compare board.' };
+  }
+}
+
+async function voidOpenCasesOwning(opts: {
+  tenantId: string;
+  sessionId: string;
+  bankLineIds?: string[];
+  transactionIds?: string[];
+}) {
+  const now = new Date();
+  const caseIds = new Set<string>();
+  if (opts.bankLineIds && opts.bankLineIds.length > 0) {
+    const owning = await db()
+      .select({ caseId: bankReconciliationCaseBankLines.caseId })
+      .from(bankReconciliationCaseBankLines)
+      .innerJoin(bankReconciliationCases, eq(bankReconciliationCases.id, bankReconciliationCaseBankLines.caseId))
+      .where(
+        and(
+          eq(bankReconciliationCases.sessionId, opts.sessionId),
+          isNull(bankReconciliationCases.voidedAt),
+          isNull(bankReconciliationCaseBankLines.voidedAt),
+          inArray(bankReconciliationCaseBankLines.bankLineId, opts.bankLineIds),
+          inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+        ),
+      );
+    for (const o of owning) caseIds.add(o.caseId);
+  }
+  if (opts.transactionIds && opts.transactionIds.length > 0) {
+    const owning = await db()
+      .select({ caseId: bankReconciliationCaseBookTransactions.caseId })
+      .from(bankReconciliationCaseBookTransactions)
+      .innerJoin(bankReconciliationCases, eq(bankReconciliationCases.id, bankReconciliationCaseBookTransactions.caseId))
+      .where(
+        and(
+          eq(bankReconciliationCases.sessionId, opts.sessionId),
+          isNull(bankReconciliationCases.voidedAt),
+          isNull(bankReconciliationCaseBookTransactions.voidedAt),
+          inArray(bankReconciliationCaseBookTransactions.transactionId, opts.transactionIds),
+          inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+        ),
+      );
+    for (const o of owning) caseIds.add(o.caseId);
+  }
+  const ids = [...caseIds];
+  if (ids.length === 0) return;
+  await db()
+    .update(bankReconciliationCases)
+    .set({ voidedAt: now, updatedAt: now })
+    .where(inArray(bankReconciliationCases.id, ids));
+  await db()
+    .update(bankReconciliationCaseBankLines)
+    .set({ voidedAt: now })
+    .where(inArray(bankReconciliationCaseBankLines.caseId, ids));
+  await db()
+    .update(bankReconciliationCaseBookTransactions)
+    .set({ voidedAt: now })
+    .where(inArray(bankReconciliationCaseBookTransactions.caseId, ids));
+}
+
+/** Match selected bank line(s) to selected BookOne entry(ies). */
+export async function matchBankToBook(input: {
+  sessionId: string;
+  bankLineIds: string[];
+  transactionIds: string[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const sessionId = z.string().uuid().parse(input.sessionId);
+    const bankLineIds = [...new Set(input.bankLineIds.filter(Boolean))];
+    const transactionIds = [...new Set(input.transactionIds.filter(Boolean))];
+    z.array(z.string().uuid()).min(1).max(12).parse(bankLineIds);
+    z.array(z.string().uuid()).min(1).max(8).parse(transactionIds);
+    if (bankLineIds.length > 1 && transactionIds.length > 1) {
+      return {
+        ok: false,
+        error: 'Match several bank lines to one BookOne entry, or several BookOne entries to one bank line — not both.',
+      };
+    }
+
+    if (bankLineIds.length > 1) {
+      return confirmManyBanksOneBook({
+        sessionId,
+        bankLineIds,
+        transactionId: transactionIds[0]!,
+      });
+    }
+    if (transactionIds.length > 1) {
+      const user = await requireTenantContext();
+      const caseId = await withTenantContext(user.tenantId, async () => {
+        const [row] = await db()
+          .select({ caseId: bankReconciliationCaseBankLines.caseId })
+          .from(bankReconciliationCaseBankLines)
+          .innerJoin(bankReconciliationCases, eq(bankReconciliationCases.id, bankReconciliationCaseBankLines.caseId))
+          .where(
+            and(
+              eq(bankReconciliationCases.sessionId, sessionId),
+              eq(bankReconciliationCaseBankLines.bankLineId, bankLineIds[0]!),
+              isNull(bankReconciliationCases.voidedAt),
+              isNull(bankReconciliationCaseBankLines.voidedAt),
+              inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+            ),
+          )
+          .limit(1);
+        if (!row) throw new Error('That bank line is not open in this session.');
+        return row.caseId;
+      });
+      return confirmGroupMatch({ caseId, transactionIds });
+    }
+
+    const user = await requireTenantContext();
+    const bankLineId = bankLineIds[0]!;
+    const transactionId = transactionIds[0]!;
+
+    const existing = await withTenantContext(user.tenantId, async () => {
+      const [pair] = await db()
+        .select({
+          caseId: bankReconciliationCases.id,
+          caseType: bankReconciliationCases.caseType,
+          bookId: bankReconciliationCaseBookTransactions.transactionId,
+        })
+        .from(bankReconciliationCases)
+        .innerJoin(
+          bankReconciliationCaseBankLines,
+          and(
+            eq(bankReconciliationCaseBankLines.caseId, bankReconciliationCases.id),
+            isNull(bankReconciliationCaseBankLines.voidedAt),
+            eq(bankReconciliationCaseBankLines.bankLineId, bankLineId),
+          ),
+        )
+        .leftJoin(
+          bankReconciliationCaseBookTransactions,
+          and(
+            eq(bankReconciliationCaseBookTransactions.caseId, bankReconciliationCases.id),
+            isNull(bankReconciliationCaseBookTransactions.voidedAt),
+          ),
+        )
+        .where(
+          and(
+            eq(bankReconciliationCases.sessionId, sessionId),
+            eq(bankReconciliationCases.tenantId, user.tenantId),
+            isNull(bankReconciliationCases.voidedAt),
+            eq(bankReconciliationCases.caseType, 'match_1_1'),
+            inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+          ),
+        )
+        .limit(1);
+      return pair;
+    });
+
+    if (existing && existing.bookId === transactionId) {
+      return confirmCaseMatch({ caseId: existing.caseId });
+    }
+
+    await withTenantContext(user.tenantId, async () => {
+      const [session] = await db()
+        .select()
+        .from(bankReconciliationSessions)
+        .where(
+          and(
+            eq(bankReconciliationSessions.id, sessionId),
+            eq(bankReconciliationSessions.tenantId, user.tenantId),
+            isNull(bankReconciliationSessions.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (!session) throw new Error('Session not found.');
+
+      const [line] = await db()
+        .select({
+          id: bankStatementLines.id,
+          date: bankStatementLines.transactionDate,
+          description: bankStatementLines.description,
+          amount: bankStatementLines.amount,
+        })
+        .from(bankStatementLines)
+        .where(and(eq(bankStatementLines.id, bankLineId), eq(bankStatementLines.tenantId, user.tenantId)))
+        .limit(1);
+      if (!line) throw new Error('Bank line not found.');
+
+      const books = await loadBookCandidates(
+        user.tenantId,
+        session.bankAccountId,
+        session.periodFrom,
+        session.periodTo,
+        session.bookDomain,
+      );
+      const book = books.find((b) => b.id === transactionId);
+      if (!book) throw new Error('BookOne entry is not in this period or account.');
+      const bankAmt = Number(line.amount);
+      if (Math.abs(bankAmt - book.amountSigned) > 0.02) {
+        throw new Error(
+          `Amounts differ (bank Rs. ${bankAmt.toFixed(2)} vs BookOne Rs. ${book.amountSigned.toFixed(2)}).`,
+        );
+      }
+
+      await voidOpenCasesOwning({
+        tenantId: user.tenantId,
+        sessionId,
+        bankLineIds: [bankLineId],
+        transactionIds: [transactionId],
+      });
+
+      const [created] = await db()
+        .insert(bankReconciliationCases)
+        .values({
+          tenantId: user.tenantId,
+          sessionId,
+          caseType: 'match_1_1',
+          confidence: 'strong',
+          state: 'confirmed',
+          matchMethod: 'manual',
+          explanation: 'Matched by comparing the two lists.',
+          reasonCodes: ['manual_compare'],
+          userLabel: 'Matched',
+          resultLabel: 'Confirmed',
+          sortDate: line.date,
+          sortAmount: bankAmt.toFixed(2),
+          confirmedBy: user.id,
+          confirmedAt: new Date(),
+        })
+        .returning({ id: bankReconciliationCases.id });
+
+      await db().insert(bankReconciliationCaseBankLines).values({
+        tenantId: user.tenantId,
+        caseId: created.id,
+        bankLineId,
+        allocatedAmount: bankAmt.toFixed(2),
+      });
+      await db().insert(bankReconciliationCaseBookTransactions).values({
+        tenantId: user.tenantId,
+        caseId: created.id,
+        transactionId,
+        allocatedAmount: book.amountSigned.toFixed(2),
+      });
+      await db()
+        .update(bankStatementLines)
+        .set({
+          status: 'reconciled',
+          matchedTransactionId: transactionId,
+          proposedAction: 'link',
+          matchMethod: 'manual',
+          reviewedByUserId: user.id,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(bankStatementLines.id, bankLineId));
+
+      await logEvent(user.tenantId, sessionId, user.id, 'match_confirmed', {
+        caseId: created.id,
+        after: { bankLineId, transactionId },
+      });
+      await refreshSessionCounts(user.tenantId, sessionId);
+    });
+
+    revalidateRecon();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not match.' };
   }
 }
 

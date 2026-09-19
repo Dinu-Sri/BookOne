@@ -98,6 +98,18 @@
       "feature_ref": "apps/web/src/components/ui/status-help.tsx",
       "added_at": "2026-09-19",
       "notes": "Load checks in 06-sales-journey and 12-settings-save. Numbering mutate and TIN persist later."
+    },
+    {
+      "id": "BL-0009",
+      "kind": "new_scenario",
+      "related_scenarios": ["S-0758"],
+      "title": "Two-pane bank reconciliation compare",
+      "priority": "P1",
+      "status": "planned",
+      "target_depth": "mutate",
+      "feature_ref": "apps/web/src/components/reconciliation/reconciliation-compare.tsx",
+      "added_at": "2026-09-19",
+      "notes": "Default session UI is BookOne | Bank sheet. Classic workbench remains at ?view=classic."
     }
   ]
 }

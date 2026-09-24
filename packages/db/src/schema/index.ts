@@ -54,6 +54,7 @@ export { rentalSettings } from './rental-settings';
 export { rentalEvents, rentalBookingLines, rentalReturnPhotos, rentalKitComponents, rentalSerials } from './rental';
 
 export { healthCheckRuns } from './health-check';
+export { opsRequestLogs, opsIdempotency } from './ops';
 export { posRegisters, posShifts } from './pos';
 export {
   tenantRoles,

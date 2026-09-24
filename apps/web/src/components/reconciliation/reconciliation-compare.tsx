@@ -15,6 +15,7 @@ import {
 } from '@/app/actions/bank-reconciliation';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button } from '@/components/ui/bookone-ui';
+import { emitFormPending } from '@/components/ui/form-busy';
 
 const OUT_CATS = [
   { code: '6600', label: 'Bank fees' },
@@ -103,16 +104,19 @@ export function ReconciliationCompare({
   }
 
   function run(fn: () => Promise<{ ok: boolean; error?: string; confirmed?: number }>, okMsg: string) {
+    emitFormPending(true);
     start(() => {
-      fn().then((res) => {
-        if (!res.ok) {
-          pushStatusToast({ kind: 'error', message: res.error ?? 'Could not save.' });
-          return;
-        }
-        const extra = res.confirmed != null ? ` (${res.confirmed})` : '';
-        pushStatusToast({ kind: 'success', message: `${okMsg}${extra}` });
-        load();
-      });
+      fn()
+        .then((res) => {
+          if (!res.ok) {
+            pushStatusToast({ kind: 'error', message: res.error ?? 'Could not save.' });
+            return;
+          }
+          const extra = res.confirmed != null ? ` (${res.confirmed})` : '';
+          pushStatusToast({ kind: 'success', message: `${okMsg}${extra}` });
+          load();
+        })
+        .finally(() => emitFormPending(false));
     });
   }
 

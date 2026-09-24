@@ -18,6 +18,7 @@ import {
 } from '@/components/module/brand-location-fields';
 import { documentHasRentalLines, EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
+import { IdempotencyField } from '@/components/ui/form-busy';
 import { DiscountPicker, type DiscountPick } from '@/components/sales/discount-picker';
 
 type PartyOpt = { id: string; name: string; code: string | null };
@@ -204,6 +205,7 @@ export function InvoiceDocumentForm({
       <input type="hidden" name="documentType" value="sales_invoice" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
+      <IdempotencyField />
       {draft ? <input type="hidden" name="existingDraftId" value={draft.id} /> : null}
       {selectedOrderIds.map((id) => (
         <input key={id} type="hidden" name="sourceOrderIds" value={id} />

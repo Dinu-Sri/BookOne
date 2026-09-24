@@ -25,6 +25,7 @@ import {
 } from '@/components/module/brand-location-fields';
 import { documentHasRentalLines, EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
+import { IdempotencyField } from '@/components/ui/form-busy';
 import { DiscountPicker } from '@/components/sales/discount-picker';
 
 type PartyOpt = {
@@ -203,6 +204,7 @@ export function SalesDocumentForm({
 
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">
+      <IdempotencyField />
       <input type="hidden" name="documentType" value={documentType} />
       <input type="hidden" name="saleChannel" value="local" />
       <input type="hidden" name="invoiceKind" value="commercial" />

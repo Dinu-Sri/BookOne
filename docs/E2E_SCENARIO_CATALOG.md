@@ -6451,6 +6451,13 @@
 - **Steps:** Open `/sales/invoices/new`, click Combine sales orders near Back to list
 - **Expect:** Popup to pick customer, list that customer’s open orders, OK appends lines. Notes and discounts stay in the bottom of the invoice form.
 
+### S-0760 — Ops logs gate is public
+
+- **Priority:** P1
+- **Tags:** `@platform`
+- **Steps:** Open `/ops/logs` logged out
+- **Expect:** Password form, not redirected to /login.
+
 ---
 
 *Catalog complete. Next: implement Playwright specs mapped to these IDs/tags.*

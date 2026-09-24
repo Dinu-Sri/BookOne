@@ -26,6 +26,7 @@ import {
   type LocationOption,
 } from '@/components/module/brand-location-fields';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { IdempotencyField } from '@/components/ui/form-busy';
 
 /** Parties-style list: toolbar + table (basic — prefer CommercialDocumentList) */
 export function CommercialDocList({
@@ -272,6 +273,7 @@ export function CommercialDocNewForm({
   return (
     <div className="workspace party-workspace">
       <form action={createCommercialDocumentFromForm} className="doc-form-shell">
+        <IdempotencyField />
         <input type="hidden" name="documentType" value={documentType} />
         <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
         <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />

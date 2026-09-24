@@ -549,10 +549,20 @@ export async function receiveCustomerPayments(input: {
   paymentDate: string;
   paymentAccountCode: string;
   allocations: { documentId: string; amount: number }[];
+  idempotencyKey?: string | null;
 }): Promise<{ ok: boolean; error?: string; paidCount?: number }> {
+  const started = Date.now();
   try {
     const { assertPermission } = await import('@/lib/access');
     await assertPermission('sales.payments.write', 'write');
+    const { requireTenantContext } = await import('@bookone/auth');
+    const user = await requireTenantContext();
+    const { claimIdempotency, writeIdempotency } = await import('@/lib/idempotency');
+    const claim = await withTenantContext(user.tenantId, () =>
+      claimIdempotency(user.tenantId, input.idempotencyKey),
+    );
+    if (claim.state === 'done') return claim.result as { ok: boolean; paidCount?: number };
+    if (claim.state === 'busy') return { ok: false, error: 'This payment is already running. Wait a moment.' };
     const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(input.paymentDate);
     const account = z.string().min(1).max(20).parse(input.paymentAccountCode);
     const allocations = input.allocations.filter((a) => a.amount > 0);
@@ -574,9 +584,16 @@ export async function receiveCustomerPayments(input: {
     revalidatePath('/sales/payments');
     revalidatePath('/sales/invoices');
     revalidatePath('/sales/aging');
-    return { ok: true, paidCount };
+    const out = { ok: true as const, paidCount };
+    await withTenantContext(user.tenantId, () => writeIdempotency(user.tenantId, input.idempotencyKey, out));
+    const { logIfSlow } = await import('@/lib/ops-log');
+    await logIfSlow('action:receiveCustomerPayments', started, { status: 'ok', message: String(paidCount) });
+    return out;
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Receive payment failed.' };
+    const message = e instanceof Error ? e.message : 'Receive payment failed.';
+    const { logOps } = await import('@/lib/ops-log');
+    await logOps({ kind: 'error', path: 'action:receiveCustomerPayments', status: 'error', message });
+    return { ok: false, error: message };
   }
 }
 

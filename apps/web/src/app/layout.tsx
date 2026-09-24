@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Noto_Serif_Sinhala } from 'next/font/google';
+import { FormBusyGuard } from '@/components/ui/form-busy';
 import './globals.css';
 
 /**
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`light ${notoSerifSinhala.variable}`} suppressHydrationWarning>
       <body className={notoSerifSinhala.variable} suppressHydrationWarning>
         {children}
+        <FormBusyGuard />
       </body>
     </html>
   );

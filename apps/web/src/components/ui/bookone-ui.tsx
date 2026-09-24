@@ -1,5 +1,15 @@
-import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from 'react';
+'use client';
+
+import {
+  forwardRef,
+  useEffect,
+  type ComponentPropsWithoutRef,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
+import { useFormStatus } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
+import { emitFormPending } from '@/components/ui/form-busy';
 
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -23,8 +33,39 @@ export function BrandLockup({ compact = false }: { compact?: boolean }) {
 export const Button = forwardRef<
   HTMLButtonElement,
   ComponentPropsWithoutRef<'button'> & { variant?: 'primary' | 'secondary' | 'ghost' | 'icon' }
->(function Button({ variant = 'secondary', className = '', type = 'button', ...props }, ref) {
-  return <button ref={ref} className={`button ${variant} ${className}`.trim()} type={type} {...props} />;
+>(function Button({ variant = 'secondary', className = '', type = 'button', children, disabled, onClick, ...props }, ref) {
+  const { pending } = useFormStatus();
+  const isSubmit = type === 'submit';
+  const busy = pending && isSubmit;
+  const locked = Boolean(disabled) || pending;
+
+  useEffect(() => {
+    if (isSubmit) emitFormPending(pending);
+  }, [pending, isSubmit]);
+
+  function handleClick(e: MouseEvent<HTMLButtonElement>) {
+    if (locked) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    onClick?.(e);
+  }
+
+  return (
+    <button
+      ref={ref}
+      className={`button ${variant} ${className}`.trim()}
+      type={type}
+      disabled={locked}
+      aria-busy={busy || undefined}
+      onClick={handleClick}
+      {...props}
+    >
+      {busy ? <span className="btn-spinner" aria-hidden /> : null}
+      {children}
+    </button>
+  );
 });
 
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {

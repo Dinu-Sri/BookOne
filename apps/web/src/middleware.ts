@@ -29,6 +29,8 @@ function isPublicPath(pathname: string): boolean {
   // E2E console + runner APIs (no session; credentials entered for the test run only).
   if (pathname === '/e2e' || pathname.startsWith('/e2e/')) return true;
   if (pathname === '/api/e2e' || pathname.startsWith('/api/e2e/')) return true;
+  if (pathname === '/ops/logs' || pathname.startsWith('/ops/logs')) return true;
+  if (pathname === '/api/ops' || pathname.startsWith('/api/ops/')) return true;
   return false;
 }
 

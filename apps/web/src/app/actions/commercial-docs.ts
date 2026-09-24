@@ -148,6 +148,7 @@ const createSchema = z.object({
   invoiceTiming: z.enum(INVOICE_TIMINGS).optional(),
   confirmTimingOverride: z.boolean().optional(),
   intent: z.enum(['draft', 'post', 'post_print']).optional().default('post'),
+  idempotencyKey: z.string().max(80).optional().nullable(),
   existingDraftId: z.string().uuid().optional().nullable(),
   lines: z.array(lineSchema).min(1),
 });
@@ -867,13 +868,29 @@ function permissionForDocumentType(documentType: string): string {
 export async function createCommercialDocument(
   input: z.input<typeof createSchema>,
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
+  const started = Date.now();
+  let parsedType = 'document';
   try {
     const parsed = createSchema.parse(input);
+    parsedType = parsed.documentType;
     const user = await requireTenantContext();
     const { assertPermission } = await import('@/lib/access');
     const perm = permissionForDocumentType(parsed.documentType);
     if (!perm) return { ok: false, error: 'You do not have permission to do that.' };
     await assertPermission(perm, 'write');
+    const { claimIdempotency, writeIdempotency } = await import('@/lib/idempotency');
+    const { logIfSlow, logOps } = await import('@/lib/ops-log');
+    if (parsed.intent !== 'draft') {
+      const claim = await withTenantContext(user.tenantId, () =>
+        claimIdempotency(user.tenantId, parsed.idempotencyKey),
+      );
+      if (claim.state === 'done') {
+        return claim.result as { ok: boolean; id?: string };
+      }
+      if (claim.state === 'busy') {
+        return { ok: false, error: 'This save is already running. Wait a moment.' };
+      }
+    }
     const isSales = (SALES_TYPES as readonly string[]).includes(parsed.documentType);
     const party = await ensureParty({
       name: parsed.partyName,
@@ -2118,9 +2135,20 @@ export async function createCommercialDocument(
     revalidatePath('/inventory/products');
     revalidatePath('/inventory/levels');
     revalidatePath('/inventory/calendar');
+    if (parsed.intent !== 'draft') {
+      await withTenantContext(user.tenantId, () =>
+        writeIdempotency(user.tenantId, parsed.idempotencyKey, { ok: true, id }),
+      );
+    }
+    await logIfSlow(`action:create:${parsed.documentType}:${parsed.intent ?? 'post'}`, started, {
+      status: 'ok',
+      message: id,
+    });
     return { ok: true, id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not create document.';
+    const { logOps } = await import('@/lib/ops-log');
+    await logOps({ kind: 'error', path: `action:create:${parsedType}`, status: 'error', message });
     return { ok: false, error: message };
   }
 }
@@ -2211,6 +2239,7 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     collectAt: String(formData.get('collectAt') ?? ''),
     packingNotes: String(formData.get('packingNotes') ?? ''),
     existingDraftId: String(formData.get('existingDraftId') ?? '') || null,
+    idempotencyKey: String(formData.get('idempotencyKey') ?? '') || null,
     confirmOverlap: formData.get('confirmOverlap') === 'on',
     overlapOverrideReason: String(formData.get('overlapOverrideReason') ?? ''),
     intent: ((): 'draft' | 'post' | 'post_print' => {

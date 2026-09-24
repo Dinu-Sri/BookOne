@@ -790,6 +790,50 @@ img {
   padding: 0;
 }
 
+.button:disabled,
+.button[aria-busy='true'] {
+  opacity: 0.72;
+  pointer-events: none;
+  cursor: wait;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: btn-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+.form-busy-root.is-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.28);
+  pointer-events: all;
+}
+
+.form-busy-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
 .input,
 .select-like {
   width: 100%;
@@ -9528,3 +9572,25 @@ a.bih-card:hover {
   .brc-board { grid-template-columns: 1fr; }
   .brc-list { max-height: 42vh; }
 }
+
+.ops-log-page {
+  min-height: 100vh;
+  margin: 0;
+  padding: 24px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+.ops-log-page h1 { margin: 0 0 8px; font-size: 22px; }
+.ops-log-gate { max-width: 360px; display: grid; gap: 10px; }
+.ops-log-gate .input { background: #1e293b; color: #fff; border-color: #334155; }
+.ops-log-head p { color: #94a3b8; max-width: 40rem; }
+.ops-log-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+.ops-log-table th, .ops-log-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #1e293b;
+  vertical-align: top;
+  word-break: break-word;
+}
+.ops-log-table th { color: #93c5fd; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }

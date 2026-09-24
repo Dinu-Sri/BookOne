@@ -8,6 +8,7 @@ import type { OpenArInvoice } from '@/app/actions/commercial-docs';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { emitFormPending } from '@/components/ui/form-busy';
 
 export function ReceivePaymentsForm({
   invoices,
@@ -71,31 +72,38 @@ export function ReceivePaymentsForm({
       return;
     }
 
+    const idempotencyKey = crypto.randomUUID();
+    emitFormPending(true);
     startTransition(async () => {
-      const res = await receiveCustomerPayments({
-        paymentDate,
-        paymentAccountCode: accountCode,
-        allocations,
-      });
-      if (!res.ok) {
-        pushStatusToast({ kind: 'error', message: res.error ?? 'Payment failed' });
-        return;
+      try {
+        const res = await receiveCustomerPayments({
+          paymentDate,
+          paymentAccountCode: accountCode,
+          allocations,
+          idempotencyKey,
+        });
+        if (!res.ok) {
+          pushStatusToast({ kind: 'error', message: res.error ?? 'Payment failed' });
+          return;
+        }
+        pushStatusToast({
+          kind: 'success',
+          message: `Received ${res.paidCount} payment${res.paidCount === 1 ? '' : 's'} · LKR ${totalReceive.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        });
+        const params = new URLSearchParams({
+          date: paymentDate,
+          account: accountCode,
+          total: String(totalReceive),
+        });
+        for (const a of allocations) {
+          params.append('doc', a.documentId);
+          params.append('amt', String(a.amount));
+        }
+        router.push(`/sales/payments/receipt?${params.toString()}`);
+        router.refresh();
+      } finally {
+        emitFormPending(false);
       }
-      pushStatusToast({
-        kind: 'success',
-        message: `Received ${res.paidCount} payment${res.paidCount === 1 ? '' : 's'} · LKR ${totalReceive.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-      });
-      const params = new URLSearchParams({
-        date: paymentDate,
-        account: accountCode,
-        total: String(totalReceive),
-      });
-      for (const a of allocations) {
-        params.append('doc', a.documentId);
-        params.append('amt', String(a.amount));
-      }
-      router.push(`/sales/payments/receipt?${params.toString()}`);
-      router.refresh();
     });
   }
 

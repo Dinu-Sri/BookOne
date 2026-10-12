@@ -2,16 +2,11 @@
 # Compose path in Portainer: docker/docker-compose.staging.yml
 #
 # ── Selective builds (turn services on/off) ─────────────────────────────
-# Always on: traefik, postgres, redis, minio, cloudflared
-# Optional (Compose profiles):
-#   docs  — COMPOSE_PROFILES=docs
-#   erp   — COMPOSE_PROFILES=erp  (web). Set WEB_IMAGE to the local image name.
+# Always on: traefik, web, postgres, redis, minio, cloudflared
+# Optional: docs — COMPOSE_PROFILES=docs
 #
-# Portainer Git "Update" compiles every service with `build:` and fails the
-# whole stack if that compile (or a missing image) errors. Web is therefore
-# profile `erp` so postgres/minio/traefik can start without it.
-# After infra is up: Portainer → Images → copy the old web image name into
-# WEB_IMAGE, set COMPOSE_PROFILES=erp (or erp,docs), Update with Re-pull OFF.
+# Web uses the local image bookone_stage-web:latest (no build, no new env vars).
+# Portainer Update with Re-pull OFF. Never re-pull MinIO.
 #
 # Hosts (one subdomain level under clossyan.com for free SSL):
 #   WEB_HOST=bookone.clossyan.com
@@ -40,10 +35,9 @@ services:
       - bookone_network
     restart: unless-stopped
 
-  # ── ERP — enable with COMPOSE_PROFILES=erp and WEB_IMAGE=<local image>
+  # ── ERP — local image already on the VPS (Portainer Images list)
   web:
-    profiles: ["erp"]
-    image: ${WEB_IMAGE:-bookone_stage-web}
+    image: bookone_stage-web:latest
     pull_policy: never
     container_name: bookone-staging-web
     environment:

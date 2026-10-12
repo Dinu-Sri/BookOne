@@ -199,4 +199,12 @@ Kept: Control Room health-check (incl. migration `019`), company reset, `scripts
 4. Branch protection / deploy promotion still advisory; product CI `production-check.yml` uses `continue-on-error` for lint/build/test.
 5. Operator must stop `bookone-staging-e2e` / Cloudflare `bookone-e2e.clossyan.com`; not in Git.
 
+## Independent merge review
+
+- Reviewer pass on 2026-10-12 confirmed the branch is three commits ahead of `master` with no product schema or migration changes.
+- Re-ran accounting unit tests: 60 passed. Re-ran statement-import tests: 26 passed, 4 inherited optional-fixture skips.
+- Confirmed the graph index at the branch SHA retained stale deleted-file nodes, so final absence checks used the checked-out branch and Git search.
+- Removed remaining active documentation instructions that pointed agents at the retired product `/e2e` route, catalog, or runner.
+- Local Node 20 install/postinstall and web typecheck remain unsuitable for release evidence because the repository requires Node 22+; the exact candidate must pass the repository's Node 24 GitHub workflow before merge.
+
 Wave 0 inventory, Wave 1a QA companion, and Wave 1b product deletion are on this branch. Do not merge to `master` until reviewed. Denial evidence belongs to the deployed cleaned candidate.

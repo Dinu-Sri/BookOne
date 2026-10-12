@@ -29,7 +29,7 @@ Canonical public QA project: https://github.com/Dinu-Sri/bookone-qa. All develop
 > **Audience:** Anyone joining the project (yourself, future AI agents, or a teammate).
 > **Last updated:** 2026-06-16
 > **Live URL:** https://bookone.clossyan.com
-> **Admin login:** dinu.sri.m@gmail.com / 12345678
+> **Admin access:** Use the approved secret store; never put credentials in this public repository.
 
 This is the single canonical document for **what's built, what's running, what broke and how we fixed it, how to deploy, how to develop locally, and what's next.** It is the companion to `AGENTS.md` (which is AI-specific) and `docs/DEPLOYMENT_WORKFLOW.md` (which is the operational runbook).
 
@@ -454,7 +454,7 @@ A chronological log of every blocker we hit during deployment and the exact fix.
 ### 10.8 DATABASE_URL password mismatch
 
 - **Symptom:** `password authentication failed for user "bookone"`.
-- **Cause:** `DATABASE_URL` contained `bookone:bookone` but the Postgres container was created with a different password.
+- **Cause:** `DATABASE_URL` contained `<db-user>:<db-password>` but the Postgres container was created with a different password.
 - **Fix:** Make sure `DATABASE_URL`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` in Portainer all match what the `postgres` service in compose expects. `DATABASE_URL` should be:
   `postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}`
 
@@ -531,7 +531,7 @@ Additional BookOne-specific conventions:
 **Manual smoke test (use after every deploy):**
 
 1. Open https://bookone.clossyan.com/login
-2. Sign in with `dinu.sri.m@gmail.com` / `12345678`
+2. Sign in with an authorized staging test account from the approved secret store.
 3. Verify the build stamp in the corner is the latest
 4. Click Dashboard → should show real metrics
 5. Click Simple Entry → fill in form, submit → "Entry recorded. Journal #..."

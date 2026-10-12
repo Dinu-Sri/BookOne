@@ -2,23 +2,27 @@
 # Layered for cache: deps install only re-runs when lockfiles change.
 FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat
-RUN npm install -g pnpm@9
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+# Pin to package.json packageManager. `pnpm@9` floats and can fail frozen-lockfile.
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 FROM base AS deps
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV CI=true
 
-# Copy only dependency manifests first (best cache hit rate)
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+# Copy every workspace manifest the lockfile knows about (not apps/* glob).
+# A leftover apps/e2e-runner dir on the VPS must not become a workspace package.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json .npmrc ./
 COPY apps/web/package.json ./apps/web/
+COPY apps/docs/package.json ./apps/docs/
+COPY apps/workers/package.json ./apps/workers/
 COPY packages/accounting/package.json ./packages/accounting/
 COPY packages/auth/package.json ./packages/auth/
 COPY packages/db/package.json ./packages/db/
 COPY packages/modules/package.json ./packages/modules/
 COPY packages/statement-import/package.json ./packages/statement-import/
 COPY packages/ui/package.json ./packages/ui/
-
-# Optional packages if present in lockfile workspace
 COPY packages/db/drizzle.config.ts ./packages/db/drizzle.config.ts
 
 # Ignore scripts here: apps/web postinstall runs `fumadocs-mdx` which needs
@@ -34,7 +38,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages ./packages
-COPY --from=deps /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/turbo.json /app/tsconfig.base.json ./
+COPY --from=deps /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/turbo.json /app/tsconfig.base.json /app/.npmrc ./
+COPY --from=deps /app/apps/docs/package.json ./apps/docs/
+COPY --from=deps /app/apps/workers/package.json ./apps/workers/
 
 # App sources (invalidates cache only when code changes)
 COPY apps/web ./apps/web

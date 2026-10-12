@@ -1,3 +1,7 @@
+## 2026-10-12 — Portainer web image install hotfix
+
+Wave 1b is on `master` (`2bbc334`). Portainer failed at `pnpm install --frozen-lockfile --ignore-scripts`. Dockerfile now pins pnpm 9.0.0 and copies every remaining workspace manifest. Pull `master` and rebuild web only (never MinIO). Then run bookone-qa denial tests S-0031–S-0033.
+
 ## 2026-10-12 — Inbuilt E2E cleanup Wave 1b (product delete)
 
 Branch `chore/remove-inbuilt-e2e` removes the inbuilt runner, `/e2e`, `/api/e2e/**`, and e2e Docker. Tests live in https://github.com/Dinu-Sri/bookone-qa (`0ed1195`). Do not merge to `master` until reviewed. After deploy, run QA denial tests S-0031–S-0033. Operator: stop `bookone-staging-e2e` and the `bookone-e2e.clossyan.com` tunnel. Health-check, company reset, seeds, migrations, MinIO, `/ops/logs` stay.

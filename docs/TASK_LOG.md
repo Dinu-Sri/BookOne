@@ -1,3 +1,9 @@
+## 2026-10-12 — Portainer frozen-lockfile after Wave 1b merge
+
+- `master` merge `2bbc334` made Portainer rebuild the web deps layer. Install failed at `pnpm install --frozen-lockfile --ignore-scripts`.
+- Fix: pin pnpm 9.0.0 in `Dockerfile.web`; copy `apps/docs` and `apps/workers` manifests; replace `apps/*` workspace glob with explicit packages; add `.npmrc` supported architectures for Alpine musl.
+- Local: frozen-lockfile still up to date (10 projects). Docker CLI not on this machine. Owner should pull/redeploy **web only**.
+
 ## 2026-10-12 — Wave 1b: remove inbuilt E2E from BookOne
 
 - Branch `chore/remove-inbuilt-e2e`. Deleted `apps/e2e-runner/`, `/e2e` page, `/api/e2e/**`, e2e Docker service/image, product `E2E_*` env, catalog export scripts, root `test:e2e` / `agent:browse`.

@@ -5,9 +5,8 @@
 # Always on: traefik, web, postgres, redis, minio, cloudflared
 # Optional: docs — COMPOSE_PROFILES=docs
 #
-# Web compiles from docker/Dockerfile.web and tags bookone_stage-web:latest.
-# Portainer Update with Re-pull OFF (MinIO must not hit Docker Hub).
-# Build takes several minutes. If compile fails, the stack can go down again.
+# Web runs the local image until GitHub Action "Docker web image" is green.
+# Do not compile on Portainer while pnpm install still exits 1.
 #
 # Hosts (one subdomain level under clossyan.com for free SSL):
 #   WEB_HOST=bookone.clossyan.com
@@ -36,14 +35,10 @@ services:
       - bookone_network
     restart: unless-stopped
 
-  # ── ERP — build on Update, keep the Portainer image name
+  # ── ERP — local image (compile is off until Docker web image CI is green)
   web:
     image: bookone_stage-web:latest
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.web
-      args:
-        BUILD_DATE: "${BUILD_DATE:-0}"
+    pull_policy: never
     container_name: bookone-staging-web
     environment:
       - DATABASE_URL=${DATABASE_URL}

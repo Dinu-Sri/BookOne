@@ -17,6 +17,10 @@ RUN npm install -g pnpm@9
 FROM base AS deps
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV CI=false
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV PNPM_NETWORK_CONCURRENCY=4
+ENV NODE_OPTIONS=--max-old-space-size=2048
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json .npmrc ./
 COPY apps ./apps
@@ -24,12 +28,10 @@ COPY packages ./packages
 COPY scripts ./scripts
 COPY docker/entrypoint.sh ./docker/entrypoint.sh
 
-# Skip apps/web postinstall (fumadocs-mdx). It runs in the builder stage
-# after source.config.ts is present (704099b).
-# Do not use --frozen-lockfile here. Portainer Alpine/Debian install has
-# failed frozen-lockfile after Wave 1b; GitHub Actions Ubuntu install passes.
-# --ignore-scripts: fumadocs-mdx runs in the builder stage (704099b).
-RUN pnpm install --ignore-scripts
+# fumadocs-mdx runs in the builder stage (704099b). Low concurrency for 8GB VPS.
+RUN pnpm --version \
+ && pnpm install --ignore-scripts --network-concurrency=4 \
+ || pnpm install --ignore-scripts --network-concurrency=1 --reporter=append-only
 
 FROM base AS builder
 WORKDIR /app

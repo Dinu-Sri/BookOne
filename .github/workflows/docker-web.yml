@@ -1,0 +1,32 @@
+# Builds docker/Dockerfile.web on GitHub so Portainer's truncated
+# "pnpm install --ignore-scripts exit 1" has a full log.
+name: Docker web image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - docker/Dockerfile.web
+      - docker/entrypoint.sh
+      - .dockerignore
+      - .npmrc
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - package.json
+      - apps/**
+      - packages/**
+      - scripts/**
+      - .github/workflows/docker-web.yml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: docker build Dockerfile.web
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build web image
+        run: docker build -f docker/Dockerfile.web --build-arg BUILD_DATE=${GITHUB_SHA} -t bookone-web:ci .

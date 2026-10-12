@@ -1,3 +1,8 @@
+## 2026-10-12 — Staging web compile re-enabled
+
+- Infra recovered; site was on `bookone_stage-web:latest` (24 Sep). Owner asked to move to current `master`.
+- Staging `web` has `build:` again, still tagged `bookone_stage-web:latest`. Dockerfile: Debian, `pnpm@9`, `pnpm install --ignore-scripts` (no frozen-lockfile). Update with Re-pull OFF.
+
 ## 2026-10-12 — Staging: infra can start without a web image
 
 - Portainer error `No such image: bookone-web:latest`. Web is now compose profile `erp` so Update can start postgres/redis/minio/traefik/cloudflared without it.

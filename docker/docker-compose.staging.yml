@@ -5,8 +5,9 @@
 # Always on: traefik, web, postgres, redis, minio, cloudflared
 # Optional: docs — COMPOSE_PROFILES=docs
 #
-# Web uses the local image bookone_stage-web:latest (no build, no new env vars).
-# Portainer Update with Re-pull OFF. Never re-pull MinIO.
+# Web compiles from docker/Dockerfile.web and tags bookone_stage-web:latest.
+# Portainer Update with Re-pull OFF (MinIO must not hit Docker Hub).
+# Build takes several minutes. If compile fails, the stack can go down again.
 #
 # Hosts (one subdomain level under clossyan.com for free SSL):
 #   WEB_HOST=bookone.clossyan.com
@@ -35,10 +36,14 @@ services:
       - bookone_network
     restart: unless-stopped
 
-  # ── ERP — local image already on the VPS (Portainer Images list)
+  # ── ERP — build on Update, keep the Portainer image name
   web:
     image: bookone_stage-web:latest
-    pull_policy: never
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        BUILD_DATE: "${BUILD_DATE:-0}"
     container_name: bookone-staging-web
     environment:
       - DATABASE_URL=${DATABASE_URL}

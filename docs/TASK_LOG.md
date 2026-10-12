@@ -1,3 +1,9 @@
+## 2026-10-12 — Staging compose: stop compiling web on Portainer Update
+
+- Stack uses `docker/docker-compose.staging.yml`. Any `build:` failure removes the whole stack.
+- Staging `web` now uses local image `${WEB_IMAGE:-bookone-web}` with `pull_policy: never` (no Dockerfile compile). Infra images `pull_policy: missing`; MinIO stays `never`.
+- If web container is missing after Update, set Portainer env `WEB_IMAGE` to the name shown under Images (often `bookone-web` or `bookone-staging-web`).
+
 ## 2026-10-12 — Portainer frozen-lockfile: Debian image (second hotfix)
 
 - Owner did the usual Portainer pull after Production Check went green. That workflow never builds the web image (GHCR publish was reverted). Alpine `pnpm install --frozen-lockfile --ignore-scripts` still failed.

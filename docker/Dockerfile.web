@@ -26,7 +26,10 @@ COPY docker/entrypoint.sh ./docker/entrypoint.sh
 
 # Skip apps/web postinstall (fumadocs-mdx). It runs in the builder stage
 # after source.config.ts is present (704099b).
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# Do not use --frozen-lockfile here. Portainer Alpine/Debian install has
+# failed frozen-lockfile after Wave 1b; GitHub Actions Ubuntu install passes.
+# --ignore-scripts: fumadocs-mdx runs in the builder stage (704099b).
+RUN pnpm install --ignore-scripts
 
 FROM base AS builder
 WORKDIR /app

@@ -7,8 +7,10 @@
 #   docs  — set COMPOSE_PROFILES=docs
 # Daily ERP work: leave COMPOSE_PROFILES empty or only "docs"
 #
-# Rebuild ONLY web (SSH on VPS, in stack directory):
-#   docker compose build web && docker compose up -d web
+# Portainer Git "Update" always compiles every service that has `build:`.
+# If that compile fails, Compose takes the WHOLE stack down (postgres/minio too).
+# Web therefore uses the image already on the VPS. Set WEB_IMAGE in Portainer
+# if the local image has a different name (Images list). Never re-pull MinIO.
 #
 # Hosts (one subdomain level under clossyan.com for free SSL):
 #   WEB_HOST=bookone.clossyan.com
@@ -18,6 +20,7 @@
 services:
   traefik:
     image: traefik:v3
+    pull_policy: missing
     container_name: bookone-staging-traefik
     command:
       - "--providers.docker=true"
@@ -34,14 +37,12 @@ services:
       - "letsencrypt_data:/letsencrypt"
     networks:
       - bookone_network
+    restart: unless-stopped
 
-  # ── ERP (slim — no Chromium) ───────────────────────────────────────────
+  # ── ERP — last image already on the VPS (no compile on Portainer Update)
   web:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.web
-      args:
-        BUILD_DATE: "${BUILD_DATE:-0}"
+    image: ${WEB_IMAGE:-bookone-web}
+    pull_policy: never
     container_name: bookone-staging-web
     environment:
       - DATABASE_URL=${DATABASE_URL}
@@ -105,6 +106,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    pull_policy: missing
     container_name: bookone-staging-postgres
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -119,9 +121,11 @@ services:
       retries: 5
     networks:
       - bookone_network
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    pull_policy: missing
     container_name: bookone-staging-redis
     volumes:
       - redis_data:/data
@@ -132,6 +136,7 @@ services:
       retries: 5
     networks:
       - bookone_network
+    restart: unless-stopped
 
   minio:
     image: minio/minio:latest
@@ -145,9 +150,11 @@ services:
       - minio_data:/data
     networks:
       - bookone_network
+    restart: unless-stopped
 
   cloudflared:
     image: cloudflare/cloudflared:latest
+    pull_policy: missing
     container_name: bookone-staging-cloudflared
     command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     networks:

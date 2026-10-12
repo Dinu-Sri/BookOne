@@ -8,9 +8,12 @@ cd /app
 # unprivileged `nextjs` user inside the container.
 export PNPM_HOME=/app/.pnpm-store
 export npm_config_cache=/app/.cache/npm
+export HOME=/app/.cache
+export XDG_DATA_HOME=/app/.cache
+export XDG_CONFIG_HOME=/app/.cache
 export NEXT_TELEMETRY_DISABLED=1
 export NODE_ENV=production
-mkdir -p "$PNPM_HOME" "$npm_config_cache"
+mkdir -p "$PNPM_HOME" "$npm_config_cache" "$XDG_DATA_HOME/drizzle-studio"
 
 if [ -z "$DATABASE_URL" ]; then
   echo "ERROR: DATABASE_URL is not set. Refusing to start without DB."

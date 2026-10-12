@@ -1,6 +1,6 @@
 # BookOne — Event rental + catering (hire inventory)
 
-**Status:** Phases 0–6 shipped (hire loop + wash/repair + health/docs/e2e). Kits v1.5 and serials v2 still later.  
+**Status:** Phases 0–6 shipped (hire loop + wash/repair + health/docs/external QA). Kits v1.5 and serials v2 still later.
 **Date:** 2026-09-05  
 **Offline / local-node work is out of scope** (cloud-only).
 
@@ -423,7 +423,7 @@ Resolved:
 | PR5 | `feat(rental): calendar pages` | `/inventory/calendar` or `/rentals/calendar` | PR3 | Date-period view |
 | PR6 | `feat(rental): dispatch and return wizards` | stock docs, booking status | PR2, PR3 | Moves + condition |
 | PR7 | `feat(rental): deposits and damage charges` | 2400 postings, invoice lines | PR0, PR6 | Honour deposit mode |
-| PR8 | `test: rental health-check + e2e` | health-check, e2e-runner | PR7 | Matrix in §6 |
+| PR8 | `test: rental health-check + external QA` | health-check, `Dinu-Sri/bookone-qa` | PR7 | Matrix in §6 |
 
 ---
 

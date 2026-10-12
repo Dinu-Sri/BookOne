@@ -82,11 +82,19 @@ docker compose restart cloudflared    # Restart tunnel
 
 ---
 
+## Error: Portainer pull denied for `ghcr.io/dinu-sri/bookone-web`
+
+**Symptom:** Stack update fails with `pull access denied` / 401 for `ghcr.io/dinu-sri/bookone-web:latest`.  
+**Cause:** GHCR packages default to private until visibility is Public or Portainer has a `read:packages` credential. Updating before **Docker web image** is green also fails because the tag does not exist yet.  
+**Fix:** Wait for the Action to finish. Then either set the `bookone-web` package Public (GitHub → Packages → settings) or add a Portainer registry `ghcr.io` with a PAT (`read:packages`). Do not add `build:` back onto `web`.
+
+---
+
 ## Error: Portainer web build fails at `pnpm install --frozen-lockfile --ignore-scripts`
 
 **Symptom:** Stack update fails with `process "/bin/sh -c pnpm install --frozen-lockfile --ignore-scripts" did not complete successfully: exit code: 1`  
-**Cause:** GitHub Actions Production Check only installs on Ubuntu. Portainer builds `Dockerfile.web`. After Wave 1b the Alpine deps layer rebuilt against a lockfile generated on Windows; that step exits 1. A green Action does not mean the image built.  
-**Fix:** Current `docker/Dockerfile.web` uses `node:22-bookworm-slim` and a full workspace copy (same Linux/glibc family as Actions). Pull `master` and rebuild **web only**. Do not re-pull MinIO. Compose path must stay `docker/docker-compose.prod.yml`.
+**Cause (historical):** Portainer used to compile `Dockerfile.web` on the VPS. Production Check going green did not publish an image. Alpine frozen-lockfile failed after Wave 1b.  
+**Fix:** Web is now `ghcr.io/dinu-sri/bookone-web:latest` with no compose `build:`. If this error returns, compose still has a `build:` block — remove it. The image is built in GitHub Actions, not on the VPS.
 
 ---
 
@@ -105,4 +113,4 @@ docker compose up -d                                     # Start manually (bypas
 
 ---
 
-*Last updated: 2026-06-14 | Add new errors as they're discovered*
+*Last updated: 2026-10-12 | Add new errors as they're discovered*

@@ -10,12 +10,26 @@ The deployment flow:
 
 ```
 GitHub Repo (Dinu-Sri/BookOne, master branch)
-    ↓  Portainer pulls docker-compose.prod.yml directly from repo
+    ↓  Action "Docker web image" pushes ghcr.io/dinu-sri/bookone-web:latest
+    ↓  Portainer pulls that image (compose has no web build)
     ↓  Traefik routes bookone.clossyan.com → Next.js container
     ↓  Cloudflared tunnel → Cloudflare → public internet
 ```
 
-**You do NOT need to build Docker images on GitHub Actions.** Portainer builds them directly from the repo. This is simpler and avoids needing a container registry.
+Wait for **Docker web image** to go green, then stack **Update** with **Re-pull image and redeploy** ON. Infra uses `pull_policy: missing`, so postgres/redis/minio stay on the images already on the host.
+
+### GHCR pull access
+
+The git repo is public. The GHCR package can still be private on first publish.
+
+1. After the first green Action, open GitHub → Packages → **bookone-web** → Package settings → Change visibility → **Public** (simplest for this public repo), **or**
+2. Portainer → Registries → Add:
+   - Name: `GHCR`
+   - Registry URL: `ghcr.io`
+   - Username: your GitHub username
+   - Password: a PAT with `read:packages`
+
+If Update fails with `pull access denied` / 401 for `ghcr.io/dinu-sri/bookone-web`, the package is still private and the registry credential is missing.
 
 ---
 

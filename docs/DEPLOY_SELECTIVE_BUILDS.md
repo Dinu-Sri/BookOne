@@ -1,7 +1,6 @@
 # Selective deploys — rebuild only what you changed
 
-Your **4 CPU / 8 GB** VPS is fine for running BookOne and for building **one** service.  
-Long rebuilds happen when Portainer rebuilds **everything**.
+Your **4 CPU / 8 GB** VPS is sized to **run** BookOne. Next.js compile happens in GitHub Actions; the VPS **pulls** `ghcr.io/dinu-sri/bookone-web:latest`.
 
 ## Principle
 
@@ -18,7 +17,7 @@ Postgres / Redis / Minio / Traefik use public images — they are **not** rebuil
 
 ## Automatic: “when I pull, only build what changed”
 
-Portainer **cannot** decide this by itself — a full stack “Pull and redeploy” rebuilds every service that has a `build:` block.
+Portainer **cannot** decide this by itself — a full stack “Pull and redeploy” rebuilds every service that still has a `build:` block (docs nginx if that profile is on). `web` has no `build:`; it only pulls GHCR.
 
 Use **`scripts/smart-deploy.sh`** on the VPS instead:
 
@@ -87,7 +86,7 @@ COMPOSE_PROFILES=docs
 
 Redeploy after changing `COMPOSE_PROFILES`.
 
-**Daily ERP work:** stack update only builds **web** (and docs if enabled). Browser tests run from https://github.com/Dinu-Sri/bookone-qa.
+**Daily ERP work:** stack update pulls **web** from GHCR (and builds docs nginx only if that profile is on). Browser tests run from https://github.com/Dinu-Sri/bookone-qa.
 
 ---
 
@@ -96,22 +95,22 @@ Redeploy after changing `COMPOSE_PROFILES`.
 On the VPS, in the Portainer stack project directory (or where compose lives):
 
 ```bash
-# Only ERP (most common)
-docker compose -f docker/docker-compose.staging.yml build web
+# Only ERP (most common) — pull the GHCR image, do not build on the VPS
+docker compose -f docker/docker-compose.staging.yml pull web
 docker compose -f docker/docker-compose.staging.yml up -d web
 ```
 
-Avoid “Pull and redeploy entire stack” with rebuild-all unless you mean it.
+Avoid “Pull and redeploy entire stack” unless you mean to refresh infra images too.
 
 ---
 
 ## Approach C — Development mode (what to rebuild by phase)
 
-| Development focus | COMPOSE_PROFILES | Rebuild |
+| Development focus | COMPOSE_PROFILES | What the VPS does |
 |-------------------|------------------|---------|
-| Entity tiers / cashbook / ERP | empty or `docs` | `web` only |
+| Entity tiers / cashbook / ERP | empty or `docs` | pull `web` from GHCR |
 | Docs domain only | `docs` | rarely (nginx is tiny) |
-| Release / first setup | `full` | web + docs once |
+| Release / first setup | `full` | pull web + build docs once |
 
 ---
 
@@ -126,18 +125,22 @@ That alone cuts many deploys from “full install + build” to “build only”
 
 ---
 
-## Optional later (fastest)
+## Current path (fastest): GHCR pull
 
-Build images in **GitHub Actions** → push GHCR → Portainer **only pulls**.  
-Then VPS deploys are 1–3 minutes. Use when daily deploys matter more than simpler GitOps.
+GitHub Action **Docker web image** builds `docker/Dockerfile.web` and pushes `ghcr.io/dinu-sri/bookone-web:latest`. Portainer only pulls.
 
-Until then: **profiles + rebuild one service + layered Dockerfile** is the right approach for your 4c/8G box.
+1. Push to `master` (or run the workflow manually).
+2. Wait until **Docker web image** is green.
+3. Portainer Update with Re-pull ON.
+
+VPS time is image pull + container start + entrypoint (`drizzle-kit push` then `init-db.ts`), not `pnpm install` / `next build`.
+
+If pull returns 401, set the GHCR package Public or add a `read:packages` PAT in Portainer Registries. See `docs/PORTAINER_SETUP.md`.
 
 ---
 
 ## Checklist
 
 - [ ] Daily: `COMPOSE_PROFILES` empty or `docs` only  
-- [ ] Prefer `docker compose build web && up -d web` over full stack rebuild  
-- [ ] Keep 8 GB RAM free of other heavy builds during `web` build  
+- [ ] Wait for **Docker web image** green, then Portainer Update (Re-pull ON)  
 - [ ] Browser tests: bookone-qa, not an ERP e2e image  

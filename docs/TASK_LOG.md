@@ -1,3 +1,10 @@
+## 2026-10-12 — GHCR so VPS only pulls
+
+- Record: [CHG-20261012-ghcr-web-image](changes/CHG-20261012-ghcr-web-image.md).
+- Action **Docker web image** logs into GHCR and pushes `ghcr.io/dinu-sri/bookone-web:latest` plus `sha-<short>`.
+- Staging and prod `web` use that image with `pull_policy: always` and no `build:`.
+- Next: wait for the Action green, then Portainer Update Re-pull ON. If 401, make the package Public or add a GHCR PAT.
+
 ## 2026-10-12 — QA BUG-0001 and BUG-0002
 
 - Record: [CHG-20261012-qa-bugs-0001-0002](changes/CHG-20261012-qa-bugs-0001-0002.md).

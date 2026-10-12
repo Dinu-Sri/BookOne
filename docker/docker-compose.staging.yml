@@ -6,9 +6,11 @@
 # Optional: docs — COMPOSE_PROFILES=docs
 #
 # Fresh staging: empty VPS, data loss accepted.
-# GitHub Action "Docker web image" already succeeded on this Dockerfile.
-# Portainer Update WITH Re-pull ON: pull postgres/redis/traefik/cloudflared/minio,
-# compile web. Docker Hub no longer serves minio/minio — use chainguard/minio.
+# Web image is built in GitHub Actions ("Docker web image") and pushed to GHCR.
+# Portainer only pulls ghcr.io/dinu-sri/bookone-web:latest — it does not compile Next.js.
+# Wait for that Action to go green, then Update with Re-pull ON.
+# Infra uses pull_policy: missing so Re-pull does not replace postgres/redis/minio.
+# Docker Hub no longer serves minio/minio — use chainguard/minio.
 #
 # Hosts (one subdomain level under clossyan.com for free SSL):
 #   WEB_HOST=bookone.clossyan.com
@@ -37,14 +39,11 @@ services:
       - bookone_network
     restart: unless-stopped
 
-  # ── ERP — local Dockerfile only. Do not set `image:` — Portainer Re-pull
-  # would try Docker Hub for that name and fail (bookone_stage-web is not a Hub repo).
+  # ── ERP — GHCR image only. Do not add `build:` (that compiles on the VPS).
+  # Do not use a local name like bookone_stage-web (Hub 401).
   web:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.web
-      args:
-        BUILD_DATE: "${BUILD_DATE:-0}"
+    image: ghcr.io/dinu-sri/bookone-web:latest
+    pull_policy: always
     container_name: bookone-staging-web
     environment:
       - DATABASE_URL=${DATABASE_URL}

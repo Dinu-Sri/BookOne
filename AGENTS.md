@@ -102,8 +102,8 @@ For every candidate intended for `master` (the deployment branch):
 1. [ ] Local test: `pnpm install && pnpm build && pnpm lint && pnpm test`
 2. [ ] Any new env vars? → Added to VPS `.env` AND `.env.example`
 3. [ ] Database migration needed? → `pnpm db:migrate` on VPS
-4. [ ] Container rebuild needed? → `docker compose build` if Dockerfile changed
-5. [ ] Portainer stack redeploy? → Pull latest image + restart
+4. [ ] Web image: wait for GitHub Action **Docker web image** to push `ghcr.io/dinu-sri/bookone-web:latest` (do not compile on the VPS)
+5. [ ] Portainer stack redeploy? → Update with Re-pull ON after the Action is green
 6. [ ] Cache clear? → `docker compose exec redis redis-cli FLUSHDB` (if schema changed)
 7. [ ] Queue/worker restart? → If BullMQ processors changed
 8. [ ] Cron update? → If new scheduled tasks added
@@ -154,7 +154,14 @@ Use these checks before changing architecture or rewriting Docker from scratch.
 - Cause: Cloudflare's edge cache was serving stale HTML referencing deleted JS chunks, and our no-cache header was *also* applied (incorrectly) to `_next/static` in some browser paths, masking chunk URLs.
 - Fix: remove the custom `headers()` block. Next.js already sends `Cache-Control: public, max-age=31536000, immutable` for `/_next/static/*`. Use a build stamp in the HTML (e.g. `build: v10`) to force fresh fetches after redeploy.
 
-8. **Dockerfile `nextjs` user needs writable pnpm cache** *(2026-06-16)*
+8. **Web image comes from GHCR** *(2026-10-12)*
+- Staging and prod `web` use `image: ghcr.io/dinu-sri/bookone-web:latest` with `pull_policy: always` and **no** `build:`.
+- Action **Docker web image** is the image. Production Check is only pnpm lint/build/test.
+- Wait for that Action to go green, then Portainer Update with Re-pull ON. Infra stays `pull_policy: missing`.
+- Pull 401: set the GHCR package Public or add a `read:packages` PAT in Portainer Registries.
+- Do not set a local name like `bookone_stage-web` (Hub 401). Do not add `WEB_IMAGE` env.
+
+9. **Dockerfile `nextjs` user needs writable pnpm cache** *(2026-06-16)*
 - Symptom: `pnpm --filter @bookone/db db:migrate` fails with EACCES on first run.
 - Fix: in `docker/entrypoint.sh`, export `PNPM_HOME=/app/.pnpm-store` and `npm_config_cache=/app/.cache/npm`, and `mkdir -p` those dirs. In `Dockerfile.web` `chown` `/app/.cache /app/.next /app/.pnpm-store` to `nextjs:nodejs` before `USER nextjs`.
 

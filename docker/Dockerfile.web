@@ -1,9 +1,9 @@
 # BookOne v2 — Production web (ERP only — no Chromium / E2E)
 #
-# GitHub Actions "Production Check" is NOT this image. It only runs
-# `pnpm install --frozen-lockfile` on ubuntu-latest (glibc). Portainer
-# builds this file. Use Debian slim so install matches that proven Linux
-# lockfile, not Alpine musl.
+# GitHub Actions "Docker web image" builds this file and pushes
+# ghcr.io/dinu-sri/bookone-web. Portainer only pulls that tag.
+# "Production Check" is a separate pnpm install/lint/build/test job.
+# Use Debian slim so install matches that proven Linux lockfile, not Alpine musl.
 #
 # Full apps/ + packages/ copy matches CI checkout (765dbe5). Manifest-only
 # copy broke after Wave 1b removed apps/e2e-runner from the lockfile.

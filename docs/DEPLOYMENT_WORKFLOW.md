@@ -24,16 +24,19 @@
 ```
 Developer pushes to GitHub master branch
     ↓
-GitHub sends webhook to Portainer (or Portainer polls on schedule)
+GitHub Action "Docker web image" builds Dockerfile.web and pushes
+  ghcr.io/dinu-sri/bookone-web:latest
     ↓
-Portainer pulls latest from GitHub, rebuilds Docker images, redeploys stack
+Wait until that Action is green
+    ↓
+Portainer Update (Re-pull ON) pulls the GHCR image and restarts web
     ↓
 Traefik detects new container, routes traffic
     ↓
 Cloudflare Tunnel → Traefik → Next.js container → bookone.clossyan.com
 ```
 
-**Key:** You do NOT need a container registry (Docker Hub, GHCR). Portainer builds images directly from the `Dockerfile` in the repo. The `docker-compose.prod.yml` uses `build:` directives, not pre-built images.
+**Key:** The VPS does not compile Next.js. Staging and prod `web` use `image: ghcr.io/dinu-sri/bookone-web:latest` with `pull_policy: always` and no `build:`. Infra images stay `pull_policy: missing`. Do not Update until **Docker web image** is green, or the GHCR tag will not exist yet.
 
 ### Portainer Stack Configuration
 

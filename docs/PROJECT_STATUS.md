@@ -1,3 +1,7 @@
+## 2026-10-12 — GHCR web image (VPS only pulls)
+
+GitHub Action **Docker web image** pushes `ghcr.io/dinu-sri/bookone-web:latest`. Staging and prod compose have no `web` `build:`. Wait for the Action to go green, then Portainer Update with Re-pull ON. Infra stays `pull_policy: missing`. See [CHG-20261012-ghcr-web-image](changes/CHG-20261012-ghcr-web-image.md).
+
 ## 2026-10-12 — QA BUG-0001 / BUG-0002
 
 Simple Entry cash sale posts to 4000. Viewer invoice write denial is a toast/readable page, not a Next.js error. See [CHG-20261012-qa-bugs-0001-0002](changes/CHG-20261012-qa-bugs-0001-0002.md). Rebuild web to pick up.
@@ -382,7 +386,7 @@ pnpm --filter @bookone/db db:studio      # Open Drizzle Studio (DB GUI)
 
 ## 9. Production deployment — Portainer stack
 
-**Source of truth:** GitHub `master` branch → Portainer pulls → Docker builds.
+**Source of truth:** GitHub `master` → Action **Docker web image** pushes GHCR → Portainer pulls `ghcr.io/dinu-sri/bookone-web:latest`.
 
 **In Portainer:**
 
@@ -390,13 +394,13 @@ pnpm --filter @bookone/db db:studio      # Open Drizzle Studio (DB GUI)
 2. Repository: `https://github.com/Dinu-Sri/BookOne`
 3. Compose path: `docker/docker-compose.prod.yml` ← **must be the prod file, not dev**
 4. Environment variables: see Section 7 above. **Do not include quotes around values unless the value contains spaces.**
-5. **Set `BUILD_DATE` to a new number on every rebuild** (e.g. `1`, then `2`, then `3`) to force Docker to skip its cache. This is critical when you change `Dockerfile.web` or `apps/web/`.
-6. Click **Deploy the stack**.
+5. Wait until GitHub Action **Docker web image** is green (it tags the image with the commit SHA as `BUILD_DATE`).
+6. Click **Update the stack** with **Re-pull image and redeploy** ON.
 
-**What happens automatically on `Deploy`:**
+**What happens on `Update`:**
 
-1. GitHub webhook → Portainer pulls latest `master`
-2. Docker builds `bookone-web` with `BUILD_DATE` arg
+1. Portainer pulls latest `master` compose
+2. Docker pulls `ghcr.io/dinu-sri/bookone-web:latest` (no VPS `next build`)
 3. `entrypoint.sh` runs inside the new container:
    - Waits for Postgres
    - Runs `drizzle-kit push` (additive migrations only)

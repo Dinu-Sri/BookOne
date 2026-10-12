@@ -1,5 +1,5 @@
-# Builds docker/Dockerfile.web on GitHub so Portainer's truncated
-# "pnpm install --ignore-scripts exit 1" has a full log.
+# Build docker/Dockerfile.web on GitHub and push to GHCR.
+# Portainer pulls ghcr.io/<owner>/bookone-web:latest — no Next.js compile on the VPS.
 name: Docker web image
 
 on:
@@ -19,14 +19,88 @@ on:
       - .github/workflows/docker-web.yml
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: bookone-web
+
 jobs:
-  build:
-    name: docker build Dockerfile.web
+  build-and-push:
+    name: Build & push web image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build web image
-        run: docker build -f docker/Dockerfile.web --build-arg BUILD_DATE=${GITHUB_SHA} -t bookone-web:ci .
+      - name: Set image name (lowercase owner)
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=${{ env.REGISTRY }}/${OWNER}/${{ env.IMAGE_NAME }}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.web
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_DATE=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Summary
+        run: |
+          {
+            echo "## BookOne web image published"
+            echo ""
+            echo "| Tag | Value |"
+            echo "|-----|-------|"
+            echo "| Image | \`${{ env.IMAGE }}\` |"
+            echo "| latest | \`${{ env.IMAGE }}:latest\` |"
+            echo "| sha | \`${{ env.IMAGE }}:sha-$(echo ${{ github.sha }} | cut -c1-7)\` |"
+            echo ""
+            echo "Wait for this job to finish, then Portainer Update with Re-pull ON."
+            echo "If pull returns 401, set the GHCR package Public or add a read:packages PAT in Portainer Registries."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger Portainer webhook
+        continue-on-error: true
+        env:
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        run: |
+          if [ -z "$PORTAINER_WEBHOOK_URL" ]; then
+            echo "No PORTAINER_WEBHOOK_URL secret — skip auto-redeploy."
+            exit 0
+          fi
+          curl -fsS -X POST "$PORTAINER_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            && echo "Portainer webhook triggered." \
+            || echo "Portainer webhook failed (non-fatal)."

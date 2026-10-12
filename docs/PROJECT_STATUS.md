@@ -1,6 +1,10 @@
+## 2026-10-12 — Inbuilt E2E cleanup Wave 1a (QA companion)
+
+QA branch `qa/chg-20261012-e2e-denial` at `0ed1195` now asserts `/e2e` and `/api/e2e/**` cannot start runs or return artifacts (S-0031/S-0032/S-0033/S-0578). `agent-browse` lives in bookone-qa. Discovery 770; unit 94 passed / 4 skipped. Product `/e2e` is still live. Next: Wave 1b delete the product runner on this branch, then run the denial tests. Do not merge to `master` yet. Health-check, company reset, seeds, and package unit tests stay.
+
 ## 2026-10-12 — Inbuilt E2E cleanup Wave 0 (preservation)
 
-Branch `chore/remove-inbuilt-e2e`. Inventory vs https://github.com/Dinu-Sri/bookone-qa (`b9e13bc`) recorded in [CHG-20261012-remove-inbuilt-e2e](changes/CHG-20261012-remove-inbuilt-e2e.md). Tests are preserved in QA (94 unit passed / 4 skipped; 771 browser tests discovered). Public `/e2e` is still live. Next action: Wave 1a in bookone-qa (assert `/e2e` and `/api/e2e` denied; port `agent-browse`), then delete the product runner. Do not merge this cleanup to `master` until that companion exists. Health-check, company reset, seeds, and package unit tests stay.
+Branch `chore/remove-inbuilt-e2e`. Inventory vs https://github.com/Dinu-Sri/bookone-qa (`b9e13bc`) recorded in [CHG-20261012-remove-inbuilt-e2e](changes/CHG-20261012-remove-inbuilt-e2e.md). Tests are preserved in QA (94 unit passed / 4 skipped; 771 browser tests discovered). Public `/e2e` is still live. Wave 1a companion now exists at bookone-qa `0ed1195`. Health-check, company reset, seeds, and package unit tests stay.
 
 ## 2026-10-11 — External QA handover
 

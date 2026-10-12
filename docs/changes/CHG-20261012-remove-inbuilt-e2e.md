@@ -1,27 +1,27 @@
 # CHG-20261012-remove-inbuilt-e2e — remove inbuilt E2E runner from BookOne
 
-Status: implementing (Wave 0 preservation complete; no runtime deletion yet).
+Status: implementing (Wave 0 preservation complete; Wave 1a complete in bookone-qa; no product runtime deletion yet).
 
 - Author/agent and date: Grok coding agent, 2026-10-12, requested by repository owner.
-- Product base SHA and branch/PR: `bdff296bd3f0dae6470b15be74cfee8b71567501`, branch `chore/remove-inbuilt-e2e`. QA unit pin remains product `d35ed9209852af3fbcfe140176f2f8e74cae15f7`. `bdff296` is documentation-only on top of `d35ed92` (no test-path diff).
-- QA repository revision and companion PR/change ID: bookone-qa `b9e13bcc1a6222aedd0356c19336e141cd08c9b0` (`qa: update sanitized status with manual findings`). Wave 1a companion not started.
+- Product base SHA and branch/PR: `bdff296bd3f0dae6470b15be74cfee8b71567501`, branch `chore/remove-inbuilt-e2e` (Wave 0 commit `f048c9ed2c1a411b50111cc83fb60bcca8224073`). QA unit pin remains product `d35ed9209852af3fbcfe140176f2f8e74cae15f7`. `bdff296` is documentation-only on top of `d35ed92` (no test-path diff).
+- QA repository revision and companion PR/change ID: bookone-qa branch `qa/chg-20261012-e2e-denial` at `0ed11956634f4bb6117807ad8c1aebe18a357777` ([CHG-20261012-remove-inbuilt-e2e](https://github.com/Dinu-Sri/bookone-qa/blob/qa/chg-20261012-e2e-denial/changes/CHG-20261012-remove-inbuilt-e2e.md)). Parent was `b9e13bcc1a6222aedd0356c19336e141cd08c9b0`.
 - Intended before/after behaviour with a concrete example:
   - Before: unauthenticated `/e2e` console and `POST /api/e2e/runs` can start Playwright against the ERP with submitted credentials. Tests, catalog, and runner live in BookOne.
   - After (Wave 1b): those URLs cannot start runs or expose artifacts; tests live in https://github.com/Dinu-Sri/bookone-qa.
   - Wave 0 does not change runtime behaviour.
 - Existing behaviour that must remain correct: login, docs, navigation, sales/purchase/inventory/rental/accounting, Control Room health-check, company reset, install/demo seeds, RLS, backups, `/ops/logs`, `/api/ops`, operational health. No schema or data changes.
-- Actual changed paths/symbols/routes (Wave 0): `docs/changes/CHG-20261012-remove-inbuilt-e2e.md`, `docs/TASK_LOG.md`, `docs/PROJECT_STATUS.md`. No runner/API/page deleted.
-- Business rule/profile/scenario IDs: catalog 747 IDs, last `S-0760`, identical ID set in product and QA. Wave 1a must revise S-0031, S-0032, S-0033, S-0578, plus tests `02-public.spec.ts` (`S-e2e console public at /e2e`) and `10-edges-security.spec.ts` (S-0462) to assert denial. Preserve S-NNNN IDs.
+- Actual changed paths/symbols/routes (this product branch): `docs/changes/CHG-20261012-remove-inbuilt-e2e.md`, `docs/TASK_LOG.md`, `docs/PROJECT_STATUS.md`. No runner/API/page deleted. Wave 1a code lives in bookone-qa `0ed1195`.
+- Business rule/profile/scenario IDs: catalog 747 IDs, last `S-0760`. Wave 1a revised S-0031, S-0032, S-0033, S-0578 and S-0462 to assert denial. Preserve S-NNNN IDs.
 - Accounting, stock/rental, tenant/access and customer-data effects: none in Wave 0. Later removal of public `/api/e2e` is access hardening. No posting/stock changes.
 - Migrations, schema/history compatibility and recovery implications: none. Do not drop `019_health_check_staging.sql` or any applied migration. Rollback is git revert. Never delete databases/volumes/MinIO.
 - Dependencies, settings/flags, deployment and external-service changes: none in Wave 0. Later: drop e2e Docker profile and product `E2E_PUBLIC_URL` / `NEXT_PUBLIC_E2E_URL` / `E2E_HOST`. Operator must stop `bookone-staging-e2e` separately.
 - Independent diff/impact review and uncertainties: tables below. Blockers at the end.
-- Checks executed: see Wave 0 checks.
+- Checks executed: see Wave 0 checks and Wave 1a section.
 - Failed/skipped/flaky/blocked/not-run checks: 4 skipped bank-fixture unit tests (optional local files, inherited). Browser execution not run (discovery only). Staging deployed SHA/image/schema still unverified in QA STATUS. Graph `search_graph` timed out; grep used.
-- New QA assertions or outstanding work: Wave 1a denial tests; port `agent-browse`; retire HTTP runner (already excluded from QA). Owner has not wired QA as a required merge/deploy gate (advisory).
+- New QA assertions or outstanding work: Wave 1a denial tests and `agent-browse` port are in QA `0ed1195`. HTTP runner stays unpublished. Owner has not wired QA as a required merge/deploy gate (advisory).
 - Created staging records/cleanup: none in Wave 0.
 - Documentation updated: this CHG; TASK_LOG; PROJECT_STATUS.
-- Next exact action and responsible role: Wave 1a in bookone-qa (denial tests + agent-browse port), then Wave 1b product deletion on this branch. Coding agent. Do not merge to `master` until Wave 1a exists.
+- Next exact action and responsible role: Wave 1b product deletion on this branch (runner page/APIs/Docker), then execute QA denial tests against that candidate. Coding agent. Do not merge to `master` until Wave 1b is ready and QA denial evidence exists for the cleaned candidate. Operator must stop `bookone-staging-e2e` separately.
 
 Final product/QA SHAs belong in PR metadata and external run manifests after commit.
 
@@ -35,7 +35,8 @@ Final product/QA SHAs belong in PR metadata and external run manifests after com
 | BookOne HEAD | `bdff296bd3f0dae6470b15be74cfee8b71567501` |
 | Inventory source commit | `d35ed9209852af3fbcfe140176f2f8e74cae15f7` |
 | QA clone | gitignored `.local/bookone-qa` (not committed) |
-| QA HEAD | `b9e13bcc1a6222aedd0356c19336e141cd08c9b0` |
+| QA HEAD (Wave 0) | `b9e13bcc1a6222aedd0356c19336e141cd08c9b0` |
+| QA HEAD (Wave 1a) | `0ed11956634f4bb6117807ad8c1aebe18a357777` (`qa/chg-20261012-e2e-denial`) |
 | QA `product-ref.json` | `d35ed9209852af3fbcfe140176f2f8e74cae15f7` |
 | Inventory | 98 entries: 84 imported (12 adapted), 14 source-reference-only |
 | Product e2e-runner files missing from inventory | 0 |
@@ -149,32 +150,36 @@ Stop/remove `bookone-staging-e2e` if running. Do not recreate MinIO. Remove Clou
 | QA browser discovery | `pnpm --ignore-workspace test:e2e:list` (suite `full`) | **771 tests in 29 files**. Not executed. |
 | BookOne engineering unit | `pnpm --filter @bookone/accounting test`; `pnpm --filter @bookone/statement-import test` on `bdff296` | Accounting **60 passed** (5 files). Statement-import **26 passed, 4 skipped** (4 files). 4 skips = optional bank fixtures. |
 | Browser journeys on staging | not run | Blocked/not-run: Wave 0 is inventory. QA STATUS: no staging acceptance; deployed SHA unverified. |
-| `/e2e` denial tests | not present in QA | Must be Wave 1a. Current tests **require** the public console. |
+| `/e2e` denial tests | Wave 1a `0ed1195` | Written. Discovery 770. Not executed against live staging (still hosts the console). |
 
 QA `--ignore-workspace` was required because the clone sits under BookOne's `pnpm-workspace.yaml`.
 
 ---
 
-## Tests that still expect the inbuilt console (Wave 1a)
+## Wave 1a (bookone-qa `0ed1195`)
 
-| Location | Behaviour today |
+Denial tests now live in QA. Historical S-NNNN IDs preserved (747, last S-0760). Extra dedicated test `S-e2e console public at /e2e` dropped; discovery 771 → 770.
+
+| Location | Behaviour after Wave 1a |
 |---|---|
-| `tests/02-public.spec.ts` `S-e2e console public at /e2e` | Logged-out `/e2e` must show E2E heading and Start run. |
-| Catalog S-0031 / S-0032 / S-0033 via executor | Public console, credentials required to start, report download. |
-| `src/runner/execute.ts` | `page.goto('/e2e')` for console/report scenarios. |
-| `src/helpers/nav.ts` | `{ path: '/e2e', name: 'E2E console' }` public smoke. |
-| `tests/10-edges-security.spec.ts` S-0462 | Opens `/e2e` and asserts password not embedded. |
+| `tests/02-public.spec.ts` S-0031 / S-0032 / S-0033 | Console gone; POST cannot start a run; artifacts not exposed. |
+| Catalog S-0031 / S-0032 / S-0033 / S-0578 | Same IDs; expectation is removal. S-0578 title still `Route smoke /e2e`. |
+| `src/runner/execute.ts` | `expectE2ePageGone` / `expectE2eApiGone`. |
+| `src/helpers/nav.ts` | `/e2e` removed from `PUBLIC_SMOKE_ROUTES`. |
+| `tests/10-edges-security.spec.ts` S-0462 | Opens `/e2e`; forbids embedded password **and** console UI. |
+| `scripts/agent-browse.mjs` + login-smoke / rental-ops | Ported. `pnpm agent:browse`. |
+| HTTP `server.ts` / `public/index.html` | Still unpublished (not in QA). |
 
-Wave 1a: assert `/e2e` and `/api/e2e/**` cannot start runs or return artifacts. Preserve historical run records; do not rewrite old results as new passes.
+QA checks: `catalog:sync` 747/747; `check` pass; unit **94 passed, 4 skipped** on pin `d35ed92`; `test:e2e:list` **770 tests in 29 files**. Browser denial not executed (staging still serves the console until Wave 1b).
 
 ---
 
 ## Blockers remaining (do not declare cleanup complete)
 
-1. QA has no `/e2e` denial tests yet. Product delete before Wave 1a would fail inherited public-console tests for the wrong reason.
-2. No staging browser acceptance run on a named deployed SHA/image/schema.
+1. Product `/e2e` and `/api/e2e/**` still exist on this BookOne branch and on staging. Wave 1b deletes them.
+2. No staging browser acceptance run on a named deployed SHA/image/schema. Denial tests not executed yet (expected fail on current host).
 3. 717 of 747 assertion-depth reviews still pending (does not block Wave 1 public-console removal).
 4. Branch protection / deploy promotion still advisory; product CI `production-check.yml` uses `continue-on-error` for lint/build/test. Do not treat that as the replacement gate.
-5. `agent-browse` is not in QA until Wave 1a ports it.
+5. Operator must stop `bookone-staging-e2e` / Cloudflare `bookone-e2e.clossyan.com` at Wave 1b; not in Git.
 
-Wave 0 itself is complete: inventory, hashes, classifications, and unit/discovery evidence are recorded. No product deletes in this wave.
+Wave 0 inventory and Wave 1a QA companion are complete. No product deletes until Wave 1b. Do not merge this branch to `master` yet.

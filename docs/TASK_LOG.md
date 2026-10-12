@@ -1,3 +1,10 @@
+## 2026-10-12 — Wave 1a: QA denial tests + agent-browse port
+
+- bookone-qa branch `qa/chg-20261012-e2e-denial` at `0ed11956634f4bb6117807ad8c1aebe18a357777`. Record: [CHG-20261012-remove-inbuilt-e2e](changes/CHG-20261012-remove-inbuilt-e2e.md).
+- S-0031 / S-0032 / S-0033 / S-0578 assert `/e2e` and `/api/e2e` are gone. IDs preserved (747, last S-0760). `pnpm agent:browse` ported. HTTP runner unpublished.
+- QA: unit 94 passed / 4 skipped; discovery 770 tests in 29 files; catalog 747/747. Browser denial not executed (staging still hosts the console).
+- Next: Wave 1b product delete on `chore/remove-inbuilt-e2e`. Do not merge to `master` until that lands and denial tests run against the cleaned candidate.
+
 ## 2026-10-12 — Wave 0: prove preservation before removing inbuilt E2E
 
 - Branch `chore/remove-inbuilt-e2e` from `bdff296`. Change record: [CHG-20261012-remove-inbuilt-e2e](changes/CHG-20261012-remove-inbuilt-e2e.md).

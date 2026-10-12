@@ -2255,10 +2255,6 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     lines,
   });
 
-  if (!result.ok) {
-    throw new Error(result.error ?? 'Could not create document.');
-  }
-
   const { redirect } = await import('next/navigation');
   const listPath: Record<string, string> = {
     quotation: '/sales/quotations',
@@ -2274,8 +2270,16 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     purchase_return: '/purchase/returns',
     vendor_bill: '/purchase/purchases',
   };
-  const intent = String(formData.get('intent') ?? 'post');
   const base = listPath[documentType] ?? '/sales/invoices';
+  if (!result.ok) {
+    const error = result.error ?? 'Could not create document.';
+    if (/permission/i.test(error)) {
+      redirect(`${base}?flash=denied_write`);
+    }
+    redirect(`${base}?err=${encodeURIComponent(error.slice(0, 180))}`);
+  }
+
+  const intent = String(formData.get('intent') ?? 'post');
   if (intent === 'post_print' && result.id) {
     redirect(`${base}?print=${result.id}`);
   }

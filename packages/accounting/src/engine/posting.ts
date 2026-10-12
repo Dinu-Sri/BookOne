@@ -16,8 +16,14 @@ export function inferTransaction(entry: SimpleEntry): EngineResult {
   if (entry.direction === 'money_out') {
     category = inferCategory(entry.description, entry.party, 'money_out', entry.categoryOverride);
   } else if (entry.direction === 'money_in' && entry.moneyInType === 'new_sale') {
-    // Personal salary/other income or business sales — revenue account from rules/override
-    category = inferCategory(entry.description, entry.party, 'money_in', entry.categoryOverride);
+    // UI "New cash sale" credits Sales Revenue 4000. Do not fall back to
+    // personal Other Income 4300 when the description lacks the word "sale".
+    category = inferCategory(
+      entry.description,
+      entry.party,
+      'money_in',
+      entry.categoryOverride ?? '4000',
+    );
   } else if (entry.direction === 'invoice_bill' && entry.invoiceType === 'vendor_bill') {
     category = inferCategory(entry.description, entry.party, 'money_out', entry.categoryOverride);
   }

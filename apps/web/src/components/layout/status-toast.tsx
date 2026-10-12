@@ -20,6 +20,7 @@ const FLASH_MAP: Record<string, StatusPayload> = {
   archived: { kind: 'success', message: 'Archived successfully' },
   restored: { kind: 'success', message: 'Restored successfully' },
   error: { kind: 'error', message: 'Something went wrong' },
+  denied_write: { kind: 'error', message: 'You do not have permission to save that.' },
 };
 
 /** Fire from any client component: pushStatusToast({ message: 'Saved', kind: 'success' }) */
@@ -47,6 +48,15 @@ export function StatusToast() {
       show({ kind: 'error', message: 'You do not have access to that screen.' });
       const params = new URLSearchParams(searchParams.toString());
       params.delete('denied');
+      const next = params.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+      return;
+    }
+    const err = searchParams.get('err');
+    if (err) {
+      show({ kind: 'error', message: err.slice(0, 280) });
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('err');
       const next = params.toString();
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
       return;

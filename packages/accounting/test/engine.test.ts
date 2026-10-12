@@ -135,6 +135,30 @@ describe('inferTransaction + generateJournal', () => {
     assertBalanced(journal.lines);
   });
 
+  it('Money In: new cash sale without sale keywords still credits Sales 4000', () => {
+    const entry: SimpleEntry = {
+      tenantId: tenant,
+      userId: user,
+      direction: 'money_in',
+      moneyInType: 'new_sale',
+      party: 'Walk-in customer',
+      description: 'QA notebook walk-in',
+      amount: 100,
+      paymentMethod: 'Cash',
+      paymentAccount: { kind: 'code', value: '1000' },
+      date: '2026-10-12',
+    };
+
+    const { transaction, journal } = inferTransaction(entry);
+
+    expect(transaction.accountingType).toBe('Sale');
+    expect(transaction.category?.accountCode).toBe('4000');
+    expectLine(journal.lines, '1000', 'debit', 100);
+    expectLine(journal.lines, '4000', 'credit', 100);
+    expect(journal.lines.some((line) => line.account.code === '4300')).toBe(false);
+    assertBalanced(journal.lines);
+  });
+
   it('Money In: new sale without invoiceRef maps to Sale', () => {
     const entry: SimpleEntry = {
       tenantId: tenant,

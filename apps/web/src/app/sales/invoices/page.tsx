@@ -30,6 +30,8 @@ export default async function SalesInvoicesPage() {
             searchPlaceholder: 'Search by customer name or number…',
             newHref: '/sales/invoices/new',
             newLabel: 'New invoice',
+            canWrite:
+              tenant.platformRole === 'super_admin' || tenant.accessByLabel?.['Sales Invoices'] !== 'read',
             showTaxCols: true,
             printHrefPattern: '/sales/invoices/:id/print',
             detailHrefPattern: '/sales/invoices/:id',

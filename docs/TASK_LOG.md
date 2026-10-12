@@ -1,3 +1,10 @@
+## 2026-10-12 — QA BUG-0001 and BUG-0002
+
+- Record: [CHG-20261012-qa-bugs-0001-0002](changes/CHG-20261012-qa-bugs-0001-0002.md).
+- Simple Entry new cash sale defaults to Sales 4000 (no 4300 fallback when description has no “sale”).
+- Viewer invoice Save draft redirects to the list with a permission toast instead of throwing; New invoice hidden; `/new` shows a readable denial.
+- Next: rebuild staging web; QA re-runs BUG-0001 and BUG-0002.
+
 ## 2026-10-12 — Tenant portable archive (design freeze)
 
 - Record: [CHG-20261012-tenant-backup-archive](changes/CHG-20261012-tenant-backup-archive.md). Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md).

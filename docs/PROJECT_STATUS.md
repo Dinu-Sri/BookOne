@@ -1,3 +1,7 @@
+## 2026-10-12 — QA BUG-0001 / BUG-0002
+
+Simple Entry cash sale posts to 4000. Viewer invoice write denial is a toast/readable page, not a Next.js error. See [CHG-20261012-qa-bugs-0001-0002](changes/CHG-20261012-qa-bugs-0001-0002.md). Rebuild web to pick up.
+
 ## 2026-10-12 — Tenant portable archive (design freeze)
 
 Owner-held company backup is specified in [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md): two files, empty-tenant restore only, schemaVersion transformers later. Not implemented yet. Platform `pg_dump` + MinIO replica remains operator DR.

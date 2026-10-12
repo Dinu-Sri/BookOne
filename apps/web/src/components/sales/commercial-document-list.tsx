@@ -56,6 +56,8 @@ export type CommercialListConfig = {
   showTaxCols?: boolean;
   /** Example: `/sales/invoices/:id/print` */
   printHrefPattern?: string;
+  /** Hide New when the job has read-only access. */
+  canWrite?: boolean;
   /** 0 = unlimited. Days after issue date when Edit is hidden. */
   editLockDays?: number;
   /** Example: `/purchase/payments/new?documentId=:id` */
@@ -534,11 +536,13 @@ export function CommercialDocumentList({
         <div className="party-toolbar-period">
           <DateRangePicker compact />
         </div>
-        <Link href={config.newHref}>
-          <Button variant="primary" type="button">
-            {config.newLabel}
-          </Button>
-        </Link>
+        {config.canWrite === false ? null : (
+          <Link href={config.newHref}>
+            <Button variant="primary" type="button">
+              {config.newLabel}
+            </Button>
+          </Link>
+        )}
       </div>
 
       <Card>
@@ -548,7 +552,9 @@ export function CommercialDocumentList({
               <h3>{rows.length === 0 ? `No ${config.title.toLowerCase()} yet` : 'No matches'}</h3>
               <p style={{ marginTop: 6 }}>
                 {rows.length === 0
-                  ? `Use ${config.newLabel} to get started.`
+                  ? config.canWrite === false
+                    ? `No ${config.title.toLowerCase()} to show.`
+                    : `Use ${config.newLabel} to get started.`
                   : 'Try another search or date range.'}
               </p>
             </div>

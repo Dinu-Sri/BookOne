@@ -369,7 +369,7 @@ export function BookOneShell({
         if (tenant?.accessByLabel) {
           items = items.filter((item) => {
             if (!item.href || item.label === 'Documentation') return true;
-            const level = tenant.accessByLabel?.[item.label] ?? 'write';
+            const level = tenant.accessByLabel?.[item.label] ?? 'none';
             return level !== 'none';
           });
         }

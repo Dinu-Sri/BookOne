@@ -138,11 +138,10 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     access = null;
   }
   const accessByLabel: Record<string, 'none' | 'read' | 'write'> = {};
-  const fallbackOpen = !access;
   for (const screen of SCREEN_DEFS) {
-    if (fallbackOpen) accessByLabel[screen.label] = screen.writeable ? 'write' : 'read';
-    else if (access?.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
-    else if (access?.allows(`${screen.keyPrefix}.read`, 'read')) accessByLabel[screen.label] = 'read';
+    if (!access) accessByLabel[screen.label] = 'none';
+    else if (access.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
+    else if (access.allows(`${screen.keyPrefix}.read`, 'read')) accessByLabel[screen.label] = 'read';
     else accessByLabel[screen.label] = 'none';
   }
   accessByLabel.Documentation = 'read';

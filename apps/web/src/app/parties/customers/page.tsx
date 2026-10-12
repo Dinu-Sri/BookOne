@@ -4,6 +4,7 @@ import { listParties, type PartyListFilter } from '@/app/actions/parties';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { PartyListScreen } from '@/components/parties/party-list';
+import { jobCanWrite } from '@/lib/access';
 
 interface SearchParams {
   q?: string;
@@ -35,7 +36,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   return (
     <BookOneShell active="Customers" tenant={tenant}>
       <Suspense fallback={<div className="workspace">Loading…</div>}>
-        <PartyListScreen role="customer" rows={rows} filter={filter} />
+        <PartyListScreen role="customer" rows={rows} filter={filter} canWrite={jobCanWrite(tenant, 'Customers')} />
       </Suspense>
     </BookOneShell>
   );

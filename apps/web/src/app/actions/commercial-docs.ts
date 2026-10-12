@@ -3687,6 +3687,10 @@ export async function deleteCommercialDocument(id: string): Promise<{ ok: boolea
         )
         .limit(1);
       if (!doc) throw new Error('Document not found.');
+      const { assertPermission } = await import('@/lib/access');
+      const perm = permissionForDocumentType(doc.documentType);
+      if (!perm) throw new Error('You do not have permission to do that.');
+      await assertPermission(perm, 'write');
       if (doc.transactionId) {
         throw new Error('Cannot delete a posted document. Void it from accounting controls later.');
       }
@@ -3735,6 +3739,10 @@ export async function archiveCommercialDocument(id: string): Promise<{ ok: boole
         )
         .limit(1);
       if (!doc) throw new Error('Document not found.');
+      const { assertPermission } = await import('@/lib/access');
+      const perm = permissionForDocumentType(doc.documentType);
+      if (!perm) throw new Error('You do not have permission to do that.');
+      await assertPermission(perm, 'write');
       if (doc.status === 'converted' || doc.status === 'fully_invoiced') {
         throw new Error('Already converted — leave as historical record.');
       }
@@ -3778,6 +3786,10 @@ export async function restoreCommercialDocument(id: string): Promise<{ ok: boole
         )
         .limit(1);
       if (!doc) throw new Error('Document not found.');
+      const { assertPermission } = await import('@/lib/access');
+      const perm = permissionForDocumentType(doc.documentType);
+      if (!perm) throw new Error('You do not have permission to do that.');
+      await assertPermission(perm, 'write');
       if (doc.status !== 'archived') throw new Error('Only archived documents can be restored.');
 
       const nextStatus = NON_GL_TYPES.has(doc.documentType)
@@ -3822,6 +3834,10 @@ export async function updateCommercialDocumentHeaderFromForm(formData: FormData)
       )
       .limit(1);
     if (!doc) throw new Error('Document not found.');
+    const { assertPermission } = await import('@/lib/access');
+    const perm = permissionForDocumentType(doc.documentType);
+    if (!perm) throw new Error('You do not have permission to do that.');
+    await assertPermission(perm, 'write');
     if (doc.status === 'converted' || doc.status === 'fully_invoiced') {
       throw new Error('Converted documents cannot be edited.');
     }

@@ -41,10 +41,12 @@ export function PartyListScreen({
   role,
   rows: initialRows,
   filter,
+  canWrite = true,
 }: {
   role: 'customer' | 'vendor';
   rows: PartyRow[];
   filter: PartyListFilter;
+  canWrite?: boolean;
 }) {
   const basePath = role === 'customer' ? '/parties/customers' : '/parties/vendors';
   const title = role === 'customer' ? 'Customers' : 'Vendors';
@@ -210,11 +212,13 @@ export function PartyListScreen({
         <div className="party-toolbar-period">
           <DateRangePicker compact />
         </div>
-        <Link href={newHref}>
-          <Button variant="primary" type="button">
-            {newLabel}
-          </Button>
-        </Link>
+        {canWrite ? (
+          <Link href={newHref}>
+            <Button variant="primary" type="button">
+              {newLabel}
+            </Button>
+          </Link>
+        ) : null}
       </div>
 
       <Card>
@@ -222,7 +226,13 @@ export function PartyListScreen({
           {pageRows.length === 0 ? (
             <div className="empty-state" style={{ padding: 28 }}>
               <h3>No {title.toLowerCase()} found</h3>
-              <p>{query ? 'Try a different search.' : `Use ${newLabel} to add the first record.`}</p>
+              <p>
+                {query
+                  ? 'Try a different search.'
+                  : canWrite
+                    ? `Use ${newLabel} to add the first record.`
+                    : `No ${title.toLowerCase()} to show.`}
+              </p>
             </div>
           ) : (
             <div className="table-wrap">
@@ -266,9 +276,13 @@ export function PartyListScreen({
                       <tr key={p.id}>
                         <td>{p.code ?? '—'}</td>
                         <td>
-                          <Link href={editHref} style={{ color: 'inherit', textDecoration: 'none' }}>
+                          {canWrite ? (
+                            <Link href={editHref} style={{ color: 'inherit', textDecoration: 'none' }}>
+                              <strong>{p.displayName || p.name}</strong>
+                            </Link>
+                          ) : (
                             <strong>{p.displayName || p.name}</strong>
-                          </Link>
+                          )}
                           {p.isCustomer && p.isVendor ? (
                             <span className="badge info" style={{ marginLeft: 8, fontSize: 11 }}>
                               Both
@@ -294,31 +308,35 @@ export function PartyListScreen({
                             >
                               <Eye size={16} />
                             </Button>
-                            <Link href={editHref}>
-                              <Button variant="secondary" type="button">
-                                Edit
-                              </Button>
-                            </Link>
-                            {p.status === 'active' ? (
-                              <Button
-                                variant="ghost"
-                                type="button"
-                                onClick={() => setConfirm({ type: 'archive', party: p })}
-                              >
-                                Archive
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                type="button"
-                                onClick={() => setConfirm({ type: 'restore', party: p })}
-                              >
-                                Restore
-                              </Button>
-                            )}
-                            <Button variant="ghost" type="button" onClick={() => onDeleteClick(p)}>
-                              Delete
-                            </Button>
+                            {canWrite ? (
+                              <>
+                                <Link href={editHref}>
+                                  <Button variant="secondary" type="button">
+                                    Edit
+                                  </Button>
+                                </Link>
+                                {p.status === 'active' ? (
+                                  <Button
+                                    variant="ghost"
+                                    type="button"
+                                    onClick={() => setConfirm({ type: 'archive', party: p })}
+                                  >
+                                    Archive
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    type="button"
+                                    onClick={() => setConfirm({ type: 'restore', party: p })}
+                                  >
+                                    Restore
+                                  </Button>
+                                )}
+                                <Button variant="ghost" type="button" onClick={() => onDeleteClick(p)}>
+                                  Delete
+                                </Button>
+                              </>
+                            ) : null}
                           </div>
                         </td>
                       </tr>

@@ -1,3 +1,9 @@
+## 2026-10-12 — Viewer write denial (BUG-0003 / BUG-0004)
+
+- Record: [CHG-20261012-viewer-write-denial](changes/CHG-20261012-viewer-write-denial.md). QA [PR #4](https://github.com/Dinu-Sri/bookone-qa/pull/4).
+- Viewer cannot create/archive customers or save invoice drafts. Party actions assert write; invoice UI requires `accessByLabel === 'write'`; missing access is none, not write.
+- Next: wait for Docker web image, Portainer Update Re-pull ON, QA retest Viewer customer + invoice Save draft.
+
 ## 2026-10-12 — GHCR so VPS only pulls
 
 - Record: [CHG-20261012-ghcr-web-image](changes/CHG-20261012-ghcr-web-image.md).

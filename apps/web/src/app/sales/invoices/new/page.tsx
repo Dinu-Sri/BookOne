@@ -5,8 +5,8 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { loadSalesFormData } from '@/lib/module-page-helpers';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { InvoiceDocumentForm } from '@/components/sales/invoice-document-form';
-import { Button, Card } from '@/components/ui/bookone-ui';
-import Link from 'next/link';
+import { PermissionDeniedCard } from '@/components/layout/permission-denied-card';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function NewSalesInvoicePage() {
   let tenant;
@@ -24,28 +24,15 @@ export default async function NewSalesInvoicePage() {
     redirect('/login');
   }
 
-  const canWrite =
-    tenant.platformRole === 'super_admin' || tenant.accessByLabel?.['Sales Invoices'] !== 'read';
-  if (!canWrite) {
+  if (!jobCanWrite(tenant, 'Sales Invoices')) {
     return (
       <BookOneShell active="Sales Invoices" tenant={tenant}>
-        <div className="workspace party-workspace">
-          <Card>
-            <div className="card-body">
-              <h2 className="card-title">Cannot create invoices</h2>
-              <p style={{ color: 'var(--ink-muted)', marginTop: 8 }}>
-                Your job can view sales invoices but cannot save or post them.
-              </p>
-              <div style={{ marginTop: 14 }}>
-                <Link href="/sales/invoices">
-                  <Button variant="secondary" type="button">
-                    Back to invoices
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </Card>
-        </div>
+        <PermissionDeniedCard
+          title="Cannot create invoices"
+          body="Your job can view sales invoices but cannot save or post them."
+          backHref="/sales/invoices"
+          backLabel="Back to invoices"
+        />
       </BookOneShell>
     );
   }

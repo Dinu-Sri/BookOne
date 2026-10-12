@@ -9,10 +9,12 @@ import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { loadSalesFormData } from '@/lib/module-page-helpers';
 import { BookOneShell } from '@/components/layout/bookone-shell';
+import { PermissionDeniedCard } from '@/components/layout/permission-denied-card';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { InvoiceDocumentForm } from '@/components/sales/invoice-document-form';
 import { Button } from '@/components/ui/bookone-ui';
 import { PrintPreviewButton } from '@/components/print/print-preview-button';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,6 +32,18 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   }
   if (!doc || !['sales_invoice', 'customer_invoice'].includes(doc.documentType)) {
     redirect('/sales/invoices');
+  }
+  if (!jobCanWrite(tenant, 'Sales Invoices')) {
+    return (
+      <BookOneShell active="Sales Invoices" tenant={tenant}>
+        <PermissionDeniedCard
+          title="Cannot edit invoices"
+          body="Your job can view sales invoices but cannot change them."
+          backHref="/sales/invoices"
+          backLabel="Back to invoices"
+        />
+      </BookOneShell>
+    );
   }
   if (doc.status === 'void' || doc.status === 'paid') redirect(`/sales/invoices/${doc.id}`);
   if (doc.status !== 'draft' && settings.editLockDays > 0) {

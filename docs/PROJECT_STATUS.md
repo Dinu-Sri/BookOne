@@ -1,3 +1,7 @@
+## 2026-10-12 — Viewer write denial (BUG-0003 / BUG-0004)
+
+QA PR #4: Viewer created a customer and saved invoice draft `INV-20261012-0001`. Product now denies those writes on the server and hides New/Edit/Archive. See [CHG-20261012-viewer-write-denial](changes/CHG-20261012-viewer-write-denial.md). Pull the new GHCR image after **Docker web image** is green.
+
 ## 2026-10-12 — GHCR web image (VPS only pulls)
 
 GitHub Action **Docker web image** pushes `ghcr.io/dinu-sri/bookone-web:latest`. Staging and prod compose have no `web` `build:`. Wait for the Action to go green, then Portainer Update with Re-pull ON. Infra stays `pull_policy: missing`. See [CHG-20261012-ghcr-web-image](changes/CHG-20261012-ghcr-web-image.md).

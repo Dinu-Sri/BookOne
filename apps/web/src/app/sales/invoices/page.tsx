@@ -5,6 +5,7 @@ import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentList } from '@/components/sales/commercial-document-list';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function SalesInvoicesPage() {
   let tenant;
@@ -30,8 +31,7 @@ export default async function SalesInvoicesPage() {
             searchPlaceholder: 'Search by customer name or number…',
             newHref: '/sales/invoices/new',
             newLabel: 'New invoice',
-            canWrite:
-              tenant.platformRole === 'super_admin' || tenant.accessByLabel?.['Sales Invoices'] !== 'read',
+            canWrite: jobCanWrite(tenant, 'Sales Invoices'),
             showTaxCols: true,
             printHrefPattern: '/sales/invoices/:id/print',
             detailHrefPattern: '/sales/invoices/:id',

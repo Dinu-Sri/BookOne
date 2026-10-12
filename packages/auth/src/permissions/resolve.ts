@@ -77,8 +77,9 @@ export function ceilingAllows(
 
 function fallbackFullAccess(input: ResolveInput): boolean {
   if (input.rbacEnforced) return false;
-  const slug = (input.primaryTemplateKey || input.legacyRole || '').toLowerCase();
-  return slug === 'owner' || slug === 'admin' || slug === 'member' || slug === 'super_admin' || !slug;
+  const slug = (input.primaryTemplateKey || '').toLowerCase();
+  // Unknown/empty/member/viewer must not inherit owner writes. Design: missing job is Viewer.
+  return slug === 'owner' || slug === 'admin';
 }
 
 export function resolveLevel(input: ResolveInput, key: string): AccessLevel {

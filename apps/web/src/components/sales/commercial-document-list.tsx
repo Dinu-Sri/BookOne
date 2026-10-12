@@ -364,8 +364,9 @@ export function CommercialDocumentList({
 
   function renderMenuItems(row: CommercialDocRow) {
     const items: ReactNode[] = [];
+    const allowWrite = config.canWrite !== false;
     const editTo = hrefFromPattern(config.editHrefPattern, row.id);
-    if (canEdit(row) && editTo) {
+    if (allowWrite && canEdit(row) && editTo) {
       items.push(
         <Link
           key="edit"
@@ -381,7 +382,7 @@ export function CommercialDocumentList({
         </Link>,
       );
     }
-    if (canConvert(row) && config.convertTo) {
+    if (allowWrite && canConvert(row) && config.convertTo) {
       items.push(
         <form key="convert" action={convertDocumentAction}>
           <input type="hidden" name="sourceId" value={row.id} />
@@ -394,6 +395,7 @@ export function CommercialDocumentList({
     }
     const payTo = hrefFromPattern(config.payHrefPattern, row.id);
     if (
+      allowWrite &&
       payTo &&
       Number(row.balanceDue) > 0.005 &&
       row.status !== 'void' &&
@@ -435,7 +437,7 @@ export function CommercialDocumentList({
         </Link>,
       );
     }
-    if (row.status === 'archived') {
+    if (allowWrite && row.status === 'archived') {
       items.push(
         <button
           key="restore"
@@ -451,7 +453,7 @@ export function CommercialDocumentList({
           Restore
         </button>,
       );
-    } else if (canEdit(row)) {
+    } else if (allowWrite && canEdit(row)) {
       items.push(
         <button
           key="archive"
@@ -468,7 +470,7 @@ export function CommercialDocumentList({
         </button>,
       );
     }
-    if (row.status !== 'converted') {
+    if (allowWrite && row.status !== 'converted') {
       items.push(
         <button
           key="delete"

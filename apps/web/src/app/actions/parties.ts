@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
+import { assertPermission } from '@/lib/access';
 import {
   auditLog,
   businessDocuments,
@@ -488,6 +489,27 @@ function toDbValues(tenantId: string, parsed: PartyInput, code: string | null) {
   };
 }
 
+function partyWriteKey(isCustomer: boolean, isVendor: boolean): 'parties.customers.write' | 'parties.vendors.write' {
+  if (isVendor && !isCustomer) return 'parties.vendors.write';
+  return 'parties.customers.write';
+}
+
+function partyListPath(isCustomer: boolean, isVendor: boolean): string {
+  return isVendor && !isCustomer ? '/parties/vendors' : '/parties/customers';
+}
+
+async function assertPartyWrite(isCustomer: boolean, isVendor: boolean, redirectTo?: string): Promise<void> {
+  try {
+    await assertPermission(partyWriteKey(isCustomer, isVendor), 'write');
+  } catch {
+    if (redirectTo) {
+      const { redirect } = await import('next/navigation');
+      redirect(`${redirectTo}?flash=denied_write`);
+    }
+    throw new Error('You do not have permission to do that.');
+  }
+}
+
 export async function listParties(filter?: PartyListFilter): Promise<PartyRow[]> {
   const user = await requireTenantContext();
   const kind = filter?.kind ?? 'all';
@@ -813,6 +835,9 @@ export async function createPartyFromForm(formData: FormData): Promise<void> {
     throw new Error('Select at least one role: customer and/or vendor.');
   }
 
+  const dest = partyListPath(parsed.isCustomer, parsed.isVendor);
+  await assertPartyWrite(parsed.isCustomer, parsed.isVendor, dest);
+
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
     // Duplicate TIN
@@ -879,7 +904,6 @@ export async function createPartyFromForm(formData: FormData): Promise<void> {
 
   revalidateParties();
   const { redirect } = await import('next/navigation');
-  const dest = parsed.isVendor && !parsed.isCustomer ? '/parties/vendors' : '/parties/customers';
   redirect(`${dest}?flash=created`);
 }
 
@@ -891,6 +915,9 @@ export async function updatePartyFromForm(formData: FormData): Promise<void> {
   if (!parsed.isCustomer && !parsed.isVendor) {
     throw new Error('Select at least one role: customer and/or vendor.');
   }
+
+  const dest = partyListPath(parsed.isCustomer, parsed.isVendor);
+  await assertPartyWrite(parsed.isCustomer, parsed.isVendor, dest);
 
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
@@ -954,13 +981,22 @@ export async function updatePartyFromForm(formData: FormData): Promise<void> {
 
   revalidateParties();
   const { redirect } = await import('next/navigation');
-  const dest = parsed.isVendor && !parsed.isCustomer ? '/parties/vendors' : '/parties/customers';
   redirect(`${dest}?flash=updated`);
 }
 
 export async function archivePartyFromForm(formData: FormData): Promise<void> {
   const id = String(formData.get('id') ?? '');
   const user = await requireTenantContext();
+  const existing = await withTenantContext(user.tenantId, async () => {
+    const [row] = await db()
+      .select({ isCustomer: parties.isCustomer, isVendor: parties.isVendor })
+      .from(parties)
+      .where(and(eq(parties.tenantId, user.tenantId), eq(parties.id, id), isNull(parties.voidedAt)))
+      .limit(1);
+    return row;
+  });
+  if (!existing) throw new Error('Party not found.');
+  await assertPartyWrite(existing.isCustomer === '1', existing.isVendor === '1');
   await withTenantContext(user.tenantId, async () => {
     await db()
       .update(parties)
@@ -982,6 +1018,16 @@ export async function archivePartyFromForm(formData: FormData): Promise<void> {
 export async function restorePartyFromForm(formData: FormData): Promise<void> {
   const id = String(formData.get('id') ?? '');
   const user = await requireTenantContext();
+  const existing = await withTenantContext(user.tenantId, async () => {
+    const [row] = await db()
+      .select({ isCustomer: parties.isCustomer, isVendor: parties.isVendor })
+      .from(parties)
+      .where(and(eq(parties.tenantId, user.tenantId), eq(parties.id, id), isNull(parties.voidedAt)))
+      .limit(1);
+    return row;
+  });
+  if (!existing) throw new Error('Party not found.');
+  await assertPartyWrite(existing.isCustomer === '1', existing.isVendor === '1');
   await withTenantContext(user.tenantId, async () => {
     await db()
       .update(parties)
@@ -1005,11 +1051,17 @@ export async function deletePartyFromForm(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
     const [existing] = await db()
-      .select({ id: parties.id, name: parties.name })
+      .select({
+        id: parties.id,
+        name: parties.name,
+        isCustomer: parties.isCustomer,
+        isVendor: parties.isVendor,
+      })
       .from(parties)
       .where(and(eq(parties.tenantId, user.tenantId), eq(parties.id, id), isNull(parties.voidedAt)))
       .limit(1);
     if (!existing) throw new Error('Party not found.');
+    await assertPartyWrite(existing.isCustomer === '1', existing.isVendor === '1');
 
     const check = await assertPartyDeletable(user.tenantId, id, existing.name);
     if (!check.ok) {

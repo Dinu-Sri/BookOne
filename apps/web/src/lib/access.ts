@@ -42,6 +42,14 @@ export function levelForPrefix(access: LoadedAccess | null, prefix: string): Acc
   return 'none';
 }
 
+/** Write only when the job matrix says write. Missing/read/none is not write. */
+export function jobCanWrite(
+  tenant: { accessByLabel?: Record<string, 'none' | 'read' | 'write'> } | null | undefined,
+  label: string,
+): boolean {
+  return tenant?.accessByLabel?.[label] === 'write';
+}
+
 function isPublicPath(pathname: string): boolean {
   if (pathname === '/login' || pathname === '/reset-password') return true;
   if (pathname === '/i' || pathname.startsWith('/i/')) return true;

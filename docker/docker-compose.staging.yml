@@ -37,9 +37,9 @@ services:
       - bookone_network
     restart: unless-stopped
 
-  # ── ERP — compile from docker/Dockerfile.web, tag for this stack
+  # ── ERP — local Dockerfile only. Do not set `image:` — Portainer Re-pull
+  # would try Docker Hub for that name and fail (bookone_stage-web is not a Hub repo).
   web:
-    image: bookone_stage-web:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile.web

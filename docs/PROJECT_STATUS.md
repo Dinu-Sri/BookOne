@@ -1,6 +1,6 @@
 ## 2026-10-12 — Portainer web image install hotfix
 
-Wave 1b is on `master` (`2bbc334`). Portainer failed at `pnpm install --frozen-lockfile --ignore-scripts`. Dockerfile now pins pnpm 9.0.0 and copies every remaining workspace manifest. Pull `master` and rebuild web only (never MinIO). Then run bookone-qa denial tests S-0031–S-0033.
+Wave 1b is on `master`. Production Check going green does not build the Portainer image. `Dockerfile.web` now uses Debian slim (glibc, same as Actions) and a full workspace copy. Pull latest `master` and rebuild **web only** (never MinIO). Then run bookone-qa denial tests S-0031–S-0033.
 
 ## 2026-10-12 — Inbuilt E2E cleanup Wave 1b (product delete)
 

@@ -1,3 +1,8 @@
+## 2026-10-12 — Portainer frozen-lockfile: Debian image (second hotfix)
+
+- Owner did the usual Portainer pull after Production Check went green. That workflow never builds the web image (GHCR publish was reverted). Alpine `pnpm install --frozen-lockfile --ignore-scripts` still failed.
+- `Dockerfile.web` now uses `node:22-bookworm-slim`, `npm install -g pnpm@9.0.0`, and copies `apps/` + `packages/` like CI. Rebuild **web only**.
+
 ## 2026-10-12 — Portainer frozen-lockfile after Wave 1b merge
 
 - `master` merge `2bbc334` made Portainer rebuild the web deps layer. Install failed at `pnpm install --frozen-lockfile --ignore-scripts`.

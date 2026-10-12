@@ -1,59 +1,43 @@
 # BookOne v2 — Production web (ERP only — no Chromium / E2E)
-# Layered for cache: deps install only re-runs when lockfiles change.
-FROM node:22-alpine AS base
-RUN apk add --no-cache libc6-compat
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-# Pin to package.json packageManager. `pnpm@9` floats and can fail frozen-lockfile.
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+#
+# GitHub Actions "Production Check" is NOT this image. It only runs
+# `pnpm install --frozen-lockfile` on ubuntu-latest (glibc). Portainer
+# builds this file. Use Debian slim so install matches that proven Linux
+# lockfile, not Alpine musl.
+#
+# Full apps/ + packages/ copy matches CI checkout (765dbe5). Manifest-only
+# copy broke after Wave 1b removed apps/e2e-runner from the lockfile.
+FROM node:22-bookworm-slim AS base
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+# Same install path that deployed for months (`npm install -g pnpm@9`), pinned.
+RUN npm install -g pnpm@9.0.0
 
 FROM base AS deps
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV CI=true
 
-# Copy every workspace manifest the lockfile knows about (not apps/* glob).
-# A leftover apps/e2e-runner dir on the VPS must not become a workspace package.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json .npmrc ./
-COPY apps/web/package.json ./apps/web/
-COPY apps/docs/package.json ./apps/docs/
-COPY apps/workers/package.json ./apps/workers/
-COPY packages/accounting/package.json ./packages/accounting/
-COPY packages/auth/package.json ./packages/auth/
-COPY packages/db/package.json ./packages/db/
-COPY packages/modules/package.json ./packages/modules/
-COPY packages/statement-import/package.json ./packages/statement-import/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/db/drizzle.config.ts ./packages/db/drizzle.config.ts
+COPY apps ./apps
+COPY packages ./packages
+COPY scripts ./scripts
+COPY docker/entrypoint.sh ./docker/entrypoint.sh
 
-# Ignore scripts here: apps/web postinstall runs `fumadocs-mdx` which needs
-# source.config.ts and content — not present until the builder stage. Without
-# --ignore-scripts, Portainer/docker build fails with:
-#   process "/bin/sh -c pnpm install --frozen-lockfile" did not complete successfully
+# Skip apps/web postinstall (fumadocs-mdx). It runs in the builder stage
+# after source.config.ts is present (704099b).
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 FROM base AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/packages ./packages
-COPY --from=deps /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/turbo.json /app/tsconfig.base.json /app/.npmrc ./
-COPY --from=deps /app/apps/docs/package.json ./apps/docs/
-COPY --from=deps /app/apps/workers/package.json ./apps/workers/
-
-# App sources (invalidates cache only when code changes)
-COPY apps/web ./apps/web
-COPY packages ./packages
-COPY scripts ./scripts
-COPY docker/entrypoint.sh ./docker/entrypoint.sh
+COPY --from=deps /app ./
 
 ARG BUILD_DATE=0
 RUN echo "Build: $BUILD_DATE" && rm -rf apps/web/.next apps/web/.turbo
 
-# Run the deferred postinstall now that source.config.ts / MDX content exist
 RUN pnpm --dir apps/web exec fumadocs-mdx
-
 RUN pnpm --dir apps/web build
 
 FROM base AS runner
@@ -62,8 +46,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN addgroup --system --gid 1001 nodejs \
- && adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs \
+ && useradd --system --uid 1001 --gid nodejs nextjs
 
 COPY --from=builder --chown=nextjs:nodejs /app ./
 

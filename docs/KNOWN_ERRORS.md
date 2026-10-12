@@ -77,8 +77,8 @@ docker compose restart cloudflared    # Restart tunnel
 ## Error: Portainer web build fails at `pnpm install --frozen-lockfile --ignore-scripts`
 
 **Symptom:** Stack update fails with `process "/bin/sh -c pnpm install --frozen-lockfile --ignore-scripts" did not complete successfully: exit code: 1`  
-**Cause:** Wave 1b removed `apps/e2e-runner` and regenerated the lockfile, so the web image deps layer rebuilt. The Dockerfile used a floating `pnpm@9` and `apps/*` workspace glob, and did not copy `apps/docs` / `apps/workers` manifests.  
-**Fix:** Use current `docker/Dockerfile.web` (pinned pnpm 9.0.0, explicit workspace packages, all manifests). Pull `master` and rebuild **web only**. Do not re-pull MinIO. Local check: `pnpm install --frozen-lockfile --ignore-scripts`.
+**Cause:** GitHub Actions Production Check only installs on Ubuntu. Portainer builds `Dockerfile.web`. After Wave 1b the Alpine deps layer rebuilt against a lockfile generated on Windows; that step exits 1. A green Action does not mean the image built.  
+**Fix:** Current `docker/Dockerfile.web` uses `node:22-bookworm-slim` and a full workspace copy (same Linux/glibc family as Actions). Pull `master` and rebuild **web only**. Do not re-pull MinIO. Compose path must stay `docker/docker-compose.prod.yml`.
 
 ---
 

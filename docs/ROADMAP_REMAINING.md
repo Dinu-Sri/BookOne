@@ -25,6 +25,10 @@
 
 ---
 
+## Tenant portable archive (specified, not built)
+
+See `docs/TENANT_BACKUP_ARCHIVE.md`. Owner download of paired data + S3 files packs; restore only into an empty new company. Implementation starts at export (phase 1) when scheduled. Does not replace operator off-site Postgres/MinIO backups.
+
 ## Phase 6 — Tax depth (next major product)
 
 | Item | Notes |

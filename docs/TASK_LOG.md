@@ -1,3 +1,9 @@
+## 2026-10-12 — Tenant portable archive (design freeze)
+
+- Record: [CHG-20261012-tenant-backup-archive](changes/CHG-20261012-tenant-backup-archive.md). Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md).
+- Owner backup = two encrypted files (data = books including invoices; files = S3 blobs). Restore only into an operationally empty new tenant. Signup CoA/jobs are seed and get replaced.
+- Code not started. Next: phase 1 export when owner asks to build. Operator DR (pg_dump + MinIO off-site) stays separate.
+
 ## 2026-10-12 — Remove test ops; PLATFORM_ADMIN_EMAIL for Control Room
 
 - Record: [CHG-20261012-remove-test-ops](changes/CHG-20261012-remove-test-ops.md).

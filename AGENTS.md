@@ -218,6 +218,7 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 
 - `docs/QA_CHANGE_CONTRACT.md` — Mandatory development-agent handover to external QA
 - `docs/changes/README.md` — Durable per-task change ledger and template
+- `docs/TENANT_BACKUP_ARCHIVE.md` — Owner company backup/restore contract (empty tenant, two files)
 
 - `docs/PROJECT_STATUS.md` — **Master status, deployment errors, workflows, what's next** (read first)
 - `docs/ARCHITECTURE_PLAN.md` — Full technology stack, scaling strategy

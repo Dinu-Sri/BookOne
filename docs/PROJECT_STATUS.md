@@ -1,3 +1,7 @@
+## 2026-10-12 — Tenant portable archive (design freeze)
+
+Owner-held company backup is specified in [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md): two files, empty-tenant restore only, schemaVersion transformers later. Not implemented yet. Platform `pg_dump` + MinIO replica remains operator DR.
+
 ## 2026-10-12 — Remove Control Room test tools; grant admin by email
 
 Health Check is an empty placeholder. Control Room Audit, company reset, demo seed APIs/scripts, and leftover E2E docs (`docs/E2E_*`, `REMOVE_INBUILT_E2E.md`, `PRODUCTION_SMOKE_TEST.md`) are gone. Schema/migration `019` is kept. `PLATFORM_ADMIN_EMAIL` (comma-separated) promotes those users to `super_admin` on signup and login so Control Room appears. Owner must set the env in Portainer and rebuild web. See [CHG-20261012-remove-test-ops](changes/CHG-20261012-remove-test-ops.md).

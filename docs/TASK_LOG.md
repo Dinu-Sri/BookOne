@@ -1,3 +1,8 @@
+## 2026-10-12 — Staging: infra can start without a web image
+
+- Portainer error `No such image: bookone-web:latest`. Web is now compose profile `erp` so Update can start postgres/redis/minio/traefik/cloudflared without it.
+- After infra is up, set `WEB_IMAGE` from Portainer Images and `COMPOSE_PROFILES=erp`.
+
 ## 2026-10-12 — Staging compose: stop compiling web on Portainer Update
 
 - Stack uses `docker/docker-compose.staging.yml`. Any `build:` failure removes the whole stack.

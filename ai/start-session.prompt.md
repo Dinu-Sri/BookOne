@@ -8,6 +8,6 @@ The external QA repository is https://github.com/Dinu-Sri/bookone-qa. Read its S
 
 The owner identifies https://bookone.clossyan.com as staging containing disposable testing data and authorizes changes there. Production is outside the QA agent's access. Keep secrets and raw evidence out of public Git.
 
-For inbuilt test cleanup, follow docs/REMOVE_INBUILT_E2E.md; do not delete tests/interfaces until preservation and external validation criteria are met.
+Inbuilt product test consoles, company reset, demo seed APIs, and Control Room health-check runners are removed. Browser tests live in bookone-qa. Do not republish an HTTP e2e runner in the product.
 
 At handover, update the change record, docs/TASK_LOG.md and docs/PROJECT_STATUS.md with exact changed paths, checked versions, tests executed, failed/skipped/not-run checks, evidence, blockers and next action.

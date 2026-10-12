@@ -1,3 +1,14 @@
+## 2026-10-12 — Remove test ops; PLATFORM_ADMIN_EMAIL for Control Room
+
+- Record: [CHG-20261012-remove-test-ops](changes/CHG-20261012-remove-test-ops.md).
+- Deleted Control Room health-check runner (`health-check.ts`, panel, `rental-health.ts`); page is an empty placeholder.
+- Deleted Control Room Audit page/nav; tenant `auditLog` writes remain.
+- Deleted company reset actions/buttons, `api/platform/seed-rental-demo`, `cleanup-companies`, `platform-cleanup`, `scripts/seed-demo-*`, `generate-demo-product-images.ts`, `db:seed-products`.
+- Deleted leftover docs: `E2E_*.md`, `REMOVE_INBUILT_E2E.md`, `PRODUCTION_SMOKE_TEST.md`.
+- `PLATFORM_ADMIN_EMAIL` (compose + `.env.example`) promotes listed emails to `super_admin` on signup and login.
+- Kept: schema/migration 019, `/ops/logs`, CoA/job seed on signup, package unit tests. No DROP TABLE.
+- Next: owner sets `PLATFORM_ADMIN_EMAIL` in Portainer, Update with Re-pull OFF, log out and in.
+
 ## 2026-10-12 — Fresh staging stack (wiped images/volumes)
 
 - Owner wiped Portainer images/volumes; data loss accepted. GitHub Action Docker web image #1 succeeded (2m 22s).

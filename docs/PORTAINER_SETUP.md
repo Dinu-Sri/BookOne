@@ -84,6 +84,7 @@ Below each variable, I explain what it is and how to get/generate it.
 | `BETTER_AUTH_URL` | `https://bookone.clossyan.com` | Your domain |
 | `GOOGLE_CLIENT_ID` | `...apps.googleusercontent.com` | Google Cloud OAuth client |
 | `GOOGLE_CLIENT_SECRET` | `...` | Google Cloud OAuth client secret |
+| `PLATFORM_ADMIN_EMAIL` | `you@example.com` | Comma-separated emails that get Control Room on signup/login |
 
 ### Redis
 

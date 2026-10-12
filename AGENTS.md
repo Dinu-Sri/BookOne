@@ -8,7 +8,7 @@
 
 Canonical QA: **https://github.com/Dinu-Sri/bookone-qa** (public). For every coding task, read **docs/QA_CHANGE_CONTRACT.md**, create/update **docs/changes/CHG-YYYYMMDD-short-slug.md** from its template, and update TASK_LOG and PROJECT_STATUS before handover. Tests, scenarios, assertion reviews and run history belong in QA; keep development change records and integration references here. Never publish secrets or raw customer/session evidence.
 
-The inbuilt `/e2e` console, `/api/e2e/**`, and `apps/e2e-runner` were removed (Wave 1b, [CHG-20261012-remove-inbuilt-e2e](docs/changes/CHG-20261012-remove-inbuilt-e2e.md)). Browser tests and `pnpm agent:browse` live in bookone-qa. Operator follow-up: stop any leftover `bookone-staging-e2e` container and `bookone-e2e.clossyan.com` tunnel. Keep Health Check, company reset, seeds, migrations, MinIO, `/ops/logs`, and package unit tests.
+The inbuilt `/e2e` console, `/api/e2e/**`, and `apps/e2e-runner` were removed (Wave 1b). Control Room Health Check is an empty placeholder; company reset, demo seed APIs/scripts, and the Control Room Audit screen are gone. Browser tests live in bookone-qa. Keep migrations (including unused `019` history), MinIO, `/ops/logs`, CoA/job seeding on signup, and package unit tests. `PLATFORM_ADMIN_EMAIL` grants Control Room (`super_admin`) on signup and login.
 
 The owner confirms **https://bookone.clossyan.com is staging with disposable testing data** and authorizes changes there. Production is outside the QA agent's access. Verify the target; older documents calling this host production are obsolete.
 
@@ -51,6 +51,7 @@ Key variables:
 - `SENTRY_DSN` — Error tracking
 - `NEXT_PUBLIC_POSTHOG_KEY` — Product analytics (public)
 - `CRON_SECRET` — Secret for securing cron job endpoints
+- `PLATFORM_ADMIN_EMAIL` — Comma-separated emails that receive Control Room (`super_admin`) on signup and login
 
 ---
 
@@ -64,7 +65,7 @@ packages/auth/     → NextAuth.js v5 configuration
 packages/ui/       → Shared shadcn/ui components
 packages/modules/  → Module registry, feature flags (inventory, tax, POS, CRM, HR)
 docker/            → Dockerfile, docker-compose.yml, docker-compose.prod.yml
-scripts/           → Seed, backup, migration scripts
+scripts/           → Init, backup, migration scripts
 docs/              → Architecture docs, deployment workflow, known errors
 ai/                → AI session files (generated context, start-session prompt)
 ```
@@ -216,7 +217,6 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 ## Important Docs
 
 - `docs/QA_CHANGE_CONTRACT.md` — Mandatory development-agent handover to external QA
-- `docs/REMOVE_INBUILT_E2E.md` — Safe removal task for embedded testing environments, code and interfaces
 - `docs/changes/README.md` — Durable per-task change ledger and template
 
 - `docs/PROJECT_STATUS.md` — **Master status, deployment errors, workflows, what's next** (read first)
@@ -234,7 +234,7 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 
 ---
 
-*Last updated: 2026-09-05 | BookOne v2*
+*Last updated: 2026-10-12 | BookOne v2*
 
 ## Codebase Memory MCP
 

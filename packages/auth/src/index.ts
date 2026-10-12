@@ -4,6 +4,7 @@ export { createCredentialLogin, setCredentialPassword } from './create-login';
 export { signOut } from './sign-out';
 export { getSession, requireTenantContext, withTenantAuth, getAuthIdentity, INVITE_COOKIE } from './session';
 export type { Session, SessionUser, AuthIdentity } from './session';
+export { isPlatformAdminEmail, platformAdminEmails } from './platform-admin-email';
 export {
   CATALOG_VERSION,
   PERMISSION_KEYS,

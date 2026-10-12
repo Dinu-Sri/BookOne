@@ -1,3 +1,7 @@
+## 2026-10-12 — Remove Control Room test tools; grant admin by email
+
+Health Check is an empty placeholder. Control Room Audit, company reset, demo seed APIs/scripts, and leftover E2E docs (`docs/E2E_*`, `REMOVE_INBUILT_E2E.md`, `PRODUCTION_SMOKE_TEST.md`) are gone. Schema/migration `019` is kept. `PLATFORM_ADMIN_EMAIL` (comma-separated) promotes those users to `super_admin` on signup and login so Control Room appears. Owner must set the env in Portainer and rebuild web. See [CHG-20261012-remove-test-ops](changes/CHG-20261012-remove-test-ops.md).
+
 ## 2026-10-12 — Portainer web image install hotfix
 
 Wave 1b is on `master`. Production Check going green does not build the Portainer image. `Dockerfile.web` now uses Debian slim (glibc, same as Actions) and a full workspace copy. Pull latest `master` and rebuild **web only** (never MinIO). Then run bookone-qa denial tests S-0031–S-0033.
@@ -16,7 +20,7 @@ Branch `chore/remove-inbuilt-e2e`. Inventory vs https://github.com/Dinu-Sri/book
 
 ## 2026-10-11 — External QA handover
 
-Canonical public QA project: https://github.com/Dinu-Sri/bookone-qa. All development agents must follow [QA_CHANGE_CONTRACT.md](QA_CHANGE_CONTRACT.md) and maintain [change records](changes/README.md). The owner requested removal of inbuilt testing through [REMOVE_INBUILT_E2E.md](REMOVE_INBUILT_E2E.md); no runtime removal is performed by this documentation update. See [CHG-20261011-external-qa-handover](changes/CHG-20261011-external-qa-handover.md). Older embedded-runner instructions are superseded by the new contract. Staging test data is owner-authorized; production is outside QA access.
+Canonical public QA project: https://github.com/Dinu-Sri/bookone-qa. All development agents must follow [QA_CHANGE_CONTRACT.md](QA_CHANGE_CONTRACT.md) and maintain [change records](changes/README.md). Inbuilt product test consoles, company reset, demo seeds, and Control Room health-check runners are removed. Staging test data is owner-authorized; production is outside QA access.
 
 ---
 
@@ -128,12 +132,12 @@ Each phase corresponds to a commit on `master`. Replay them in order if you ever
 - Reversing entries are available from Transactions and post an opposite journal in the current open period.
 - Transaction review now supports search, party, account, low confidence, missing receipt, and unreconciled filters.
 - Receipt viewing uses private R2 presigned download URLs from the Transactions page.
-- Production smoke testing is documented in `docs/PRODUCTION_SMOKE_TEST.md`.
+- Browser tests live in https://github.com/Dinu-Sri/bookone-qa.
 - Customer/vendor parties are reusable records instead of only free-text names.
 - Invoices and bills are real AR/AP documents with journal posting and payment allocation.
 - Reports v1 now exposes Profit & Loss, Balance Sheet, Cash Flow, General Ledger, and Trial Balance.
 - Journal is now the first accounting-engine audit surface: check every posted entry, balance status, debit/credit totals, and ledger integrity before trusting reports or reconciliation.
-- Temporary admin reset is available from the header for live test cycles. It preserves tenant/users/accounts and clears operational data plus tenant receipt files.
+- Company reset and demo seed tools were removed from the product.
 - Settings now includes the company setup foundation: legal company profile, tax identifiers, financial years, brands, locations, tenant memberships, additional company creation, and company switching through tenant-session refresh.
 
 | # | Phase | Status | Commit | Notes |

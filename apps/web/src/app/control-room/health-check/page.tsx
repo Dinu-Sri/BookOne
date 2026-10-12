@@ -1,31 +1,32 @@
 import { redirect } from 'next/navigation';
 import { getTenantInfo } from '@/app/actions/workspace';
-import { getHealthCheckPageData } from '@/app/actions/health-check';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { HealthCheckPanel } from '@/components/control-room/health-check-panel';
+import { Card } from '@/components/ui/bookone-ui';
+import { isPlatformAdmin } from '@/lib/platform-admin';
 
 export default async function ControlRoomHealthCheckPage() {
   let tenant;
-  let data;
   try {
     tenant = await getTenantInfo();
-    data = await getHealthCheckPageData();
   } catch {
     redirect('/login');
   }
 
-  if (!data.isSuperAdmin) {
+  if (!isPlatformAdmin(tenant)) {
     redirect('/');
   }
 
   return (
     <BookOneShell active="ERP Health Check" tenant={tenant}>
       <section className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
-        <HealthCheckPanel
-          environment={data.environment}
-          canRun={data.canRun}
-          recentRuns={data.recentRuns}
-        />
+        <Card>
+          <div className="card-body">
+            <h2 className="card-title">ERP Health Check</h2>
+            <p style={{ color: 'var(--ink-muted)', marginTop: 8 }}>
+              This screen is reserved for operational checks. Tools will be added later.
+            </p>
+          </div>
+        </Card>
       </section>
     </BookOneShell>
   );

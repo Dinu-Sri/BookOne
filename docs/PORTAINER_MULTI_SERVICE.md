@@ -101,6 +101,7 @@ Retired: `bookone-e2e.clossyan.com` / inbuilt `/e2e`. Remove that tunnel hostnam
 | `AUTH_SECRET` or `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional |
 | `CRON_SECRET` | Cron endpoints |
+| `PLATFORM_ADMIN_EMAIL` | Comma-separated emails that get Control Room |
 
 ### Redis / S3 / MinIO
 

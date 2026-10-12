@@ -32,7 +32,6 @@ import { useRouter } from 'next/navigation';
 import { Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
 import { PeriodSelector } from '@/components/layout/period-selector';
-import { CompanyResetButton } from '@/components/layout/company-reset-button';
 import { StatusToast } from '@/components/layout/status-toast';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
 import {
@@ -175,7 +174,6 @@ const navSuites: NavSuite[] = [
       { label: 'Companies', icon: Building2, href: '/control-room/companies' },
       { label: 'Modules', icon: SlidersHorizontal, href: '/control-room/modules' },
       { label: 'Access', icon: ShieldCheck, href: '/control-room/access' },
-      { label: 'Audit', icon: ClipboardList, href: '/control-room/audit' },
       { label: 'ERP Health Check', icon: CheckCircle2, href: '/control-room/health-check' },
     ],
   },
@@ -503,7 +501,6 @@ export function BookOneShell({
             <WorkspaceSwitcher currentName={tenant?.name} />
           </div>
           <div className="topbar-actions">
-            <CompanyResetButton />
             <Suspense fallback={null}>
               <StatusToast />
             </Suspense>

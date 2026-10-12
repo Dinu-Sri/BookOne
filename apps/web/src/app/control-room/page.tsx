@@ -147,11 +147,6 @@ export default async function ControlRoomOverviewPage() {
               <div>
                 <h2 className="card-title">Recent platform activity</h2>
               </div>
-              <Link href="/control-room/audit">
-                <Button variant="ghost" type="button">
-                  Audit
-                </Button>
-              </Link>
             </div>
             <div className="card-body" style={{ padding: 0 }}>
               <div className="table-wrap">

@@ -17,6 +17,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { auth } from './auth';
+import { isPlatformAdminEmail } from './platform-admin-email';
 import { ensureOwnerMembership, seedJobsForTenant } from './permissions/seed-jobs';
 
 export const INVITE_COOKIE = 'bookone_invite_token';
@@ -86,7 +87,8 @@ async function toSessionUser(row: {
 }): Promise<SessionUser> {
   const homeTenantId = row.tenantId;
   const tenantId = row.activeTenantId || row.tenantId;
-  const platformRole: 'super_admin' | 'user' = row.role === 'super_admin' ? 'super_admin' : 'user';
+  const platformRole: 'super_admin' | 'user' =
+    row.role === 'super_admin' || isPlatformAdminEmail(row.email) ? 'super_admin' : 'user';
 
   let jobSlug: string | null = null;
   let jobId: string | null = null;
@@ -166,6 +168,7 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
 
   if (existing) {
     if (existing.voidedAt) return null;
+    existing.role = await persistPlatformAdminRole(existing);
     try {
       await ensureOwnerMembership(existing.tenantId, existing.id);
     } catch {
@@ -211,7 +214,7 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
         email: normalizedEmail,
         name: displayName,
         passwordHash: 'better-auth-managed',
-        role: 'admin',
+        role: isPlatformAdminEmail(normalizedEmail) ? 'super_admin' : 'admin',
       })
       .returning({
         id: users.id,
@@ -262,6 +265,20 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
   }
 
   return toSessionUser(created);
+}
+
+async function persistPlatformAdminRole(row: { id: string; email: string; role: string }): Promise<string> {
+  if (row.role === 'super_admin') return 'super_admin';
+  if (!isPlatformAdminEmail(row.email)) return row.role;
+  try {
+    await db()
+      .update(users)
+      .set({ role: 'super_admin', updatedAt: sql`NOW()` })
+      .where(eq(users.id, row.id));
+  } catch {
+    /* session still grants Control Room via isPlatformAdminEmail */
+  }
+  return 'super_admin';
 }
 
 function andEqEmail(email: string) {

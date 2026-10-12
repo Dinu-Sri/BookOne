@@ -1,3 +1,7 @@
+# BookOne coding-agent entry point
+
+Read root AGENTS.md and docs/QA_CHANGE_CONTRACT.md first. Maintain a docs/changes record, TASK_LOG and PROJECT_STATUS. Canonical tests and QA history: https://github.com/Dinu-Sri/bookone-qa. Cleanup task: docs/REMOVE_INBUILT_E2E.md. The root instructions govern conflicts with older testing guidance.
+
 ## Codebase Memory MCP
 
 **MANDATORY: use Codebase Memory MCP graph tools FIRST — before reading files or making code changes.**

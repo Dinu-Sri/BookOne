@@ -20,7 +20,7 @@
 
 8. **Respect period locks.** Locked periods cannot be directly edited — use reversals.
 
-9. **UI verification is `pnpm agent:browse`.** Playwright logs in like a person (credentials in gitignored `.local/debug-accounts.json`). After any screen change, browse the route, read `.local/agent-browse/<run>/final.png`, and do not claim the UI works from curl or a code-only read. Full contract: **AGENTS.md → Agent UI testing**. Never print or commit passwords.
+9. **External QA and durable handover.** Read AGENTS.md and docs/QA_CHANGE_CONTRACT.md. Create/update a docs/changes record for every coding task and link the external QA assertions/results. Browser verification comes from bookone-qa or authorized browser tooling; embedded agent:browse is being retired through docs/REMOVE_INBUILT_E2E.md. Never claim a code-only read proves UI/business correctness.
 
 ## When Making Changes
 

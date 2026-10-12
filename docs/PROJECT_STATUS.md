@@ -1,3 +1,9 @@
+## 2026-10-11 — External QA handover
+
+Canonical public QA project: https://github.com/Dinu-Sri/bookone-qa. All development agents must follow [QA_CHANGE_CONTRACT.md](QA_CHANGE_CONTRACT.md) and maintain [change records](changes/README.md). The owner requested removal of inbuilt testing through [REMOVE_INBUILT_E2E.md](REMOVE_INBUILT_E2E.md); no runtime removal is performed by this documentation update. See [CHG-20261011-external-qa-handover](changes/CHG-20261011-external-qa-handover.md). Older embedded-runner instructions are superseded by the new contract. Staging test data is owner-authorized; production is outside QA access.
+
+---
+
 # BookOne v2 — Master Status, Workflows & Operations Guide
 
 > **Audience:** Anyone joining the project (yourself, future AI agents, or a teammate).

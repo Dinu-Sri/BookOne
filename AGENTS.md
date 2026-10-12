@@ -4,6 +4,18 @@
 
 ---
 
+## External QA and coding-agent memory (effective 2026-10-11)
+
+Canonical QA: **https://github.com/Dinu-Sri/bookone-qa** (public). For every coding task, read **docs/QA_CHANGE_CONTRACT.md**, create/update **docs/changes/CHG-YYYYMMDD-short-slug.md** from its template, and update TASK_LOG and PROJECT_STATUS before handover. Tests, scenarios, assertion reviews and run history belong in QA; keep development change records and integration references here. Never publish secrets or raw customer/session evidence.
+
+Follow **docs/REMOVE_INBUILT_E2E.md** for the requested cleanup. Preserve and validate external coverage before removing old runner code/interfaces. This contract supersedes older embedded-runner/catalog and `pnpm agent:browse` requirements; it does not itself authorize deleting tests before the cleanup criteria are met.
+
+The owner confirms **https://bookone.clossyan.com is staging with disposable testing data** and authorizes changes there. Production is outside the QA agent's access. Verify the target; older documents calling this host production are obsolete.
+
+A prior pass never certifies a new build. Record product/QA revisions, schema/configuration, fixtures, exact executed checks, failures/skips and evidence. Critical accounting, stock/rental, tenant/access and data-preservation changes require outcome assertions. Never weaken expectations merely to pass changed code.
+
+---
+
 ## Project Identity
 
 - **Name:** BookOne v2
@@ -85,7 +97,7 @@ When making any schema change, document:
 
 ## Deployment Checklist
 
-For every change pushed to `main`:
+For every candidate intended for `master` (the deployment branch):
 
 1. [ ] Local test: `pnpm install && pnpm build && pnpm lint && pnpm test`
 2. [ ] Any new env vars? → Added to VPS `.env` AND `.env.example`
@@ -159,20 +171,12 @@ Use these checks before changing architecture or rewriting Docker from scratch.
 | Architecture change | `AGENTS.md`, `docs/DEPLOYMENT_WORKFLOW.md` |
 | Known error discovered | `docs/KNOWN_ERRORS.md` |
 | Deployment process change | `docs/DEPLOYMENT_WORKFLOW.md`, `AGENTS.md` |
-| **UI / posting / route / settings feature** | **E2E catalog + tests or backlog** — see `docs/E2E_GOVERNANCE.md` |
-| **UI you can click** | Run **`pnpm agent:browse`** (see Agent UI testing) — do not substitute curl |
+| **UI / posting / route / settings feature** | Change record + corresponding external QA scenarios/assertions — see `docs/QA_CHANGE_CONTRACT.md` |
+| **UI you can click** | External QA browser journey or authorized browser tooling; save outcome evidence |
 
-### E2E keep-in-sync (mandatory on product change)
+### External QA keep-in-sync
 
-When shipping user-visible or accounting/stock behavior:
-
-1. Read current level: `pnpm --dir apps/e2e-runner level` (`apps/e2e-runner/src/catalog/level.json`).
-2. Add or update scenarios in `docs/E2E_SCENARIO_CATALOG.md` (next `S-NNNN` after `last_scenario_id`).
-3. Automate in `apps/e2e-runner/tests/` **or** add `apps/e2e-runner/src/catalog/backlog.json` item (`planned`).
-4. `pnpm --dir apps/e2e-runner sync` (export catalog + coverage + level report).
-5. After a maturity milestone: `pnpm --dir apps/e2e-runner level:bump -- X.Y.Z "label"`.
-
-Full process: **`docs/E2E_GOVERNANCE.md`**.
+Follow docs/QA_CHANGE_CONTRACT.md. Link the product change record to the external QA change/run. Preserve S-NNNN IDs; do not maintain a second scenario catalog here. New P0 outcomes require implemented assertions before acceptance. Backlog, catalog presence and page-load checks are not release evidence.
 
 ---
 
@@ -190,133 +194,11 @@ pnpm dev                       # Start Next.js dev server at http://localhost:30
 
 ---
 
-## Agent UI testing — `pnpm agent:browse` (MANDATORY for UI work)
+## Agent UI testing — external QA
 
-**What it is:** a local Playwright Chromium driver that logs into BookOne **as a person** — opens pages, clicks buttons, types into fields, uploads files, and writes screenshots + a text snapshot the assistant can read. It is **not** curl, not a raw HTML dump, and not “I assumed the form posted.”
+Use the browser tooling available in the authorized session or the external harness in [bookone-qa](https://github.com/Dinu-Sri/bookone-qa). For UI changes, exercise the changed and adjacent routes, inspect the rendered result, reload saved data, and verify relevant financial/stock outcomes. Record product build, QA revision, environment and evidence. Do not claim UI verification from code inspection or an HTTP response alone.
 
-**Who must use it:** every AI assistant in this repo (Grok, Copilot, Claude, Cursor, Codex, …). If the user says “use the browser tool”, “click through”, “test like a person”, “agent browse”, or you changed anything a user sees, this is the tool. Read this section, then run it. Do not invent a second login method.
-
-**When to use (required):**
-
-| Situation | What to run |
-|-----------|-------------|
-| Any UI change (layout, form, button, table, toast, route) | `--path` every screen you touched, desktop at least |
-| Hire / rental work | `/inventory/on-rent`, `/inventory/calendar`, `/company/rental`, the invoice you used |
-| Sales / purchase documents | new + list + detail of that doc type |
-| Settings / Control Room | the settings page after save — confirm the tick/value is still there |
-| “Verify it works” / “test as a user” | a JSON script that **clicks and types**, not only `goto` |
-| After push to production | default URL (production) so you see the live stack |
-
-**When not to use:** unit tests in `packages/accounting`, additive SQL-only migrations with no UI, or API-only jobs. Still use it if those changes surface on a page.
-
-**When not to mutate production:** browsing, opening Return, filling fields, then **Cancel** is fine. Do **not** click Dispatch / Record return / Collect deposit / Extend hire / Save / Post on production unless the user asked to change live data. Prefer `--base-url http://localhost:3000` for mutating journeys when local `pnpm dev` is up.
-
-### How to run
-
-From the **repo root** (Windows PowerShell is fine — no bash heredocs):
-
-```bash
-pnpm agent:browse
-pnpm agent:browse --path /inventory/on-rent --path /sales/invoices
-pnpm agent:browse --script apps/e2e-runner/scripts/agent-scenarios/login-smoke.json
-pnpm agent:browse --script apps/e2e-runner/scripts/agent-scenarios/rental-ops.json
-pnpm agent:browse --base-url http://localhost:3000 --path /dashboard
-pnpm agent:browse --fresh
-pnpm agent:browse --account info@clossyan.com --path /dashboard
-pnpm agent:browse --headed
-```
-
-| Flag | Meaning |
-|------|---------|
-| `--path /route` | After login, visit (repeatable). Each path gets a screenshot + snapshot |
-| `--script file.json` | Run `steps` (or `paths`) from a JSON file |
-| `--base-url URL` | Target. Default: `.local/debug-accounts.json` → `productionUrl` (https://bookone.clossyan.com). Local only when `pnpm dev` is running |
-| `--account EMAIL` | Which login in `debug-accounts.json` (or match `role`) |
-| `--fresh` | Ignore saved session; log in again |
-| `--headed` | Visible window (usually skip — headless screenshots are enough) |
-| `--out dir` | Artifact folder (default `.local/agent-browse/<timestamp>/`) |
-
-Implementation: `apps/e2e-runner/scripts/agent-browse.mjs`. Root script: `package.json` → `agent:browse`.
-
-### Credentials (never print, never commit)
-
-1. Preferred: gitignored `.local/debug-accounts.json` (`email`, `password`, `productionUrl`, `role`).
-2. Else: env `E2E_EMAIL` / `E2E_PASSWORD` / `E2E_BASE_URL`.
-3. **Never** log the password, put it in a commit, a PR, `AGENTS.md`, or a screenshot caption.
-4. **Never** commit `.local/` (already in `.gitignore`). Cookie jars and `storage-*.json` live there.
-
-Session reuse: `.local/agent-browse/storage-*.json` so we do not hammer `/login` (rate limits). `--fresh` if the session is stale or the wrong user.
-
-### What to read after a run
-
-Folder: `.local/agent-browse/<run>/`
-
-| File | Use |
-|------|-----|
-| `result.json` | `ok`, final `url`, `alerts`, `consoleErrors` |
-| `final.png` / `{path}.png` | **Look at the pixels** (`read_file` on the PNG) |
-| `final.md` / `{path}-snap.md` | URL, buttons, fields, visible text |
-| `report.md` | Step transcript |
-| `failure.png` | Only if the run exited non-zero |
-
-A run is **not** verified if you only checked `exit code 0`. Open the screenshot and confirm the control you changed is visible and the old bug is gone.
-
-### JSON script (click / type / upload)
-
-Committed examples:
-
-- `apps/e2e-runner/scripts/agent-scenarios/login-smoke.json` — dashboard, on-rent, invoices, rental settings
-- `apps/e2e-runner/scripts/agent-scenarios/rental-ops.json` — hire panel, open Return, Cancel (no live mutation)
-
-One-off mutating scripts belong under `.local/agent-scenarios/` (gitignored).
-
-Step `action` values:
-
-| action | Fields | Notes |
-|--------|--------|--------|
-| `goto` | `path` | `/inventory/on-rent` or absolute URL |
-| `click` | `text` or `testid` / `selector` / `label` | Tries button, then link, then text |
-| `fill` | `label` or `name` / `testid`, `value` | BookOne `.field label` pattern |
-| `select` | same + `value` | option value or label |
-| `check` / `uncheck` | locator fields | checkboxes |
-| `upload` | locator + `files: ["rel/path"]` | repo-relative paths |
-| `press` | `key` | e.g. `Enter` |
-| `wait` | `text` or `ms` | wait for text or timeout |
-| `screenshot` | `name` | PNG in the run folder |
-| `snapshot` | `name` | `.md` + `.json` |
-| `assertText` / `assertNoText` | `text` | fail the run if missing/present |
-| `assertUrl` | `match` or `path` | regex against current URL |
-
-Example:
-
-```json
-{
-  "name": "open-return-and-cancel",
-  "steps": [
-    { "action": "goto", "path": "/inventory/on-rent" },
-    { "action": "click", "text": "Return" },
-    { "action": "wait", "ms": 500 },
-    { "action": "screenshot", "name": "return-form" },
-    { "action": "assertText", "text": "Record return" },
-    { "action": "click", "text": "Cancel" }
-  ]
-}
-```
-
-### Local vs production
-
-- **Default = production** (`https://bookone.clossyan.com`) because that is the GitOps live app (Portainer pulls `master`). Use this after a push to confirm the stack picked up the change.
-- **Local** (`--base-url http://localhost:3000`): `docker compose up -d`, `pnpm db:migrate`, `pnpm dev`. Use this to **enter and save** data without touching live companies.
-- Local DB does **not** automatically have the production Garden Banquet hire job. Seed or create data locally, or browse production read-only.
-
-### Definition of done for UI
-
-1. Code + additive migration if needed.  
-2. `pnpm agent:browse` on every changed route (and a related route that shares the component).  
-3. Read `*.png` + `result.json`. Hunt regressions (empty, error, mobile if layout changed).  
-4. If the run cannot start (no Chromium, no credentials), say so — do not claim the UI was verified.
-
-Install Chromium once: `pnpm --dir apps/e2e-runner exec playwright install chromium`.
+During migration, legacy local commands remain only until docs/REMOVE_INBUILT_E2E.md criteria are met. The external README is authoritative for current commands. Credentials and raw evidence stay outside public Git. If execution is unavailable, record it as blocked/not-run.
 
 ---
 
@@ -325,7 +207,7 @@ Install Chromium once: `pnpm --dir apps/e2e-runner exec playwright install chrom
 ```bash
 git add -A
 git commit -m "type: description"
-git push origin main
+git push origin <reviewed-branch>
 ```
 
 Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (for migrations)
@@ -333,6 +215,10 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 ---
 
 ## Important Docs
+
+- `docs/QA_CHANGE_CONTRACT.md` — Mandatory development-agent handover to external QA
+- `docs/REMOVE_INBUILT_E2E.md` — Safe removal task for embedded testing environments, code and interfaces
+- `docs/changes/README.md` — Durable per-task change ledger and template
 
 - `docs/PROJECT_STATUS.md` — **Master status, deployment errors, workflows, what's next** (read first)
 - `docs/ARCHITECTURE_PLAN.md` — Full technology stack, scaling strategy

@@ -1,51 +1,13 @@
-# Start Session Prompt — BookOne v2
+# Start a BookOne development session
 
-> Copy this entire prompt at the start of a new AI chat session to load all context.
+Read AGENTS.md, docs/PROJECT_STATUS.md and docs/QA_CHANGE_CONTRACT.md. Then read only relevant business/architecture docs. BookOne is a running product; older planning-only descriptions are obsolete.
 
----
+Use Codebase Memory MCP first and verify the source revision. Create or resume a docs/changes/CHG-YYYYMMDD-short-slug.md record before implementation. Preserve tested behaviour, financial history, tenant isolation and additive migrations.
 
-You are working on **BookOne v2**, a multi-tenant SaaS accounting and ERP application built with Next.js 15, TypeScript, PostgreSQL 16 with RLS, Drizzle ORM, shadcn/ui, Tailwind CSS, deployed on a Linux VPS via Docker/Portainer/Cloudflare Tunnel at `bookone.clossyan.com`.
+The external QA repository is https://github.com/Dinu-Sri/bookone-qa. Read its STATUS.md and the relevant rules/scenarios; submit corresponding QA changes and pin product/QA versions. Previous passing results do not certify new changes.
 
-## Before writing any code, read these files in order:
+The owner identifies https://bookone.clossyan.com as staging containing disposable testing data and authorizes changes there. Production is outside the QA agent's access. Keep secrets and raw evidence out of public Git.
 
-1. **`AGENTS.md`** (root) — Canonical agent instructions, production rules, architecture overview
-2. **`.github/copilot-instructions.md`** — Copilot-specific rules (synced from AGENTS.md)
-3. **`docs/ARCHITECTURE_PLAN.md`** — Full technology stack, multi-tenancy, scaling, module system
-4. **`docs/ACCOUNTING_ENGINE_DESIGN.md`** — Simple entry → professional accounting engine design
-5. **`docs/DEPLOYMENT_WORKFLOW.md`** — How to deploy (Portainer, Cloudflare Tunnel, GitOps)
-6. **`docs/PRODUCTION_RULES.md`** — Rules that must never be broken
-7. **`docs/KNOWN_ERRORS.md`** — Common issues and fixes
-8. **`docs/TASK_LOG.md`** — Current progress and next steps
-9. **`ai/AI_CONTEXT.generated.md`** — Auto-generated project summary
+For inbuilt test cleanup, follow docs/REMOVE_INBUILT_E2E.md; do not delete tests/interfaces until preservation and external validation criteria are met.
 
-## Then, understand the context:
-
-- **Project phase:** Pre-development / planning. No running code yet. Monorepo scaffolded.
-- **Old codebase:** Archived in `old-project/` — PHP v1.4.0 accounting app. Reference for porting logic.
-- **Key constraint:** The accounting engine (`packages/accounting/`) must be correct — it's double-entry with journal validation.
-- **Deployment:** GitHub push → Portainer webhook → VPS redeploy → Cloudflare Tunnel to domain.
-
-## Rules for this session:
-
-1. Never hardcode localhost, secrets, or file paths. Use `process.env.*`
-2. Never bypass tenant isolation. All queries must be tenant-scoped.
-3. Never DELETE data — void it.
-4. All financial mutations create journal entries and audit log entries.
-5. Schema changes are additive migrations only.
-6. After making changes, tell me what needs to be done for deployment (env vars, migration, rebuild, restart).
-
-## Project structure (monorepo with Turborepo + pnpm):
-
-```
-apps/web/           — Next.js App Router
-packages/db/        — Drizzle schemas + migrations
-packages/accounting/ — Journal engine + inference engine
-packages/auth/      — Auth.js v5
-packages/ui/        — shadcn/ui components
-packages/modules/   — Module registry
-docker/             — Docker configs
-docs/               — Documentation
-old-project/        — Archived v1.x PHP (reference)
-```
-
-Let's begin.
+At handover, update the change record, docs/TASK_LOG.md and docs/PROJECT_STATUS.md with exact changed paths, checked versions, tests executed, failed/skipped/not-run checks, evidence, blockers and next action.

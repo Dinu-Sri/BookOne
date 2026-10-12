@@ -20,8 +20,6 @@ node_modules
 old-project
 uploads
 apps/docs/dist
-apps/e2e-runner/runs
-apps/e2e-runner/reports
 .codebase-memory
 .cursor
 .zed

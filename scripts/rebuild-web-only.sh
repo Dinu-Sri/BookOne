@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild and restart ONLY the ERP web service (not e2e, not full stack).
+# Rebuild and restart ONLY the ERP web service (not docs, not full stack).
 # Run ON the VPS after: git pull (or Portainer already pulled files).
 #
 # Usage:

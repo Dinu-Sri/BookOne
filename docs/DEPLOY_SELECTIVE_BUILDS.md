@@ -1,17 +1,16 @@
 # Selective deploys — rebuild only what you changed
 
 Your **4 CPU / 8 GB** VPS is fine for running BookOne and for building **one** service.  
-30–40 minutes happens when Portainer rebuilds **everything** (especially **e2e** Playwright).
+Long rebuilds happen when Portainer rebuilds **everything**.
 
 ## Principle
 
 | What you changed | Rebuild |
 |------------------|---------|
 | ERP / cashbook / onboarding / packages | **web only** |
-| E2E runner tests / `/e2e` console UI | **e2e only** |
 | Docs nginx config | **docs only** (rare) |
 | DB schema + ERP | **web** (migrations run in web entrypoint) |
-| Nothing in e2e | **Do not rebuild e2e** |
+| Browser tests | **bookone-qa** — do not rebuild an ERP e2e image |
 
 Postgres / Redis / Minio / Traefik use public images — they are **not** rebuilt from your code.
 
@@ -37,7 +36,6 @@ What it does:
 2. Compares files changed since **last successful deploy** (file `.deploy-last-sha`)
 3. Builds only:
    - **web** if `apps/web/**`, `packages/**`, `Dockerfile.web`, lockfiles, …
-   - **e2e** if `apps/e2e-runner/**` or `Dockerfile.e2e`
    - **docs** if docs nginx Dockerfile only
 4. Saves new commit SHA so the next pull is incremental
 
@@ -45,8 +43,8 @@ What it does:
 |------|--------|
 | `./scripts/smart-deploy.sh` | Auto from git diff |
 | `--force-web` | Always rebuild web |
-| `--force-e2e` | Always rebuild e2e |
-| `--force-all` | Everything |
+| `--force-docs` | Always rebuild docs |
+| `--force-all` | web + docs |
 
 **Current development focus (entity tiers / cashbook):** almost every commit only touches `apps/web` + `packages` → script rebuilds **web only**.
 
@@ -73,8 +71,7 @@ Staging compose uses **Compose profiles**:
 |---------|----------|
 | *(empty)* | web + infra only (**fastest daily path**) |
 | `docs` | + docs host |
-| `e2e` | + Playwright e2e host |
-| `full` | docs + e2e |
+| `full` | docs |
 
 ### Portainer env
 
@@ -86,18 +83,11 @@ Stack → Environment variables:
 
 # Need docs host
 COMPOSE_PROFILES=docs
-
-# Need E2E host for a test day
-COMPOSE_PROFILES=docs,e2e
-
-# Everything
-COMPOSE_PROFILES=full
 ```
 
 Redeploy after changing `COMPOSE_PROFILES`.
 
-**Daily ERP work:** no e2e profile → stack update only builds **web** (and docs if enabled).  
-**E2E day:** set `e2e` once, rebuild e2e, then leave the container running and only rebuild **web** for app fixes.
+**Daily ERP work:** stack update only builds **web** (and docs if enabled). Browser tests run from https://github.com/Dinu-Sri/bookone-qa.
 
 ---
 
@@ -109,10 +99,6 @@ On the VPS, in the Portainer stack project directory (or where compose lives):
 # Only ERP (most common)
 docker compose -f docker/docker-compose.staging.yml build web
 docker compose -f docker/docker-compose.staging.yml up -d web
-
-# Only E2E (when you changed apps/e2e-runner)
-docker compose -f docker/docker-compose.staging.yml --profile e2e build e2e
-docker compose -f docker/docker-compose.staging.yml --profile e2e up -d e2e
 ```
 
 Avoid “Pull and redeploy entire stack” with rebuild-all unless you mean it.
@@ -124,9 +110,8 @@ Avoid “Pull and redeploy entire stack” with rebuild-all unless you mean it.
 | Development focus | COMPOSE_PROFILES | Rebuild |
 |-------------------|------------------|---------|
 | Entity tiers / cashbook / ERP | empty or `docs` | `web` only |
-| Playwright / e2e console | add `e2e` | `e2e` when e2e code changes; `web` when app under test changes |
 | Docs domain only | `docs` | rarely (nginx is tiny) |
-| Release / first setup | `full` | all once |
+| Release / first setup | `full` | web + docs once |
 
 ---
 
@@ -153,6 +138,6 @@ Until then: **profiles + rebuild one service + layered Dockerfile** is the right
 ## Checklist
 
 - [ ] Daily: `COMPOSE_PROFILES` empty or `docs` only  
-- [ ] Do not rebuild e2e unless `apps/e2e-runner` or e2e Dockerfile changed  
 - [ ] Prefer `docker compose build web && up -d web` over full stack rebuild  
 - [ ] Keep 8 GB RAM free of other heavy builds during `web` build  
+- [ ] Browser tests: bookone-qa, not an ERP e2e image  

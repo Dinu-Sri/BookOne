@@ -1,8 +1,8 @@
-# Portainer multi-service deploy (web + docs + e2e)
+# Portainer multi-service deploy (web + docs)
 
 **One GitHub monorepo · one Portainer stack · selective app images (staging).**
 
-> **Selective rebuilds / profiles / when not to build e2e:** see [`DEPLOY_SELECTIVE_BUILDS.md`](./DEPLOY_SELECTIVE_BUILDS.md).
+> **Selective rebuilds / profiles:** see [`DEPLOY_SELECTIVE_BUILDS.md`](./DEPLOY_SELECTIVE_BUILDS.md). Browser tests live in https://github.com/Dinu-Sri/bookone-qa.
 
 ---
 
@@ -14,14 +14,13 @@ GitHub Dinu-Sri/BookOne (master)
         ▼  Portainer stack pull (full repo once)
         │
         ├── build Dockerfile.web   → bookone-*-web   (ERP, no Chromium)
-        ├── build Dockerfile.docs  → bookone-*-docs  (static docs)
-        └── build Dockerfile.e2e   → bookone-*-e2e   (Playwright)  [staging only]
+        └── build Dockerfile.docs  → bookone-*-docs  (static docs)
 ```
 
 | Env | Compose file | Services |
 |-----|--------------|----------|
-| **Staging** | `docker/docker-compose.staging.yml` | web + docs + e2e + postgres + redis + minio + traefik + cloudflared |
-| **Production** | `docker/docker-compose.prod.yml` | web + docs + postgres + redis + minio + traefik + cloudflared (**no e2e**) |
+| **Staging** | `docker/docker-compose.staging.yml` | web + docs + postgres + redis + minio + traefik + cloudflared |
+| **Production** | `docker/docker-compose.prod.yml` | web + docs + postgres + redis + minio + traefik + cloudflared |
 
 ### Cloudflare SSL hostname rules (important)
 
@@ -37,8 +36,7 @@ It does **not** cover nested hosts like `docs.bookone.clossyan.com` → browser 
 | Use on staging (clossyan.com) | Avoid on free SSL |
 |-------------------------------|-------------------|
 | `bookone.clossyan.com` | `docs.bookone.clossyan.com` |
-| `bookone-docs.clossyan.com` | `e2e.bookone.clossyan.com` |
-| `bookone-e2e.clossyan.com` | `app.staging.bookone.…` multi-level |
+| `bookone-docs.clossyan.com` | `app.staging.bookone.…` multi-level |
 
 On a **dedicated zone** `bookone.lk`, first-level names are fine: `docs.bookone.lk`, `app.bookone.lk`.
 
@@ -63,7 +61,6 @@ Add public hostnames → same tunnel → Traefik on the VPS:
 |----------|---------|
 | `bookone.clossyan.com` | web `:3100` |
 | `bookone-docs.clossyan.com` | docs `:80` |
-| `bookone-e2e.clossyan.com` | e2e `:3200` |
 
 ---
 
@@ -75,13 +72,9 @@ Add public hostnames → same tunnel → Traefik on the VPS:
 |----------|----------------------|---------|
 | `WEB_HOST` | `bookone.clossyan.com` | Traefik Host rule for ERP |
 | `DOCS_HOST` | `bookone-docs.clossyan.com` | Traefik Host rule for docs |
-| `E2E_HOST` | `bookone-e2e.clossyan.com` | Traefik Host rule for E2E UI |
 | `AUTH_URL` | `https://bookone.clossyan.com` | Auth callback base (must match browser URL) |
 | `BETTER_AUTH_URL` | `https://bookone.clossyan.com` | Same as AUTH_URL if using Better Auth |
 | `DOCS_APP_URL` | `https://bookone.clossyan.com` | “Open app” link on docs site |
-| `E2E_BASE_URL` | `https://bookone.clossyan.com` | Default **app under test** when E2E run starts |
-| `E2E_PUBLIC_URL` | `https://bookone-e2e.clossyan.com` | Standalone E2E console URL; ERP `/e2e` redirects here |
-| `NEXT_PUBLIC_E2E_URL` | same as `E2E_PUBLIC_URL` | Client-side redirect target |
 
 ### What each hostname must serve
 
@@ -89,9 +82,8 @@ Add public hostnames → same tunnel → Traefik on the VPS:
 |------|--------------------|----------------|
 | `bookone.clossyan.com` | **web** | ERP login / app |
 | `bookone-docs.clossyan.com` | **docs** (nginx → web Fumadocs) | Same BookOne Docs UI as `/docs` on the app |
-| `bookone-e2e.clossyan.com` | **e2e** (Playwright runner) | “BookOne E2E Runner” form (Start E2E) — **not** Next 404 |
 
-If `bookone-e2e…` shows a **Next.js 404**, Cloudflare is still routing that host to **web**. Point the tunnel hostname at **Traefik** (not `web:3100`) so Host-based routing can select the `e2e` service.
+Retired: `bookone-e2e.clossyan.com` / inbuilt `/e2e`. Remove that tunnel hostname when ready. Tests run from bookone-qa.
 
 ### Database (web only)
 
@@ -133,26 +125,16 @@ If `bookone-e2e…` shows a **Next.js 404**, Cloudflare is still routing that ho
 | `CLOUDFLARE_TUNNEL_TOKEN` | cloudflared service |
 | `BUILD_DATE` | Optional bust cache (`date +%s`) |
 
-### E2E service only (optional)
-
-| Variable | Notes |
-|----------|--------|
-| `E2E_ADMIN_EMAIL` | Super-admin for Control Room scenarios |
-| `E2E_ADMIN_PASSWORD` | Same |
-
-**No `E2E_ALLOW_FULL` / staging host gates** — UI passes URL + credentials per run.
-
 ### Services that use which env
 
-| Env group | web | docs | e2e |
-|-----------|:---:|:---:|:---:|
-| DB / Redis / S3 / Auth | ✅ | — | — |
-| `WEB_HOST` / AUTH_URL | ✅ | — | — |
-| `DOCS_HOST` / DOCS_APP_URL | — | ✅ | — |
-| `E2E_HOST` / E2E_BASE_URL | — | — | ✅ |
-| Tunnel token | cloudflared | | |
+| Env group | web | docs |
+|-----------|:---:|:---:|
+| DB / Redis / S3 / Auth | ✅ | — |
+| `WEB_HOST` / AUTH_URL | ✅ | — |
+| `DOCS_HOST` / DOCS_APP_URL | — | ✅ |
+| Tunnel token | cloudflared | |
 
-Docs and e2e images do **not** need `DATABASE_URL`.
+Docs images do **not** need `DATABASE_URL`. Browser-test credentials belong in bookone-qa, not this stack.
 
 ---
 
@@ -165,7 +147,6 @@ Docs and e2e images do **not** need `DATABASE_URL`.
 | `DOCS_HOST` | `docs.bookone.lk` |
 | `AUTH_URL` / `BETTER_AUTH_URL` | `https://app.bookone.lk` |
 | `DOCS_APP_URL` | `https://app.bookone.lk` |
-| E2E service | **Not in prod compose** — run against staging |
 
 Until cutover you can keep production compose pointing at `bookone.clossyan.com` via the same `WEB_HOST` / `DOCS_HOST` vars.
 
@@ -178,11 +159,10 @@ Until cutover you can keep production compose pointing at `bookone.clossyan.com`
 3. Rebuild images:
    - **ERP change only** → rebuild **web** (fast, no Chromium).
    - **Docs content only** → rebuild **docs**.
-   - **E2E tests only** → rebuild **e2e** (heavy, has browsers).
 4. Open:
    - App: `https://bookone.clossyan.com`
    - Docs: `https://bookone-docs.clossyan.com`
-   - E2E: `https://bookone-e2e.clossyan.com` → target URL + credentials → Start
+   - Browser tests: https://github.com/Dinu-Sri/bookone-qa against the named candidate
 
 ---
 
@@ -193,36 +173,21 @@ Until cutover you can keep production compose pointing at `bookone.clossyan.com`
 | Git pull | Whole monorepo (once per stack update) |
 | `docker build web` | ERP only, **no Chromium** |
 | `docker build docs` | Nginx proxy → web Fumadocs (same UI as `/docs`) |
-| `docker build e2e` | Playwright image + tests only |
 
-Main system build time drops because **web no longer installs Chromium**.
+Main system build time stays low because **web does not install Chromium**.
 
 ---
 
-## Cloudflare Tunnel checklist (most common E2E 404 cause)
+## Cloudflare Tunnel checklist
 
-If `bookone-e2e.…` shows a **Next.js** 404, the tunnel is sending that host to the **web** container.
-
-**Recommended — one Public Hostname per service (most reliable):**
+**Recommended — one Public Hostname per service:**
 
 | Public hostname | Type | URL |
 |-----------------|------|-----|
 | `bookone.clossyan.com` | HTTP | `http://web:3100` |
 | `bookone-docs.clossyan.com` | HTTP | `http://docs:80` |
-| `bookone-e2e.clossyan.com` | HTTP | **`http://e2e:3200`** |
 
-In Zero Trust → Tunnels → your tunnel → **Public Hostname**:
-
-1. Edit **`bookone-e2e.clossyan.com`**
-2. Service **HTTP** → URL **`http://e2e:3200`**  
-   (if DNS fails, try `http://bookone-staging-e2e:3200`)
-3. Save → hard-refresh the e2e URL
-4. Check `https://bookone-e2e.clossyan.com/api/health`  
-   → JSON with `"service":"bookone-e2e-runner"`
-
-**Wrong:** pointing e2e hostname at `http://web:3100` or `bookone-staging-web`.
-
-cloudflared must share Docker network `bookone_network` with web/docs/e2e (compose already does).
+Remove `bookone-e2e.clossyan.com` when the inbuilt runner container is stopped. cloudflared must share Docker network `bookone_network` with web/docs (compose already does).
 
 ---
 
@@ -230,10 +195,9 @@ cloudflared must share Docker network `bookone_network` with web/docs/e2e (compo
 
 | Symptom | Fix |
 |---------|-----|
-| Wrong host 404 | Check Traefik labels vs `WEB_HOST` / `DOCS_HOST` / `E2E_HOST` |
+| Wrong host 404 | Check Traefik labels vs `WEB_HOST` / `DOCS_HOST` |
 | `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` on `docs.bookone.clossyan.com` | Nested subdomain — free Cloudflare SSL does not cover it. Use `bookone-docs.clossyan.com` instead |
 | Auth redirects wrong | `AUTH_URL` / `BETTER_AUTH_URL` must match public HTTPS app URL |
-| E2E can’t reach app | Set `E2E_BASE_URL=https://bookone.clossyan.com` (public), not only `http://web:3100` if browser needs public cookies |
 | Docs “Open app” wrong | Set `DOCS_APP_URL` |
 | Web image still huge / slow | Confirm stack uses new `Dockerfile.web` (no chromium `apk`) |
 
@@ -245,5 +209,4 @@ cloudflared must share Docker network `bookone_network` with web/docs/e2e (compo
 # From monorepo root
 docker build -f docker/Dockerfile.web -t bookone-web:local .
 docker build -f docker/Dockerfile.docs --build-arg DOCS_APP_URL=http://localhost:3100 -t bookone-docs:local .
-docker build -f docker/Dockerfile.e2e -t bookone-e2e:local .
 ```

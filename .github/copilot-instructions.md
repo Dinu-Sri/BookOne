@@ -20,7 +20,7 @@
 
 8. **Respect period locks.** Locked periods cannot be directly edited — use reversals.
 
-9. **External QA and durable handover.** Read AGENTS.md and docs/QA_CHANGE_CONTRACT.md. Create/update a docs/changes record for every coding task and link the external QA assertions/results. Browser verification comes from bookone-qa or authorized browser tooling; embedded agent:browse is being retired through docs/REMOVE_INBUILT_E2E.md. Never claim a code-only read proves UI/business correctness.
+9. **External QA and durable handover.** Read AGENTS.md and docs/QA_CHANGE_CONTRACT.md. Create/update a docs/changes record for every coding task and link the external QA assertions/results. Browser verification comes from https://github.com/Dinu-Sri/bookone-qa (`pnpm agent:browse` / `pnpm test:e2e`). Never claim a code-only read proves UI/business correctness.
 
 ## When Making Changes
 

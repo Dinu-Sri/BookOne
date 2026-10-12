@@ -1,3 +1,15 @@
+## 2026-10-12 — Inbuilt E2E cleanup Wave 1b (product delete)
+
+Branch `chore/remove-inbuilt-e2e` removes the inbuilt runner, `/e2e`, `/api/e2e/**`, and e2e Docker. Tests live in https://github.com/Dinu-Sri/bookone-qa (`0ed1195`). Do not merge to `master` until reviewed. After deploy, run QA denial tests S-0031–S-0033. Operator: stop `bookone-staging-e2e` and the `bookone-e2e.clossyan.com` tunnel. Health-check, company reset, seeds, migrations, MinIO, `/ops/logs` stay.
+
+## 2026-10-12 — Inbuilt E2E cleanup Wave 1a (QA companion)
+
+QA branch `qa/chg-20261012-e2e-denial` at `0ed1195` asserts `/e2e` and `/api/e2e/**` cannot start runs or return artifacts (S-0031/S-0032/S-0033/S-0578). `agent-browse` lives in bookone-qa. Discovery 770; unit 94 passed / 4 skipped. Wave 1b product delete is on this BookOne branch. Health-check, company reset, seeds, and package unit tests stay.
+
+## 2026-10-12 — Inbuilt E2E cleanup Wave 0 (preservation)
+
+Branch `chore/remove-inbuilt-e2e`. Inventory vs https://github.com/Dinu-Sri/bookone-qa (`b9e13bc`) recorded in [CHG-20261012-remove-inbuilt-e2e](changes/CHG-20261012-remove-inbuilt-e2e.md). Tests are preserved in QA (94 unit passed / 4 skipped; 771 browser tests discovered). Public `/e2e` is still live. Wave 1a companion now exists at bookone-qa `0ed1195`. Health-check, company reset, seeds, and package unit tests stay.
+
 ## 2026-10-11 — External QA handover
 
 Canonical public QA project: https://github.com/Dinu-Sri/bookone-qa. All development agents must follow [QA_CHANGE_CONTRACT.md](QA_CHANGE_CONTRACT.md) and maintain [change records](changes/README.md). The owner requested removal of inbuilt testing through [REMOVE_INBUILT_E2E.md](REMOVE_INBUILT_E2E.md); no runtime removal is performed by this documentation update. See [CHG-20261011-external-qa-handover](changes/CHG-20261011-external-qa-handover.md). Older embedded-runner instructions are superseded by the new contract. Staging test data is owner-authorized; production is outside QA access.

@@ -47,7 +47,6 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === '/i' || pathname.startsWith('/i/')) return true;
   if (pathname === '/invite' || pathname.startsWith('/invite/')) return true;
   if (pathname === '/docs' || pathname.startsWith('/docs/')) return true;
-  if (pathname === '/e2e' || pathname.startsWith('/e2e/')) return true;
   if (pathname === '/onboarding' || pathname.startsWith('/onboarding')) return true;
   if (pathname.startsWith('/api/')) return true;
   if (pathname === '/ops/logs' || pathname.startsWith('/ops/logs')) return true;

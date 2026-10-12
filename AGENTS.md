@@ -8,7 +8,7 @@
 
 Canonical QA: **https://github.com/Dinu-Sri/bookone-qa** (public). For every coding task, read **docs/QA_CHANGE_CONTRACT.md**, create/update **docs/changes/CHG-YYYYMMDD-short-slug.md** from its template, and update TASK_LOG and PROJECT_STATUS before handover. Tests, scenarios, assertion reviews and run history belong in QA; keep development change records and integration references here. Never publish secrets or raw customer/session evidence.
 
-Follow **docs/REMOVE_INBUILT_E2E.md** for the requested cleanup. Preserve and validate external coverage before removing old runner code/interfaces. This contract supersedes older embedded-runner/catalog and `pnpm agent:browse` requirements; it does not itself authorize deleting tests before the cleanup criteria are met.
+The inbuilt `/e2e` console, `/api/e2e/**`, and `apps/e2e-runner` were removed (Wave 1b, [CHG-20261012-remove-inbuilt-e2e](docs/changes/CHG-20261012-remove-inbuilt-e2e.md)). Browser tests and `pnpm agent:browse` live in bookone-qa. Operator follow-up: stop any leftover `bookone-staging-e2e` container and `bookone-e2e.clossyan.com` tunnel. Keep Health Check, company reset, seeds, migrations, MinIO, `/ops/logs`, and package unit tests.
 
 The owner confirms **https://bookone.clossyan.com is staging with disposable testing data** and authorizes changes there. Production is outside the QA agent's access. Verify the target; older documents calling this host production are obsolete.
 
@@ -65,7 +65,6 @@ packages/ui/       → Shared shadcn/ui components
 packages/modules/  → Module registry, feature flags (inventory, tax, POS, CRM, HR)
 docker/            → Dockerfile, docker-compose.yml, docker-compose.prod.yml
 scripts/           → Seed, backup, migration scripts
-playwright/        → E2E tests
 docs/              → Architecture docs, deployment workflow, known errors
 ai/                → AI session files (generated context, start-session prompt)
 ```
@@ -198,7 +197,7 @@ pnpm dev                       # Start Next.js dev server at http://localhost:30
 
 Use the browser tooling available in the authorized session or the external harness in [bookone-qa](https://github.com/Dinu-Sri/bookone-qa). For UI changes, exercise the changed and adjacent routes, inspect the rendered result, reload saved data, and verify relevant financial/stock outcomes. Record product build, QA revision, environment and evidence. Do not claim UI verification from code inspection or an HTTP response alone.
 
-During migration, legacy local commands remain only until docs/REMOVE_INBUILT_E2E.md criteria are met. The external README is authoritative for current commands. Credentials and raw evidence stay outside public Git. If execution is unavailable, record it as blocked/not-run.
+The bookone-qa README is authoritative for test commands (`pnpm test:e2e`, `pnpm agent:browse`). Credentials and raw evidence stay outside public Git. If execution is unavailable, record it as blocked/not-run.
 
 ---
 

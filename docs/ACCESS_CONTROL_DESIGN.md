@@ -9,7 +9,7 @@
 | **Status** | Implemented (v1 shipped 2026-09-11; PR-6 groups/SoD/history; PR-9 shop scope 2026-09-11) |
 | **Audience** | Senior engineers who know BookOne (`AGENTS.md`, auth, RLS, shell) |
 | **Repo** | https://github.com/Dinu-Sri/BookOne |
-| **Related** | `packages/auth/src/session.ts`, `packages/db/src/schema/users.ts`, `packages/db/src/schema/company-settings.ts`, `apps/web/src/lib/module-access.ts`, `apps/web/src/lib/entity-kind.ts`, `apps/web/src/components/layout/bookone-shell.tsx`, `docs/E2E_GOVERNANCE.md` |
+| **Related** | `packages/auth/src/session.ts`, `packages/db/src/schema/users.ts`, `packages/db/src/schema/company-settings.ts`, `apps/web/src/lib/module-access.ts`, `apps/web/src/lib/entity-kind.ts`, `apps/web/src/components/layout/bookone-shell.tsx`, external QA in `Dinu-Sri/bookone-qa` |
 
 ---
 
@@ -273,7 +273,7 @@ Format: `module.screen.action`.
 | `team.jobs.read` | `/company/team/jobs` | `/company/team/jobs/[roleId]` | own |
 | `team.jobs.write` | `/company/team/jobs` | save matrix | own; **primary Owner or Admin only** |
 | *(not in catalog)* | `/docs`, `/docs/**` | middleware `isPublicPath` | **Public. Do not ACL. Shell Documentation always visible.** |
-| *(not in catalog)* | `/e2e`, `/login`, `/onboarding`, `/invite`, `/invite/complete` | public / session flows | `/invite/*` added to `isPublicPath` in PR-5; post-auth landing for invitees |
+| *(not in catalog)* | `/login`, `/onboarding`, `/invite`, `/invite/complete` | public / session flows | `/invite/*` added to `isPublicPath` in PR-5; post-auth landing for invitees |
 | `control_room.*` | `/control-room/*` | **not in tenant catalog** | `platformRole === 'super_admin'` only |
 
 Low stock shares `inventory.levels`. Fleet filter on levels is **not** dispatch.
@@ -469,7 +469,7 @@ Voided BookOne `users` still block accept (same email cannot re-enter as a ghost
 
 **Rule:** if `?invite=` is present **or** cookie `bookone_invite_token` is set, `callbackURL` and every `router.push` after sign-in/sign-up/OAuth **must** be `/invite/complete` (public, no `requireTenantContext`). That page calls `acceptInvite` then redirects to the invited tenant’s `homePathForEntity`. **Never `/` first.** ERP layouts stay on `requireTenantContext`.
 
-**Middleware (PR-5 must edit `apps/web/src/middleware.ts`):** today `isPublicPath` is `/login`, `/docs`, `/e2e` only — **`/invite` is not public**. Add `/invite` and `/invite/*` (including `/invite/complete`). Unauthenticated `/invite/[token]` may `redirect('/login?invite=' + token)`. `/login` sets httpOnly cookie `bookone_invite_token` (TTL = min(7d, invite remaining); `Secure`/`SameSite=Lax`).
+**Middleware (historical PR-5 instruction):** the inbuilt `/e2e` route has since been removed. Current public/session routes include `/login`, `/docs`, `/invite`, and `/invite/*` (including `/invite/complete`). Unauthenticated `/invite/[token]` may `redirect('/login?invite=' + token)`. `/login` sets httpOnly cookie `bookone_invite_token` (TTL = min(7d, invite remaining); `Secure`/`SameSite=Lax`).
 
 ```mermaid
 sequenceDiagram
@@ -1060,7 +1060,7 @@ Passwords stay in Better Auth; `users.passwordHash` remains `'better-auth-manage
 - `docs/TASK_LOG.md` — team invitations on memberships / Better Auth orgs
 - `docs/ENTITY_TIERS_AND_TAX_ARCHITECTURE.md` — memberships as future accountant multi-client
 - `docs/LIST_TABLE_UX_GUIDE.md` — list chrome
-- `docs/E2E_GOVERNANCE.md` — catalog + backlog on UI ship
+- External `Dinu-Sri/bookone-qa` repository — catalog + backlog on UI ship
 - SAP Help — PFCG single/composite/derived roles, `ACTVT`, SU01 (ideas only)
 - Odoo Access Rights — groups, model ACL, record rules
 - NetSuite / Business Central — role + subsidiary axes, license ceiling
@@ -1134,7 +1134,7 @@ Ordered. Sizes: **S** ≤1d, **M** 2–3d, **L** 4–6d. PR-2 and PR-4 are the l
 
 - **Title:** `test(e2e): team RBAC scenarios S-0713+`
 - **Depends:** PR-4, PR-5
-- **Files:** `docs/E2E_SCENARIO_CATALOG.md` (after **S-0712**), `backlog.json` **BL-0005**, `tests/29-team-rbac.spec.ts`, `pnpm --dir apps/e2e-runner sync`
+- **External QA files:** preserve the existing scenario IDs and team/RBAC assertions in `Dinu-Sri/bookone-qa`; follow that repository's current catalog commands.
 
 | ID | Depth | Scenario |
 |----|-------|----------|
@@ -1198,7 +1198,7 @@ Email bypass retirement is PR-1b, not a trailing v1 PR.
 23. **v1 extra cardinality is one** (UI “Also help with” = team extra slot).
 24. **Document/POS writes may `ensureParty` for the counterparty** without Parties master write. Warehouse is not field-level (“no prices” is Phase 2 / non-goal).
 25. **`rbac_enforced` defaults false; flip true only with PR-2.** No `tenants.settings`.
-26. **Public `/docs` (and `/e2e`) are not ACL’d.** Documentation nav is always visible. PR-5 adds `/invite` (or `/login?invite=`) to `isPublicPath`.
+26. **Public `/docs` is not ACL’d.** The inbuilt `/e2e` route is retired. Documentation nav is always visible. PR-5 adds `/invite` (or `/login?invite=`) to `isPublicPath`.
 27. **RSC read deny = `redirect` + `?denied=1` toast**, not `throw` into `error.tsx`. Actions keep throw / `{ error }`.
 28. **Email collapse merges FKs** onto the kept `users` row before voiding duplicates.
 29. **`assertModuleWrite` call sites are deleted in PR-2**; mutates use screen keys. If the helper remains, it is ceiling + **any** `module.*.write`.

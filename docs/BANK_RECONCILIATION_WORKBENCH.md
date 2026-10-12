@@ -3157,7 +3157,7 @@ Do not log full bank narratives in analytics.
 
 ## 47.3 E2E scenarios
 
-Add scenarios to `docs/E2E_SCENARIO_CATALOG.md`.
+Add scenarios to the canonical external QA catalog in `Dinu-Sri/bookone-qa`; the in-product E2E catalog is retired.
 
 Minimum:
 

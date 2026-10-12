@@ -1,6 +1,8 @@
 # Coding-agent instructions: remove inbuilt testing after external QA migration
 
-Owner direction, 2026-10-11: use https://github.com/Dinu-Sri/bookone-qa as the canonical testing system and clean test-only environments, code, interfaces and deployment wiring from BookOne. This document is the implementation task for a future coding agent; this documentation change does **not** remove runtime code.
+Owner direction, 2026-10-11: use https://github.com/Dinu-Sri/bookone-qa as the canonical testing system and clean test-only environments, code, interfaces and deployment wiring from BookOne.
+
+**Status 2026-10-12:** Wave 0 inventory and Wave 1a QA denial tests are done. Wave 1b on branch `chore/remove-inbuilt-e2e` removes the product runner, `/e2e`, `/api/e2e/**`, e2e Docker, and inbuilt catalog. Operator still must stop `bookone-staging-e2e` and the `bookone-e2e.clossyan.com` tunnel. Do not merge to `master` until the cleaned candidate is reviewed. See [CHG-20261012-remove-inbuilt-e2e](changes/CHG-20261012-remove-inbuilt-e2e.md).
 
 ## Desired final state
 

@@ -1,6 +1,10 @@
+## 2026-10-12 — Inbuilt E2E cleanup Wave 1b (product delete)
+
+Branch `chore/remove-inbuilt-e2e` removes the inbuilt runner, `/e2e`, `/api/e2e/**`, and e2e Docker. Tests live in https://github.com/Dinu-Sri/bookone-qa (`0ed1195`). Do not merge to `master` until reviewed. After deploy, run QA denial tests S-0031–S-0033. Operator: stop `bookone-staging-e2e` and the `bookone-e2e.clossyan.com` tunnel. Health-check, company reset, seeds, migrations, MinIO, `/ops/logs` stay.
+
 ## 2026-10-12 — Inbuilt E2E cleanup Wave 1a (QA companion)
 
-QA branch `qa/chg-20261012-e2e-denial` at `0ed1195` now asserts `/e2e` and `/api/e2e/**` cannot start runs or return artifacts (S-0031/S-0032/S-0033/S-0578). `agent-browse` lives in bookone-qa. Discovery 770; unit 94 passed / 4 skipped. Product `/e2e` is still live. Next: Wave 1b delete the product runner on this branch, then run the denial tests. Do not merge to `master` yet. Health-check, company reset, seeds, and package unit tests stay.
+QA branch `qa/chg-20261012-e2e-denial` at `0ed1195` asserts `/e2e` and `/api/e2e/**` cannot start runs or return artifacts (S-0031/S-0032/S-0033/S-0578). `agent-browse` lives in bookone-qa. Discovery 770; unit 94 passed / 4 skipped. Wave 1b product delete is on this BookOne branch. Health-check, company reset, seeds, and package unit tests stay.
 
 ## 2026-10-12 — Inbuilt E2E cleanup Wave 0 (preservation)
 

@@ -8,7 +8,7 @@
 #
 # Optional:
 #   ./scripts/smart-deploy.sh --force-web     # always rebuild web
-#   ./scripts/smart-deploy.sh --force-all    # web + docs + e2e (if profiles allow)
+#   ./scripts/smart-deploy.sh --force-all    # web + docs
 #   COMPOSE_FILE=docker/docker-compose.staging.yml ./scripts/smart-deploy.sh
 #
 # State file: .deploy-last-sha (commit that was last successfully deployed)
@@ -23,17 +23,15 @@ STATE_FILE="${DEPLOY_STATE_FILE:-$ROOT/.deploy-last-sha}"
 COMPOSE_FILE="${COMPOSE_FILE:-}"
 FORCE_WEB=0
 FORCE_ALL=0
-FORCE_E2E=0
 FORCE_DOCS=0
 
 for arg in "$@"; do
   case "$arg" in
     --force-web) FORCE_WEB=1 ;;
-    --force-e2e) FORCE_E2E=1 ;;
     --force-docs) FORCE_DOCS=1 ;;
     --force-all) FORCE_ALL=1 ;;
     --help|-h)
-      echo "Usage: $0 [--force-web|--force-e2e|--force-docs|--force-all]"
+      echo "Usage: $0 [--force-web|--force-docs|--force-all]"
       exit 0
       ;;
   esac
@@ -95,14 +93,12 @@ else
 fi
 
 NEED_WEB=0
-NEED_E2E=0
 NEED_DOCS=0
 
 if [[ "$FORCE_ALL" == "1" ]]; then
-  NEED_WEB=1; NEED_E2E=1; NEED_DOCS=1
+  NEED_WEB=1; NEED_DOCS=1
 fi
 if [[ "$FORCE_WEB" == "1" ]]; then NEED_WEB=1; fi
-if [[ "$FORCE_E2E" == "1" ]]; then NEED_E2E=1; fi
 if [[ "$FORCE_DOCS" == "1" ]]; then NEED_DOCS=1; fi
 
 if [[ "$CHANGED" == "FORCE_DEFAULT_WEB" ]]; then
@@ -114,10 +110,6 @@ else
       # ERP / monorepo app
       apps/web/*|packages/*|scripts/init-db.ts|scripts/seed*|docker/Dockerfile.web|docker/entrypoint.sh|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|tsconfig.base.json)
         NEED_WEB=1
-        ;;
-      # E2E runner only
-      apps/e2e-runner/*|docker/Dockerfile.e2e)
-        NEED_E2E=1
         ;;
       # Docs reverse-proxy only
       docker/Dockerfile.docs|docker/docs.nginx.conf)
@@ -138,7 +130,7 @@ else
 fi
 
 # If nothing matched but there were commits, still touch web for safety on code paths
-if [[ "$NEED_WEB$NEED_E2E$NEED_DOCS" == "000" && -n "$CHANGED" && "$CHANGED" != "FORCE_DEFAULT_WEB" ]]; then
+if [[ "$NEED_WEB$NEED_DOCS" == "00" && -n "$CHANGED" && "$CHANGED" != "FORCE_DEFAULT_WEB" ]]; then
   if echo "$CHANGED" | grep -qE '^(apps/|packages/)'; then
     NEED_WEB=1
   else
@@ -153,8 +145,7 @@ echo ""
 echo "Plan:"
 [[ "$NEED_WEB" == "1" ]] && echo "  ✓ build + up  web"
 [[ "$NEED_DOCS" == "1" ]] && echo "  ✓ build + up  docs  (profile docs)"
-[[ "$NEED_E2E" == "1" ]] && echo "  ✓ build + up  e2e  (profile e2e — slow)"
-[[ "$NEED_WEB$NEED_DOCS$NEED_E2E" == "000" ]] && echo "  (nothing)"
+[[ "$NEED_WEB$NEED_DOCS" == "00" ]] && echo "  (nothing)"
 echo ""
 
 dc() {
@@ -173,13 +164,6 @@ if [[ "$NEED_DOCS" == "1" ]]; then
   dc --profile docs build docs
   echo ">>> Starting docs..."
   dc --profile docs up -d docs
-fi
-
-if [[ "$NEED_E2E" == "1" ]]; then
-  echo ">>> Building e2e (this can take a long time)..."
-  dc --profile e2e build e2e
-  echo ">>> Starting e2e..."
-  dc --profile e2e up -d e2e
 fi
 
 echo "$HEAD_SHA" > "$STATE_FILE"

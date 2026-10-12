@@ -36,6 +36,6 @@ Public records must use synthetic data and sanitized summaries. Never publish pa
 
 ## Transition and enforcement status
 
-Follow `docs/REMOVE_INBUILT_E2E.md` for product cleanup. The extraction bootstrap does not yet certify all inherited tests, staging acceptance or a production release gate. Keep legacy execution available until the removal criteria are met; new test maintenance belongs in the external QA repository.
+The inbuilt `/e2e` runner was removed from BookOne (Wave 1b). New test maintenance belongs in the external QA repository. The extraction does not yet certify all inherited tests, staging acceptance or a production release gate.
 
 The owner must wire trusted external QA status checks to branch protection and deployment promotion. Until implemented, report that gates are advisory. Do not claim that this documentation alone prevents release. Product build/lint/typecheck and schema readiness still belong to engineering even when executable QA tests live externally.

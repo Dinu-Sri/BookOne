@@ -41,11 +41,11 @@ Cloudflare Tunnel → Traefik → Next.js container → bookone.clossyan.com
 2. Repository URL: `https://github.com/Dinu-Sri/BookOne.git`
 3. Reference: `refs/heads/master`
 4. Compose path:
-   - Staging: `docker/docker-compose.staging.yml` (web + docs + e2e)
-   - Production: `docker/docker-compose.prod.yml` (web + docs; no public e2e)
+   - Staging: `docker/docker-compose.staging.yml` (web + optional docs profile)
+   - Production: `docker/docker-compose.prod.yml` (web + docs)
 5. Environment variables: Portainer stack UI — see `docs/PORTAINER_SETUP.md` and **`docs/PORTAINER_MULTI_SERVICE.md`**
 
-Images: slim `Dockerfile.web` (no Chromium), separate `Dockerfile.docs` / `Dockerfile.e2e`.
+Images: slim `Dockerfile.web` (no Chromium), separate `Dockerfile.docs`. Browser tests live in https://github.com/Dinu-Sri/bookone-qa.
 
 ---
 
@@ -68,10 +68,9 @@ pnpm build
 
 # 5. Test
 pnpm test
-
-# 6. E2E (optional, before major releases)
-pnpm test:e2e
 ```
+
+Browser/E2E checks run from https://github.com/Dinu-Sri/bookone-qa against the named candidate (not `pnpm test:e2e` in this repo).
 
 ### Deploy
 

@@ -1,7 +1,7 @@
-# BookOne — Production stack (ERP + docs; no public E2E)
+# BookOne — Production stack (ERP + docs)
 # Compose path: docker/docker-compose.prod.yml
 #
-# Staging (3 services including e2e): use docker/docker-compose.staging.yml
+# Staging: docker/docker-compose.staging.yml (web + optional docs profile)
 #
 # Hosts via Portainer env (examples):
 #   WEB_HOST=app.bookone.lk          (or bookone.clossyan.com until cutover)
@@ -64,8 +64,6 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - NODE_ENV=production
-      - E2E_PUBLIC_URL=${E2E_PUBLIC_URL:-}
-      - NEXT_PUBLIC_E2E_URL=${NEXT_PUBLIC_E2E_URL:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone.rule=Host(`${WEB_HOST:-bookone.clossyan.com}`)"
@@ -98,8 +96,6 @@ services:
     depends_on:
       - web
     restart: unless-stopped
-
-  # E2E is staging-only (see docker-compose.staging.yml). Not deployed on production.
 
   postgres:
     image: postgres:16-alpine

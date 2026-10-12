@@ -1,3 +1,11 @@
+## 2026-10-12 — Wave 1b: remove inbuilt E2E from BookOne
+
+- Branch `chore/remove-inbuilt-e2e`. Deleted `apps/e2e-runner/`, `/e2e` page, `/api/e2e/**`, e2e Docker service/image, product `E2E_*` env, catalog export scripts, root `test:e2e` / `agent:browse`.
+- Middleware no longer treats `/e2e` or `/api/e2e` as public. Docs E2E_* are stubs pointing at https://github.com/Dinu-Sri/bookone-qa.
+- Kept Health Check, company reset, seeds, migrations, MinIO, `/ops/logs`, package unit tests.
+- Checks: accounting 60 passed; statement-import 26 passed / 4 skipped; lockfile dropped e2e-runner. Typecheck still has pre-existing errors. Docker CLI unavailable here. Denial tests not run (not on `master`).
+- Do not merge to `master` until reviewed. Operator: stop `bookone-staging-e2e` and `bookone-e2e.clossyan.com`.
+
 ## 2026-10-12 — Wave 1a: QA denial tests + agent-browse port
 
 - bookone-qa branch `qa/chg-20261012-e2e-denial` at `0ed11956634f4bb6117807ad8c1aebe18a357777`. Record: [CHG-20261012-remove-inbuilt-e2e](changes/CHG-20261012-remove-inbuilt-e2e.md).

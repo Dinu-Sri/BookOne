@@ -20,27 +20,18 @@ fi
 echo "[1/3] Waiting for Postgres & pushing Drizzle schema..."
 MIGRATE_OK=0
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  OUT=$(pnpm --filter @bookone/db db:migrate 2>&1) || true
-  echo "$OUT" | tail -5
-  if echo "$OUT" | grep -Eqi "No config path|Pull schema|Your database|Changes applied|No changes|already in sync"; then
+  if pnpm --dir packages/db exec drizzle-kit push --force; then
     echo "Schema push ok."
     MIGRATE_OK=1
     break
-  fi
-  if echo "$OUT" | grep -qi "password authentication failed"; then
-    echo ""
-    echo "ERROR: DATABASE_URL password is wrong."
-    echo "Check Portainer stack env → DATABASE_URL matches DB_PASSWORD."
-    echo "Expected format: postgres://bookone:DB_PASSWORD@postgres:5432/bookone"
-    echo ""
   fi
   echo "  Retry $i/10..."
   sleep 5
 done
 
 if [ "$MIGRATE_OK" != "1" ]; then
-  echo "WARN: drizzle-kit push did not report success after retries."
-  echo "Continuing to SQL migrations — check logs if tables are missing."
+  echo "ERROR: drizzle-kit push failed after retries. Signup will fail until tables exist."
+  echo "Check DATABASE_URL (postgres://USER:PASSWORD@postgres:5432/DBNAME)."
 fi
 
 echo "[2/3] SQL migrations (packages/db/migrations/*.sql) — no seed..."

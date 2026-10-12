@@ -31,9 +31,10 @@ async function init() {
       if (
         msg.includes('already exists') ||
         msg.includes('already a policy') ||
-        msg.includes('duplicate')
+        msg.includes('duplicate') ||
+        msg.includes('does not exist')
       ) {
-        console.log(`${file} already applied.`);
+        console.log(`${file} skipped:`, msg.split('\n')[0]);
       } else {
         console.error(`${file} FAILED:`, msg);
         await sql.end();

@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "drizzle-kit push",
+    "db:migrate": "drizzle-kit push --force",
     "db:seed": "tsx src/seed.ts",
     "db:studio": "drizzle-kit studio"
   },

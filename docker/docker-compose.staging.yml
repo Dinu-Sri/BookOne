@@ -5,8 +5,10 @@
 # Always on: traefik, web, postgres, redis, minio, cloudflared
 # Optional: docs — COMPOSE_PROFILES=docs
 #
-# Web runs the local image until GitHub Action "Docker web image" is green.
-# Do not compile on Portainer while pnpm install still exits 1.
+# Fresh staging: empty VPS, data loss accepted.
+# GitHub Action "Docker web image" already succeeded on this Dockerfile.
+# Portainer Update WITH Re-pull ON: pull postgres/redis/traefik/cloudflared/minio,
+# compile web. Docker Hub no longer serves minio/minio — use chainguard/minio.
 #
 # Hosts (one subdomain level under clossyan.com for free SSL):
 #   WEB_HOST=bookone.clossyan.com
@@ -35,10 +37,14 @@ services:
       - bookone_network
     restart: unless-stopped
 
-  # ── ERP — local image (compile is off until Docker web image CI is green)
+  # ── ERP — compile from docker/Dockerfile.web, tag for this stack
   web:
     image: bookone_stage-web:latest
-    pull_policy: never
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        BUILD_DATE: "${BUILD_DATE:-0}"
     container_name: bookone-staging-web
     environment:
       - DATABASE_URL=${DATABASE_URL}
@@ -133,10 +139,11 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
-    pull_policy: never
+    # Docker Hub removed minio/minio. Chainguard is a pullable S3-compatible server.
+    image: chainguard/minio:latest
+    pull_policy: missing
     container_name: bookone-staging-minio
-    command: server /data
+    command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}

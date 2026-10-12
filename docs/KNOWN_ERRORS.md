@@ -4,6 +4,14 @@
 
 ---
 
+## Error: `minio/minio` cannot be pulled
+
+**Symptom:** Portainer stack pull hangs or fails on MinIO; Docker Hub says the repository does not exist.  
+**Cause:** Docker Hub removed `minio/minio` (2026). `pull_policy: never` only works if that image is already on the VPS.  
+**Fix:** Staging/prod compose uses `chainguard/minio:latest` with `pull_policy: missing`. Same `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` and `S3_ENDPOINT=http://minio:9000`.
+
+---
+
 ## Error: Database Connection Refused
 
 **Symptom:** `Error: connect ECONNREFUSED 127.0.0.1:5432`  

@@ -1,3 +1,8 @@
+## 2026-10-12 — Fresh staging stack (wiped images/volumes)
+
+- Owner wiped Portainer images/volumes; data loss accepted. GitHub Action Docker web image #1 succeeded (2m 22s).
+- Staging compose compiles web again; MinIO is `chainguard/minio:latest` (Docker Hub no longer has `minio/minio`). First Update uses Re-pull ON.
+
 ## 2026-10-12 — Staging web compile re-enabled
 
 - Infra recovered; site was on `bookone_stage-web:latest` (24 Sep). Owner asked to move to current `master`.

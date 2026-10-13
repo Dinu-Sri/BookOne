@@ -1,3 +1,9 @@
+## 2026-10-13 — Tenant archive export (v2.3.0)
+
+- Record: [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md). Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md) phase 1.
+- Owner downloads paired encrypted `.bookone-data` / `.bookone-files` from Company → Backup. Restore stays disabled. Empty-check helper is in place for phase 2.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.3.0 · <sha7>` and adds export scenarios.
+
 ## 2026-10-13 — Physical SKU, posting atomicity, bill approve (v2.2.5)
 
 - Record: [CHG-20261013-physical-sku-atomicity-approval](changes/CHG-20261013-physical-sku-atomicity-approval.md). QA [HANDOFF-20261013-physical-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261013-physical-findings.md) BUG-0018/0019/0020.

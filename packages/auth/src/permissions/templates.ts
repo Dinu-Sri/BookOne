@@ -56,7 +56,13 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     key: 'admin',
     name: 'Admin',
     slug: 'admin',
-    grants: allKeys().filter((k) => k !== 'company.lifecycle.write' && k !== 'company.reset.write'),
+    grants: allKeys().filter(
+      (k) =>
+        k !== 'company.lifecycle.write' &&
+        k !== 'company.reset.write' &&
+        k !== 'company.backup.write' &&
+        k !== 'company.backup.read',
+    ),
   },
   {
     key: 'accountant',

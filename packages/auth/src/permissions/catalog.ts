@@ -85,6 +85,8 @@ export const PERMISSION_KEYS = [
   'company.locations.write',
   'company.domains.read',
   'company.domains.write',
+  'company.backup.read',
+  'company.backup.write',
   'company.lifecycle.write',
   'company.reset.write',
   'team.people.read',
@@ -102,6 +104,8 @@ export const PRIVILEGED_KEYS: readonly PermissionKey[] = [
   'team.jobs.write',
   'company.lifecycle.write',
   'company.reset.write',
+  'company.backup.read',
+  'company.backup.write',
 ];
 
 export const SCREEN_DEFS: {
@@ -156,6 +160,7 @@ export const SCREEN_DEFS: {
   { keyPrefix: 'company.brands', label: 'Brands', href: '/company/brands', module: 'company', writeable: true },
   { keyPrefix: 'company.locations', label: 'Locations', href: '/company/locations', module: 'company', writeable: true },
   { keyPrefix: 'company.domains', label: 'Domain Verification', href: '/company/domains', module: 'company', writeable: true },
+  { keyPrefix: 'company.backup', label: 'Backup', href: '/company/backup', module: 'company', writeable: true },
   { keyPrefix: 'team.people', label: 'Team', href: '/company/team', module: 'team', writeable: true },
   { keyPrefix: 'team.jobs', label: 'Jobs', href: '/company/team/jobs', module: 'team', writeable: true },
 ];

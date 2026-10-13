@@ -1,8 +1,8 @@
 # Tenant portable archive (company backup)
 
-> **Status:** Design freeze (not implemented).  
-> **Last updated:** 2026-10-12  
-> **Change record:** [CHG-20261012-tenant-backup-archive](changes/CHG-20261012-tenant-backup-archive.md)  
+> **Status:** Phase 1 export shipped (restore not built).  
+> **Last updated:** 2026-10-13  
+> **Change records:** [CHG-20261012-tenant-backup-archive](changes/CHG-20261012-tenant-backup-archive.md) (spec), [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md) (export).  
 > **Audience:** company **primary owner** (download + restore). Platform operators still run whole-stack DR separately.
 
 This document is the contract. UI and code follow it. Do not restore into a company that has already traded. Do not put invoice/journal rows in the files pack.
@@ -104,6 +104,10 @@ Restore of a files pack is rejected unless `exportId` matches the data already a
 
 Encryption: both files password-protected by the owner at download. BookOne does not store that password.
 
+**Container (phase 1):** magic `B1AR1` + 16-byte salt + 12-byte IV + AES-256-GCM ciphertext + 16-byte tag. Key is scrypt (N=16384, r=8, p=1) of the owner password. Inner payload is gzip JSON `{ format, kind, manifest, tables, objects }`. `dataSha256` hashes the tables object; `filesSha256` hashes `{key, sha256, size}` for packed objects. Prepared blobs live under `tenants/{tenantId}/_archive/` (excluded from the files pack) or in process memory for 15 minutes if S3 is unset.
+
+**UI (phase 1):** Company → Backup. Owner creates a pair with a password, then downloads both files. Restore is visible and disabled. Viewer and Admin are denied. Rate limit: one prepare per two minutes per company.
+
 ---
 
 ## 5. Schema evolution
@@ -158,7 +162,7 @@ Lock the tenant for the data import. One in-flight restore per tenant. Files pac
 | Phase | Deliverable |
 |-------|-------------|
 | **0** | This document + change record (done when committed). |
-| **1** | Export: empty-check helper, data snapshot, files listing, paired encrypted downloads. No restore yet. |
+| **1** | Export: empty-check helper, data snapshot, files listing, paired encrypted downloads. No restore yet. **Shipped in v2.3.0.** |
 | **2** | Restore **data** into empty tenant + integrity + rollback. |
 | **3** | Restore **files** pack (chunked), pointer rewrite, “missing attachment” UI. |
 | **4** | `schemaVersion` transformers + CI golden restore. |

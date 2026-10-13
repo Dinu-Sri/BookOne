@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Archive,
   Bell,
   BookOpen,
   BookOpenCheck,
@@ -160,6 +161,7 @@ const navSuites: NavSuite[] = [
       { label: 'Brands', icon: Package, href: '/company/brands' },
       { label: 'Locations', icon: Landmark, href: '/company/locations' },
       { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },
+      { label: 'Backup', icon: Archive, href: '/company/backup' },
       { label: 'Team', icon: Users, href: '/company/team' },
       { label: 'Jobs', icon: ShieldCheck, href: '/company/team/jobs' },
       { label: 'Groups', icon: Users, href: '/company/team/groups' },

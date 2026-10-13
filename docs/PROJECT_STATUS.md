@@ -1,3 +1,7 @@
+## 2026-10-13 — Tenant archive export (v2.3.0)
+
+Owner-held company backup phase 1: paired encrypted downloads at Company → Backup. Restore is not built. See [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.3.0 · <sha7>`.
+
 ## 2026-10-13 — Physical SKU, posting atomicity, bill approve (v2.2.5)
 
 QA RUN-15 on v2.2.4: foreign SKU on invoice, leftover txn/empty journal, Viewer bill approve. See [CHG-20261013-physical-sku-atomicity-approval](changes/CHG-20261013-physical-sku-atomicity-approval.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.5 · <sha7>`.
@@ -44,7 +48,7 @@ Simple Entry cash sale posts to 4000. Viewer invoice write denial is a toast/rea
 
 ## 2026-10-12 — Tenant portable archive (design freeze)
 
-Owner-held company backup is specified in [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md): two files, empty-tenant restore only, schemaVersion transformers later. Not implemented yet. Platform `pg_dump` + MinIO replica remains operator DR.
+Superseded 2026-10-13: phase 1 export shipped in v2.3.0. Restore remains unbuilt. Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md).
 
 ## 2026-10-12 — Remove Control Room test tools; grant admin by email
 

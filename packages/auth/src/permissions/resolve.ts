@@ -51,6 +51,12 @@ export function privilegedLevel(primaryTemplateKey: string | null, key: string):
   if (key === 'company.lifecycle.write' || key === 'company.reset.write') {
     return primaryTemplateKey === 'owner' ? 'write' : 'none';
   }
+  if (key === 'company.backup.write') {
+    return primaryTemplateKey === 'owner' ? 'write' : 'none';
+  }
+  if (key === 'company.backup.read') {
+    return primaryTemplateKey === 'owner' ? 'read' : 'none';
+  }
   return 'none';
 }
 

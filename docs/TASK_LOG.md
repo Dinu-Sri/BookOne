@@ -1,3 +1,9 @@
+## 2026-10-13 — Physical SKU, posting atomicity, bill approve (v2.2.5)
+
+- Record: [CHG-20261013-physical-sku-atomicity-approval](changes/CHG-20261013-physical-sku-atomicity-approval.md). QA [HANDOFF-20261013-physical-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261013-physical-findings.md) BUG-0018/0019/0020.
+- Non-null product ids must belong to the current tenant. Failed GL posts roll back transaction/journal/stock/party. Viewer cannot approve or reject pending bills.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA reruns 60 source / 49 runtime on `v2.2.5 · <sha7>`.
+
 ## 2026-10-13 — Reserved Drizzle client (v2.2.4)
 
 - Record: [CHG-20261013-reserved-drizzle](changes/CHG-20261013-reserved-drizzle.md).

@@ -1,3 +1,7 @@
+## 2026-10-13 — Physical SKU, posting atomicity, bill approve (v2.2.5)
+
+QA RUN-15 on v2.2.4: foreign SKU on invoice, leftover txn/empty journal, Viewer bill approve. See [CHG-20261013-physical-sku-atomicity-approval](changes/CHG-20261013-physical-sku-atomicity-approval.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.5 · <sha7>`.
+
 ## 2026-10-13 — Reserved Drizzle client (v2.2.4)
 
 v2.2.3 empty module nav / dashboard `parsers` TypeError: reserved postgres.js clients lack `options`. See [CHG-20261013-reserved-drizzle](changes/CHG-20261013-reserved-drizzle.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.4 · <sha7>`.

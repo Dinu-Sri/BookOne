@@ -36,6 +36,30 @@
 
 ---
 
+## Error: Invoice accepted another company’s SKU (BUG-0018)
+
+**Symptom:** C-115/215 posted an invoice using a foreign-tenant product UUID; the line stored that id.  
+**Cause:** Missing product lookup fell through as a service line and still saved `productId`.  
+**Fix:** Require every non-null product id to be a live product of the current tenant. Missing product errors instead of becoming a service. Trigger 041 blocks the same on insert/update.
+
+---
+
+## Error: Failed posting left a transaction and empty journal (BUG-0019)
+
+**Symptom:** C-116/216 journal-line insert failed; a transaction and empty journal remained. Locked-period finance (RT-018/118) still created a party audit.  
+**Cause:** `withTenantContext` pins a connection without BEGIN; inserts autocommitted. `ensureParty` ran before the period check.  
+**Fix:** Preflight locked periods. Wrap document/party/journal/stock/cost/audit in one `db().transaction` on the reserved connection.
+
+---
+
+## Error: Viewer approved and posted a purchase bill (BUG-0020)
+
+**Symptom:** RT-020/120 Viewer posted an existing pending bill. Create already denied.  
+**Cause:** `approvePurchaseDocument` / `rejectPurchaseDocument` did not assert purchase write, Viewer hard-deny, or dimension scope.  
+**Fix:** Same permission/read-only/module/dimension rules as create, before any GL or status change. Owner approval unchanged.
+
+---
+
 ## Error: Empty module screens after reserved tenant connection (v2.2.3)
 
 **Symptom:** After Portainer pull of v2.2.3, login showed Accounting/Sales/Purchase groups with no child screens. Web log: `TypeError: Cannot read properties of undefined (reading 'parsers')` on `app/page.js`. Init-db `42701`/`42P07` “already exists, skipping” is expected and not this bug.  

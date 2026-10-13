@@ -1,3 +1,9 @@
+## 2026-10-13 — On-screen version stamp (v2.1.0)
+
+- Record: [CHG-20261013-on-screen-version](changes/CHG-20261013-on-screen-version.md). Contract: [VERSIONING.md](VERSIONING.md).
+- Sidebar bottom-left shows `vMAJOR.MINOR.PATCH · sha`. Agents must bump `VERSION` before every product commit (`pnpm version:bump`).
+- Next: Portainer Re-pull ON; confirm the stamp is not `dev`.
+
 ## 2026-10-13 — Viewer hard deny after QA PR #5
 
 - Record: [CHG-20261013-viewer-hard-deny](changes/CHG-20261013-viewer-hard-deny.md). QA [PR #5](https://github.com/Dinu-Sri/bookone-qa/pull/5) still created customers and drafts `INV-20261012-0002` / `0003` as Viewer.

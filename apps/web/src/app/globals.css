@@ -288,6 +288,9 @@ img {
   background: rgba(255, 255, 255, 0.84);
   backdrop-filter: blur(18px);
   transition: padding 160ms ease;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .sidebar-header {
@@ -328,6 +331,27 @@ img {
 
 .suite-nav {
   margin-top: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-version {
+  margin-top: auto;
+  padding-top: 12px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  user-select: all;
+}
+
+.is-collapsed .sidebar-version {
+  font-size: 10px;
+  text-align: center;
+  word-break: break-all;
+  white-space: pre-line;
 }
 
 .is-collapsed .sidebar {

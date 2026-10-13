@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Noto_Serif_Sinhala } from 'next/font/google';
 import { FormBusyGuard } from '@/components/ui/form-busy';
-import { bookoneBuildId } from '@/lib/build-id';
+import { bookoneAppVersion, bookoneBuildId } from '@/lib/build-id';
 import './globals.css';
 
 /**
@@ -39,7 +39,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     // Default light; Fumadocs/next-themes may toggle `dark` on <html> for /docs only.
     <html lang="en" className={`light ${notoSerifSinhala.variable}`} suppressHydrationWarning>
-      <body className={notoSerifSinhala.variable} data-bookone-build={bookoneBuildId()} suppressHydrationWarning>
+      <body
+        className={notoSerifSinhala.variable}
+        data-bookone-version={bookoneAppVersion()}
+        data-bookone-build={bookoneBuildId()}
+        suppressHydrationWarning
+      >
         {children}
         <FormBusyGuard />
       </body>

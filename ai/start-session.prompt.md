@@ -1,6 +1,6 @@
 # Start a BookOne development session
 
-Read AGENTS.md, docs/PROJECT_STATUS.md and docs/QA_CHANGE_CONTRACT.md. Then read only relevant business/architecture docs. BookOne is a running product; older planning-only descriptions are obsolete.
+Read AGENTS.md, docs/VERSIONING.md, docs/PROJECT_STATUS.md and docs/QA_CHANGE_CONTRACT.md. Then read only relevant business/architecture docs. BookOne is a running product; older planning-only descriptions are obsolete. Before every product commit, bump repo-root VERSION.
 
 Use Codebase Memory MCP first and verify the source revision. Create or resume a docs/changes/CHG-YYYYMMDD-short-slug.md record before implementation. Preserve tested behaviour, financial history, tenant isolation and additive migrations.
 

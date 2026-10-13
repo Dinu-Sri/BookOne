@@ -34,6 +34,31 @@ A prior pass never certifies a new build. Record product/QA revisions, schema/co
 3. **Never drop/recreate production tables.** Schema changes are additive migrations only.
 4. **Never delete existing functionality.** Preserve working features; add new features alongside.
 5. **Never commit `.env` files, secrets, or hardcoded production URLs.** `.env` is in `.gitignore`.
+6. **Never commit product code without bumping `VERSION`.** See [Release versioning](#release-versioning-mandatory-before-every-commit). A commit that leaves `VERSION` unchanged while changing `apps/`, `packages/`, `docker/`, or `scripts/` is incomplete. Do not push it.
+
+---
+
+## Release versioning (MANDATORY before every commit)
+
+Full contract: **[docs/VERSIONING.md](docs/VERSIONING.md)**. Read it. Follow it. Do not invent a second scheme.
+
+Canonical file: repo-root **`VERSION`** (`MAJOR.MINOR.PATCH`). The live UI shows `vMAJOR.MINOR.PATCH · <sha7>` in the **sidebar bottom-left** and on `/login`.
+
+**Before `git commit` you MUST:**
+
+1. Bump `VERSION` in this same commit (`pnpm version:bump -- patch` or `minor` / `major`).
+2. Write the new version in the CHG record.
+3. `git add VERSION` with the rest of the files.
+
+| Change | Bump |
+|--------|------|
+| Bug fix, permission fix, refactor, chore that rebuilds the web image | **patch** |
+| New user-visible feature or screen | **minor** |
+| Breaking workflow, API, or unskippable migration | **major** |
+
+Never reuse a version. Never skip a bump because “it is small.” Workspace `package.json` versions are package identity, not the on-screen release. Local `pnpm dev` shows `dev` for the SHA; staging shows the GitHub SHA after Portainer Re-pull ON.
+
+QA must quote the on-screen `vX.Y.Z · sha` in the run record. Findings without that stamp cannot be tied to a build.
 
 ---
 
@@ -178,6 +203,7 @@ Use these checks before changing architecture or rewriting Docker from scratch.
 | Architecture change | `AGENTS.md`, `docs/DEPLOYMENT_WORKFLOW.md` |
 | Known error discovered | `docs/KNOWN_ERRORS.md` |
 | Deployment process change | `docs/DEPLOYMENT_WORKFLOW.md`, `AGENTS.md` |
+| Product commit (any apps/packages/docker/scripts change) | **`VERSION` bump** — [docs/VERSIONING.md](docs/VERSIONING.md) |
 | **UI / posting / route / settings feature** | Change record + corresponding external QA scenarios/assertions — see `docs/QA_CHANGE_CONTRACT.md` |
 | **UI you can click** | External QA browser journey or authorized browser tooling; save outcome evidence |
 
@@ -212,10 +238,14 @@ The bookone-qa README is authoritative for test commands (`pnpm test:e2e`, `pnpm
 ## Git Workflow
 
 ```bash
+pnpm version:bump -- patch    # or minor / major — required when the web image rebuilds
+git add VERSION
 git add -A
 git commit -m "type: description"
 git push origin <reviewed-branch>
 ```
+
+Stop if `VERSION` was not bumped and the diff includes `apps/`, `packages/`, `docker/`, or `scripts/`.
 
 Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (for migrations)
 
@@ -223,6 +253,7 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 
 ## Important Docs
 
+- `docs/VERSIONING.md` — Mandatory on-screen release version (`VERSION` file + SHA stamp)
 - `docs/QA_CHANGE_CONTRACT.md` — Mandatory development-agent handover to external QA
 - `docs/changes/README.md` — Durable per-task change ledger and template
 - `docs/TENANT_BACKUP_ARCHIVE.md` — Owner company backup/restore contract (empty tenant, two files)
@@ -242,7 +273,7 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 
 ---
 
-*Last updated: 2026-10-12 | BookOne v2*
+*Last updated: 2026-10-13 | BookOne v2.1.0*
 
 ## Codebase Memory MCP
 

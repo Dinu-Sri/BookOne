@@ -1,7 +1,22 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createMDX } from 'fumadocs-mdx/next';
+
+function readAppVersion() {
+  try {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
+    return readFileSync(join(root, 'VERSION'), 'utf8').trim();
+  } catch {
+    return '0.0.0';
+  }
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: readAppVersion(),
+  },
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
   serverExternalPackages: ['bcryptjs', 'postgres', 'sharp', 'qrcode'],

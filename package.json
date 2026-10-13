@@ -13,6 +13,7 @@
     "db:seed": "turbo db:seed",
     "db:studio": "turbo db:studio",
     "db:init": "npx tsx scripts/init-db.ts",
+    "version:bump": "node scripts/bump-version.mjs",
     "clean": "turbo clean"
   },
   "devDependencies": {

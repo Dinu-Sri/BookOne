@@ -3,7 +3,7 @@
 Status: planned / implementing / ready-for-QA / blocked / verified.
 
 - Author/agent and date:
-- Product base SHA and branch/PR:
+- Product version (`VERSION` file) and base SHA / branch/PR:
 - QA repository revision and companion PR/change ID:
 - Intended before/after behaviour with a concrete example:
 - Existing behaviour that must remain correct:

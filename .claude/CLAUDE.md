@@ -1,6 +1,6 @@
 # BookOne coding-agent entry point
 
-Read root AGENTS.md and docs/QA_CHANGE_CONTRACT.md first. Maintain a docs/changes record, TASK_LOG and PROJECT_STATUS. Canonical tests and QA history: https://github.com/Dinu-Sri/bookone-qa. Cleanup task: docs/REMOVE_INBUILT_E2E.md. The root instructions govern conflicts with older testing guidance.
+Read root AGENTS.md, docs/VERSIONING.md and docs/QA_CHANGE_CONTRACT.md first. Maintain a docs/changes record, TASK_LOG and PROJECT_STATUS. **Before every product commit, bump repo-root `VERSION` (`pnpm version:bump -- patch|minor|major`) and include it in the commit.** Canonical tests and QA history: https://github.com/Dinu-Sri/bookone-qa. The root instructions govern conflicts with older testing guidance.
 
 ## Codebase Memory MCP
 

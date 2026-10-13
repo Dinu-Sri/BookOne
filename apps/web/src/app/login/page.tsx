@@ -7,7 +7,7 @@ import { createAuthClient } from 'better-auth/react';
 import { Eye, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
 import { migrateLegacyLogin } from '@/app/actions/legacy-auth';
-import { bookoneBuildId } from '@/lib/build-id';
+import { bookoneVersionLabel } from '@/lib/build-id';
 
 const authClient = createAuthClient();
 
@@ -232,7 +232,7 @@ function LoginContent() {
             By signing {mode === 'signin' ? 'in' : 'up'}, you agree to the <a href="#">Terms of Use</a>, <a href="#">Privacy Policy</a>, and <a href="#">Cookies Policy</a>.
           </div>
           <p className="auth-terms" data-testid="bookone-build" style={{ marginTop: 8 }}>
-            build {bookoneBuildId()}
+            {bookoneVersionLabel()}
           </p>
         </form>
       </section>

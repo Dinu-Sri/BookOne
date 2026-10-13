@@ -1,3 +1,7 @@
+## 2026-10-13 — On-screen version (v2.1.0)
+
+Sidebar bottom-left shows `v2.1.0 · <sha>`. Agents must bump `VERSION` before product commits. See [VERSIONING.md](VERSIONING.md) and [CHG-20261013-on-screen-version](changes/CHG-20261013-on-screen-version.md). Portainer Re-pull ON after Docker web image is green.
+
 ## 2026-10-13 — Viewer hard deny (QA PR #5)
 
 QA still created customers and invoice drafts as Viewer after `85bb2f3`. Primary Viewer is now read-only even with extra grants. Login shows `build <sha>`. See [CHG-20261013-viewer-hard-deny](changes/CHG-20261013-viewer-hard-deny.md). Pull GHCR after Docker web image is green (Re-pull ON).

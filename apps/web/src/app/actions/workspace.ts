@@ -162,6 +162,10 @@ export async function getTenantInfo(): Promise<TenantInfo> {
   accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
   accessByLabel.Groups = accessByLabel.Team ?? 'none';
   const { landingHrefForAccess } = await import('@/lib/access');
+  const { CONTROL_ROOM_NAV_LABELS } = await import('@/lib/nav-visibility');
+  if (user.platformRole === 'super_admin') {
+    for (const label of CONTROL_ROOM_NAV_LABELS) accessByLabel[label] = 'write';
+  }
   return {
     ...t,
     environment: t.environment ?? 'production',

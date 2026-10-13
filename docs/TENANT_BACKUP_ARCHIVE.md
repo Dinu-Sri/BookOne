@@ -1,8 +1,8 @@
 # Tenant portable archive (company backup)
 
-> **Status:** Phase 1 export shipped (restore not built).  
+> **Status:** Phase 2 data restore shipped (files pack apply is later).  
 > **Last updated:** 2026-10-13  
-> **Change records:** [CHG-20261012-tenant-backup-archive](changes/CHG-20261012-tenant-backup-archive.md) (spec), [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md) (export).  
+> **Change records:** [CHG-20261012-tenant-backup-archive](changes/CHG-20261012-tenant-backup-archive.md) (spec), [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md) (export), [CHG-20261013-tenant-archive-restore](changes/CHG-20261013-tenant-archive-restore.md) (restore).  
 > **Audience:** company **primary owner** (download + restore). Platform operators still run whole-stack DR separately.
 
 This document is the contract. UI and code follow it. Do not restore into a company that has already traded. Do not put invoice/journal rows in the files pack.
@@ -106,7 +106,7 @@ Encryption: both files password-protected by the owner at download. BookOne does
 
 **Container (phase 1):** magic `B1AR1` + 16-byte salt + 12-byte IV + AES-256-GCM ciphertext + 16-byte tag. Key is scrypt (N=16384, r=8, p=1) of the owner password. Inner payload is gzip JSON `{ format, kind, manifest, tables, objects }`. `dataSha256` hashes the tables object; `filesSha256` hashes `{key, sha256, size}` for packed objects. Prepared blobs live under `tenants/{tenantId}/_archive/` (excluded from the files pack) or in process memory for 15 minutes if S3 is unset.
 
-**UI (phase 1):** Company → Backup. Owner creates a pair with a password, then downloads both files. Restore is visible and disabled. Viewer and Admin are denied. Rate limit: one prepare per two minutes per company.
+**UI:** Company → Backup. Owner creates a pair with a password, then downloads both files. Restore of the **data** file is enabled only when this company is operationally empty. Viewer and Admin are denied. Rate limit: one prepare per two minutes per company. Files pack apply is phase 3.
 
 ---
 
@@ -163,7 +163,7 @@ Lock the tenant for the data import. One in-flight restore per tenant. Files pac
 |-------|-------------|
 | **0** | This document + change record (done when committed). |
 | **1** | Export: empty-check helper, data snapshot, files listing, paired encrypted downloads. No restore yet. **Shipped in v2.3.0.** |
-| **2** | Restore **data** into empty tenant + integrity + rollback. |
+| **2** | Restore **data** into empty tenant + integrity + rollback. **Shipped in v2.4.0.** |
 | **3** | Restore **files** pack (chunked), pointer rewrite, “missing attachment” UI. |
 | **4** | `schemaVersion` transformers + CI golden restore. |
 | **5** | Scheduled reminder / optional copy to the owner’s download list. |
@@ -178,6 +178,6 @@ Platform off-site `pg_dump` + MinIO replica is operator work in parallel (alread
 
 - Download company data  
 - Download attachments (files pack)  
-- Restore into **this** company (disabled unless empty; two upload fields)
+- Restore into **this** company (data file + password; enabled only when empty)
 
 Copy on restore: “Only a new company with no invoices, journals, or stock can be restored. This replaces the starter chart of accounts.”

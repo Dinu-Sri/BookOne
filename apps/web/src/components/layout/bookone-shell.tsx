@@ -54,6 +54,7 @@ import {
   type ModuleWriteKey,
 } from '@/lib/entity-kind';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
+import { keepNavItem } from '@/lib/nav-visibility';
 
 export interface NavItem {
   label: string;
@@ -375,11 +376,15 @@ export function BookOneShell({
           items = items.filter((item) => item.label !== 'Team' && item.label !== 'Jobs' && item.label !== 'Groups');
         }
         if (tenant?.accessByLabel) {
-          items = items.filter((item) => {
-            if (!item.href || item.label === 'Documentation') return true;
-            const level = tenant.accessByLabel?.[item.label] ?? 'none';
-            return level !== 'none';
-          });
+          items = items.filter((item) =>
+            keepNavItem({
+              label: item.label,
+              href: item.href,
+              accessByLabel: tenant.accessByLabel,
+              suiteSuperAdminOnly: suite.superAdminOnly,
+              isSuperAdmin,
+            }),
+          );
         }
         // Sole: always link Cashbook (Personal | Business domains) from ERP
         if (suite.id === 'accounting' && soleNeedsCashbook) {
@@ -404,7 +409,7 @@ export function BookOneShell({
         }
         return { ...suite, items };
       })
-      .filter(Boolean) as NavSuite[];
+      .filter((suite): suite is NavSuite => suite != null && suite.items.length > 0);
   }, [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier, tenant?.accessByLabel]);
   const activeSuite = visibleSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);

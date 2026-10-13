@@ -1,6 +1,10 @@
+## 2026-10-13 — Tenant archive restore + Control Room nav (v2.4.0)
+
+Owner restores encrypted company data into an empty tenant (phase 2). Control Room menu children show for platform super_admin. Files pack apply is later. See [CHG-20261013-tenant-archive-restore](changes/CHG-20261013-tenant-archive-restore.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.4.0 · <sha7>`.
+
 ## 2026-10-13 — Tenant archive export (v2.3.0)
 
-Owner-held company backup phase 1: paired encrypted downloads at Company → Backup. Restore is not built. See [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.3.0 · <sha7>`.
+Owner-held company backup phase 1: paired encrypted downloads at Company → Backup. Restore shipped later in v2.4.0. See [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md).
 
 ## 2026-10-13 — Physical SKU, posting atomicity, bill approve (v2.2.5)
 

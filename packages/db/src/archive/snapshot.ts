@@ -81,7 +81,7 @@ type DumpTable = {
   by: 'tenantId' | 'id';
 };
 
-const DATA_TABLES: DumpTable[] = [
+export const ARCHIVE_DUMP_TABLES: DumpTable[] = [
   { table: tenants, by: 'id' },
   { table: accounts, by: 'tenantId' },
   { table: parties, by: 'tenantId' },
@@ -155,7 +155,7 @@ export function archiveExcludedTables(): readonly string[] {
 }
 
 export function archiveDataTableNames(): string[] {
-  const names = DATA_TABLES.map((entry) => getTableName(entry.table));
+  const names = ARCHIVE_DUMP_TABLES.map((entry) => getTableName(entry.table));
   const expected = new Set<string>(ARCHIVE_DATA_TABLE_NAMES);
   if (names.length !== expected.size || names.some((name) => !expected.has(name))) {
     throw new Error('Archive table list is out of date.');
@@ -170,7 +170,7 @@ export async function snapshotTenantTables(tenantId: string): Promise<{
   archiveDataTableNames();
   const tables: Record<string, Record<string, unknown>[]> = {};
   const rowCounts: Record<string, number> = {};
-  for (const entry of DATA_TABLES) {
+  for (const entry of ARCHIVE_DUMP_TABLES) {
     const name = getTableName(entry.table);
     const col = entry.by === 'id' ? (entry.table as typeof tenants).id : (entry.table as typeof accounts).tenantId;
     const rows = await db()

@@ -3,7 +3,7 @@ import { Archive } from 'lucide-react';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CompanyCard } from '../_components';
-import { BackupClient } from '@/components/company/backup-client';
+import { BackupClient, RestoreClient } from '@/components/company/backup-client';
 import { assertScreenAccess } from '@/lib/access';
 import { getArchiveEmptyState, peekPreparedArchive, requireArchiveOwner } from '@/lib/tenant-archive';
 import { withTenantContext } from '@bookone/db';
@@ -42,8 +42,7 @@ export default async function CompanyBackupPage() {
           >
             <p style={{ color: 'var(--ink-muted)', fontSize: 13, marginTop: 0 }}>
               Data holds the books (invoices, journals, stock, settings). Attachments holds receipts and photos.
-              Keep both files and the password together. Restore into a new empty company comes in a later
-              release.
+              Keep both files and the password together. Restore only into a new empty company.
             </p>
             <BackupClient initialMeta={prepared} />
           </CompanyCard>
@@ -65,9 +64,7 @@ export default async function CompanyBackupPage() {
                 Only a new company with no invoices, journals, or stock can be restored. This replaces the starter
                 chart of accounts.
               </p>
-              <button type="button" className="btn-secondary" disabled>
-                Restore (coming later)
-              </button>
+              <RestoreClient restoreEnabled={emptyState.empty} />
             </div>
           </CompanyCard>
         </div>

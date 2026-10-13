@@ -1,3 +1,9 @@
+## 2026-10-13 — Tenant archive restore + Control Room nav (v2.4.0)
+
+- Record: [CHG-20261013-tenant-archive-restore](changes/CHG-20261013-tenant-archive-restore.md). Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md) phase 2.
+- Owner restores a `.bookone-data` file into an operationally empty company. Extra users skipped; journals must balance; failed restore rolls back. Control Room children show for platform super_admin.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.4.0 · <sha7>`.
+
 ## 2026-10-13 — Tenant archive export (v2.3.0)
 
 - Record: [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md). Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md) phase 1.

@@ -18,6 +18,7 @@ import {
   eq,
   isArchiveObjectKey,
   sha256Hex,
+  restoreTenantDataArchive,
   snapshotTenantTables,
   tenantIsOperationallyEmpty,
   tenants,
@@ -388,5 +389,25 @@ export async function peekPreparedArchive(): Promise<PreparedArchiveMeta | null>
     return pair?.meta ?? null;
   } catch {
     return null;
+  }
+}
+
+export async function restoreTenantArchiveFromUpload(
+  file: Buffer,
+  password: string,
+): Promise<{ ok: true; exportId: string; rowCount: number } | { ok: false; error: string }> {
+  try {
+    const user = await requireArchiveOwner();
+    return await withTenantContext(user.tenantId, () =>
+      restoreTenantDataArchive({
+        tenantId: user.tenantId,
+        restorerUserId: user.id,
+        file,
+        password,
+      }),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not restore this backup.';
+    return { ok: false, error: message };
   }
 }

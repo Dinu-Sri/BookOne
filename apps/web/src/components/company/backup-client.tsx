@@ -105,3 +105,97 @@ export function BackupClient({ initialMeta }: { initialMeta: PreparedArchiveMeta
     </div>
   );
 }
+
+export function RestoreClient({ restoreEnabled }: { restoreEnabled: boolean }) {
+  const [restorePassword, setRestorePassword] = useState('');
+  const [restoreBusy, setRestoreBusy] = useState(false);
+
+  async function restore(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (restoreBusy || !restoreEnabled) return;
+    const form = e.currentTarget;
+    const input = form.elements.namedItem('file') as HTMLInputElement | null;
+    const chosen = input?.files?.[0];
+    if (!chosen) {
+      pushStatusToast({ kind: 'error', message: 'Choose a company data file to restore.' });
+      return;
+    }
+    setRestoreBusy(true);
+    try {
+      const body = new FormData();
+      body.set('file', chosen);
+      body.set('password', restorePassword);
+      const res = await fetch('/api/company/backup/restore', {
+        method: 'POST',
+        credentials: 'same-origin',
+        body,
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string; exportId?: string };
+      if (!res.ok || !json.ok) {
+        pushStatusToast({ kind: 'error', message: json.error ?? 'Could not restore this backup.' });
+        return;
+      }
+      setRestorePassword('');
+      form.reset();
+      pushStatusToast({
+        kind: 'success',
+        message: 'Company data restored. Upload the matching attachments pack later if you have it.',
+      });
+      window.location.reload();
+    } catch {
+      pushStatusToast({ kind: 'error', message: 'Could not restore this backup.' });
+    } finally {
+      setRestoreBusy(false);
+    }
+  }
+
+  if (!restoreEnabled) {
+    return (
+      <button type="button" className="btn-secondary" disabled>
+        Restore (company already has records)
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={restore} className="form-grid">
+      <div className="field">
+        <label htmlFor="archive-restore-file">Data file</label>
+        <input
+          id="archive-restore-file"
+          name="file"
+          type="file"
+          className="input"
+          accept=".bookone-data,application/octet-stream"
+          required
+          disabled={restoreBusy}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor="archive-restore-password">Archive password</label>
+        <input
+          id="archive-restore-password"
+          name="restorePassword"
+          type="password"
+          className="input"
+          autoComplete="current-password"
+          value={restorePassword}
+          onChange={(e) => setRestorePassword(e.target.value)}
+          minLength={8}
+          required
+          disabled={restoreBusy}
+        />
+      </div>
+      <div className="field field-full">
+        <Button
+          variant="secondary"
+          type="submit"
+          disabled={restoreBusy}
+          style={{ width: '100%', justifyContent: 'center' }}
+        >
+          {restoreBusy ? 'Restoring…' : 'Restore company data'}
+        </Button>
+      </div>
+    </form>
+  );
+}

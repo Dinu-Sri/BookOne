@@ -294,6 +294,8 @@ export interface TenantLite {
   platformRole?: 'super_admin' | 'user';
   jobSlug?: string | null;
   accessByLabel?: Record<string, 'none' | 'read' | 'write'>;
+  /** First screen this job can open; used when a typed URL is denied. */
+  landingHref?: string;
 }
 
 export interface PeriodLite {

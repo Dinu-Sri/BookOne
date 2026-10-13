@@ -7,7 +7,7 @@ import {
   DocsPage,
   DocsTitle,
 } from 'fumadocs-ui/page';
-import { source } from '@/lib/source';
+import { docsPageData, source } from '@/lib/source';
 
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
@@ -17,13 +17,14 @@ export default async function Page(props: PageProps) {
   const params = await props.params;
   const page = source.getPage(params.slug);
   if (!page) notFound();
+  const data = docsPageData(page);
 
-  const MDX = page.data.body;
+  const MDX = data.body;
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
-      <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsDescription>{page.data.description}</DocsDescription>
+    <DocsPage toc={data.toc} full={data.full}>
+      <DocsTitle>{data.title}</DocsTitle>
+      <DocsDescription>{data.description}</DocsDescription>
       <DocsBody>
         <MDX
           components={{

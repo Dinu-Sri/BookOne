@@ -188,7 +188,7 @@ async function assertParentAllowed(tenantId: string, id: string | null, parentId
 export async function createProductCategory(
   name: string,
   opts: { parentId?: string | null; brandId?: string | null; locationId?: string | null } = {},
-): Promise<{ ok: boolean; name?: string; id?: string; error?: string }> {
+): Promise<{ ok: true; name: string; id: string } | { ok: false; error: string }> {
   const user = await requireTenantContext();
   await assertModuleWrite('inventory');
   const cleaned = cleanName(name);

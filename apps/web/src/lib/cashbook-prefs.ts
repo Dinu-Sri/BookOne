@@ -24,17 +24,17 @@ export function writeLastCategory(domain: string, direction: string, code: strin
   }
 }
 
-export function readLastPayMethod(): 'Cash' | 'Bank' | null {
+export function readLastPayMethod(): 'Cash' | 'Bank' | 'Card' | null {
   if (typeof window === 'undefined') return null;
   try {
     const v = window.localStorage.getItem(KEY_PAY);
-    return v === 'Cash' || v === 'Bank' ? v : null;
+    return v === 'Cash' || v === 'Bank' || v === 'Card' ? v : null;
   } catch {
     return null;
   }
 }
 
-export function writeLastPayMethod(m: 'Cash' | 'Bank') {
+export function writeLastPayMethod(m: 'Cash' | 'Bank' | 'Card') {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(KEY_PAY, m);

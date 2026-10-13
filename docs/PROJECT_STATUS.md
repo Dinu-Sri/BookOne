@@ -1,3 +1,7 @@
+## 2026-10-13 — Quality + GHCR gate (v2.2.1)
+
+QA RUN-08: Batch A 14/15, remaining A-014 / BUG-0008 (Docker published while quality was red). Type errors fixed; Docker web image now requires same-workflow lint+typecheck+build+test, including manual dispatch. See [CHG-20261013-quality-release-gate](changes/CHG-20261013-quality-release-gate.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.1 · <sha7>`.
+
 ## 2026-10-13 — QA finance + sidebar (v2.2.0)
 
 QA PR #5 finance handoff: Viewer reversal denied; cash flow nets sale+reversal; Open AR ignores unposted/archived drafts; Reports period label; Production Check gates GHCR. Sidebar shows first name + job, centered version, logo to dashboard. See [CHG-20261013-finance-qa-and-sidebar](changes/CHG-20261013-finance-qa-and-sidebar.md). Portainer Re-pull ON after Docker web image is green.

@@ -1,3 +1,9 @@
+## 2026-10-13 — Quality errors + GHCR release gate (v2.2.1)
+
+- Record: [CHG-20261013-quality-release-gate](changes/CHG-20261013-quality-release-gate.md). QA [HANDOFF-20261013-v2-2-0-next](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261013-v2-2-0-next.md) BUG-0008 / A-014.
+- Fixed turbo TypeScript errors that failed Production Check Lint. Docker web image now `needs` a same-workflow job that runs unmasked `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test`. Manual `workflow_dispatch` cannot skip that job. Failed/cancelled/skipped/missing/timed-out quality blocks GHCR.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA retests A-014 on `v2.2.1 · <sha7>`.
+
 ## 2026-10-13 — QA finance defects + sidebar identity (v2.2.0)
 
 - Record: [CHG-20261013-finance-qa-and-sidebar](changes/CHG-20261013-finance-qa-and-sidebar.md). QA PR #5 handoff BUG-0005/0006/0007/0008/0009.

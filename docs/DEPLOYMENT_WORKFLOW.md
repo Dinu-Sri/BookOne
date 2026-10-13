@@ -24,10 +24,13 @@
 ```
 Developer pushes to GitHub master branch
     ↓
-GitHub Action "Docker web image" builds Dockerfile.web and pushes
+GitHub Action "Docker web image" runs unmasked `pnpm lint`,
+  `pnpm typecheck`, `pnpm build`, `pnpm test` in job `quality`
+    ↓
+Only if that job succeeds, it builds Dockerfile.web and pushes
   ghcr.io/dinu-sri/bookone-web:latest
     ↓
-Wait until that Action is green
+Wait until that Action is green (quality + Build & push)
     ↓
 Portainer Update (Re-pull ON) pulls the GHCR image and restarts web
     ↓
@@ -37,6 +40,8 @@ Cloudflare Tunnel → Traefik → Next.js container → bookone.clossyan.com
 ```
 
 **Key:** The VPS does not compile Next.js. Staging and prod `web` use `image: ghcr.io/dinu-sri/bookone-web:latest` with `pull_policy: always` and no `build:`. Infra images stay `pull_policy: missing`. Do not Update until **Docker web image** is green, or the GHCR tag will not exist yet.
+
+**Publication gate:** job `quality` has no `if` and no `continue-on-error`. `Build & push` `needs: [quality]` with no `always()` / `failure()` bypass. Manual **Run workflow** (`workflow_dispatch`) still runs quality first. If quality is failed, cancelled, skipped, missing, or timed out, GitHub does not run the publisher. Isolated contract: `packages/auth/test/release-gate-workflow.test.ts`. This does not wait on bookone-qa; release certification still needs same-SHA external QA.
 
 ### Portainer Stack Configuration
 

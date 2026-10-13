@@ -210,7 +210,10 @@ export function StatementImportWizard({
           return previewStatementMapping(fd2);
         };
 
-        const finish = (r: typeof res, presetId: string) => {
+        const finish = (
+          r: Awaited<ReturnType<typeof previewStatementMapping>>,
+          presetId: string,
+        ) => {
           if (!r.ok) {
             setError(r.error);
             return;

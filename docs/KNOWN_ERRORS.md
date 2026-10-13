@@ -4,6 +4,14 @@
 
 ---
 
+## Error: Docker web image published while quality was red (BUG-0008)
+
+**Symptom:** Production Check Tests green, Lint/typecheck/build red, GHCR `bookone-web:latest` still updated. Manual **Run workflow** skipped the wait job.  
+**Cause:** `docker-web.yml` waited only for the Tests job, used `if: always()` on Build & push, and skipped the wait on `workflow_dispatch`.  
+**Fix:** `build-and-push` `needs: [quality]`. Job `quality` runs unmasked `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test` with no job `if`. Publisher has no `always()` / `failure()`. Failed, cancelled, skipped, missing, or timed-out quality blocks publish. Isolated test: `packages/auth/test/release-gate-workflow.test.ts`.
+
+---
+
 ## Error: `minio/minio` cannot be pulled
 
 **Symptom:** Portainer stack pull hangs or fails on MinIO; Docker Hub says the repository does not exist.  

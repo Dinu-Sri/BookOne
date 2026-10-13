@@ -5,7 +5,7 @@ import { useState } from 'react';
 export type DiscountPick = {
   id: string;
   name: string;
-  code: string | null;
+  code?: string | null;
   discountType: string;
   value: string | number;
 };

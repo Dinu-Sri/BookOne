@@ -99,7 +99,7 @@ export function ProductForm({
     setCategoryError('');
     try {
       const result = await createProductCategory(categoryName, { parentId: categoryParentId || null });
-      if (!result.ok || !result.name || !result.id) {
+      if (!result.ok) {
         setCategoryError(result.error ?? 'Could not save category.');
         return;
       }

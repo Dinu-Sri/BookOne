@@ -973,6 +973,7 @@ export async function createQuickProduct(input: {
             expenseAccountCode: '6800',
             notes: 'Quick-created from sales document free-text line',
             isActive: true,
+            tracksSerials: false,
           }),
         )
         .returning({

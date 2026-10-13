@@ -278,7 +278,7 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors.map((e) => e.message).join(', ')}`,
+        error: `Validation error: ${error.issues.map((e) => e.message).join(', ')}`,
       };
     }
     const message = error instanceof Error ? error.message : 'Unknown error recording entry';

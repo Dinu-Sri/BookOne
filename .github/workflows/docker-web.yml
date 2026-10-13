@@ -23,52 +23,99 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: bookone-web
+  NODE_VERSION: '24'
+  PNPM_VERSION: '9'
+
+# Publication gate (BUG-0008):
+# Build & push needs the quality job that runs unmasked `pnpm lint`,
+# `pnpm typecheck`, `pnpm build`, and `pnpm test`. That job has no `if`,
+# no continue-on-error, and checks out github.sha (default).
+# The publisher has no `if: always()` / `failure()` and no workflow_dispatch bypass.
+# GitHub skips dependents when a needed job is failed, cancelled, skipped,
+# or timed out, so those conclusions block GHCR. A missing quality job fails
+# the workflow graph. Isolated contract: packages/auth/test/release-gate-workflow.test.ts
+# Staging Portainer Re-pull remains operator-controlled. Release certification
+# still requires same-SHA external QA; this workflow does not wait on bookone-qa.
 
 jobs:
-  require-production-check:
-    name: Require Production Check
-    if: github.event_name == 'push'
+  quality:
+    name: Lint typecheck build test
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     permissions:
-      actions: read
       contents: read
-    steps:
-      - name: Wait for Production Check Tests on this SHA
+
+    services:
+      postgres:
+        image: postgres:16-alpine
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          echo "Waiting for Production Check job Tests on ${GITHUB_SHA}"
-          for i in $(seq 1 80); do
-            JSON=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&per_page=20")
-            RUN_ID=$(echo "$JSON" | python3 -c 'import json,sys; runs=json.load(sys.stdin).get("workflow_runs",[]); hits=[r for r in runs if r.get("name")=="Production Check"]; print(hits[0]["id"] if hits else "")')
-            if [ -z "$RUN_ID" ]; then
-              echo "attempt $i Production Check run missing"
-              sleep 15
-              continue
-            fi
-            JOBS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs")
-            STATUS=$(echo "$JOBS" | python3 -c 'import json,sys; jobs=json.load(sys.stdin).get("jobs",[]); hits=[j for j in jobs if j.get("name")=="Tests"]; print((hits[0].get("status","")+"|"+str(hits[0].get("conclusion") or "")) if hits else "missing|")')
-            STATE=${STATUS%%|*}
-            CONCLUSION=${STATUS#*|}
-            echo "attempt $i run=$RUN_ID status=$STATE conclusion=$CONCLUSION"
-            if [ "$CONCLUSION" = "success" ]; then
-              exit 0
-            fi
-            if [ "$CONCLUSION" = "failure" ] || [ "$CONCLUSION" = "cancelled" ] || [ "$CONCLUSION" = "timed_out" ]; then
-              echo "Production Check Tests did not pass for this SHA ($CONCLUSION). Image will not publish."
-              exit 1
-            fi
-            sleep 15
-          done
-          echo "Timed out waiting for Production Check Tests on this SHA."
-          exit 1
+          POSTGRES_USER: bookone
+          POSTGRES_PASSWORD: bookone
+          POSTGRES_DB: bookone_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+        env:
+          DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
+          REDIS_URL: redis://localhost:6379
+          AUTH_SECRET: test-secret-for-ci-only
+          AUTH_URL: http://localhost:3000
+          S3_ENDPOINT: http://localhost:9000
+          S3_ACCESS_KEY: minioadmin
+          S3_SECRET_KEY: minioadmin
+          S3_BUCKET: bookone-test
+
+      - name: Test
+        run: pnpm test
+        env:
+          DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
+          REDIS_URL: redis://localhost:6379
+          AUTH_SECRET: test-secret-for-ci-only
 
   build-and-push:
     name: Build & push web image
-    needs: [require-production-check]
-    if: ${{ always() && (github.event_name != 'push' || needs.require-production-check.result == 'success') }}
+    needs: [quality]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

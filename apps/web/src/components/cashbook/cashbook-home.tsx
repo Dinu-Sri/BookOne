@@ -397,7 +397,7 @@ export function CashbookHomeClient({
               : 'Entry');
 
       let result;
-      let sheetDirection = mode || 'money_out';
+      let sheetDirection: string = mode || 'money_out';
       let accountingType: string | null = null;
 
       if (mode === 'invoice') {

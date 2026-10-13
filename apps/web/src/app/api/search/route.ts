@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { source } from '@/lib/source';
+import { docsPageData, source } from '@/lib/source';
 
 type SearchHit = {
   id: string;
@@ -15,9 +15,9 @@ type SearchHit = {
 function buildIndex(): SearchHit[] {
   const hits: SearchHit[] = [];
   for (const page of source.getPages()) {
-    const title = page.data.title ?? 'Untitled';
-    const description =
-      typeof page.data.description === 'string' ? page.data.description : '';
+    const data = docsPageData(page);
+    const title = data.title ?? 'Untitled';
+    const description = typeof data.description === 'string' ? data.description : '';
     hits.push({
       id: page.url,
       type: 'page',
@@ -32,12 +32,7 @@ function buildIndex(): SearchHit[] {
         url: page.url,
       });
     }
-    const structured = page.data.structuredData as
-      | {
-          headings?: { content?: string; id?: string }[];
-          contents?: { content?: string; heading?: string }[];
-        }
-      | undefined;
+    const structured = data.structuredData;
     if (Array.isArray(structured?.headings)) {
       for (const h of structured.headings) {
         if (typeof h?.content === 'string' && h.content.trim()) {

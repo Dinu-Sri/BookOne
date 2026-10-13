@@ -26,7 +26,7 @@ const importLineSchema = z.object({
   amount: z.number(),
   matchedTransactionId: z.string().uuid().nullable().optional(),
   status: z.enum(['matched', 'reconciled', 'unmatched', 'review']).default('review'),
-  raw: z.record(z.unknown()).optional(),
+  raw: z.record(z.string(), z.unknown()).optional(),
 });
 
 const createImportSchema = z.object({

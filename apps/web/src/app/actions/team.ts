@@ -1006,7 +1006,7 @@ export async function getPersonAccess(userId: string) {
     const platformRole = person.usersRole === 'super_admin' ? 'super_admin' : 'user';
     const access = await loadAccessForUser(userId, actor.tenantId, platformRole);
     const preview = SCREEN_DEFS.map((s) => {
-      const level = access?.allows(`${s.keyPrefix}.write`, 'write')
+      const level: 'none' | 'read' | 'write' = access?.allows(`${s.keyPrefix}.write`, 'write')
         ? 'write'
         : access?.allows(`${s.keyPrefix}.read`, 'read')
           ? 'read'

@@ -1,6 +1,23 @@
+import type { MDXContent } from 'mdx/types';
 import { docs } from '../../.source';
 import { createMDXSource } from 'fumadocs-mdx';
-import { loader, type Source } from 'fumadocs-core/source';
+import { loader, type PageData, type Source } from 'fumadocs-core/source';
+import type { TOCItemType } from 'fumadocs-core/toc';
+
+/** Runtime fumadocs-mdx fields that default PageData does not declare. */
+export type DocsPageData = PageData & {
+  body: MDXContent;
+  toc: TOCItemType[];
+  full?: boolean;
+  structuredData?: {
+    headings?: { content?: string; id?: string }[];
+    contents?: { content?: string; heading?: string }[];
+  };
+};
+
+export function docsPageData(page: { data: PageData }): DocsPageData {
+  return page.data as DocsPageData;
+}
 
 type FileEntry = {
   _file?: { path: string; absolutePath?: string };

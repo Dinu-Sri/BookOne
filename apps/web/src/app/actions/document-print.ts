@@ -186,7 +186,7 @@ export async function getDocumentPrintModel(
         website,
       },
       party: {
-        name: party?.legalName || party?.displayName || party?.name || doc.partyName || '',
+        name: party?.legalName || party?.displayName || party?.name || '',
         address: doc.purchaserAddress || party?.addressLine1 || party?.address || '',
         phone: doc.purchaserPhone || party?.phoneMobile || party?.phone || '',
         tin: doc.purchaserTin || party?.tin || '',

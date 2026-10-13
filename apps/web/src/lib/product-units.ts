@@ -31,7 +31,10 @@ export function productUnitLabel(raw?: string | null): string {
 }
 
 export function productUnitOptions(current?: string | null): { value: string; label: string }[] {
-  const options = PRODUCT_UNITS.map((u) => ({ value: u.value, label: u.label }));
+  const options: { value: string; label: string }[] = PRODUCT_UNITS.map((u) => ({
+    value: u.value,
+    label: u.label,
+  }));
   const currentValue = current?.trim();
   if (!currentValue) return options;
   const normalized = normalizeProductUnit(currentValue);

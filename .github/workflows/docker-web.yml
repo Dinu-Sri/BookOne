@@ -74,7 +74,7 @@ print((hits[0].get('status','')+'|'+str(hits[0].get('conclusion') or '')) if hit
   build-and-push:
     name: Build & push web image
     needs: [require-production-check]
-    if: always() && (github.event_name != 'push' || needs.require-production-check.result == 'success')
+    if: ${{ always() && (github.event_name != 'push' || needs.require-production-check.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

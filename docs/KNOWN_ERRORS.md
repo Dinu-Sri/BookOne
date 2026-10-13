@@ -36,6 +36,14 @@
 
 ---
 
+## Error: Empty module screens after reserved tenant connection (v2.2.3)
+
+**Symptom:** After Portainer pull of v2.2.3, login showed Accounting/Sales/Purchase groups with no child screens. Web log: `TypeError: Cannot read properties of undefined (reading 'parsers')` on `app/page.js`. Init-db `42701`/`42P07` “already exists, skipping” is expected and not this bug.  
+**Cause:** `postgres.js` `reserve()` does not copy pool `options`. `drizzle(reserved)` reads `client.options.parsers`. `loadAccessForUser` swallowed that and returned null, so every nav item was `none`.  
+**Fix:** `adaptReservedForDrizzle` copies pool `options` and implements `begin`/`savepoint` on the reserved client before Drizzle constructs.
+
+---
+
 ## Error: Concurrent reverse posted twice (BUG-0015)
 
 **Symptom:** Two overlapping `reverseTransactionById` calls both succeeded; cash/income went to −123.45.  

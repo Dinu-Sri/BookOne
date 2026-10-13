@@ -1,3 +1,10 @@
+## 2026-10-13 — Reserved Drizzle client (v2.2.4)
+
+- Record: [CHG-20261013-reserved-drizzle](changes/CHG-20261013-reserved-drizzle.md).
+- v2.2.3 reserved a postgres.js connection for tenant GUC, then passed it to `drizzle()`. That client has no `options`, so `client.options.parsers` threw. Access load failed closed and module screens disappeared.
+- `adaptReservedForDrizzle` attaches pool `options` plus reserved `begin`/`savepoint`. Init-db “already exists, skipping” notices are unchanged.
+- Next: Docker web image green, Portainer Update Re-pull ON, confirm `v2.2.4 · <sha7>` and module children on login.
+
 ## 2026-10-13 — Reports, dates, receipt, RLS, reversal (v2.2.3)
 
 - Record: [CHG-20261013-runtime-reports-dates](changes/CHG-20261013-runtime-reports-dates.md). QA [HANDOFF-20261013-v2-2-2-followup](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261013-v2-2-2-followup.md).

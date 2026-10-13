@@ -3,11 +3,14 @@ import 'server-only';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { adaptReservedForDrizzle, type ReservedSql } from './reserved-client';
 import * as schema from './schema';
+
+export { adaptReservedForDrizzle } from './reserved-client';
 
 type ScopedTenantDb = {
   tenantId: string;
-  sql: Awaited<ReturnType<ReturnType<typeof postgres>['reserve']>>;
+  sql: ReservedSql;
   db: ReturnType<typeof drizzle<typeof schema>>;
 };
 
@@ -62,7 +65,7 @@ export async function reservePgClient() {
 }
 
 export function drizzleOn(client: ScopedTenantDb['sql']) {
-  return drizzle(client, { schema });
+  return drizzle(adaptReservedForDrizzle(client, getDb().client), { schema });
 }
 
 export function runWithTenantDb<T>(scope: ScopedTenantDb, fn: () => Promise<T>): Promise<T> {

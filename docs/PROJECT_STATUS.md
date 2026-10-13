@@ -1,3 +1,7 @@
+## 2026-10-13 — Reserved Drizzle client (v2.2.4)
+
+v2.2.3 empty module nav / dashboard `parsers` TypeError: reserved postgres.js clients lack `options`. See [CHG-20261013-reserved-drizzle](changes/CHG-20261013-reserved-drizzle.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.4 · <sha7>`.
+
 ## 2026-10-13 — Reports, dates, receipt, RLS, reversal (v2.2.3)
 
 QA RUN-12 on v2.2.2: payments pass; `30 Feb 2026` still rolled over; credit 100 inflated reported income; receipt signer, tenant helper, and double reversal still failed. See [CHG-20261013-runtime-reports-dates](changes/CHG-20261013-runtime-reports-dates.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.3 · <sha7>`.

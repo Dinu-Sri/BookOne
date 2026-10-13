@@ -45,7 +45,8 @@ function grantsFromTemplate(templateKey: string | null): { key: string; level: A
 export async function loadAccessForUser(userId: string, tenantId: string, platformRole: 'super_admin' | 'user'): Promise<LoadedAccess | null> {
   try {
     return await withTenantContext(tenantId, () => loadAccessForUserInner(userId, tenantId, platformRole));
-  } catch {
+  } catch (error) {
+    console.error('loadAccessForUser failed', error);
     return null;
   }
 }

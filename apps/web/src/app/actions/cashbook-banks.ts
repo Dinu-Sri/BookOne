@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { isLiquidTenderCode } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -50,10 +51,7 @@ export async function listLiquidAccounts(): Promise<LiquidAccount[]> {
       .orderBy(asc(accounts.code));
 
     return rows
-      .filter((r) => {
-        const c = r.code;
-        return c === '1000' || c === '1100' || c === '1200' || /^11\d{2}$/.test(c) || /^12\d{2}$/.test(c);
-      })
+      .filter((r) => isLiquidTenderCode(r.code))
       .map((r) => ({
         id: r.id,
         code: r.code,

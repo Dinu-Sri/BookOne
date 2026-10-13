@@ -4,6 +4,30 @@
 
 ---
 
+## Error: Viewer could allocate a payment at the exported action (BUG-0010)
+
+**Symptom:** QA B-007 called `allocateDocumentPayment` as Viewer and the invoice paid amount, payment journal, allocation, and audit row persisted. Wrapper `receiveCustomerPayments` already denied the same actor (B-012).  
+**Cause:** Write permission lived only on the receive/pay wrappers. The exported allocation function checked period lock, tenant, and balance, then posted.  
+**Fix:** `allocateDocumentPayment` asserts `sales.payments.write` for AR documents and `purchase.payments.write` for AP documents, plus dimension scope and posted-state, before any insert.
+
+---
+
+## Error: Revenue account accepted as payment tender (BUG-0011)
+
+**Symptom:** QA B-011 paid an invoice with account `4000`; balanceDue changed and a payment journal posted.  
+**Cause:** Allocation resolved any tenant account by code, including revenue.  
+**Fix:** Tender must be tenant-owned, active, non-void, type asset, and a liquid code (`1000` / `11xx` / `12xx`). Custom cashbook banks stay eligible. Invalid accounts throw before the financial transaction.
+
+---
+
+## Error: Bank date parser accepted impossible dates (BUG-0012)
+
+**Symptom:** QA F-004: `parseStatementDate('2026-02-30')` returned that ISO with confidence 1.  
+**Cause:** `YYYY-MM-DD` matched a regex and was returned as-is, so JavaScript date rollover never ran.  
+**Fix:** Parsed year/month/day must exist on the real calendar (including leap years) for ISO and slash formats. Invalid values return `{ iso: '', confidence: 0 }`; statement preview/commit already skip empty dates.
+
+---
+
 ## Error: Docker web image published while quality was red (BUG-0008)
 
 **Symptom:** Production Check Tests green, Lint/typecheck/build red, GHCR `bookone-web:latest` still updated. Manual **Run workflow** skipped the wait job.  

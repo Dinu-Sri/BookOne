@@ -30,19 +30,35 @@ export type DateParseResult = { iso: string; confidence: number };
 /**
  * Ordered strategies: ISO → DD/MM/YYYY → DD-MM-YYYY → Mon DD YYYY / DD Mon YYYY
  */
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (year < 1000 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
+}
+
+function calendarDate(year: number, month: number, day: number, confidence: number): DateParseResult {
+  if (!isValidCalendarDate(year, month, day)) return { iso: '', confidence: 0 };
+  return { iso: ymd(year, month, day), confidence };
+}
+
 export function parseStatementDate(value: unknown): DateParseResult {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     const y = value.getFullYear();
     const m = value.getMonth() + 1;
     const d = value.getDate();
-    return { iso: ymd(y, m, d), confidence: 0.95 };
+    return calendarDate(y, m, d, 0.95);
   }
 
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return { iso: '', confidence: 0 };
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return { iso: trimmed, confidence: 1 };
+    const y = Number(trimmed.slice(0, 4));
+    const m = Number(trimmed.slice(5, 7));
+    const d = Number(trimmed.slice(8, 10));
+    // Impossible calendar values must not fall through to Date.parse rollover.
+    return calendarDate(y, m, d, 1);
   }
 
   // DD/MM/YYYY or D/M/YYYY (also DD-MM-YYYY)
@@ -52,13 +68,13 @@ export function parseStatementDate(value: unknown): DateParseResult {
     const b = Number(slash[2]);
     const y = Number(slash[3]);
     if (a > 12) {
-      return { iso: ymd(y, b, a), confidence: 0.95 };
+      return calendarDate(y, b, a, 0.95);
     }
     if (b > 12) {
-      return { iso: ymd(y, a, b), confidence: 0.9 };
+      return calendarDate(y, a, b, 0.9);
     }
     // Ambiguous: prefer DD/MM (Sri Lanka)
-    return { iso: ymd(y, b, a), confidence: 0.7 };
+    return calendarDate(y, b, a, 0.7);
   }
 
   // Excel serial date (days since 1899-12-30)

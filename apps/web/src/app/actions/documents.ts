@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { isLiquidTenderCode } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -26,6 +27,8 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { ensureParty } from '@/app/actions/parties';
+import { assertPermission } from '@/lib/access';
+import { assertDimensionScope } from '@/lib/dimension-scope';
 
 const documentTypeSchema = z.enum(['customer_invoice', 'vendor_bill', 'sales_invoice']);
 
@@ -86,12 +89,24 @@ function documentDirection(type: z.infer<typeof documentTypeSchema>) {
 
 async function resolveAccount(tenantId: string, code: string) {
   const [account] = await db()
-    .select({ id: accounts.id, code: accounts.code, name: accounts.name, type: accounts.type })
+    .select({
+      id: accounts.id,
+      code: accounts.code,
+      name: accounts.name,
+      type: accounts.type,
+      isActive: accounts.isActive,
+    })
     .from(accounts)
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.code, code), isNull(accounts.voidedAt)))
     .limit(1);
   if (!account) throw new Error(`Account ${code} not found.`);
   return account;
+}
+
+function assertEligiblePaymentTender(account: { code: string; type: string; isActive: string }) {
+  if (account.type !== 'asset' || account.isActive !== '1' || !isLiquidTenderCode(account.code)) {
+    throw new Error('Payment must use an active cash, bank, or card account.');
+  }
 }
 
 async function assertOpenPeriod(tenantId: string, date: string) {
@@ -365,6 +380,9 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
           documentNumber: businessDocuments.documentNumber,
           partyName: parties.name,
           transactionId: businessDocuments.transactionId,
+          postedAt: businessDocuments.postedAt,
+          brandId: businessDocuments.brandId,
+          locationId: businessDocuments.locationId,
           total: businessDocuments.total,
           paidAmount: businessDocuments.paidAmount,
           balanceDue: businessDocuments.balanceDue,
@@ -381,11 +399,9 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
         .limit(1);
 
       if (!document) throw new Error('Document not found.');
-      if (!document.transactionId) throw new Error('Document has no posted transaction to allocate against.');
-      const balanceDue = Number(document.balanceDue);
-      if (parsed.amount > balanceDue + 0.005) throw new Error('Payment cannot exceed balance due.');
-
-      const paymentAccount = await resolveAccount(user.tenantId, parsed.paymentAccountCode);
+      if (!document.transactionId || !document.postedAt) {
+        throw new Error('Document has no posted transaction to allocate against.');
+      }
       const arTypes = new Set(['customer_invoice', 'sales_invoice', 'pos_sale']);
       const apTypes = new Set(['purchase', 'import_purchase', 'vendor_bill']);
       const isInvoice = arTypes.has(document.documentType);
@@ -393,6 +409,13 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
       if (!isInvoice && !isApBill) {
         throw new Error('Payments can only be allocated to sales invoices or purchase bills.');
       }
+      await assertPermission(isInvoice ? 'sales.payments.write' : 'purchase.payments.write', 'write');
+      await assertDimensionScope({ locationId: document.locationId, brandId: document.brandId });
+      const balanceDue = Number(document.balanceDue);
+      if (parsed.amount > balanceDue + 0.005) throw new Error('Payment cannot exceed balance due.');
+
+      const paymentAccount = await resolveAccount(user.tenantId, parsed.paymentAccountCode);
+      assertEligiblePaymentTender(paymentAccount);
       const controlAccount = await resolveAccount(user.tenantId, isInvoice ? '1300' : '2100');
 
       await db().transaction(async (tx) => {

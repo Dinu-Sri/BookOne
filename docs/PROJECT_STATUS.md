@@ -1,3 +1,7 @@
+## 2026-10-13 — Payment allocation, tender, bank dates (v2.2.2)
+
+QA RUN-10: quality gate verified (A 15/15); remaining source findings B-007 Viewer allocation, B-011 revenue tender, F-004 impossible bank dates. `allocateDocumentPayment` now asserts write + liquid tender; `parseStatementDate` rejects non-calendar dates. See [CHG-20261013-allocation-tender-date](changes/CHG-20261013-allocation-tender-date.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.2 · <sha7>`.
+
 ## 2026-10-13 — Quality + GHCR gate (v2.2.1)
 
 QA RUN-08: Batch A 14/15, remaining A-014 / BUG-0008 (Docker published while quality was red). Type errors fixed; Docker web image now requires same-workflow lint+typecheck+build+test, including manual dispatch. See [CHG-20261013-quality-release-gate](changes/CHG-20261013-quality-release-gate.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.1 · <sha7>`.

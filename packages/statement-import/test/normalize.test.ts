@@ -18,6 +18,23 @@ describe('parseStatementDate SL bias', () => {
     const r = parseStatementDate('03/04/2026');
     expect(r.iso).toBe('2026-04-03'); // 3 April, not 4 March
   });
+
+  it('accepts a real February date', () => {
+    expect(parseStatementDate('2026-02-28')).toEqual({ iso: '2026-02-28', confidence: 1 });
+  });
+
+  it('rejects impossible calendar dates instead of rolling them over', () => {
+    for (const value of ['2026-02-30', '2026-13-01', '31/04/2026']) {
+      expect(parseStatementDate(value)).toEqual({ iso: '', confidence: 0 });
+    }
+  });
+
+  it('accepts leap-year 29 Feb and rejects non-leap 29 Feb', () => {
+    expect(parseStatementDate('2024-02-29').iso).toBe('2024-02-29');
+    expect(parseStatementDate('2025-02-29').iso).toBe('');
+    expect(parseStatementDate('29/02/2024').iso).toBe('2024-02-29');
+    expect(parseStatementDate('29/02/2025').iso).toBe('');
+  });
 });
 
 describe('parseAmountCell', () => {

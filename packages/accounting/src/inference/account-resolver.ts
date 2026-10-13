@@ -10,19 +10,20 @@ const PAYMENT_ACCOUNT_BY_METHOD: Record<PaymentMethod, string> = {
 };
 
 /**
+ * Cash 1000 plus cashbook bank/card codes 11xx / 12xx (including 1100 and 1200).
+ * Payment tenders and cashbook tiles share this family so custom banks stay valid.
+ */
+export function isLiquidTenderCode(code: string): boolean {
+  return code === '1000' || /^11\d{2}$/.test(code) || /^12\d{2}$/.test(code);
+}
+
+/**
  * Tenant-created liquid accounts (cashbook multi-bank) live in 1101–1199 / 1201–1299
  * and are not on the static seed CoA. Resolve them as bank/card asset shells so the
  * journal engine can post; recordEntry still binds the real DB account by code.
  */
 function dynamicLiquidAccount(code: string): Account | null {
-  if (/^11\d{2}$/.test(code)) {
-    return {
-      code,
-      name: code === '1100' ? 'Bank Account' : `Bank ${code}`,
-      type: 'asset',
-      normalSide: 'debit',
-    };
-  }
+  if (!isLiquidTenderCode(code)) return null;
   if (/^12\d{2}$/.test(code)) {
     return {
       code,
@@ -34,7 +35,12 @@ function dynamicLiquidAccount(code: string): Account | null {
   if (code === '1000') {
     return { code: '1000', name: 'Cash on Hand', type: 'asset', normalSide: 'debit' };
   }
-  return null;
+  return {
+    code,
+    name: code === '1100' ? 'Bank Account' : `Bank ${code}`,
+    type: 'asset',
+    normalSide: 'debit',
+  };
 }
 
 export function resolveAccount(ref: AccountRef): Account {

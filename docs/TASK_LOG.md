@@ -1,3 +1,11 @@
+## 2026-10-13 — Payment allocation, tender, bank dates (v2.2.2)
+
+- Record: [CHG-20261013-allocation-tender-date](changes/CHG-20261013-allocation-tender-date.md). QA [HANDOFF-20261013-v2-2-1-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261013-v2-2-1-findings.md) BUG-0010 / B-007, BUG-0011 / B-011, BUG-0012 / F-004.
+- `allocateDocumentPayment` requires sales/purchase payments.write, dimension scope, and a posted tenant document. Viewer is denied with no persisted rows.
+- Payment tender must be an active owned cash/bank/card liquid account (`1000` / `11xx` / `12xx`). Revenue 4000 is denied atomically. Custom banks remain valid.
+- `parseStatementDate` requires real calendar dates. Impossible ISO and slash dates return empty iso; leap years stay correct.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA retests B-007, B-011, F-004 on `v2.2.2 · <sha7>`.
+
 ## 2026-10-13 — Quality errors + GHCR release gate (v2.2.1)
 
 - Record: [CHG-20261013-quality-release-gate](changes/CHG-20261013-quality-release-gate.md). QA [HANDOFF-20261013-v2-2-0-next](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261013-v2-2-0-next.md) BUG-0008 / A-014.

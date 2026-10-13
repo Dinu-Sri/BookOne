@@ -1,4 +1,5 @@
-import { pgTable, uuid, varchar, timestamp, numeric, text, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, numeric, text, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants';
 import { users } from './users';
 import { accounts } from './accounts';
@@ -35,4 +36,8 @@ export const transactions = pgTable('transactions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),
-});
+}, (table) => ({
+  oneReversalPerOriginal: uniqueIndex('transactions_one_reversal_per_original_uidx')
+    .on(table.tenantId, table.reversesTransactionId)
+    .where(sql`${table.reversesTransactionId} is not null and ${table.voidedAt} is null`),
+}));

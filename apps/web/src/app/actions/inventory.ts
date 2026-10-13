@@ -488,7 +488,7 @@ export async function listProducts(filter?: {
         if (mov > 0) reasons.push(`Has ${mov} stock movement(s).`);
         if (docs > 0) reasons.push(`Used on ${docs} document line(s).`);
         if (Math.abs(qty) > 0.0001) reasons.push(`Qty on hand is ${qty} (adjust to zero first).`);
-        const imageUrl = await resolveProductImageUrl(row.imageKey);
+        const imageUrl = await resolveProductImageUrl(row.imageKey, user.tenantId);
         const locNames = stockByLocation.filter((s) => Math.abs(s.qty) > 0.0001).map((s) => s.locationName);
         return mapProduct(row as unknown as Record<string, unknown>, {
           qtyOnHand: qty,

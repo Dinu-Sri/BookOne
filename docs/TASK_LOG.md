@@ -1,3 +1,9 @@
+## 2026-10-13 — Reports, dates, receipt, RLS, reversal (v2.2.3)
+
+- Record: [CHG-20261013-runtime-reports-dates](changes/CHG-20261013-runtime-reports-dates.md). QA [HANDOFF-20261013-v2-2-2-followup](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261013-v2-2-2-followup.md).
+- Named-month bank dates reject `30 Feb 2026`. Reports income uses statement signs so invoice 600 − credit 100 = 500. Receipt signing requires current-tenant key. `withTenantContext` pins one connection. Concurrent reversal locks the original plus unique index.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA retests F-010, B-104, F-008, RT-002/004/006 on `v2.2.3 · <sha7>`.
+
 ## 2026-10-13 — Payment allocation, tender, bank dates (v2.2.2)
 
 - Record: [CHG-20261013-allocation-tender-date](changes/CHG-20261013-allocation-tender-date.md). QA [HANDOFF-20261013-v2-2-1-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261013-v2-2-1-findings.md) BUG-0010 / B-007, BUG-0011 / B-011, BUG-0012 / F-004.

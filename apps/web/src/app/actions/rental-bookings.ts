@@ -871,7 +871,7 @@ export async function listRentalJobs(filter?: {
     const { resolveProductImageUrl } = await import('@/lib/product-image');
     const urlsByLine = new Map<string, string[]>();
     for (const photo of photoRows) {
-      const url = await resolveProductImageUrl(photo.imageKey);
+      const url = await resolveProductImageUrl(photo.imageKey, user.tenantId);
       if (!url) continue;
       const list = urlsByLine.get(photo.bookingLineId) ?? [];
       list.push(url);

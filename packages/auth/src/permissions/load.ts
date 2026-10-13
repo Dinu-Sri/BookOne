@@ -11,6 +11,7 @@ import {
   tenantRolePermissions,
   tenantRoles,
   tenants,
+  withTenantContext,
 } from '@bookone/db';
 import type { AccessLevel } from './catalog';
 import type { ModuleWriteKey } from './ceiling';
@@ -43,7 +44,7 @@ function grantsFromTemplate(templateKey: string | null): { key: string; level: A
 
 export async function loadAccessForUser(userId: string, tenantId: string, platformRole: 'super_admin' | 'user'): Promise<LoadedAccess | null> {
   try {
-    return await loadAccessForUserInner(userId, tenantId, platformRole);
+    return await withTenantContext(tenantId, () => loadAccessForUserInner(userId, tenantId, platformRole));
   } catch {
     return null;
   }

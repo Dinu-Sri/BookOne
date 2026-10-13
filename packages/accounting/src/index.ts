@@ -29,6 +29,7 @@ export type {
   PurchaseLineBucket,
 } from './engine/document-posting';
 export { CASH_ACCOUNT_CODES, signedCashFlow } from './cash-flow';
+export { signedAccountBalance } from './statement-sign';
 export type { CashFlowLine, SignedCashFlow } from './cash-flow';
 export { amountInWordsLkr, formatDateMmDdYyyy } from './amount-in-words';
 export { datesOverlap, padHireTo, availableQty } from './rental-availability';

@@ -90,17 +90,54 @@ export function parseStatementDate(value: unknown): DateParseResult {
     }
   }
 
-  // "28 Jul 2026" / "Jul 28, 2026"
-  const parsed = Date.parse(trimmed);
-  if (!Number.isNaN(parsed)) {
-    const d = new Date(parsed);
-    return {
-      iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
-      confidence: 0.75,
-    };
+  // "30 Feb 2026" / "28 February 2026"
+  const dmyNamed = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})$/);
+  if (dmyNamed) {
+    const month = monthNumber(dmyNamed[2]!);
+    if (!month) return { iso: '', confidence: 0 };
+    return calendarDate(Number(dmyNamed[3]), month, Number(dmyNamed[1]), 0.8);
+  }
+
+  // "Feb 30, 2026" / "July 28 2026"
+  const mdyNamed = trimmed.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (mdyNamed) {
+    const month = monthNumber(mdyNamed[1]!);
+    if (!month) return { iso: '', confidence: 0 };
+    return calendarDate(Number(mdyNamed[3]), month, Number(mdyNamed[2]), 0.75);
   }
 
   return { iso: '', confidence: 0 };
+}
+
+const MONTH_INDEX: Record<string, number> = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12,
+};
+
+function monthNumber(token: string): number | null {
+  return MONTH_INDEX[token.toLowerCase()] ?? null;
 }
 
 function ymd(y: number, m: number, d: number): string {

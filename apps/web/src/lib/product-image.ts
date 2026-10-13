@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import sharp from 'sharp';
+import { isOwnedTenantStorageKey } from '@/lib/storage-key';
 
 const MAX_INPUT_BYTES = 12 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif']);
@@ -140,10 +141,16 @@ export async function saveLetterheadLogo(opts: {
 }
 
 /** Resolve a stored image_key to a browser-usable URL. */
-export async function resolveProductImageUrl(imageKey: string | null | undefined): Promise<string | null> {
+export async function resolveProductImageUrl(
+  imageKey: string | null | undefined,
+  tenantId?: string,
+): Promise<string | null> {
   if (!imageKey) return null;
   if (imageKey.startsWith('/') || imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
     return imageKey;
+  }
+  if (imageKey.startsWith('tenants/')) {
+    if (!tenantId || !isOwnedTenantStorageKey(tenantId, imageKey)) return null;
   }
   const publicBase = process.env.S3_PUBLIC_URL?.replace(/\/$/, '');
   if (publicBase) {

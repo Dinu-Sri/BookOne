@@ -43,6 +43,15 @@ export interface ReversalResult {
   error?: string;
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let i = 0; i < 5 && current && typeof current === 'object'; i += 1) {
+    if ((current as { code?: unknown }).code === '23505') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 async function resolveAccountId(code: string, tenantId?: string): Promise<string> {
   const [account] = await db()
     .select({ id: accounts.id })
@@ -317,77 +326,80 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
     }
 
     const result = await withTenantContext(user.tenantId, async () => {
-      const [original] = await db()
-        .select({
-          id: transactions.id,
-          accountingType: transactions.accountingType,
-          direction: transactions.direction,
-          party: transactions.party,
-          description: transactions.description,
-          amount: transactions.amount,
-          currency: transactions.currency,
-          paymentMethod: transactions.paymentMethod,
-          paymentAccountId: transactions.paymentAccountId,
-          brandId: transactions.brandId,
-          locationId: transactions.locationId,
-          transferSourceAccountId: transactions.transferSourceAccountId,
-          receiptRef: transactions.receiptRef,
-          categoryCode: transactions.categoryCode,
-          categoryName: transactions.categoryName,
-          categoryConfidence: transactions.categoryConfidence,
-          categorySource: transactions.categorySource,
-          invoiceRef: transactions.invoiceRef,
-          isAlreadySettled: transactions.isAlreadySettled,
-          reversedByTransactionId: transactions.reversedByTransactionId,
-          reversesTransactionId: transactions.reversesTransactionId,
-        })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.tenantId, user.tenantId),
-            eq(transactions.id, transactionId),
-            isNull(transactions.voidedAt),
-          ),
-        )
-        .limit(1);
-
-      if (!original) throw new Error('Original transaction not found.');
-      if (original.reversedByTransactionId) throw new Error('This transaction already has a reversing entry.');
-      if (original.reversesTransactionId) throw new Error('A reversing entry cannot be reversed again.');
-      await assertDimensionScope({ locationId: original.locationId, brandId: original.brandId });
-
-      const [originalJournal] = await db()
-        .select({ id: journalEntries.id, memo: journalEntries.memo })
-        .from(journalEntries)
-        .where(
-          and(
-            eq(journalEntries.tenantId, user.tenantId),
-            eq(journalEntries.transactionId, transactionId),
-            isNull(journalEntries.voidedAt),
-          ),
-        )
-        .orderBy(desc(journalEntries.createdAt))
-        .limit(1);
-      if (!originalJournal) throw new Error('Original journal entry not found.');
-
-      const originalLines = await db()
-        .select({
-          accountId: journalLines.accountId,
-          side: journalLines.side,
-          amount: journalLines.amount,
-          memo: journalLines.memo,
-        })
-        .from(journalLines)
-        .where(
-          and(
-            eq(journalLines.tenantId, user.tenantId),
-            eq(journalLines.journalEntryId, originalJournal.id),
-            isNull(journalLines.voidedAt),
-          ),
-        );
-      if (originalLines.length === 0) throw new Error('Original journal lines not found.');
-
       return db().transaction(async (tx) => {
+        await tx.execute(
+          sql`select id from transactions where id = ${transactionId} and tenant_id = ${user.tenantId} for update`,
+        );
+        const [original] = await tx
+          .select({
+            id: transactions.id,
+            accountingType: transactions.accountingType,
+            direction: transactions.direction,
+            party: transactions.party,
+            description: transactions.description,
+            amount: transactions.amount,
+            currency: transactions.currency,
+            paymentMethod: transactions.paymentMethod,
+            paymentAccountId: transactions.paymentAccountId,
+            brandId: transactions.brandId,
+            locationId: transactions.locationId,
+            transferSourceAccountId: transactions.transferSourceAccountId,
+            receiptRef: transactions.receiptRef,
+            categoryCode: transactions.categoryCode,
+            categoryName: transactions.categoryName,
+            categoryConfidence: transactions.categoryConfidence,
+            categorySource: transactions.categorySource,
+            invoiceRef: transactions.invoiceRef,
+            isAlreadySettled: transactions.isAlreadySettled,
+            reversedByTransactionId: transactions.reversedByTransactionId,
+            reversesTransactionId: transactions.reversesTransactionId,
+          })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.tenantId, user.tenantId),
+              eq(transactions.id, transactionId),
+              isNull(transactions.voidedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!original) throw new Error('Original transaction not found.');
+        if (original.reversedByTransactionId) throw new Error('This transaction already has a reversing entry.');
+        if (original.reversesTransactionId) throw new Error('A reversing entry cannot be reversed again.');
+        await assertDimensionScope({ locationId: original.locationId, brandId: original.brandId });
+
+        const [originalJournal] = await tx
+          .select({ id: journalEntries.id, memo: journalEntries.memo })
+          .from(journalEntries)
+          .where(
+            and(
+              eq(journalEntries.tenantId, user.tenantId),
+              eq(journalEntries.transactionId, transactionId),
+              isNull(journalEntries.voidedAt),
+            ),
+          )
+          .orderBy(desc(journalEntries.createdAt))
+          .limit(1);
+        if (!originalJournal) throw new Error('Original journal entry not found.');
+
+        const originalLines = await tx
+          .select({
+            accountId: journalLines.accountId,
+            side: journalLines.side,
+            amount: journalLines.amount,
+            memo: journalLines.memo,
+          })
+          .from(journalLines)
+          .where(
+            and(
+              eq(journalLines.tenantId, user.tenantId),
+              eq(journalLines.journalEntryId, originalJournal.id),
+              isNull(journalLines.voidedAt),
+            ),
+          );
+        if (originalLines.length === 0) throw new Error('Original journal lines not found.');
+
         const [reversalTx] = await tx
           .insert(transactions)
           .values({
@@ -476,6 +488,9 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
     revalidatePath('/accounts');
     return { success: true, ...result };
   } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { success: false, error: 'This transaction already has a reversing entry.' };
+    }
     const message = error instanceof Error ? error.message : 'Unknown error creating reversing entry';
     console.error('createReversingEntry failed:', message, error);
     return { success: false, error: message };

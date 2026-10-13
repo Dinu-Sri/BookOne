@@ -19,7 +19,7 @@ import {
   inArray,
   sql,
 } from '@bookone/db';
-import { CASH_ACCOUNT_CODES, signedCashFlow } from '@bookone/accounting';
+import { CASH_ACCOUNT_CODES, signedAccountBalance, signedCashFlow } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import {
@@ -65,7 +65,10 @@ export interface AccountBalance {
   name: string;
   type: string;
   normalSide: string;
-  balance: number; // positive for assets/expenses, negative for liabilities/equity/revenue
+  debit: number;
+  credit: number;
+  /** Assets/expenses: debit−credit. Liabilities/equity/revenue: credit−debit (contra revenue is negative). */
+  balance: number;
 }
 
 export interface DashboardMetric {
@@ -218,16 +221,15 @@ async function computeAccountBalances(
     return rows.map((r) => {
       const debit = parseFloat(r.debitTotal);
       const credit = parseFloat(r.creditTotal);
-      // For debit-normal accounts: balance = debit - credit
-      // For credit-normal accounts: balance = credit - debit
-      const raw = r.normalSide === 'debit' ? debit - credit : credit - debit;
       return {
         id: r.id,
         code: r.code,
         name: r.name,
         type: r.type,
         normalSide: r.normalSide,
-        balance: Number.isFinite(raw) ? raw : 0,
+        debit: Number.isFinite(debit) ? debit : 0,
+        credit: Number.isFinite(credit) ? credit : 0,
+        balance: signedAccountBalance(r.type, debit, credit),
       };
     });
   });
@@ -814,8 +816,8 @@ export async function getReports(period?: string): Promise<ReportsData> {
     accountCode: b.code,
     accountName: b.name,
     type: b.type,
-    debit: b.normalSide === 'debit' ? Math.max(0, b.balance) : 0,
-    credit: b.normalSide === 'credit' ? Math.max(0, b.balance) : 0,
+    debit: b.debit,
+    credit: b.credit,
     balance: b.balance,
   }));
 

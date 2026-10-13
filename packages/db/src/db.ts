@@ -1,8 +1,17 @@
 import 'server-only';
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
+
+type ScopedTenantDb = {
+  tenantId: string;
+  sql: Awaited<ReturnType<ReturnType<typeof postgres>['reserve']>>;
+  db: ReturnType<typeof drizzle<typeof schema>>;
+};
+
+const tenantAls = new AsyncLocalStorage<ScopedTenantDb>();
 
 const globalForDb = globalThis as unknown as {
   db: ReturnType<typeof drizzle<typeof schema>> | undefined;
@@ -37,11 +46,27 @@ function getDb() {
 }
 
 export function db() {
-  return getDb().db;
+  return tenantAls.getStore()?.db ?? getDb().db;
 }
 
 export function pgClient() {
-  return getDb().client;
+  return tenantAls.getStore()?.sql ?? getDb().client;
+}
+
+export function currentTenantScopeId(): string | undefined {
+  return tenantAls.getStore()?.tenantId;
+}
+
+export async function reservePgClient() {
+  return getDb().client.reserve();
+}
+
+export function drizzleOn(client: ScopedTenantDb['sql']) {
+  return drizzle(client, { schema });
+}
+
+export function runWithTenantDb<T>(scope: ScopedTenantDb, fn: () => Promise<T>): Promise<T> {
+  return tenantAls.run(scope, fn);
 }
 
 export type DbClient = ReturnType<typeof getDb>['db'];

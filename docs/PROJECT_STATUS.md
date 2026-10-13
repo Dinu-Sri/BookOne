@@ -1,3 +1,7 @@
+## 2026-10-13 — Reports, dates, receipt, RLS, reversal (v2.2.3)
+
+QA RUN-12 on v2.2.2: payments pass; `30 Feb 2026` still rolled over; credit 100 inflated reported income; receipt signer, tenant helper, and double reversal still failed. See [CHG-20261013-runtime-reports-dates](changes/CHG-20261013-runtime-reports-dates.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.3 · <sha7>`.
+
 ## 2026-10-13 — Payment allocation, tender, bank dates (v2.2.2)
 
 QA RUN-10: quality gate verified (A 15/15); remaining source findings B-007 Viewer allocation, B-011 revenue tender, F-004 impossible bank dates. `allocateDocumentPayment` now asserts write + liquid tender; `parseStatementDate` rejects non-calendar dates. See [CHG-20261013-allocation-tender-date](changes/CHG-20261013-allocation-tender-date.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.2.2 · <sha7>`.

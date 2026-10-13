@@ -4,6 +4,7 @@ import { requireTenantContext } from '@bookone/auth';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
+import { isOwnedReceiptKey } from '@/lib/storage-key';
 
 export interface UploadResult {
   ok: boolean;
@@ -110,7 +111,8 @@ export async function uploadReceipt(formData: FormData): Promise<UploadResult> {
  */
 export async function getReceiptDownloadUrl(key: string): Promise<string | null> {
   try {
-    await requireTenantContext();
+    const user = await requireTenantContext();
+    if (!isOwnedReceiptKey(user.tenantId, key)) return null;
     const bucket = process.env.S3_BUCKET;
     if (!bucket) return null;
 

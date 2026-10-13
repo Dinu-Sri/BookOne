@@ -4,6 +4,46 @@
 
 ---
 
+## Error: Named bank dates rolled over (BUG-0012 remainder / F-010)
+
+**Symptom:** `parseStatementDate('30 Feb 2026')` returned `2026-03-02`. ISO/slash impossible dates were already rejected.  
+**Cause:** Named-month text fell through to `Date.parse`, which overflows to the next month.  
+**Fix:** Parse day/month-name/year components and require a real calendar date. Do not use Date.parse.
+
+---
+
+## Error: Sales credit increased reported income (BUG-0016)
+
+**Symptom:** Invoice 600 + credit 100 posted net revenue 500 in the ledger; Reports income showed 700.  
+**Cause:** `getReports` summed normal-side-positive revenue balances, so debit-normal Sales Returns 4100 added to sales.  
+**Fix:** Statement balances use credit−debit for revenue (and liability/equity) and debit−credit for assets/expenses. Journals unchanged.
+
+---
+
+## Error: Receipt download signed a foreign tenant key (BUG-0013)
+
+**Symptom:** `getReceiptDownloadUrl` forwarded Tenant B's storage key while the actor was Tenant A.  
+**Cause:** The action required a session then signed the caller-supplied key with no prefix/ownership check.  
+**Fix:** Sign only `tenants/{currentTenantId}/receipts/{userId}/{file}`. Product/style/rental object URLs use the same tenant prefix check.
+
+---
+
+## Error: Tenant helper saw no own rows under NOBYPASSRLS (BUG-0014)
+
+**Symptom:** `withTenantContext` returned 0 own account rows for a restricted role; a direct transaction on the same role saw 3.  
+**Cause:** `set_config(..., true)` is transaction-local and ran as its own autocommit query; the callback used a different pooled connection.  
+**Fix:** Reserve one connection, set session `app.current_tenant_id`, run `db()`/`pgClient()` from AsyncLocalStorage on that connection, clear the GUC, then release. Do not grant BYPASSRLS.
+
+---
+
+## Error: Concurrent reverse posted twice (BUG-0015)
+
+**Symptom:** Two overlapping `reverseTransactionById` calls both succeeded; cash/income went to −123.45.  
+**Cause:** Eligibility was read outside the write transaction; both saw an unreversed original.  
+**Fix:** `SELECT … FOR UPDATE` plus writes in one tenant transaction; unique index `transactions_one_reversal_per_original_uidx`.
+
+---
+
 ## Error: Viewer could allocate a payment at the exported action (BUG-0010)
 
 **Symptom:** QA B-007 called `allocateDocumentPayment` as Viewer and the invoice paid amount, payment journal, allocation, and audit row persisted. Wrapper `receiveCustomerPayments` already denied the same actor (B-012).  

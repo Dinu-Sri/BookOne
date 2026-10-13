@@ -120,7 +120,7 @@ export async function getDocumentPrintModel(
     const { resolveProductImageUrl } = await import('@/lib/product-image');
     style = {
       ...style,
-      logoUrl: (await resolveProductImageUrl(style.logoImageKey ?? null)) || style.logoUrl,
+      logoUrl: (await resolveProductImageUrl(style.logoImageKey ?? null, tenantId)) || style.logoUrl,
     };
     if (storedIsDefault && live.name !== 'BookOne default') {
       try {

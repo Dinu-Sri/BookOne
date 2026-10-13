@@ -35,6 +35,12 @@ describe('parseStatementDate SL bias', () => {
     expect(parseStatementDate('29/02/2024').iso).toBe('2024-02-29');
     expect(parseStatementDate('29/02/2025').iso).toBe('');
   });
+
+  it('accepts named 28 Feb and rejects named 30 Feb without Date.parse rollover', () => {
+    expect(parseStatementDate('28 Feb 2026').iso).toBe('2026-02-28');
+    expect(parseStatementDate('30 Feb 2026')).toEqual({ iso: '', confidence: 0 });
+    expect(parseStatementDate('Feb 30, 2026')).toEqual({ iso: '', confidence: 0 });
+  });
 });
 
 describe('parseAmountCell', () => {

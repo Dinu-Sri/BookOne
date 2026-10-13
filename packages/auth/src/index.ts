@@ -18,7 +18,7 @@ export {
 } from './permissions/catalog';
 export { JOB_TEMPLATES, templateByKey, type JobTemplateKey } from './permissions/templates';
 export { getRequestAccess, loadAccessForUser, type LoadedAccess } from './permissions/load';
-export { allows, resolveLevel } from './permissions/resolve';
+export { allows, resolveLevel, isReadOnlyJob } from './permissions/resolve';
 export {
   inDimensionScope,
   isUnrestrictedScope,

@@ -31,6 +31,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
+import { bookoneBuildId } from '@/lib/build-id';
 import { PeriodSelector } from '@/components/layout/period-selector';
 import { StatusToast } from '@/components/layout/status-toast';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
@@ -406,6 +407,11 @@ export function BookOneShell({
       <aside className="sidebar" aria-label="BookOne workspace sidebar">
         <div className="sidebar-header">
           <BrandLockup compact={!sidebarOpen} />
+          {sidebarOpen ? (
+            <p data-testid="bookone-build" style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--ink-muted)' }}>
+              build {bookoneBuildId()}
+            </p>
+          ) : null}
           <Button
             variant="secondary"
             className="icon sidebar-toggle"

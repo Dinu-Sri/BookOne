@@ -22,6 +22,7 @@ export type ResolveInput = {
   capabilityTier: string | null;
   modules: Partial<Record<ModuleWriteKey, boolean>>;
   legacyRole?: string | null;
+  jobSlug?: string | null;
 };
 
 function rank(level: AccessLevel): number {
@@ -82,12 +83,23 @@ function fallbackFullAccess(input: ResolveInput): boolean {
   return slug === 'owner' || slug === 'admin';
 }
 
+/** Primary Viewer is read-only even with extra jobs, copied grants, or allow-overrides. */
+export function isReadOnlyJob(input: {
+  primaryTemplateKey?: string | null;
+  legacyRole?: string | null;
+  jobSlug?: string | null;
+}): boolean {
+  return [input.primaryTemplateKey, input.legacyRole, input.jobSlug].some(
+    (s) => (s || '').toLowerCase() === 'viewer',
+  );
+}
+
 export function resolveLevel(input: ResolveInput, key: string): AccessLevel {
   if (key.startsWith('control_room')) {
     return input.platformRole === 'super_admin' ? 'write' : 'none';
   }
-
   const needWrite = key.endsWith('.write');
+  if (needWrite && isReadOnlyJob(input)) return 'none';
   const need: 'read' | 'write' = needWrite ? 'write' : 'read';
   if (!ceilingAllows(input, key, need)) {
     if (need === 'write' && ceilingAllows(input, key, 'read')) {
@@ -142,6 +154,7 @@ function resolveWriteOnly(input: ResolveInput, writeKey: string): AccessLevel {
 export function allows(input: ResolveInput, key: PermissionKey | string, need: 'read' | 'write'): boolean {
   const prefix = String(key).replace(/\.(read|write)$/, '');
   if (need === 'write') {
+    if (isReadOnlyJob(input)) return false;
     if (!ceilingAllows(input, `${prefix}.write`, 'write')) return false;
     return resolveLevel(input, `${prefix}.write`) === 'write';
   }

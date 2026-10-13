@@ -40,6 +40,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app ./
 
 ARG BUILD_DATE=0
+ENV NEXT_PUBLIC_BOOKONE_BUILD=$BUILD_DATE
 RUN echo "Build: $BUILD_DATE" && rm -rf apps/web/.next apps/web/.turbo
 
 RUN pnpm --dir apps/web exec fumadocs-mdx

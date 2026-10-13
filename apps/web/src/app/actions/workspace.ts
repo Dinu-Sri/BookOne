@@ -130,17 +130,22 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     .where(eq(tenants.id, user.tenantId))
     .limit(1);
   if (!t) throw new Error('Tenant not found.');
-  const { loadAccessForUser, SCREEN_DEFS } = await import('@bookone/auth');
+  const { loadAccessForUser, SCREEN_DEFS, isReadOnlyJob } = await import('@bookone/auth');
   let access = null as Awaited<ReturnType<typeof loadAccessForUser>>;
   try {
     access = await loadAccessForUser(user.id, user.tenantId, user.platformRole);
   } catch {
     access = null;
   }
+  const readOnlyJob = isReadOnlyJob({
+    primaryTemplateKey: access?.primaryTemplateKey,
+    legacyRole: access?.legacyRole,
+    jobSlug: access?.jobSlug ?? user.jobSlug,
+  });
   const accessByLabel: Record<string, 'none' | 'read' | 'write'> = {};
   for (const screen of SCREEN_DEFS) {
     if (!access) accessByLabel[screen.label] = 'none';
-    else if (access.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
+    else if (!readOnlyJob && access.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
     else if (access.allows(`${screen.keyPrefix}.read`, 'read')) accessByLabel[screen.label] = 'read';
     else accessByLabel[screen.label] = 'none';
   }

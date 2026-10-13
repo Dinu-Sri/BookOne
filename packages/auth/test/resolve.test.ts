@@ -46,6 +46,28 @@ describe('Viewer job', () => {
     expect(allows(viewer, 'parties.customers.write', 'write')).toBe(false);
     expect(allows(viewer, 'parties.vendors.write', 'write')).toBe(false);
   });
+
+  it('cannot write even when extra Sales grants or allow-overrides are present', () => {
+    const sales = templateByKey('sales');
+    const grants = (sales?.grants ?? []).map((key) => ({
+      key,
+      level: (key.endsWith('.write') ? 'write' : 'read') as 'read' | 'write',
+    }));
+    const viewer = input({
+      primaryTemplateKey: 'viewer',
+      extraTemplateKey: 'sales',
+      grants,
+      overrides: [{ key: 'sales.invoices.write', effect: 'allow' }],
+    });
+    expect(allows(viewer, 'sales.invoices.write', 'write')).toBe(false);
+    expect(allows(viewer, 'parties.customers.write', 'write')).toBe(false);
+    expect(allows(viewer, 'sales.invoices.read', 'read')).toBe(true);
+  });
+
+  it('cannot write when only jobSlug is viewer', () => {
+    const viewer = input({ primaryTemplateKey: 'sales', jobSlug: 'viewer' });
+    expect(allows(viewer, 'sales.invoices.write', 'write')).toBe(false);
+  });
 });
 
 describe('fallback full access', () => {

@@ -5,6 +5,7 @@ import {
   SCREEN_DEFS,
   getRequestAccess,
   getSession,
+  isReadOnlyJob,
   requireTenantContext,
   screenKeyFromHref,
   type AccessLevel,
@@ -22,6 +23,9 @@ export async function assertPermission(
   opts?: { surface?: 'action' | 'rsc' },
 ): Promise<void> {
   const access = await getMyAccess();
+  if (need === 'write' && access && isReadOnlyJob(access)) {
+    throw new Error('You do not have permission to do that.');
+  }
   if (access?.allows(key, need)) return;
   if (opts?.surface === 'rsc' && need === 'read') {
     redirect('/?denied=1');
@@ -44,9 +48,10 @@ export function levelForPrefix(access: LoadedAccess | null, prefix: string): Acc
 
 /** Write only when the job matrix says write. Missing/read/none is not write. */
 export function jobCanWrite(
-  tenant: { accessByLabel?: Record<string, 'none' | 'read' | 'write'> } | null | undefined,
+  tenant: { accessByLabel?: Record<string, 'none' | 'read' | 'write'>; jobSlug?: string | null } | null | undefined,
   label: string,
 ): boolean {
+  if (isReadOnlyJob({ jobSlug: tenant?.jobSlug })) return false;
   return tenant?.accessByLabel?.[label] === 'write';
 }
 

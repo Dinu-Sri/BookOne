@@ -1,3 +1,9 @@
+## 2026-10-13 — Viewer hard deny after QA PR #5
+
+- Record: [CHG-20261013-viewer-hard-deny](changes/CHG-20261013-viewer-hard-deny.md). QA [PR #5](https://github.com/Dinu-Sri/bookone-qa/pull/5) still created customers and drafts `INV-20261012-0002` / `0003` as Viewer.
+- Primary Viewer cannot write even with extra-job grants or allow-overrides. Login/sidebar show `build <sha>`.
+- Next: wait for Docker web image, Portainer Update Re-pull ON, confirm the SHA on `/login`, then QA retest.
+
 ## 2026-10-12 — Viewer write denial (BUG-0003 / BUG-0004)
 
 - Record: [CHG-20261012-viewer-write-denial](changes/CHG-20261012-viewer-write-denial.md). QA [PR #4](https://github.com/Dinu-Sri/bookone-qa/pull/4).

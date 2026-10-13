@@ -14,7 +14,7 @@ import {
 } from '@bookone/db';
 import type { AccessLevel } from './catalog';
 import type { ModuleWriteKey } from './ceiling';
-import { allows, type ResolveInput } from './resolve';
+import { allows, isReadOnlyJob, type ResolveInput } from './resolve';
 import { templateByKey } from './templates';
 import type { PermissionKey } from './catalog';
 import { scopeIgnoresJob } from './scope';
@@ -116,9 +116,17 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
 
   const primary = roles.find((r) => r.id === membership.primaryRoleId) ?? null;
   const extraRole = extra ? roles.find((r) => r.id === extra.roleId) ?? null : null;
+  const primaryKey = primary?.templateKey ?? primary?.slug ?? membership.role ?? null;
+  const extraRoleForGrants = isReadOnlyJob({
+    primaryTemplateKey: primaryKey,
+    legacyRole: membership.role,
+    jobSlug: primary?.slug,
+  })
+    ? null
+    : extraRole;
 
   const grants: { key: string; level: AccessLevel }[] = [];
-  for (const role of [primary, extraRole]) {
+  for (const role of [primary, extraRoleForGrants]) {
     if (!role) continue;
     if (role.templateKey && !role.customizedAt) {
       grants.push(...grantsFromTemplate(role.templateKey));
@@ -173,6 +181,7 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
     capabilityTier: tenant.capabilityTier,
     modules,
     legacyRole: membership.role,
+    jobSlug: primary?.slug ?? membership.role ?? null,
   };
 
   let locationIds: string[] | null = null;

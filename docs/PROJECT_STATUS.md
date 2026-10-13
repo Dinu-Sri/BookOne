@@ -1,3 +1,7 @@
+## 2026-10-13 — Viewer hard deny (QA PR #5)
+
+QA still created customers and invoice drafts as Viewer after `85bb2f3`. Primary Viewer is now read-only even with extra grants. Login shows `build <sha>`. See [CHG-20261013-viewer-hard-deny](changes/CHG-20261013-viewer-hard-deny.md). Pull GHCR after Docker web image is green (Re-pull ON).
+
 ## 2026-10-12 — Viewer write denial (BUG-0003 / BUG-0004)
 
 QA PR #4: Viewer created a customer and saved invoice draft `INV-20261012-0001`. Product now denies those writes on the server and hides New/Edit/Archive. See [CHG-20261012-viewer-write-denial](changes/CHG-20261012-viewer-write-denial.md). Pull the new GHCR image after **Docker web image** is green.

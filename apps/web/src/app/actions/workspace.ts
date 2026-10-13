@@ -19,6 +19,7 @@ import {
   inArray,
   sql,
 } from '@bookone/db';
+import { CASH_ACCOUNT_CODES, signedCashFlow } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import {
@@ -47,7 +48,10 @@ export interface TenantInfo {
     hr: boolean;
   };
   userEmail?: string;
+  userName?: string;
+  userFirstName?: string;
   userRole?: string;
+  jobTitle?: string;
   platformRole?: 'super_admin' | 'user';
   jobSlug?: string | null;
   accessByLabel?: Record<string, 'none' | 'read' | 'write'>;
@@ -163,7 +167,10 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     capabilityTier: t.capabilityTier ?? null,
     modules: normalizeModules(t.modules, t.plan),
     userEmail: user.email,
+    userName: user.name,
+    userFirstName: firstNameFrom(user.name, user.email),
     userRole: user.role,
+    jobTitle: jobTitleFrom(access?.jobName, access?.jobSlug ?? user.jobSlug, user.role),
     platformRole: user.platformRole,
     jobSlug: user.jobSlug,
     accessByLabel,
@@ -224,6 +231,56 @@ async function computeAccountBalances(
       };
     });
   });
+}
+
+function firstNameFrom(fullName: string | undefined, email: string | undefined): string {
+  const trimmed = (fullName ?? '').trim();
+  if (trimmed) return trimmed.split(/\s+/)[0]!;
+  const local = (email ?? '').split('@')[0]?.trim();
+  return local || 'User';
+}
+
+function jobTitleFrom(jobName: string | null | undefined, jobSlug: string | null | undefined, role: string | undefined): string {
+  const named = (jobName ?? '').trim();
+  if (named) return named;
+  const raw = (jobSlug || role || '').trim();
+  if (!raw) return 'Member';
+  return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+async function cashFlowForPeriod(
+  tenantId: string,
+  bounds: PeriodBounds,
+): Promise<{ moneyIn: number; moneyOut: number; net: number; lineCount: number }> {
+  const conditions = [
+    eq(journalLines.tenantId, tenantId),
+    isNull(journalLines.voidedAt),
+    isNull(journalEntries.voidedAt),
+    isNull(accounts.voidedAt),
+    inArray(accounts.code, [...CASH_ACCOUNT_CODES]),
+  ];
+  if (bounds.from && bounds.to) {
+    conditions.push(gte(journalEntries.entryDate, bounds.from));
+    conditions.push(lte(journalEntries.entryDate, bounds.to));
+  }
+  const scope = await currentDimensionScope();
+  const loc = columnInScope(journalLines.locationId, scope.locationIds);
+  const brand = columnInScope(journalLines.brandId, scope.brandIds);
+  if (loc) conditions.push(loc);
+  if (brand) conditions.push(brand);
+
+  const rows = await db()
+    .select({
+      accountCode: accounts.code,
+      side: journalLines.side,
+      amount: journalLines.amount,
+    })
+    .from(journalLines)
+    .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+    .innerJoin(accounts, eq(accounts.id, journalLines.accountId))
+    .where(and(...conditions));
+
+  return signedCashFlow(rows);
 }
 
 function formatLKR(value: number, compact = false): string {
@@ -349,21 +406,10 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
     if (dashLoc) transactionConditions.push(dashLoc);
     if (dashBrand) transactionConditions.push(dashBrand);
 
-    const periodTransactions = await db()
-      .select({
-        direction: transactions.direction,
-        amount: transactions.amount,
-      })
-      .from(transactions)
-      .where(and(...transactionConditions));
-
-    const moneyIn = periodTransactions
-      .filter((tx) => tx.direction === 'money_in')
-      .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
-    const moneyOut = periodTransactions
-      .filter((tx) => tx.direction === 'money_out')
-      .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
-    const netCashFlow = moneyIn - moneyOut;
+    const cashMovement = await cashFlowForPeriod(user.tenantId, bounds);
+    const moneyIn = cashMovement.moneyIn;
+    const moneyOut = cashMovement.moneyOut;
+    const netCashFlow = cashMovement.net;
 
     const recent = await db()
       .select({
@@ -402,7 +448,7 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
     metrics.splice(1, 0, {
       label: 'Net cash flow',
       value: formatLKR(netCashFlow, true),
-      note: `${periodTransactions.length} posted entries in view`,
+      note: `${cashMovement.lineCount} cash movements in view`,
       tone: netCashFlow >= 0 ? 'success' : 'danger',
     });
     metrics.push(
@@ -444,7 +490,7 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
         moneyIn,
         moneyOut,
         net: netCashFlow,
-        transactionCount: periodTransactions.length,
+        transactionCount: cashMovement.lineCount,
       },
     };
   });
@@ -780,28 +826,11 @@ export async function getReports(period?: string): Promise<ReportsData> {
   const equity = trialBalance.filter((r) => r.type === 'equity');
   const netIncome = revenue.reduce((s, r) => s + r.balance, 0) - expense.reduce((s, r) => s + r.balance, 0);
 
-  const transactionConditions = [eq(transactions.tenantId, user.tenantId), isNull(transactions.voidedAt)];
-  if (bounds.from && bounds.to) {
-    transactionConditions.push(gte(transactions.date, bounds.from));
-    transactionConditions.push(lte(transactions.date, bounds.to));
-  }
-  const reportScope = await currentDimensionScope();
-  const reportLoc = columnInScope(transactions.locationId, reportScope.locationIds);
-  const reportBrand = columnInScope(transactions.brandId, reportScope.brandIds);
-  if (reportLoc) transactionConditions.push(reportLoc);
-  if (reportBrand) transactionConditions.push(reportBrand);
-  const periodTransactions = await withTenantContext(user.tenantId, async () => {
-    return db()
-      .select({ direction: transactions.direction, amount: transactions.amount })
-      .from(transactions)
-      .where(and(...transactionConditions));
+  const cashMovement = await withTenantContext(user.tenantId, async () => {
+    return cashFlowForPeriod(user.tenantId, bounds);
   });
-  const moneyIn = periodTransactions
-    .filter((tx) => tx.direction === 'money_in')
-    .reduce((sum, tx) => sum + Number(tx.amount), 0);
-  const moneyOut = periodTransactions
-    .filter((tx) => tx.direction === 'money_out')
-    .reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const moneyIn = cashMovement.moneyIn;
+  const moneyOut = cashMovement.moneyOut;
 
   return {
     trialBalance,
@@ -818,7 +847,7 @@ export async function getReports(period?: string): Promise<ReportsData> {
       moneyIn,
       moneyOut,
       netCashFlow: moneyIn - moneyOut,
-      transactionCount: periodTransactions.length,
+      transactionCount: cashMovement.lineCount,
     },
     generalLedger: await listJournalEntries(period),
     asOfPeriod: selectedPeriod ?? 'all',

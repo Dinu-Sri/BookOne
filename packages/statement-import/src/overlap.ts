@@ -22,7 +22,7 @@ export function gapDaysBetween(a: DateRange, b: DateRange): number | null {
     if (Number.isNaN(da) || Number.isNaN(db)) return null;
     return Math.round((db - da) / (24 * 60 * 60 * 1000)) - 1;
   }
-  if (b.to && b.to < a.from) {
+  if (a.from && b.to && b.to < a.from) {
     const da = new Date(`${b.to}T12:00:00`).getTime();
     const db = new Date(`${a.from}T12:00:00`).getTime();
     if (Number.isNaN(da) || Number.isNaN(db)) return null;

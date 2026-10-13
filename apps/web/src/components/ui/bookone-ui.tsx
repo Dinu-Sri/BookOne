@@ -7,6 +7,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from 'react';
+import Link from 'next/link';
 import { useFormStatus } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { emitFormPending } from '@/components/ui/form-busy';
@@ -21,12 +22,18 @@ export function LogoMark({ compact = false }: { compact?: boolean }) {
   return <img className="brand-logo" src="/logo.webp" alt="BookOne" width={284} height={73} />;
 }
 
-export function BrandLockup({ compact = false }: { compact?: boolean }) {
-  return (
+export function BrandLockup({ compact = false, href }: { compact?: boolean; href?: string }) {
+  const lockup = (
     <div className="brand-lockup">
       <LogoMark compact={compact} />
       {compact ? <strong>BookOne</strong> : null}
     </div>
+  );
+  if (!href) return lockup;
+  return (
+    <Link className="sidebar-brand-link" href={href} aria-label="Go to dashboard">
+      {lockup}
+    </Link>
   );
 }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
 import { assertPermission } from '@/lib/access';
+import { AP_BALANCE_TYPES, AR_BALANCE_TYPES, postedObligationSql } from '@/lib/posted-obligations';
 import {
   auditLog,
   businessDocuments,
@@ -14,6 +15,7 @@ import {
   and,
   isNull,
   or,
+  inArray,
   asc,
   desc,
   sql,
@@ -586,8 +588,8 @@ export async function listParties(filter?: PartyListFilter): Promise<PartyRow[]>
     const balanceRows = await db()
       .select({
         partyId: businessDocuments.partyId,
-        ar: sql<string>`coalesce(sum(case when ${businessDocuments.documentType} in ('sales_invoice','customer_invoice','pos_sale','sales_return') then ${businessDocuments.balanceDue}::numeric else 0 end), 0)`,
-        ap: sql<string>`coalesce(sum(case when ${businessDocuments.documentType} in ('vendor_bill','purchase','import_purchase','purchase_return','purchase_order') then ${businessDocuments.balanceDue}::numeric else 0 end), 0)`,
+        ar: sql<string>`coalesce(sum(case when ${postedObligationSql()} and ${inArray(businessDocuments.documentType, [...AR_BALANCE_TYPES])} then ${businessDocuments.balanceDue}::numeric else 0 end), 0)`,
+        ap: sql<string>`coalesce(sum(case when ${postedObligationSql()} and ${inArray(businessDocuments.documentType, [...AP_BALANCE_TYPES])} then ${businessDocuments.balanceDue}::numeric else 0 end), 0)`,
         docs: sql<number>`count(*)`,
       })
       .from(businessDocuments)
@@ -688,8 +690,8 @@ export async function getParty(id: string): Promise<PartyRow | null> {
 
     const [bal] = await db()
       .select({
-        ar: sql<string>`coalesce(sum(case when ${businessDocuments.documentType} in ('sales_invoice','customer_invoice','pos_sale','sales_return') then ${businessDocuments.balanceDue}::numeric else 0 end), 0)`,
-        ap: sql<string>`coalesce(sum(case when ${businessDocuments.documentType} in ('vendor_bill','purchase','import_purchase','purchase_return','purchase_order') then ${businessDocuments.balanceDue}::numeric else 0 end), 0)`,
+        ar: sql<string>`coalesce(sum(case when ${postedObligationSql()} and ${inArray(businessDocuments.documentType, [...AR_BALANCE_TYPES])} then ${businessDocuments.balanceDue}::numeric else 0 end), 0)`,
+        ap: sql<string>`coalesce(sum(case when ${postedObligationSql()} and ${inArray(businessDocuments.documentType, [...AP_BALANCE_TYPES])} then ${businessDocuments.balanceDue}::numeric else 0 end), 0)`,
         docs: sql<number>`count(*)`,
       })
       .from(businessDocuments)

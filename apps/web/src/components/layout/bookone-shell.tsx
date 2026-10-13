@@ -282,7 +282,10 @@ export interface TenantLite {
   slug: string;
   plan: string;
   userEmail?: string;
+  userName?: string;
+  userFirstName?: string;
   userRole?: string;
+  jobTitle?: string;
   status?: string;
   modules?: TenantModules;
   /** personal | sole_prop | company | pending */
@@ -406,7 +409,7 @@ export function BookOneShell({
     <div className={`app-shell ${sidebarOpen ? '' : 'is-collapsed'}`}>
       <aside className="sidebar" aria-label="BookOne workspace sidebar">
         <div className="sidebar-header">
-          <BrandLockup compact={!sidebarOpen} />
+          <BrandLockup compact={!sidebarOpen} href="/dashboard" />
           <Button
             variant="secondary"
             className="icon sidebar-toggle"
@@ -493,9 +496,17 @@ export function BookOneShell({
             })}
           </nav>
         </div>
-        <p className="sidebar-version" data-testid="bookone-build" title={bookoneVersionLabel()}>
-          {sidebarOpen ? bookoneVersionLabel() : `v${bookoneAppVersion()}\n${bookoneBuildId()}`}
-        </p>
+        <div className="sidebar-identity">
+          {tenant?.userFirstName || tenant?.jobTitle ? (
+            <div className="sidebar-user" data-testid="bookone-signed-in">
+              <p className="sidebar-user-name">{tenant.userFirstName ?? 'User'}</p>
+              {tenant.jobTitle ? <p className="sidebar-user-job">{tenant.jobTitle}</p> : null}
+            </div>
+          ) : null}
+          <p className="sidebar-version" data-testid="bookone-build" title={bookoneVersionLabel()}>
+            {sidebarOpen ? bookoneVersionLabel() : `v${bookoneAppVersion()}\n${bookoneBuildId()}`}
+          </p>
+        </div>
       </aside>
 
       <main className="main">

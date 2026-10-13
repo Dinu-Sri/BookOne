@@ -1,3 +1,7 @@
+## 2026-10-13 — QA finance + sidebar (v2.2.0)
+
+QA PR #5 finance handoff: Viewer reversal denied; cash flow nets sale+reversal; Open AR ignores unposted/archived drafts; Reports period label; Production Check gates GHCR. Sidebar shows first name + job, centered version, logo to dashboard. See [CHG-20261013-finance-qa-and-sidebar](changes/CHG-20261013-finance-qa-and-sidebar.md). Portainer Re-pull ON after Docker web image is green.
+
 ## 2026-10-13 — On-screen version (v2.1.0)
 
 Sidebar bottom-left shows `v2.1.0 · <sha>`. Agents must bump `VERSION` before product commits. See [VERSIONING.md](VERSIONING.md) and [CHG-20261013-on-screen-version](changes/CHG-20261013-on-screen-version.md). Portainer Re-pull ON after Docker web image is green.

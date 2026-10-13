@@ -48,9 +48,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   }
 
   const activeReport = reportTabs.some((tab) => tab.id === params?.report) ? params.report! : 'pnl';
-  const periodLabel = periodOptions.selected
-    ? new Date(`${periodOptions.selected}-01`).toLocaleString('en-US', { month: 'long', year: 'numeric' })
-    : 'All time';
+  const periodLabel = periodOptions.label || 'All time';
 
   return (
     <BookOneShell active="Reports" tenant={tenant} period={periodOptions}>

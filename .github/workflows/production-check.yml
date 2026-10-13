@@ -11,10 +11,65 @@ env:
   PNPM_VERSION: '9'
 
 jobs:
-  validate:
-    name: Install, Lint, Build, Test
+  tests:
+    name: Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bookone
+          POSTGRES_PASSWORD: bookone
+          POSTGRES_DB: bookone_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+        env:
+          DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
+          REDIS_URL: redis://localhost:6379
+          AUTH_SECRET: test-secret-for-ci-only
+
+  quality:
+    name: Lint, typecheck, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -60,16 +115,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: pnpm lint || echo "⚠️ Lint not configured yet — skipping"
-        continue-on-error: true
+        run: pnpm lint
 
       - name: Type check
-        run: pnpm typecheck || echo "⚠️ Typecheck not configured yet — skipping"
-        continue-on-error: true
+        run: pnpm typecheck
 
       - name: Build
-        run: pnpm build || echo "⚠️ Build not configured yet — skipping"
-        continue-on-error: true
+        run: pnpm build
         env:
           DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
           REDIS_URL: redis://localhost:6379
@@ -79,14 +131,6 @@ jobs:
           S3_ACCESS_KEY: minioadmin
           S3_SECRET_KEY: minioadmin
           S3_BUCKET: bookone-test
-
-      - name: Test
-        run: pnpm test || echo "⚠️ Tests not configured yet — skipping"
-        continue-on-error: true
-        env:
-          DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
-          REDIS_URL: redis://localhost:6379
-          AUTH_SECRET: test-secret-for-ci-only
 
   security-check:
     name: Security Scan

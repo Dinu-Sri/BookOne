@@ -14,6 +14,7 @@ import {
   amountInWordsLkr,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
+import { postedObligationSql } from '@/lib/posted-obligations';
 import {
   accounts,
   auditLog,
@@ -1063,6 +1064,7 @@ export async function createCommercialDocument(
                   'pos_sale',
                 ]),
                 isNull(businessDocuments.voidedAt),
+                postedObligationSql(),
               ),
             );
           const open = Number(openAr[0]?.bal ?? 0);
@@ -2994,7 +2996,7 @@ export async function listOpenApBills(): Promise<OpenApBill[]> {
           inArray(businessDocuments.documentType, [...AP_BILL_TYPES]),
           isNull(businessDocuments.voidedAt),
           sql`CAST(${businessDocuments.balanceDue} AS numeric) > 0.005`,
-          sql`${businessDocuments.status} NOT IN ('pending_approval', 'void', 'rejected', 'archived')`,
+          postedObligationSql(),
         ),
       )
       .orderBy(desc(businessDocuments.issueDate));
@@ -3098,7 +3100,7 @@ export async function listOpenArInvoices(): Promise<OpenArInvoice[]> {
           inArray(businessDocuments.documentType, [...AR_INVOICE_TYPES]),
           isNull(businessDocuments.voidedAt),
           sql`CAST(${businessDocuments.balanceDue} AS numeric) > 0.005`,
-          sql`${businessDocuments.status} NOT IN ('void', 'rejected', 'archived', 'pending_approval')`,
+          postedObligationSql(),
         ),
       )
       .orderBy(desc(businessDocuments.issueDate));

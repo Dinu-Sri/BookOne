@@ -25,8 +25,56 @@ env:
   IMAGE_NAME: bookone-web
 
 jobs:
+  require-production-check:
+    name: Require Production Check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for Production Check Tests on this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for Production Check job Tests on ${GITHUB_SHA}"
+          for i in $(seq 1 80); do
+            JSON=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&per_page=20")
+            RUN_ID=$(echo "$JSON" | python3 -c "import json,sys
+runs=json.load(sys.stdin).get('workflow_runs',[])
+hits=[r for r in runs if r.get('name')=='Production Check']
+print(hits[0]['id'] if hits else '')")
+            if [ -z "$RUN_ID" ]; then
+              echo "attempt $i Production Check run missing"
+              sleep 15
+              continue
+            fi
+            JOBS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs")
+            STATUS=$(echo "$JOBS" | python3 -c "import json,sys
+jobs=json.load(sys.stdin).get('jobs',[])
+hits=[j for j in jobs if j.get('name')=='Tests']
+print((hits[0].get('status','')+'|'+str(hits[0].get('conclusion') or '')) if hits else 'missing|')")
+            STATE=${STATUS%%|*}
+            CONCLUSION=${STATUS#*|}
+            echo "attempt $i run=$RUN_ID status=$STATE conclusion=$CONCLUSION"
+            if [ "$CONCLUSION" = "success" ]; then
+              exit 0
+            fi
+            if [ "$CONCLUSION" = "failure" ] || [ "$CONCLUSION" = "cancelled" ] || [ "$CONCLUSION" = "timed_out" ]; then
+              echo "Production Check Tests did not pass for this SHA ($CONCLUSION). Image will not publish."
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "Timed out waiting for Production Check Tests on this SHA."
+          exit 1
+
   build-and-push:
     name: Build & push web image
+    needs: [require-production-check]
+    if: always() && (github.event_name != 'push' || needs.require-production-check.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

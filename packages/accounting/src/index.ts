@@ -28,6 +28,8 @@ export type {
   BuiltSalePosting,
   PurchaseLineBucket,
 } from './engine/document-posting';
+export { CASH_ACCOUNT_CODES, signedCashFlow } from './cash-flow';
+export type { CashFlowLine, SignedCashFlow } from './cash-flow';
 export { amountInWordsLkr, formatDateMmDdYyyy } from './amount-in-words';
 export { datesOverlap, padHireTo, availableQty } from './rental-availability';
 export {

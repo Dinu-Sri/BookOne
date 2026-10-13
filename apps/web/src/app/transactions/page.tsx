@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getPeriodOptions, getTenantInfo, listTransactions } from '@/app/actions/workspace';
 import { reverseTransactionFromForm } from '@/app/actions/record-entry';
+import { jobCanWrite } from '@/lib/access';
 import { getReceiptDownloadUrl } from '@/app/actions/upload-receipt';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button, Card } from '@/components/ui/bookone-ui';
@@ -124,7 +125,10 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                   <tbody>
                     {txs.map((tx) => {
                       const receiptUrl = receiptUrls[tx.id];
-                      const canReverse = !tx.reversedByTransactionId && !tx.reversesTransactionId;
+                      const canReverse =
+                        jobCanWrite(tenant, 'Simple Entry') &&
+                        !tx.reversedByTransactionId &&
+                        !tx.reversesTransactionId;
 
                       return (
                         <tr key={tx.id}>

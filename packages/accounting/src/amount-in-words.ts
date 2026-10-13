@@ -26,15 +26,15 @@ const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 
 
 function underThousand(n: number): string {
   if (n === 0) return '';
-  if (n < 20) return ONES[n];
+  if (n < 20) return ONES[n] ?? '';
   if (n < 100) {
     const t = Math.floor(n / 10);
     const o = n % 10;
-    return `${TENS[t]}${o ? ` ${ONES[o]}` : ''}`.trim();
+    return `${TENS[t] ?? ''}${o ? ` ${ONES[o] ?? ''}` : ''}`.trim();
   }
   const h = Math.floor(n / 100);
   const rest = n % 100;
-  return `${ONES[h]} Hundred${rest ? ` ${underThousand(rest)}` : ''}`.trim();
+  return `${ONES[h] ?? ''} Hundred${rest ? ` ${underThousand(rest)}` : ''}`.trim();
 }
 
 function integerToWords(n: number): string {

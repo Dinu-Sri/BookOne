@@ -301,6 +301,18 @@ img {
   min-height: 40px;
 }
 
+.sidebar-brand-link {
+  display: flex;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sidebar-brand-link:hover .brand-logo,
+.sidebar-brand-link:hover .brand-mark {
+  opacity: 0.82;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;
@@ -336,20 +348,48 @@ img {
   overflow-y: auto;
 }
 
-.sidebar-version {
+.sidebar-identity {
   margin-top: auto;
   padding-top: 12px;
+  text-align: center;
+}
+
+.sidebar-user {
+  margin: 0 0 8px;
+}
+
+.sidebar-user-name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.sidebar-user-job {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--ink-muted);
+}
+
+.sidebar-version {
+  margin: 0;
   color: var(--ink-muted);
   font-size: 11px;
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   user-select: all;
+  text-align: center;
+}
+
+.is-collapsed .sidebar-user-name {
+  font-size: 11px;
 }
 
 .is-collapsed .sidebar-version {
   font-size: 10px;
-  text-align: center;
   word-break: break-all;
   white-space: pre-line;
 }

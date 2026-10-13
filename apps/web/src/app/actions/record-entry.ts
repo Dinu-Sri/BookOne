@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { inferTransaction } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -292,6 +293,8 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
     if (!transactionId) return { success: false, error: 'Missing transaction id.' };
 
     const user = await requireTenantContext();
+    const { assertPermission } = await import('@/lib/access');
+    await assertPermission('accounting.simple_entry.write', 'write');
     const reversalDate = new Date().toISOString().slice(0, 10);
     const reversalPeriod = reversalDate.slice(0, 7);
 
@@ -351,6 +354,7 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
       if (!original) throw new Error('Original transaction not found.');
       if (original.reversedByTransactionId) throw new Error('This transaction already has a reversing entry.');
       if (original.reversesTransactionId) throw new Error('A reversing entry cannot be reversed again.');
+      await assertDimensionScope({ locationId: original.locationId, brandId: original.brandId });
 
       const [originalJournal] = await db()
         .select({ id: journalEntries.id, memo: journalEntries.memo })
@@ -479,7 +483,11 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
 }
 
 export async function reverseTransactionFromForm(formData: FormData): Promise<void> {
-  await createReversingEntry(formData);
+  const result = await createReversingEntry(formData);
+  if (result.success) return;
+  const denied = result.error === 'You do not have permission to do that.';
+  if (denied) redirect('/transactions?flash=denied_write');
+  redirect(`/transactions?err=${encodeURIComponent(result.error ?? 'Could not reverse that entry.')}`);
 }
 
 /** Programmatic reverse for cashbook edit (reverse + re-post). */

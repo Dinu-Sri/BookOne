@@ -1,3 +1,10 @@
+## 2026-10-13 — QA finance defects + sidebar identity (v2.2.0)
+
+- Record: [CHG-20261013-finance-qa-and-sidebar](changes/CHG-20261013-finance-qa-and-sidebar.md). QA PR #5 handoff BUG-0005/0006/0007/0008/0009.
+- Viewer cannot reverse journals. Cash flow uses signed 1000/1100/1200 lines. Open AR/AP counts posted documents only. Reports use the resolved period label. Production Check failures block GHCR publish.
+- Sidebar: centered version, logo → `/dashboard`, first name + job above the stamp.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA quotes `v2.2.0 · <sha7>`.
+
 ## 2026-10-13 — On-screen version stamp (v2.1.0)
 
 - Record: [CHG-20261013-on-screen-version](changes/CHG-20261013-on-screen-version.md). Contract: [VERSIONING.md](VERSIONING.md).

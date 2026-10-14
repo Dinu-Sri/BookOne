@@ -26,6 +26,7 @@ export { decryptArchivePayload, encryptArchivePayload, sha256Hex } from './crypt
 export { tenantIsOperationallyEmpty, tradingActivityCounts } from './empty';
 export {
   applyArchiveObjects,
+  assertFilesApplyComplete,
   assertFilesPackMatchesDataRestore,
   filesManifestChecksum,
   parsePackedObjects,
@@ -34,13 +35,16 @@ export {
   MAX_ARCHIVE_PACK_BYTES,
   MAX_FILES_UPLOAD_BYTES,
   type ArchiveObjectStore,
+  type FilesPackPairing,
   type PackedArchiveObject,
 } from './files';
 export {
+  arApMatchesDocuments,
   invoiceTotalsFromTables,
   journalsAreBalanced,
   parseArchiveEnvelope,
   remapArchiveTables,
+  stockMatchesLayers,
   stockOnHandFromTables,
   trialBalanceHashFromTables,
   validateDataEnvelope,

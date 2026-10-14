@@ -6,6 +6,7 @@ import { decryptArchivePayload } from './crypto';
 import { tenantIsOperationallyEmpty } from './empty';
 import {
   applyArchiveObjects,
+  assertFilesApplyComplete,
   assertFilesPackMatchesDataRestore,
   parsePackedObjects,
   validateFilesEnvelope,
@@ -18,9 +19,11 @@ import {
   ARCHIVE_RESTORE_NOTES,
 } from './format';
 import {
+  arApMatchesDocuments,
   journalsAreBalanced,
   parseArchiveEnvelope,
   remapArchiveTables,
+  stockMatchesLayers,
   validateDataEnvelope,
 } from './remap';
 import { ARCHIVE_DUMP_TABLES, trialBalanceHash } from './snapshot';
@@ -123,6 +126,10 @@ export async function restoreTenantDataArchive(args: {
     }
     const journals = journalsAreBalanced(tables);
     if (!journals.ok) return journals;
+    const stock = stockMatchesLayers(tables);
+    if (!stock.ok) return stock;
+    const arap = arApMatchesDocuments(tables);
+    if (!arap.ok) return arap;
 
     const names = new Set(ARCHIVE_DUMP_TABLES.map((entry) => getTableName(entry.table)));
     const insertNames = ARCHIVE_RESTORE_INSERT_ORDER as readonly string[];
@@ -324,7 +331,7 @@ export async function restoreTenantFilesArchive(args: {
       const already = lastRestore
         ? await filesRestoreAlreadyApplied(args.tenantId, lastRestore.exportId)
         : false;
-      assertFilesPackMatchesDataRestore({
+      const pairing = assertFilesPackMatchesDataRestore({
         packExportId: envelope.manifest.exportId,
         packFilesSha256: envelope.manifest.filesSha256,
         lastRestore,
@@ -337,6 +344,7 @@ export async function restoreTenantFilesArchive(args: {
         objects,
         store: args.store,
       });
+      assertFilesApplyComplete(result);
 
       await tx.insert(auditLog).values({
         tenantId: args.tenantId,
@@ -349,6 +357,7 @@ export async function restoreTenantFilesArchive(args: {
           schemaVersion: envelope.manifest.schemaVersion,
           sourceTenantId: envelope.manifest.sourceTenantId,
           filesSha256: envelope.manifest.filesSha256,
+          pairing,
           applied: result.applied,
           skippedExisting: result.skippedExisting,
           skippedInvalid: result.skippedInvalid,

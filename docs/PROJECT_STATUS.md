@@ -1,3 +1,7 @@
+## 2026-10-14 — Archive backup owner-only + restore integrity (v2.5.4)
+
+QA HANDOFF-20261014-backup-plan on v2.5.3: 60 source + 49 PostgreSQL pass; archive helpers 15/1 fail (BUG-0021 Admin resolver). Privileged backup keys now skip RBAC-off full-access. Restore enforces stock/layers and AR/AP vs documents and refuses to complete an invalid files pack. Legacy v2.4.0 pairing is exportId-only. See [CHG-20261014-archive-backup-owner-integrity](changes/CHG-20261014-archive-backup-owner-integrity.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.4 · <sha7>`. Restore remains unverified.
+
 ## 2026-10-14 — Form overlay audit (v2.5.3)
 
 Document `submit` capture removed. Client writes use `withFormPending`. AGENTS.md **Form busy overlay** is mandatory for new forms. See [CHG-20261014-form-busy-overlay-audit](changes/CHG-20261014-form-busy-overlay-audit.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.3 · <sha7>`.

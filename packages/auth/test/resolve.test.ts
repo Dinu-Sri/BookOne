@@ -89,6 +89,12 @@ describe('fallback full access', () => {
     expect(allows(owner, 'sales.invoices.write', 'write')).toBe(true);
     expect(allows(owner, 'parties.customers.write', 'write')).toBe(true);
   });
+
+  it('admin still has financial writes when rbac is off', () => {
+    const admin = input({ primaryTemplateKey: 'admin', rbacEnforced: false });
+    expect(allows(admin, 'sales.invoices.write', 'write')).toBe(true);
+    expect(allows(admin, 'parties.customers.write', 'write')).toBe(true);
+  });
 });
 
 describe('Sales job', () => {

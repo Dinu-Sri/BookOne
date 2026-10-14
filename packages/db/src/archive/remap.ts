@@ -318,3 +318,122 @@ export function stockOnHandFromTables(tables: Record<string, Record<string, unkn
   }
   return qty;
 }
+
+const AR_BALANCE_TYPES = new Set(['sales_invoice', 'customer_invoice', 'pos_sale', 'sales_return']);
+const AP_BALANCE_TYPES = new Set(['vendor_bill', 'purchase', 'import_purchase', 'purchase_return']);
+const NON_POSTED_STATUS = new Set(['draft', 'void', 'rejected', 'pending_approval']);
+
+function money(value: unknown): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : Number.NaN;
+}
+
+function nearlyEqual(a: number, b: number, eps: number): boolean {
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= eps;
+}
+
+function locationBucket(productId: unknown, locationId: unknown): string {
+  return `${String(productId ?? '')}|${locationId == null || locationId === '' ? '' : String(locationId)}`;
+}
+
+function isPostedObligation(row: Record<string, unknown>): boolean {
+  if (row.voidedAt != null) return false;
+  if (row.postedAt == null || row.postedAt === '') return false;
+  return !NON_POSTED_STATUS.has(String(row.status ?? '').toLowerCase());
+}
+
+function accountNet(
+  tables: Record<string, Record<string, unknown>[]>,
+  code: string,
+): { present: boolean; debit: number; credit: number } {
+  const ids = new Set<string>();
+  for (const row of tables.accounts ?? []) {
+    if (row.voidedAt != null) continue;
+    if (String(row.code ?? '') === code && isUuid(row.id)) ids.add(row.id);
+  }
+  let debit = 0;
+  let credit = 0;
+  for (const line of tables.journal_lines ?? []) {
+    if (line.voidedAt != null) continue;
+    if (!isUuid(line.accountId) || !ids.has(line.accountId)) continue;
+    const amount = money(line.amount);
+    if (!Number.isFinite(amount)) continue;
+    if (String(line.side) === 'debit') debit += amount;
+    else if (String(line.side) === 'credit') credit += amount;
+  }
+  return { present: ids.size > 0, debit, credit };
+}
+
+/**
+ * Restore integrity: qty on hand per product/location equals remaining cost-layer qty.
+ * Empty inventory (no levels and no layers) passes.
+ */
+export function stockMatchesLayers(
+  tables: Record<string, Record<string, unknown>[]>,
+): { ok: true } | { ok: false; error: string } {
+  const onHand = new Map<string, number>();
+  for (const row of tables.inventory_stock_levels ?? []) {
+    const productId = String(row.productId ?? '');
+    if (!productId) {
+      return { ok: false, error: 'This backup failed integrity checks (stock vs layers).' };
+    }
+    const key = locationBucket(productId, row.locationId);
+    onHand.set(key, (onHand.get(key) ?? 0) + money(row.qtyOnHand));
+  }
+  const remaining = new Map<string, number>();
+  for (const row of tables.inventory_cost_layers ?? []) {
+    if (row.voidedAt != null) continue;
+    const productId = String(row.productId ?? '');
+    if (!productId) {
+      return { ok: false, error: 'This backup failed integrity checks (stock vs layers).' };
+    }
+    const key = locationBucket(productId, row.locationId);
+    remaining.set(key, (remaining.get(key) ?? 0) + money(row.qtyRemaining));
+  }
+  const keys = new Set([...onHand.keys(), ...remaining.keys()]);
+  for (const key of keys) {
+    const a = onHand.get(key) ?? 0;
+    const b = remaining.get(key) ?? 0;
+    if (!nearlyEqual(a, b, 0.00015)) {
+      return { ok: false, error: 'This backup failed integrity checks (stock vs layers).' };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * Restore integrity: posted AR/AP document balances match control accounts 1300/2100,
+ * and paidAmount + balanceDue equals document total.
+ */
+export function arApMatchesDocuments(
+  tables: Record<string, Record<string, unknown>[]>,
+): { ok: true } | { ok: false; error: string } {
+  let arDocs = 0;
+  let apDocs = 0;
+  for (const row of tables.business_documents ?? []) {
+    if (!isPostedObligation(row)) continue;
+    const kind = String(row.documentType ?? '');
+    const isAr = AR_BALANCE_TYPES.has(kind);
+    const isAp = AP_BALANCE_TYPES.has(kind);
+    if (!isAr && !isAp) continue;
+    const total = money(row.total);
+    const paid = money(row.paidAmount);
+    const due = money(row.balanceDue);
+    if (!nearlyEqual(paid + due, total, 0.015)) {
+      return { ok: false, error: 'This backup failed integrity checks (AR/AP vs documents).' };
+    }
+    if (isAr) arDocs += due;
+    else apDocs += due;
+  }
+  const ar = accountNet(tables, '1300');
+  const ap = accountNet(tables, '2100');
+  const arGl = ar.debit - ar.credit;
+  const apGl = ap.credit - ap.debit;
+  if (!nearlyEqual(arDocs, ar.present || Math.abs(arDocs) > 0.015 ? arGl : 0, 0.015)) {
+    return { ok: false, error: 'This backup failed integrity checks (AR/AP vs documents).' };
+  }
+  if (!nearlyEqual(apDocs, ap.present || Math.abs(apDocs) > 0.015 ? apGl : 0, 0.015)) {
+    return { ok: false, error: 'This backup failed integrity checks (AR/AP vs documents).' };
+  }
+  return { ok: true };
+}

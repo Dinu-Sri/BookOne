@@ -72,18 +72,33 @@ export function validateFilesEnvelope(envelope: ArchiveEnvelope): void {
     throw new Error('That backup file is damaged or incomplete.');
   }
   const objects = parsePackedObjects(envelope.objects);
+  if (typeof m.fileCount === 'number' && m.fileCount !== objects.length) {
+    throw new Error('That backup file is damaged or incomplete.');
+  }
   const actual = filesManifestChecksum(objects);
   if (actual !== m.filesSha256) {
     throw new Error('That backup file is damaged or incomplete.');
   }
 }
 
+export type FilesPackPairing = 'checksum' | 'legacy-export-id';
+
+/**
+ * Pair a files pack to the last data restore.
+ *
+ * Current (v2.5+) data restores persist filesSha256. Those packs must match that
+ * checksum (frozen pair contract).
+ *
+ * Legacy (v2.4.0) data restores omitted filesSha256 on the audit row. Those packs
+ * may apply when exportId matches. That pairing is exportId-only and is not
+ * cross-checksum proof.
+ */
 export function assertFilesPackMatchesDataRestore(args: {
   packExportId: string;
   packFilesSha256: string;
   lastRestore: { exportId: string; filesSha256?: string | null } | null;
   filesAlreadyApplied: boolean;
-}): void {
+}): FilesPackPairing {
   if (!args.lastRestore) {
     throw new Error('Restore the company data file first, then upload the matching attachments pack.');
   }
@@ -93,8 +108,21 @@ export function assertFilesPackMatchesDataRestore(args: {
   if (args.filesAlreadyApplied) {
     throw new Error('Attachments for this restore are already applied.');
   }
-  if (args.lastRestore.filesSha256 && args.lastRestore.filesSha256 !== args.packFilesSha256) {
-    throw new Error('This attachments pack does not match the restored company data.');
+  const stored = args.lastRestore.filesSha256;
+  if (typeof stored === 'string' && stored.length > 0) {
+    if (stored !== args.packFilesSha256) {
+      throw new Error('This attachments pack does not match the restored company data.');
+    }
+    return 'checksum';
+  }
+  return 'legacy-export-id';
+}
+
+export function assertFilesApplyComplete(result: {
+  skippedInvalid: number;
+}): void {
+  if (result.skippedInvalid > 0) {
+    throw new Error('This attachments pack is incomplete or contains invalid files.');
   }
 }
 

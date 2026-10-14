@@ -13,16 +13,19 @@ import {
   ARCHIVE_RESTORE_INSERT_ORDER,
 } from '../../db/src/archive/format';
 import {
+  arApMatchesDocuments,
   invoiceTotalsFromTables,
   journalsAreBalanced,
   parseArchiveEnvelope,
   remapArchiveTables,
+  stockMatchesLayers,
   stockOnHandFromTables,
   trialBalanceHashFromTables,
   validateDataEnvelope,
 } from '../../db/src/archive/remap';
 import {
   applyArchiveObjects,
+  assertFilesApplyComplete,
   assertFilesPackMatchesDataRestore,
   filesManifestChecksum,
   parsePackedObjects,
@@ -121,6 +124,61 @@ describe('company.backup permission', () => {
     expect(allows(input({ primaryTemplateKey: 'viewer' }), 'company.backup.write', 'write')).toBe(false);
     expect(allows(input({ primaryTemplateKey: 'admin' }), 'company.backup.write', 'write')).toBe(false);
     expect(allows(input({ primaryTemplateKey: 'admin' }), 'company.backup.read', 'read')).toBe(false);
+  });
+
+  it('denies Viewer backup in both RBAC modes despite extra Owner grant and override', () => {
+    for (const enforced of [true, false]) {
+      for (const key of ['company.backup.read', 'company.backup.write'] as const) {
+        const need = key.endsWith('.write') ? 'write' : 'read';
+        expect(
+          allows(
+            input({
+              primaryTemplateKey: 'viewer',
+              rbacEnforced: enforced,
+              extraTemplateKey: 'owner',
+              grants: [{ key, level: need }],
+              overrides: [{ key, effect: 'allow' }],
+            }),
+            key,
+            need,
+          ),
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('denies Admin backup in both RBAC modes even with extra Owner, grant, and override', () => {
+    for (const key of ['company.backup.read', 'company.backup.write'] as const) {
+      const need = key.endsWith('.write') ? 'write' : 'read';
+      expect(allows(input({ primaryTemplateKey: 'owner' }), key, need)).toBe(true);
+      expect(allows(input({ primaryTemplateKey: 'owner', rbacEnforced: false }), key, need)).toBe(true);
+      for (const enforced of [true, false]) {
+        expect(allows(input({ primaryTemplateKey: 'admin', rbacEnforced: enforced }), key, need)).toBe(
+          false,
+        );
+        expect(
+          allows(
+            input({
+              primaryTemplateKey: 'admin',
+              rbacEnforced: enforced,
+              extraTemplateKey: 'owner',
+              grants: [{ key, level: need }],
+              overrides: [{ key, effect: 'allow' }],
+            }),
+            key,
+            need,
+          ),
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('keeps Admin financial and team writes when RBAC is off, without Owner-only backup', () => {
+    const admin = input({ primaryTemplateKey: 'admin', rbacEnforced: false });
+    expect(allows(admin, 'sales.invoices.write', 'write')).toBe(true);
+    expect(allows(admin, 'team.people.write', 'write')).toBe(true);
+    expect(allows(admin, 'company.backup.write', 'write')).toBe(false);
+    expect(allows(admin, 'company.lifecycle.write', 'write')).toBe(false);
   });
 });
 
@@ -308,6 +366,7 @@ describe('archive files pack', () => {
       store,
     });
     expect(first.applied).toBe(1);
+    expect(() => assertFilesApplyComplete(first)).not.toThrow();
     expect(store.map.has(`tenants/${targetTenant}/receipts/${extraUser}/scan.png`)).toBe(true);
 
     const second = await applyArchiveObjects({
@@ -353,14 +412,45 @@ describe('archive files pack', () => {
         filesAlreadyApplied: true,
       }),
     ).toThrow(/already applied/i);
-    expect(() =>
+    expect(
       assertFilesPackMatchesDataRestore({
         packExportId: exportId,
         packFilesSha256: 'aaa',
         lastRestore: { exportId, filesSha256: 'aaa' },
         filesAlreadyApplied: false,
       }),
-    ).not.toThrow();
+    ).toBe('checksum');
+    expect(
+      assertFilesPackMatchesDataRestore({
+        packExportId: exportId,
+        packFilesSha256: 'aaa',
+        lastRestore: { exportId },
+        filesAlreadyApplied: false,
+      }),
+    ).toBe('legacy-export-id');
+  });
+
+  it('refuses to mark a files pack complete when objects were invalid', async () => {
+    const body = Buffer.from('synthetic bytes');
+    const store = memoryStore();
+    const result = await applyArchiveObjects({
+      targetTenantId: targetTenant,
+      sourceTenantId: sourceTenant,
+      objects: [
+        {
+          key: `tenants/${sourceTenant}/_archive/latest.json`,
+          contentType: 'application/json',
+          sha256: sha256Hex(body),
+          size: body.length,
+          bodyBase64: body.toString('base64'),
+        },
+      ],
+      store,
+    });
+    expect(result.skippedInvalid).toBe(1);
+    expect(result.applied).toBe(0);
+    expect(() => assertFilesApplyComplete(result)).toThrow(/incomplete or contains invalid/i);
+    expect(store.map.size).toBe(0);
   });
 });
 
@@ -443,6 +533,16 @@ describe('archive schema transformers and golden restore', () => {
         },
       ],
       inventory_stock_levels: [{ id: levelId, tenantId: sourceTenant, productId, qtyOnHand: '4.0000' }],
+      inventory_cost_layers: [
+        {
+          id: '14141414-1414-1414-1414-141414141414',
+          tenantId: sourceTenant,
+          productId,
+          qtyReceived: '4.0000',
+          qtyRemaining: '4.0000',
+          voidedAt: null,
+        },
+      ],
       transactions: [
         {
           id: '33333333-3333-3333-3333-333333333333',
@@ -457,6 +557,8 @@ describe('archive schema transformers and golden restore', () => {
     expect(tb).toBe(trialBalanceHashFromTables(tables));
     expect(invoiceTotalsFromTables(tables)).toEqual({ count: 1, total: 250 });
     expect(stockOnHandFromTables(tables)).toBe(4);
+    expect(stockMatchesLayers(tables).ok).toBe(true);
+    expect(arApMatchesDocuments(tables).ok).toBe(true);
 
     const { tables: remapped } = remapArchiveTables({
       tables,
@@ -470,6 +572,70 @@ describe('archive schema transformers and golden restore', () => {
     expect(String(remapped.transactions[0]?.receiptRef)).toBe(
       `tenants/${targetTenant}/receipts/${extraUser}/scan.png`,
     );
+    expect(stockMatchesLayers(remapped).ok).toBe(true);
+    expect(arApMatchesDocuments(remapped).ok).toBe(true);
+  });
+
+  it('rejects stock that does not match remaining cost layers', () => {
+    const productId = '12121212-1212-1212-1212-121212121212';
+    expect(
+      stockMatchesLayers({
+        inventory_stock_levels: [{ productId, qtyOnHand: '4.0000' }],
+        inventory_cost_layers: [{ productId, qtyRemaining: '3.0000', voidedAt: null }],
+      }).ok,
+    ).toBe(false);
+    expect(
+      stockMatchesLayers({
+        inventory_stock_levels: [{ productId, qtyOnHand: '4.0000' }],
+        inventory_cost_layers: [{ productId, qtyRemaining: '4.0000', voidedAt: null }],
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('rejects posted AR/AP that does not match control accounts or document totals', () => {
+    const arId = '55555555-5555-5555-5555-555555555555';
+    const cashId = '66666666-6666-6666-6666-666666666666';
+    const entryId = '44444444-4444-4444-4444-444444444444';
+    const posted = {
+      accounts: [
+        { id: arId, code: '1300', voidedAt: null },
+        { id: cashId, code: '1000', voidedAt: null },
+      ],
+      journal_entries: [{ id: entryId }],
+      journal_lines: [
+        { journalEntryId: entryId, accountId: arId, side: 'debit', amount: '250.00', voidedAt: null },
+        { journalEntryId: entryId, accountId: cashId, side: 'credit', amount: '250.00', voidedAt: null },
+      ],
+      business_documents: [
+        {
+          documentType: 'sales_invoice',
+          postedAt: '2026-10-01T00:00:00.000Z',
+          status: 'open',
+          total: '250.00',
+          paidAmount: '0.00',
+          balanceDue: '250.00',
+          voidedAt: null,
+        },
+      ],
+    };
+    expect(arApMatchesDocuments(posted).ok).toBe(true);
+    expect(
+      arApMatchesDocuments({
+        ...posted,
+        business_documents: [
+          { ...posted.business_documents[0], balanceDue: '999.00', paidAmount: '0.00', total: '250.00' },
+        ],
+      }).ok,
+    ).toBe(false);
+    expect(
+      arApMatchesDocuments({
+        ...posted,
+        journal_lines: [
+          { journalEntryId: entryId, accountId: arId, side: 'debit', amount: '1.00', voidedAt: null },
+          { journalEntryId: entryId, accountId: cashId, side: 'credit', amount: '1.00', voidedAt: null },
+        ],
+      }).ok,
+    ).toBe(false);
   });
 });
 

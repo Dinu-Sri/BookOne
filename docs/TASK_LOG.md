@@ -1,3 +1,9 @@
+## 2026-10-14 — Archive backup owner-only + restore integrity (v2.5.4)
+
+- Record: [CHG-20261014-archive-backup-owner-integrity](changes/CHG-20261014-archive-backup-owner-integrity.md). QA [HANDOFF-20261014-backup-plan](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261014-backup-plan.md) BUG-0021 / S-0764.
+- Privileged backup keys are authoritative before RBAC-off full-access. Admin cannot acquire backup via extra Owner, grant, or override. Data restore enforces stock vs layers and posted AR/AP vs 1300/2100. Files pack is not marked complete when objects are invalid. v2.4.0 missing `filesSha256` is exportId-only pairing, not checksum proof.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.4 · <sha7>` and runs restore-integrity then Owner A→empty-B. Restore remains unverified until that journey.
+
 ## 2026-10-14 — Form overlay A–Z audit (v2.5.3)
 
 - Record: [CHG-20261014-form-busy-overlay-audit](changes/CHG-20261014-form-busy-overlay-audit.md).

@@ -119,7 +119,9 @@ export function resolveLevel(input: ResolveInput, key: string): AccessLevel {
   if (need === 'write' && !ceilingAllows(input, key, 'write')) return 'none';
   if (need === 'read' && !ceilingAllows(input, key, 'read')) return 'none';
 
-  if (fallbackFullAccess(input)) {
+  // Privileged keys (backup, lifecycle, reset, team) stay on privilegedLevel even
+  // when RBAC is off. Admin must not inherit Owner-only backup via fallbackFullAccess.
+  if (fallbackFullAccess(input) && !isPrivilegedKey(key)) {
     if (need === 'write' && ceilingAllows(input, key, 'write')) return 'write';
     if (ceilingAllows(input, key, 'read')) return key.endsWith('.write') ? 'write' : 'read';
   }

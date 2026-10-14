@@ -100,7 +100,7 @@ Both manifests carry:
 }
 ```
 
-Restore of a files pack is rejected unless `exportId` matches the data already applied to that tenant. Current (v2.5+) data restores persist `filesSha256` on the restore audit row; the pack must match that checksum. **Legacy pairing:** v2.4.0 data restores omitted `filesSha256`. A matching pack may still apply when `exportId` matches. That pairing is **exportId-only** and is not cross-checksum proof (`pairing: 'legacy-export-id'` on the files restore audit). Missing checksum metadata is never treated as a matching checksum.
+Restore of a files pack is rejected unless `exportId` matches the data already applied to that tenant. Current (v2.5+) data restores persist `filesSha256` and `dataSha256` on the restore audit row; the pack must match both when the pack supplies `dataSha256`. **Legacy pairing:** v2.4.0 data restores omitted `filesSha256`. A matching pack may still apply when `exportId` matches. That pairing is **exportId-only** and is not cross-checksum proof (`pairing: 'legacy-export-id'` on the files restore audit). Missing checksum metadata is never treated as a matching checksum.
 
 Encryption: both files password-protected by the owner at download. BookOne does not store that password.
 

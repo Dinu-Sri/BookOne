@@ -1,6 +1,9 @@
 import 'server-only';
 
 import { and, db, eq, opsIdempotency } from '@bookone/db';
+import { isCompletedIdempotencyResult } from '@/lib/idempotency-result';
+
+export { isCompletedIdempotencyResult } from '@/lib/idempotency-result';
 
 function norm(key: string | null | undefined) {
   const k = String(key ?? '').trim();
@@ -31,9 +34,11 @@ export async function claimIdempotency(
   const k = norm(key);
   if (!k) return { state: 'skip' };
   try {
-    const existing = await readIdempotency<{ ok?: boolean; id?: string; pending?: boolean }>(tenantId, k);
-    if (existing?.id) return { state: 'done', result: existing };
-    if (existing?.pending) return { state: 'busy' };
+    const existing = await readIdempotency<unknown>(tenantId, k);
+    if (isCompletedIdempotencyResult(existing)) return { state: 'done', result: existing };
+    if (existing && typeof existing === 'object' && (existing as { pending?: boolean }).pending) {
+      return { state: 'busy' };
+    }
     await db().insert(opsIdempotency).values({
       tenantId,
       key: k,
@@ -41,8 +46,8 @@ export async function claimIdempotency(
     });
     return { state: 'claimed' };
   } catch {
-    const again = await readIdempotency<{ ok?: boolean; id?: string; pending?: boolean }>(tenantId, k);
-    if (again?.id) return { state: 'done', result: again };
+    const again = await readIdempotency<unknown>(tenantId, k);
+    if (isCompletedIdempotencyResult(again)) return { state: 'done', result: again };
     return { state: 'busy' };
   }
 }

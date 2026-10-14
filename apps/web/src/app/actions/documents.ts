@@ -24,6 +24,7 @@ import {
   settlementAllocations,
   sql,
   transactions,
+  pgClient,
   withTenantContext,
 } from '@bookone/db';
 import { ensureParty } from '@/app/actions/parties';
@@ -373,52 +374,58 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
     await withTenantContext(user.tenantId, async () => {
       await assertOpenPeriod(user.tenantId, parsed.paymentDate);
 
-      const [document] = await db()
-        .select({
-          id: businessDocuments.id,
-          documentType: businessDocuments.documentType,
-          documentNumber: businessDocuments.documentNumber,
-          partyName: parties.name,
-          transactionId: businessDocuments.transactionId,
-          postedAt: businessDocuments.postedAt,
-          brandId: businessDocuments.brandId,
-          locationId: businessDocuments.locationId,
-          total: businessDocuments.total,
-          paidAmount: businessDocuments.paidAmount,
-          balanceDue: businessDocuments.balanceDue,
-        })
-        .from(businessDocuments)
-        .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
-        .where(
-          and(
-            eq(businessDocuments.tenantId, user.tenantId),
-            eq(businessDocuments.id, parsed.documentId),
-            isNull(businessDocuments.voidedAt),
-          ),
-        )
-        .limit(1);
-
-      if (!document) throw new Error('Document not found.');
-      if (!document.transactionId || !document.postedAt) {
-        throw new Error('Document has no posted transaction to allocate against.');
-      }
-      const arTypes = new Set(['customer_invoice', 'sales_invoice', 'pos_sale']);
-      const apTypes = new Set(['purchase', 'import_purchase', 'vendor_bill']);
-      const isInvoice = arTypes.has(document.documentType);
-      const isApBill = apTypes.has(document.documentType);
-      if (!isInvoice && !isApBill) {
-        throw new Error('Payments can only be allocated to sales invoices or purchase bills.');
-      }
-      await assertPermission(isInvoice ? 'sales.payments.write' : 'purchase.payments.write', 'write');
-      await assertDimensionScope({ locationId: document.locationId, brandId: document.brandId });
-      const balanceDue = Number(document.balanceDue);
-      if (parsed.amount > balanceDue + 0.005) throw new Error('Payment cannot exceed balance due.');
-
-      const paymentAccount = await resolveAccount(user.tenantId, parsed.paymentAccountCode);
-      assertEligiblePaymentTender(paymentAccount);
-      const controlAccount = await resolveAccount(user.tenantId, isInvoice ? '1300' : '2100');
-
       await db().transaction(async (tx) => {
+        await pgClient()`
+          select id from business_documents
+          where id = ${parsed.documentId}::uuid and tenant_id = ${user.tenantId}::uuid
+          for update
+        `;
+
+        const [document] = await tx
+          .select({
+            id: businessDocuments.id,
+            documentType: businessDocuments.documentType,
+            documentNumber: businessDocuments.documentNumber,
+            partyName: parties.name,
+            transactionId: businessDocuments.transactionId,
+            postedAt: businessDocuments.postedAt,
+            brandId: businessDocuments.brandId,
+            locationId: businessDocuments.locationId,
+            total: businessDocuments.total,
+            paidAmount: businessDocuments.paidAmount,
+            balanceDue: businessDocuments.balanceDue,
+          })
+          .from(businessDocuments)
+          .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.id, parsed.documentId),
+              isNull(businessDocuments.voidedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!document) throw new Error('Document not found.');
+        if (!document.transactionId || !document.postedAt) {
+          throw new Error('Document has no posted transaction to allocate against.');
+        }
+        const arTypes = new Set(['customer_invoice', 'sales_invoice', 'pos_sale']);
+        const apTypes = new Set(['purchase', 'import_purchase', 'vendor_bill']);
+        const isInvoice = arTypes.has(document.documentType);
+        const isApBill = apTypes.has(document.documentType);
+        if (!isInvoice && !isApBill) {
+          throw new Error('Payments can only be allocated to sales invoices or purchase bills.');
+        }
+        await assertPermission(isInvoice ? 'sales.payments.write' : 'purchase.payments.write', 'write');
+        await assertDimensionScope({ locationId: document.locationId, brandId: document.brandId });
+        const balanceDue = Number(document.balanceDue);
+        if (parsed.amount > balanceDue + 0.005) throw new Error('Payment cannot exceed balance due.');
+
+        const paymentAccount = await resolveAccount(user.tenantId, parsed.paymentAccountCode);
+        assertEligiblePaymentTender(paymentAccount);
+        const controlAccount = await resolveAccount(user.tenantId, isInvoice ? '1300' : '2100');
+
         const [paymentTx] = await tx
           .insert(transactions)
           .values({
@@ -575,12 +582,21 @@ export async function receiveCustomerPayments(input: {
   idempotencyKey?: string | null;
 }): Promise<{ ok: boolean; error?: string; paidCount?: number }> {
   const started = Date.now();
+  let tenantId: string | undefined;
+  let key: string | null | undefined = input.idempotencyKey;
+  const { writeIdempotency } = await import('@/lib/idempotency');
+  const persist = async (out: { ok: boolean; error?: string; paidCount?: number }) => {
+    if (!tenantId) return out;
+    await withTenantContext(tenantId, () => writeIdempotency(tenantId!, key, out));
+    return out;
+  };
   try {
     const { assertPermission } = await import('@/lib/access');
     await assertPermission('sales.payments.write', 'write');
     const { requireTenantContext } = await import('@bookone/auth');
     const user = await requireTenantContext();
-    const { claimIdempotency, writeIdempotency } = await import('@/lib/idempotency');
+    tenantId = user.tenantId;
+    const { claimIdempotency } = await import('@/lib/idempotency');
     const claim = await withTenantContext(user.tenantId, () =>
       claimIdempotency(user.tenantId, input.idempotencyKey),
     );
@@ -590,7 +606,7 @@ export async function receiveCustomerPayments(input: {
     const account = z.string().min(1).max(20).parse(input.paymentAccountCode);
     const allocations = input.allocations.filter((a) => a.amount > 0);
     if (allocations.length === 0) {
-      return { ok: false, error: 'Select at least one invoice with an amount.' };
+      return persist({ ok: false, error: 'Select at least one invoice with an amount.', paidCount: 0 });
     }
 
     let paidCount = 0;
@@ -601,14 +617,14 @@ export async function receiveCustomerPayments(input: {
         paymentAccountCode: account,
         amount: row.amount,
       });
-      if (!res.ok) return { ok: false, error: res.error, paidCount };
+      if (!res.ok) return persist({ ok: false, error: res.error, paidCount });
       paidCount += 1;
     }
     revalidatePath('/sales/payments');
     revalidatePath('/sales/invoices');
     revalidatePath('/sales/aging');
     const out = { ok: true as const, paidCount };
-    await withTenantContext(user.tenantId, () => writeIdempotency(user.tenantId, input.idempotencyKey, out));
+    await persist(out);
     const { logIfSlow } = await import('@/lib/ops-log');
     await logIfSlow('action:receiveCustomerPayments', started, { status: 'ok', message: String(paidCount) });
     return out;
@@ -616,7 +632,7 @@ export async function receiveCustomerPayments(input: {
     const message = e instanceof Error ? e.message : 'Receive payment failed.';
     const { logOps } = await import('@/lib/ops-log');
     await logOps({ kind: 'error', path: 'action:receiveCustomerPayments', status: 'error', message });
-    return { ok: false, error: message };
+    return persist({ ok: false, error: message });
   }
 }
 

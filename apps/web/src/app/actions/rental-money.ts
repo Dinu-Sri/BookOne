@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { isLiquidTenderCode } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -15,12 +16,15 @@ import {
   journalLines,
   parties,
   periodLocks,
+  pgClient,
   rentalEvents,
   sql,
   transactions,
   withTenantContext,
 } from '@bookone/db';
 import { getRentalSettings } from '@/app/actions/rental-settings';
+import { assertPermission } from '@/lib/access';
+import { assertModuleWrite } from '@/lib/module-access';
 import { suggestedEventDeposit } from '@/lib/rental-core';
 
 function money(n: number) {
@@ -33,12 +37,33 @@ function depositOpen(row: { depositHeld: string | number; depositApplied: string
 
 async function accountByCode(tenantId: string, code: string) {
   const [row] = await db()
-    .select({ id: accounts.id, code: accounts.code, name: accounts.name })
+    .select({
+      id: accounts.id,
+      code: accounts.code,
+      name: accounts.name,
+      type: accounts.type,
+      isActive: accounts.isActive,
+    })
     .from(accounts)
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.code, code), isNull(accounts.voidedAt)))
     .limit(1);
   if (!row) throw new Error(`Account ${code} is missing from the chart of accounts.`);
   return row;
+}
+
+function assertEligibleRentalTender(account: { code: string; type: string; isActive: string }) {
+  if (account.type !== 'asset' || account.isActive !== '1' || !isLiquidTenderCode(account.code)) {
+    throw new Error('Payment must use an active cash, bank, or card account.');
+  }
+}
+
+async function lockRentalEvent(tenantId: string, eventId: string) {
+  const rows = await pgClient()`
+    select id from rental_events
+    where id = ${eventId}::uuid and tenant_id = ${tenantId}::uuid
+    for update
+  `;
+  if (!rows.length) throw new Error('No hire event on this document.');
 }
 
 async function assertOpenPeriod(tenantId: string, date: string) {
@@ -272,57 +297,69 @@ export async function collectRentalDeposit(input: {
   try {
     const amount = money(input.amount);
     if (amount <= 0) return { ok: false, error: 'Enter a deposit amount.' };
+    await assertPermission('rental.dispatch.write', 'write');
+    await assertModuleWrite('rental');
     const user = await requireTenantContext();
     const today = new Date().toISOString().slice(0, 10);
     await withTenantContext(user.tenantId, async () => {
       await assertOpenPeriod(user.tenantId, today);
-      const [doc] = await db()
-        .select({
-          id: businessDocuments.id,
-          documentNumber: businessDocuments.documentNumber,
-          partyName: parties.name,
-        })
-        .from(businessDocuments)
-        .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
-        .where(and(eq(businessDocuments.id, input.documentId), eq(businessDocuments.tenantId, user.tenantId)))
-        .limit(1);
-      if (!doc) throw new Error('Document not found.');
-      const [event] = await db()
-        .select()
-        .from(rentalEvents)
-        .where(
-          and(
-            eq(rentalEvents.documentId, input.documentId),
-            eq(rentalEvents.tenantId, user.tenantId),
-            isNull(rentalEvents.voidedAt),
-          ),
-        )
-        .limit(1);
-      if (!event) throw new Error('This document has no hire event yet. Save hire dates first.');
-      const bank = await accountByCode(user.tenantId, input.paymentAccountCode || '1100');
-      const liability = await accountByCode(user.tenantId, '2400');
-      await postBalanced({
-        tenantId: user.tenantId,
-        userId: user.id,
-        party: doc.partyName ?? 'Customer',
-        description: `Hire deposit ${doc.documentNumber}`,
-        amount,
-        date: today,
-        paymentAccountId: bank.id,
-        debitAccountId: bank.id,
-        creditAccountId: liability.id,
-        categoryCode: '2400',
-        categoryName: liability.name,
-        direction: 'money_in',
-        invoiceRef: doc.documentNumber,
+      await db().transaction(async () => {
+        const [doc] = await db()
+          .select({
+            id: businessDocuments.id,
+            documentNumber: businessDocuments.documentNumber,
+            partyName: parties.name,
+          })
+          .from(businessDocuments)
+          .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+          .where(and(eq(businessDocuments.id, input.documentId), eq(businessDocuments.tenantId, user.tenantId)))
+          .limit(1);
+        if (!doc) throw new Error('Document not found.');
+        const [event] = await db()
+          .select()
+          .from(rentalEvents)
+          .where(
+            and(
+              eq(rentalEvents.documentId, input.documentId),
+              eq(rentalEvents.tenantId, user.tenantId),
+              isNull(rentalEvents.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (!event) throw new Error('This document has no hire event yet. Save hire dates first.');
+        await lockRentalEvent(user.tenantId, event.id);
+        const [locked] = await db()
+          .select()
+          .from(rentalEvents)
+          .where(eq(rentalEvents.id, event.id))
+          .limit(1);
+        const heldRow = locked ?? event;
+        const bank = await accountByCode(user.tenantId, input.paymentAccountCode || '1100');
+        assertEligibleRentalTender(bank);
+        const liability = await accountByCode(user.tenantId, '2400');
+        await postBalanced({
+          tenantId: user.tenantId,
+          userId: user.id,
+          party: doc.partyName ?? 'Customer',
+          description: `Hire deposit ${doc.documentNumber}`,
+          amount,
+          date: today,
+          paymentAccountId: bank.id,
+          debitAccountId: bank.id,
+          creditAccountId: liability.id,
+          categoryCode: '2400',
+          categoryName: liability.name,
+          direction: 'money_in',
+          invoiceRef: doc.documentNumber,
+        });
+        await db()
+          .update(rentalEvents)
+          .set({
+            depositHeld: (Number(heldRow.depositHeld) + amount).toFixed(2),
+            updatedAt: new Date(),
+          })
+          .where(eq(rentalEvents.id, event.id));
       });
-      await db()
-        .update(rentalEvents)
-        .set({
-          depositHeld: (Number(event.depositHeld) + amount).toFixed(2),
-          updatedAt: new Date(),
-        })
-        .where(eq(rentalEvents.id, event.id));
     });
     revalidateMoney(input.documentId);
     return { ok: true };
@@ -339,59 +376,70 @@ export async function refundRentalDeposit(input: {
   try {
     const amount = money(input.amount);
     if (amount <= 0) return { ok: false, error: 'Enter a refund amount.' };
+    await assertPermission('rental.dispatch.write', 'write');
+    await assertModuleWrite('rental');
     const user = await requireTenantContext();
     const today = new Date().toISOString().slice(0, 10);
     await withTenantContext(user.tenantId, async () => {
       await assertOpenPeriod(user.tenantId, today);
-      const [doc] = await db()
-        .select({
-          id: businessDocuments.id,
-          documentNumber: businessDocuments.documentNumber,
-          partyName: parties.name,
-        })
-        .from(businessDocuments)
-        .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
-        .where(and(eq(businessDocuments.id, input.documentId), eq(businessDocuments.tenantId, user.tenantId)))
-        .limit(1);
-      if (!doc) throw new Error('Document not found.');
-      const [event] = await db()
-        .select()
-        .from(rentalEvents)
-        .where(
-          and(
-            eq(rentalEvents.documentId, input.documentId),
-            eq(rentalEvents.tenantId, user.tenantId),
-            isNull(rentalEvents.voidedAt),
-          ),
-        )
-        .limit(1);
-      if (!event) throw new Error('No hire event on this document.');
-      const open = depositOpen(event);
-      if (amount > open + 0.005) throw new Error(`Refund ${amount} is more than open deposit ${open}.`);
-      const bank = await accountByCode(user.tenantId, input.paymentAccountCode || '1100');
-      const liability = await accountByCode(user.tenantId, '2400');
-      await postBalanced({
-        tenantId: user.tenantId,
-        userId: user.id,
-        party: doc.partyName ?? 'Customer',
-        description: `Hire deposit refund ${doc.documentNumber}`,
-        amount,
-        date: today,
-        paymentAccountId: bank.id,
-        debitAccountId: liability.id,
-        creditAccountId: bank.id,
-        categoryCode: '2400',
-        categoryName: liability.name,
-        direction: 'money_out',
-        invoiceRef: doc.documentNumber,
+      await db().transaction(async () => {
+        const [doc] = await db()
+          .select({
+            id: businessDocuments.id,
+            documentNumber: businessDocuments.documentNumber,
+            partyName: parties.name,
+          })
+          .from(businessDocuments)
+          .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+          .where(and(eq(businessDocuments.id, input.documentId), eq(businessDocuments.tenantId, user.tenantId)))
+          .limit(1);
+        if (!doc) throw new Error('Document not found.');
+        const [event] = await db()
+          .select()
+          .from(rentalEvents)
+          .where(
+            and(
+              eq(rentalEvents.documentId, input.documentId),
+              eq(rentalEvents.tenantId, user.tenantId),
+              isNull(rentalEvents.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (!event) throw new Error('No hire event on this document.');
+        await lockRentalEvent(user.tenantId, event.id);
+        const [locked] = await db()
+          .select()
+          .from(rentalEvents)
+          .where(eq(rentalEvents.id, event.id))
+          .limit(1);
+        const open = depositOpen(locked ?? event);
+        if (amount > open + 0.005) throw new Error(`Refund ${amount} is more than open deposit ${open}.`);
+        const bank = await accountByCode(user.tenantId, input.paymentAccountCode || '1100');
+        assertEligibleRentalTender(bank);
+        const liability = await accountByCode(user.tenantId, '2400');
+        await postBalanced({
+          tenantId: user.tenantId,
+          userId: user.id,
+          party: doc.partyName ?? 'Customer',
+          description: `Hire deposit refund ${doc.documentNumber}`,
+          amount,
+          date: today,
+          paymentAccountId: bank.id,
+          debitAccountId: liability.id,
+          creditAccountId: bank.id,
+          categoryCode: '2400',
+          categoryName: liability.name,
+          direction: 'money_out',
+          invoiceRef: doc.documentNumber,
+        });
+        await db()
+          .update(rentalEvents)
+          .set({
+            depositRefunded: (Number((locked ?? event).depositRefunded) + amount).toFixed(2),
+            updatedAt: new Date(),
+          })
+          .where(eq(rentalEvents.id, event.id));
       });
-      await db()
-        .update(rentalEvents)
-        .set({
-          depositRefunded: (Number(event.depositRefunded) + amount).toFixed(2),
-          updatedAt: new Date(),
-        })
-        .where(eq(rentalEvents.id, event.id));
     });
     revalidateMoney(input.documentId);
     return { ok: true };
@@ -414,6 +462,8 @@ export async function invoiceHireCharges(input: {
     if (damageCharge + lateFee + extraHire <= 0) {
       return { ok: false, error: 'Enter a damage, late-fee, or extra hire amount.' };
     }
+    await assertPermission('rental.dispatch.write', 'write');
+    await assertModuleWrite('rental');
     const user = await requireTenantContext();
     const today = new Date().toISOString().slice(0, 10);
 
@@ -489,53 +539,56 @@ export async function invoiceHireCharges(input: {
       if (apply > 0) {
         await withTenantContext(user.tenantId, async () => {
           await assertOpenPeriod(user.tenantId, today);
-          const [chargeDoc] = await db()
-            .select({
-              id: businessDocuments.id,
-              documentNumber: businessDocuments.documentNumber,
-              paidAmount: businessDocuments.paidAmount,
-              total: businessDocuments.total,
-            })
-            .from(businessDocuments)
-            .where(eq(businessDocuments.id, invoiceId))
-            .limit(1);
-          const liability = await accountByCode(user.tenantId, '2400');
-          const ar = await accountByCode(user.tenantId, '1300');
-          await postBalanced({
-            tenantId: user.tenantId,
-            userId: user.id,
-            party: ctx.doc.partyName ?? 'Customer',
-            description: `Apply hire deposit to ${chargeDoc?.documentNumber ?? 'charges'}`,
-            amount: apply,
-            date: today,
-            paymentAccountId: liability.id,
-            debitAccountId: liability.id,
-            creditAccountId: ar.id,
-            categoryCode: '2400',
-            categoryName: liability.name,
-            direction: 'money_out',
-            invoiceRef: chargeDoc?.documentNumber,
-          });
-          if (chargeDoc) {
-            const newPaid = Number(chargeDoc.paidAmount) + apply;
-            const newBalance = Math.max(0, Number(chargeDoc.total) - newPaid);
+          await db().transaction(async () => {
+            await lockRentalEvent(user.tenantId, ctx.event!.id);
+            const [chargeDoc] = await db()
+              .select({
+                id: businessDocuments.id,
+                documentNumber: businessDocuments.documentNumber,
+                paidAmount: businessDocuments.paidAmount,
+                total: businessDocuments.total,
+              })
+              .from(businessDocuments)
+              .where(eq(businessDocuments.id, invoiceId))
+              .limit(1);
+            const liability = await accountByCode(user.tenantId, '2400');
+            const ar = await accountByCode(user.tenantId, '1300');
+            await postBalanced({
+              tenantId: user.tenantId,
+              userId: user.id,
+              party: ctx.doc.partyName ?? 'Customer',
+              description: `Apply hire deposit to ${chargeDoc?.documentNumber ?? 'charges'}`,
+              amount: apply,
+              date: today,
+              paymentAccountId: liability.id,
+              debitAccountId: liability.id,
+              creditAccountId: ar.id,
+              categoryCode: '2400',
+              categoryName: liability.name,
+              direction: 'money_out',
+              invoiceRef: chargeDoc?.documentNumber,
+            });
+            if (chargeDoc) {
+              const newPaid = Number(chargeDoc.paidAmount) + apply;
+              const newBalance = Math.max(0, Number(chargeDoc.total) - newPaid);
+              await db()
+                .update(businessDocuments)
+                .set({
+                  paidAmount: newPaid.toFixed(2),
+                  balanceDue: newBalance.toFixed(2),
+                  status: newBalance <= 0.005 ? 'paid' : 'partial',
+                  updatedAt: new Date(),
+                })
+                .where(eq(businessDocuments.id, chargeDoc.id));
+            }
             await db()
-              .update(businessDocuments)
+              .update(rentalEvents)
               .set({
-                paidAmount: newPaid.toFixed(2),
-                balanceDue: newBalance.toFixed(2),
-                status: newBalance <= 0.005 ? 'paid' : 'partial',
+                depositApplied: (Number(ctx.event!.depositApplied) + apply).toFixed(2),
                 updatedAt: new Date(),
               })
-              .where(eq(businessDocuments.id, chargeDoc.id));
-          }
-          await db()
-            .update(rentalEvents)
-            .set({
-              depositApplied: (Number(ctx.event!.depositApplied) + apply).toFixed(2),
-              updatedAt: new Date(),
-            })
-            .where(eq(rentalEvents.id, ctx.event!.id));
+              .where(eq(rentalEvents.id, ctx.event!.id));
+          });
         });
       }
     }

@@ -247,7 +247,7 @@ export async function restoreTenantDataArchive(args: {
   }
 }
 
-type RestoreAuditValues = { exportId: string; filesSha256?: string };
+type RestoreAuditValues = { exportId: string; filesSha256?: string; dataSha256?: string };
 
 function parseRestoreValues(raw: unknown): RestoreAuditValues | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -256,12 +256,14 @@ function parseRestoreValues(raw: unknown): RestoreAuditValues | null {
   return {
     exportId: rec.exportId,
     filesSha256: typeof rec.filesSha256 === 'string' ? rec.filesSha256 : undefined,
+    dataSha256: typeof rec.dataSha256 === 'string' ? rec.dataSha256 : undefined,
   };
 }
 
 export async function loadLastDataRestore(tenantId: string): Promise<{
   exportId: string;
   filesSha256?: string;
+  dataSha256?: string;
   createdAt: Date;
 } | null> {
   const [row] = await db()
@@ -334,6 +336,7 @@ export async function restoreTenantFilesArchive(args: {
       const pairing = assertFilesPackMatchesDataRestore({
         packExportId: envelope.manifest.exportId,
         packFilesSha256: envelope.manifest.filesSha256,
+        packDataSha256: envelope.manifest.dataSha256,
         lastRestore,
         filesAlreadyApplied: already,
       });

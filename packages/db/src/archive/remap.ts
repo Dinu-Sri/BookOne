@@ -251,7 +251,10 @@ export function journalsAreBalanced(
   }
   for (const entry of entries) {
     const id = String(entry.id ?? '');
-    const slot = byEntry.get(id) ?? { debit: 0, credit: 0 };
+    const slot = byEntry.get(id);
+    if (!slot || (slot.debit === 0 && slot.credit === 0)) {
+      return { ok: false, error: 'This backup failed integrity checks (journals not balanced).' };
+    }
     if (Math.abs(slot.debit - slot.credit) > 0.009) {
       return { ok: false, error: 'This backup failed integrity checks (journals not balanced).' };
     }
@@ -408,6 +411,12 @@ export function stockMatchesLayers(
 export function arApMatchesDocuments(
   tables: Record<string, Record<string, unknown>[]>,
 ): { ok: true } | { ok: false; error: string } {
+  const txnIds = new Set(
+    (tables.transactions ?? [])
+      .filter((row) => row.voidedAt == null)
+      .map((row) => String(row.id ?? ''))
+      .filter((id) => isUuid(id)),
+  );
   let arDocs = 0;
   let apDocs = 0;
   for (const row of tables.business_documents ?? []) {
@@ -416,6 +425,9 @@ export function arApMatchesDocuments(
     const isAr = AR_BALANCE_TYPES.has(kind);
     const isAp = AP_BALANCE_TYPES.has(kind);
     if (!isAr && !isAp) continue;
+    if (!isUuid(row.transactionId) || !txnIds.has(row.transactionId)) {
+      return { ok: false, error: 'This backup failed integrity checks (AR/AP vs documents).' };
+    }
     const total = money(row.total);
     const paid = money(row.paidAmount);
     const due = money(row.balanceDue);

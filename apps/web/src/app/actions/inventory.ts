@@ -33,11 +33,13 @@ import {
   journalEntries,
   journalLines,
   periodLocks,
+  pgClient,
   transactions,
   brands,
   locations,
   withTenantContext,
 } from '@bookone/db';
+import { assertPermission } from '@/lib/access';
 import { assertModuleWrite } from '@/lib/module-access';
 import { assertDimensionScope, columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import { sanitizeProductHtml } from '@/lib/product-html';
@@ -285,6 +287,57 @@ async function applyQtyDelta(
       locationId,
       qtyOnHand: next.toFixed(4),
     });
+  }
+}
+
+async function requireTenantLocation(tenantId: string, locationId: string): Promise<void> {
+  const [row] = await db()
+    .select({ id: locations.id })
+    .from(locations)
+    .where(and(eq(locations.tenantId, tenantId), eq(locations.id, locationId), isNull(locations.voidedAt)))
+    .limit(1);
+  if (!row) throw new Error('Location not found.');
+}
+
+async function lockLocationsForUpdate(tenantId: string, locationIds: string[]): Promise<void> {
+  for (const id of [...new Set(locationIds.filter(Boolean))].sort()) {
+    const rows = await pgClient()`
+      select id from locations
+      where id = ${id}::uuid and tenant_id = ${tenantId}::uuid and voided_at is null
+      for update
+    `;
+    if (!rows.length) throw new Error('Location not found.');
+  }
+}
+
+async function lockTransferStock(tenantId: string, productIds: string[], locationIds: string[]): Promise<void> {
+  for (const productId of [...new Set(productIds)].sort()) {
+    await pgClient()`
+      select id from inventory_products
+      where id = ${productId}::uuid and tenant_id = ${tenantId}::uuid
+      for update
+    `;
+  }
+  const locIds = [...new Set(locationIds.filter(Boolean))].sort();
+  for (const productId of [...new Set(productIds)].sort()) {
+    for (const locationId of locIds) {
+      await pgClient()`
+        select id from inventory_stock_levels
+        where tenant_id = ${tenantId}::uuid
+          and product_id = ${productId}::uuid
+          and location_id = ${locationId}::uuid
+        for update
+      `;
+      await pgClient()`
+        select id from inventory_cost_layers
+        where tenant_id = ${tenantId}::uuid
+          and product_id = ${productId}::uuid
+          and location_id = ${locationId}::uuid
+          and voided_at is null
+        order by id
+        for update
+      `;
+    }
   }
 }
 
@@ -1540,6 +1593,10 @@ export async function listStockDocs(docType: 'transfer' | 'adjustment'): Promise
 export async function createStockDocFromForm(formData: FormData): Promise<void> {
   await assertModuleWrite('inventory');
   const docType = String(formData.get('docType') ?? 'adjustment') as 'transfer' | 'adjustment';
+  await assertPermission(
+    docType === 'transfer' ? 'inventory.transfers.write' : 'inventory.adjustments.write',
+    'write',
+  );
   const docDate = String(formData.get('docDate') ?? new Date().toISOString().slice(0, 10));
   const reason = String(formData.get('reason') ?? '');
   const notes = String(formData.get('notes') ?? '');
@@ -1557,8 +1614,26 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
 
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
+    await db().transaction(async () => {
     if (docType === 'adjustment') await assertOpenPeriod(user.tenantId, docDate);
     await assertDimensionScope({ locationId: fromLocationId ?? toLocationId });
+    if (fromLocationId) {
+      await requireTenantLocation(user.tenantId, fromLocationId);
+      await assertDimensionScope({ locationId: fromLocationId });
+    }
+    if (toLocationId) {
+      await requireTenantLocation(user.tenantId, toLocationId);
+      await assertDimensionScope({ locationId: toLocationId });
+    }
+    const lockLocs = [fromLocationId, toLocationId].filter((id): id is string => Boolean(id));
+    if (lockLocs.length) {
+      await lockLocationsForUpdate(user.tenantId, lockLocs);
+      await lockTransferStock(
+        user.tenantId,
+        lines.map((l) => l.productId),
+        lockLocs,
+      );
+    }
 
     for (const line of lines) {
       const [product] = await db()
@@ -1788,6 +1863,7 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
       newValues: { documentNumber, docType },
       notes: docType === 'transfer' ? 'Stock transfer (no GL).' : 'Stock adjustment posted.',
     });
+    });
   });
 
   revalidateInventory();
@@ -1829,8 +1905,15 @@ export async function createStockTransfer(input: {
     if (lines.length === 0) return { ok: false, error: 'Add at least one transfer line.' };
 
     const user = await requireTenantContext();
+    await assertModuleWrite('inventory');
+    await assertPermission('inventory.transfers.write', 'write');
     await assertDimensionScope({ locationId: fromLocationId });
+    await assertDimensionScope({ locationId: toLocationId });
     const result = await withTenantContext(user.tenantId, async () => {
+      return db().transaction(async () => {
+      await requireTenantLocation(user.tenantId, fromLocationId);
+      await requireTenantLocation(user.tenantId, toLocationId);
+      await lockLocationsForUpdate(user.tenantId, [fromLocationId, toLocationId]);
       for (const line of lines) {
         const [product] = await db()
           .select()
@@ -1841,6 +1924,11 @@ export async function createStockTransfer(input: {
           throw new Error('Only physical or rental products can be transferred.');
         }
       }
+      await lockTransferStock(
+        user.tenantId,
+        lines.map((l) => l.productId),
+        [fromLocationId, toLocationId],
+      );
 
       const compact = docDate.replace(/-/g, '');
       const [{ total }] = await db()
@@ -1936,6 +2024,7 @@ export async function createStockTransfer(input: {
       });
 
       return { id: doc.id, documentNumber };
+      });
     });
 
     revalidateInventory();

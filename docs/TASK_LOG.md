@@ -1,3 +1,9 @@
+## 2026-10-14 — QA campaign atomicity, auth, restore pair (v2.5.5)
+
+- Record: [CHG-20261014-qa-campaign-atomicity-auth](changes/CHG-20261014-qa-campaign-atomicity-auth.md). QA [HANDOFF-20261014-full-campaign-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261014-full-campaign-findings.md) BUG-0022–0030 (BUG-0021 already in v2.5.4).
+- Concurrent AR payments lock the document and re-read balance. Payment idempotency treats `{ok, paidCount}` as complete and writes failure payloads. Viewer cannot collect/refund hire money or transfer stock. Deposit and transfer writes are one transaction. Files pack compares `dataSha256` when both sides have it. Restore refuses empty journals and posted AR/AP without a transaction.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.5 · <sha7>` and reruns the unified campaign. Restore A→empty-B remains unverified.
+
 ## 2026-10-14 — Archive backup owner-only + restore integrity (v2.5.4)
 
 - Record: [CHG-20261014-archive-backup-owner-integrity](changes/CHG-20261014-archive-backup-owner-integrity.md). QA [HANDOFF-20261014-backup-plan](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261014-backup-plan.md) BUG-0021 / S-0764.

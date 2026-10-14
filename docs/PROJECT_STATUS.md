@@ -1,3 +1,7 @@
+## 2026-10-14 — QA campaign atomicity, auth, restore pair (v2.5.5)
+
+Unified QA campaign (bookone-qa PR #15) on v2.5.3: 242 passed, 13 failed, 4 skipped; original 60 source + 49 DB still green. Nine new defect groups. Product now serializes AR payments, completes payment idempotency without `id`, denies Viewer rental-money and stock-transfer writes, rolls back failed deposit/transfer, pairs files packs on `dataSha256` when present, and refuses empty journals / posted AR without a transaction. See [CHG-20261014-qa-campaign-atomicity-auth](changes/CHG-20261014-qa-campaign-atomicity-auth.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.5 · <sha7>`. Restore remains unverified. Full coverage still unfinished (137 workflows; 57 partial, 80 none).
+
 ## 2026-10-14 — Archive backup owner-only + restore integrity (v2.5.4)
 
 QA HANDOFF-20261014-backup-plan on v2.5.3: 60 source + 49 PostgreSQL pass; archive helpers 15/1 fail (BUG-0021 Admin resolver). Privileged backup keys now skip RBAC-off full-access. Restore enforces stock/layers and AR/AP vs documents and refuses to complete an invalid files pack. Legacy v2.4.0 pairing is exportId-only. See [CHG-20261014-archive-backup-owner-integrity](changes/CHG-20261014-archive-backup-owner-integrity.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.4 · <sha7>`. Restore remains unverified.

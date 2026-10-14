@@ -57,51 +57,47 @@ async function openLayers(tenantId: string, productId: string, locationId: strin
 
 /** If this SKU has stock but no open lots (legacy rows), seed one lot per location at current master cost. */
 export async function seedLotsFromOnHand(tenantId: string, productId: string, date: string): Promise<void> {
-  try {
-    const [open] = await db()
-      .select({ qty: sql<string>`coalesce(sum(${inventoryCostLayers.qtyRemaining}::numeric), 0)` })
-      .from(inventoryCostLayers)
-      .where(
-        and(
-          eq(inventoryCostLayers.tenantId, tenantId),
-          eq(inventoryCostLayers.productId, productId),
-          isNull(inventoryCostLayers.voidedAt),
-        ),
-      );
-    if (Number(open?.qty ?? 0) > 0.0001) return;
+  const [open] = await db()
+    .select({ qty: sql<string>`coalesce(sum(${inventoryCostLayers.qtyRemaining}::numeric), 0)` })
+    .from(inventoryCostLayers)
+    .where(
+      and(
+        eq(inventoryCostLayers.tenantId, tenantId),
+        eq(inventoryCostLayers.productId, productId),
+        isNull(inventoryCostLayers.voidedAt),
+      ),
+    );
+  if (Number(open?.qty ?? 0) > 0.0001) return;
 
-    const [prod] = await db()
-      .select({ unitCost: inventoryProducts.unitCost })
-      .from(inventoryProducts)
-      .where(eq(inventoryProducts.id, productId))
-      .limit(1);
-    const unitCost = round2(Number(prod?.unitCost ?? 0));
+  const [prod] = await db()
+    .select({ unitCost: inventoryProducts.unitCost })
+    .from(inventoryProducts)
+    .where(eq(inventoryProducts.id, productId))
+    .limit(1);
+  const unitCost = round2(Number(prod?.unitCost ?? 0));
 
-    const levels = await db()
-      .select({
-        locationId: inventoryStockLevels.locationId,
-        qty: inventoryStockLevels.qtyOnHand,
-      })
-      .from(inventoryStockLevels)
-      .where(and(eq(inventoryStockLevels.tenantId, tenantId), eq(inventoryStockLevels.productId, productId)));
+  const levels = await db()
+    .select({
+      locationId: inventoryStockLevels.locationId,
+      qty: inventoryStockLevels.qtyOnHand,
+    })
+    .from(inventoryStockLevels)
+    .where(and(eq(inventoryStockLevels.tenantId, tenantId), eq(inventoryStockLevels.productId, productId)));
 
-    for (const row of levels) {
-      const qty = round4(Number(row.qty ?? 0));
-      if (qty <= 0.0001) continue;
-      await db().insert(inventoryCostLayers).values({
-        tenantId,
-        productId,
-        locationId: row.locationId ?? null,
-        qtyReceived: qty.toFixed(4),
-        qtyRemaining: qty.toFixed(4),
-        unitCost: unitCost.toFixed(2),
-        receivedOn: date,
-        sourceType: 'opening_seed',
-        sourceId: null,
-      });
-    }
-  } catch {
-    /* table may not exist until migration 034 */
+  for (const row of levels) {
+    const qty = round4(Number(row.qty ?? 0));
+    if (qty <= 0.0001) continue;
+    await db().insert(inventoryCostLayers).values({
+      tenantId,
+      productId,
+      locationId: row.locationId ?? null,
+      qtyReceived: qty.toFixed(4),
+      qtyRemaining: qty.toFixed(4),
+      unitCost: unitCost.toFixed(2),
+      receivedOn: date,
+      sourceType: 'opening_seed',
+      sourceId: null,
+    });
   }
 }
 
@@ -117,21 +113,17 @@ export async function receiveCostLayer(opts: {
 }): Promise<void> {
   const qty = round4(opts.qty);
   if (qty <= 0.0001) return;
-  try {
-    await db().insert(inventoryCostLayers).values({
-      tenantId: opts.tenantId,
-      productId: opts.productId,
-      locationId: opts.locationId,
-      qtyReceived: qty.toFixed(4),
-      qtyRemaining: qty.toFixed(4),
-      unitCost: round2(Math.max(0, opts.unitCost)).toFixed(2),
-      receivedOn: opts.date,
-      sourceType: opts.sourceType,
-      sourceId: opts.sourceId,
-    });
-  } catch {
-    /* 034 not applied */
-  }
+  await db().insert(inventoryCostLayers).values({
+    tenantId: opts.tenantId,
+    productId: opts.productId,
+    locationId: opts.locationId,
+    qtyReceived: qty.toFixed(4),
+    qtyRemaining: qty.toFixed(4),
+    unitCost: round2(Math.max(0, opts.unitCost)).toFixed(2),
+    receivedOn: opts.date,
+    sourceType: opts.sourceType,
+    sourceId: opts.sourceId,
+  });
 }
 
 export async function consumeCostLayers(opts: {
@@ -148,65 +140,56 @@ export async function consumeCostLayers(opts: {
   const need = round4(opts.qty);
   if (need <= 0.0001) return { unitCost: 0, totalCost: 0, slices: [] };
 
-  try {
-    await seedLotsFromOnHand(opts.tenantId, opts.productId, opts.date);
+  await seedLotsFromOnHand(opts.tenantId, opts.productId, opts.date);
 
-    const slices: LotSlice[] = [];
-    let left = need;
-    const queues = [opts.locationId];
-    if (opts.locationId) queues.push(null);
+  const slices: LotSlice[] = [];
+  let left = need;
+  const queues = [opts.locationId];
+  if (opts.locationId) queues.push(null);
 
-    for (const loc of queues) {
+  for (const loc of queues) {
+    if (left <= 0.0001) break;
+    const layers = await openLayers(opts.tenantId, opts.productId, loc);
+    for (const layer of layers) {
       if (left <= 0.0001) break;
-      const layers = await openLayers(opts.tenantId, opts.productId, loc);
-      for (const layer of layers) {
-        if (left <= 0.0001) break;
-        const avail = round4(Number(layer.qtyRemaining));
-        if (avail <= 0.0001) continue;
-        const take = round4(Math.min(avail, left));
-        const cost = round2(Number(layer.unitCost));
-        await db()
-          .update(inventoryCostLayers)
-          .set({ qtyRemaining: (avail - take).toFixed(4), updatedAt: new Date() })
-          .where(eq(inventoryCostLayers.id, layer.id));
-        await db().insert(inventoryCostLayerConsumptions).values({
-          tenantId: opts.tenantId,
-          layerId: layer.id,
-          productId: opts.productId,
-          qty: take.toFixed(4),
-          unitCost: cost.toFixed(2),
-          sourceType: opts.sourceType,
-          sourceId: opts.sourceId,
-        });
-        slices.push({ layerId: layer.id, qty: take, unitCost: cost });
-        left = round4(left - take);
-      }
-    }
-
-    if (left > 0.0001) {
-      if (opts.blockNegative) {
-        throw new Error(
-          `Insufficient stock lots for this product (need ${need}, short ${left}). Receive the goods first or allow negative stock.`,
-        );
-      }
-      slices.push({
-        layerId: null,
-        qty: left,
-        unitCost: round2(Math.max(0, opts.fallbackUnitCost)),
+      const avail = round4(Number(layer.qtyRemaining));
+      if (avail <= 0.0001) continue;
+      const take = round4(Math.min(avail, left));
+      const cost = round2(Number(layer.unitCost));
+      await db()
+        .update(inventoryCostLayers)
+        .set({ qtyRemaining: (avail - take).toFixed(4), updatedAt: new Date() })
+        .where(eq(inventoryCostLayers.id, layer.id));
+      await db().insert(inventoryCostLayerConsumptions).values({
+        tenantId: opts.tenantId,
+        layerId: layer.id,
+        productId: opts.productId,
+        qty: take.toFixed(4),
+        unitCost: cost.toFixed(2),
+        sourceType: opts.sourceType,
+        sourceId: opts.sourceId,
       });
+      slices.push({ layerId: layer.id, qty: take, unitCost: cost });
+      left = round4(left - take);
     }
-
-    const totalCost = round2(slices.reduce((s, x) => s + x.qty * x.unitCost, 0));
-    const unitCost = need > 0 ? round2(totalCost / need) : 0;
-    return { unitCost, totalCost, slices };
-  } catch (e) {
-    if (opts.blockNegative && e instanceof Error && /Insufficient stock lots/.test(e.message)) throw e;
-    return {
-      unitCost: round2(Math.max(0, opts.fallbackUnitCost)),
-      totalCost: round2(need * Math.max(0, opts.fallbackUnitCost)),
-      slices: [{ layerId: null, qty: need, unitCost: round2(Math.max(0, opts.fallbackUnitCost)) }],
-    };
   }
+
+  if (left > 0.0001) {
+    if (opts.blockNegative) {
+      throw new Error(
+        `Insufficient stock lots for this product (need ${need}, short ${left}). Receive the goods first or allow negative stock.`,
+      );
+    }
+    slices.push({
+      layerId: null,
+      qty: left,
+      unitCost: round2(Math.max(0, opts.fallbackUnitCost)),
+    });
+  }
+
+  const totalCost = round2(slices.reduce((s, x) => s + x.qty * x.unitCost, 0));
+  const unitCost = need > 0 ? round2(totalCost / need) : 0;
+  return { unitCost, totalCost, slices };
 }
 
 export async function transferCostLayers(opts: {

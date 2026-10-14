@@ -246,6 +246,13 @@ describe('archive restore remap', () => {
         journal_lines: [{ id: debitId, journalEntryId: entryId, side: 'debit', amount: '100.00' }],
       }).ok,
     ).toBe(false);
+    expect(
+      journalsAreBalanced({
+        journal_entries: [{ id: entryId }],
+        journal_lines: [],
+      }).ok,
+    ).toBe(false);
+    expect(journalsAreBalanced({ journal_entries: [], journal_lines: [] }).ok).toBe(true);
   });
 
   it('insert order is every dump table except tenants', () => {
@@ -428,6 +435,24 @@ describe('archive files pack', () => {
         filesAlreadyApplied: false,
       }),
     ).toBe('legacy-export-id');
+    expect(() =>
+      assertFilesPackMatchesDataRestore({
+        packExportId: exportId,
+        packFilesSha256: 'aaa',
+        packDataSha256: 'wrong-data',
+        lastRestore: { exportId, filesSha256: 'aaa', dataSha256: 'right-data' },
+        filesAlreadyApplied: false,
+      }),
+    ).toThrow(/does not match/i);
+    expect(
+      assertFilesPackMatchesDataRestore({
+        packExportId: exportId,
+        packFilesSha256: 'aaa',
+        packDataSha256: 'right-data',
+        lastRestore: { exportId, filesSha256: 'aaa', dataSha256: 'right-data' },
+        filesAlreadyApplied: false,
+      }),
+    ).toBe('checksum');
   });
 
   it('refuses to mark a files pack complete when objects were invalid', async () => {
@@ -596,11 +621,13 @@ describe('archive schema transformers and golden restore', () => {
     const arId = '55555555-5555-5555-5555-555555555555';
     const cashId = '66666666-6666-6666-6666-666666666666';
     const entryId = '44444444-4444-4444-4444-444444444444';
+    const txId = '77777777-7777-7777-7777-777777777777';
     const posted = {
       accounts: [
         { id: arId, code: '1300', voidedAt: null },
         { id: cashId, code: '1000', voidedAt: null },
       ],
+      transactions: [{ id: txId, voidedAt: null }],
       journal_entries: [{ id: entryId }],
       journal_lines: [
         { journalEntryId: entryId, accountId: arId, side: 'debit', amount: '250.00', voidedAt: null },
@@ -614,6 +641,7 @@ describe('archive schema transformers and golden restore', () => {
           total: '250.00',
           paidAmount: '0.00',
           balanceDue: '250.00',
+          transactionId: txId,
           voidedAt: null,
         },
       ],
@@ -633,6 +661,29 @@ describe('archive schema transformers and golden restore', () => {
         journal_lines: [
           { journalEntryId: entryId, accountId: arId, side: 'debit', amount: '1.00', voidedAt: null },
           { journalEntryId: entryId, accountId: cashId, side: 'credit', amount: '1.00', voidedAt: null },
+        ],
+      }).ok,
+    ).toBe(false);
+    expect(
+      arApMatchesDocuments({
+        ...posted,
+        business_documents: [{ ...posted.business_documents[0], transactionId: null }],
+      }).ok,
+    ).toBe(false);
+    expect(
+      arApMatchesDocuments({
+        journal_entries: [{ id: entryId }],
+        journal_lines: [],
+        business_documents: [
+          {
+            documentType: 'sales_invoice',
+            postedAt: '2026-10-01T00:00:00.000Z',
+            status: 'open',
+            total: '600.00',
+            paidAmount: '0.00',
+            balanceDue: '600.00',
+            voidedAt: null,
+          },
         ],
       }).ok,
     ).toBe(false);

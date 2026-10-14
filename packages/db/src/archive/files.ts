@@ -86,8 +86,8 @@ export type FilesPackPairing = 'checksum' | 'legacy-export-id';
 /**
  * Pair a files pack to the last data restore.
  *
- * Current (v2.5+) data restores persist filesSha256. Those packs must match that
- * checksum (frozen pair contract).
+ * Current (v2.5+) data restores persist filesSha256 and dataSha256. Those packs
+ * must match filesSha256, and dataSha256 when both sides supply it.
  *
  * Legacy (v2.4.0) data restores omitted filesSha256 on the audit row. Those packs
  * may apply when exportId matches. That pairing is exportId-only and is not
@@ -96,7 +96,8 @@ export type FilesPackPairing = 'checksum' | 'legacy-export-id';
 export function assertFilesPackMatchesDataRestore(args: {
   packExportId: string;
   packFilesSha256: string;
-  lastRestore: { exportId: string; filesSha256?: string | null } | null;
+  packDataSha256?: string | null;
+  lastRestore: { exportId: string; filesSha256?: string | null; dataSha256?: string | null } | null;
   filesAlreadyApplied: boolean;
 }): FilesPackPairing {
   if (!args.lastRestore) {
@@ -107,6 +108,13 @@ export function assertFilesPackMatchesDataRestore(args: {
   }
   if (args.filesAlreadyApplied) {
     throw new Error('Attachments for this restore are already applied.');
+  }
+  const storedData = args.lastRestore.dataSha256;
+  const packData = args.packDataSha256;
+  if (typeof storedData === 'string' && storedData.length > 0 && typeof packData === 'string' && packData.length > 0) {
+    if (storedData !== packData) {
+      throw new Error('This attachments pack does not match the restored company data.');
+    }
   }
   const stored = args.lastRestore.filesSha256;
   if (typeof stored === 'string' && stored.length > 0) {

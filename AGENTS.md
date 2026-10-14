@@ -336,3 +336,11 @@ mcp_codebase-memo_get_architecture({ "project": "<display_name>" })
 - `search_code(pattern, project)` — Grep-like text search within indexed files
 - `manage_adr(action)` — CRUD for Architecture Decision Records
 - `ingest_traces(traces)` — Ingest runtime traces to validate HTTP edges
+
+## Canonical business rulebook (2026-10-14)
+
+The single maintained intended-behaviour reference is https://github.com/Dinu-Sri/bookone-qa/blob/main/docs/rulebook/README.md; readable rules are RULES.md in that directory and the structured source is rules/rulebook.json. QA companion PR: https://github.com/Dinu-Sri/bookone-qa/pull/16.
+
+Before coding, identify applicable stable rule IDs/revisions and rulebook version/Git SHA/JSON hash in the CHG record. Applicable Sri Lankan law and the eligible accounting framework take precedence; current implementation is descriptive evidence, not its own expected result. Initial professional product defaults were delegated by the owner and remain independently expert-pending. Read RF-01–10 in the QA review queue for unresolved applicability and conflicting contracts.
+
+Do not copy a second editable rulebook here, silently change adopted rules/settings or rewrite old assertions/results to match code. Material policy changes use the QA RULE_CHANGE template, responsible rule-owner review, independent worked examples, effective dates and compatibility/migration assessment. New-company defaults do not silently change existing companies or issued facts. Tests and full current-build acceptance remain independent from documentation or code review.

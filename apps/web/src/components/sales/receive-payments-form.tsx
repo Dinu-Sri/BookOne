@@ -8,7 +8,7 @@ import type { OpenArInvoice } from '@/app/actions/commercial-docs';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
-import { emitFormPending } from '@/components/ui/form-busy';
+import { withFormPending } from '@/components/ui/form-busy';
 
 export function ReceivePaymentsForm({
   invoices,
@@ -73,9 +73,8 @@ export function ReceivePaymentsForm({
     }
 
     const idempotencyKey = crypto.randomUUID();
-    emitFormPending(true);
-    startTransition(async () => {
-      try {
+    startTransition(() => {
+      void withFormPending(async () => {
         const res = await receiveCustomerPayments({
           paymentDate,
           paymentAccountCode: accountCode,
@@ -101,9 +100,7 @@ export function ReceivePaymentsForm({
         }
         router.push(`/sales/payments/receipt?${params.toString()}`);
         router.refresh();
-      } finally {
-        emitFormPending(false);
-      }
+      });
     });
   }
 

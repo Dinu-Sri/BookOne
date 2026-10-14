@@ -2,6 +2,8 @@
 
 Read root AGENTS.md, docs/VERSIONING.md and docs/QA_CHANGE_CONTRACT.md first. Maintain a docs/changes record, TASK_LOG and PROJECT_STATUS. **Before every product commit, bump repo-root `VERSION` (`pnpm version:bump -- patch|minor|major`) and include it in the commit.** Canonical tests and QA history: https://github.com/Dinu-Sri/bookone-qa. The root instructions govern conflicts with older testing guidance.
 
+Client writes that should show **Working… please wait** must use `withFormPending` (or shared `Button type="submit"` on a server-action form). Do not add a document `submit` listener. See AGENTS.md **Form busy overlay**.
+
 ## Codebase Memory MCP
 
 **MANDATORY: use Codebase Memory MCP graph tools FIRST — before reading files or making code changes.**

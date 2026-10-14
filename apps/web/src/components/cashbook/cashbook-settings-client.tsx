@@ -18,6 +18,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
+import { withFormPending } from '@/components/ui/form-busy';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
 import {
   archiveCashbookBank,
@@ -157,19 +158,21 @@ export function CashbookSettingsClient({
   function run(
     fn: () => Promise<{ ok: true; homePath: string; message: string } | { ok: false; error: string }>,
   ) {
-    start(async () => {
-      setError('');
-      setInfo('');
-      const res = await fn();
-      if (!res.ok) {
-        setError(res.error);
+    start(() => {
+      void withFormPending(async () => {
+        setError('');
+        setInfo('');
+        const res = await fn();
+        if (!res.ok) {
+          setError(res.error);
+          setConfirm(null);
+          return;
+        }
+        setInfo(res.message);
         setConfirm(null);
-        return;
-      }
-      setInfo(res.message);
-      setConfirm(null);
-      router.push(res.homePath);
-      router.refresh();
+        router.push(res.homePath);
+        router.refresh();
+      });
     });
   }
 

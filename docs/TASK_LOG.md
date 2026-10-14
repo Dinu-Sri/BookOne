@@ -1,3 +1,9 @@
+## 2026-10-14 — Form overlay A–Z audit (v2.5.3)
+
+- Record: [CHG-20261014-form-busy-overlay-audit](changes/CHG-20261014-form-busy-overlay-audit.md).
+- Removed document `submit` capture (root cause of stuck overlay on filters and raw buttons). Added `withFormPending`. Wrapped remaining client writes. AGENTS.md rule for new forms.
+- Next: Docker web image green, Portainer Update Re-pull ON, confirm `v2.5.3 · <sha7>`.
+
 ## 2026-10-14 — Stuck “Working… please wait” overlay (v2.5.2)
 
 - Record: [CHG-20261014-form-busy-overlay-stuck](changes/CHG-20261014-form-busy-overlay-stuck.md).

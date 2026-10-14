@@ -1,3 +1,7 @@
+## 2026-10-14 — Form overlay audit (v2.5.3)
+
+Document `submit` capture removed. Client writes use `withFormPending`. AGENTS.md **Form busy overlay** is mandatory for new forms. See [CHG-20261014-form-busy-overlay-audit](changes/CHG-20261014-form-busy-overlay-audit.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.3 · <sha7>`.
+
 ## 2026-10-14 — Stuck form overlay (v2.5.2)
 
 “Working… please wait” stayed up after backup, reverse, and sometimes login. Client pending never cleared. See [CHG-20261014-form-busy-overlay-stuck](changes/CHG-20261014-form-busy-overlay-stuck.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.5.2 · <sha7>`.

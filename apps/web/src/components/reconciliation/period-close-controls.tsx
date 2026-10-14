@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { LockKeyhole, Loader2, ShieldCheck } from 'lucide-react';
 import { lockPeriod, type PeriodLockInfo, type ReconciliationImportSummary } from '@/app/actions/reconciliation';
 import { Badge, Button, Card } from '@/components/ui/bookone-ui';
+import { withFormPending } from '@/components/ui/form-busy';
 
 export function PeriodCloseControls({
   period,
@@ -23,7 +24,8 @@ export function PeriodCloseControls({
   function handleLock() {
     setError(null);
     startTransition(() => {
-      lockPeriod(period).then((result) => {
+      void withFormPending(async () => {
+        const result = await lockPeriod(period);
         if (!result.ok) {
           setError(result.error ?? 'Could not lock this period.');
           return;

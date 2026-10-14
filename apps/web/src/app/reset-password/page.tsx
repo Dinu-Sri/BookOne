@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createAuthClient } from 'better-auth/react';
 import { LockKeyhole } from 'lucide-react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
+import { withFormPending } from '@/components/ui/form-busy';
 
 const authClient = createAuthClient();
 
@@ -42,13 +43,15 @@ function ResetPasswordContent() {
 
     setLoading(true);
     try {
-      const result = await authClient.resetPassword({ token, newPassword: password });
-      if (result.error) {
-        setError(result.error.message ?? 'Could not reset password.');
-        return;
-      }
-      setMessage('Password updated. Redirecting to sign in...');
-      window.setTimeout(() => router.push('/login'), 800);
+      await withFormPending(async () => {
+        const result = await authClient.resetPassword({ token, newPassword: password });
+        if (result.error) {
+          setError(result.error.message ?? 'Could not reset password.');
+          return;
+        }
+        setMessage('Password updated. Redirecting to sign in...');
+        window.setTimeout(() => router.push('/login'), 800);
+      });
     } finally {
       setLoading(false);
     }

@@ -15,6 +15,7 @@ import { pushStatusToast } from '@/components/layout/status-toast';
 import { MODULE_CATALOG, MODULE_KEYS, modulesForPlan, type ModuleKey } from '@/lib/platform-modules';
 import { StatusBadge } from '@/components/module/list-page';
 import { Button } from '@/components/ui/bookone-ui';
+import { withFormPending } from '@/components/ui/form-busy';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const CREATE_TABS = [
@@ -121,29 +122,31 @@ export function CompanyCreateForm() {
       <form
         className="party-form-body"
         action={(fd) => {
-          startTransition(async () => {
-            try {
-              fd.set('module_touch', '1');
-              for (const key of MODULE_KEYS) {
-                if (modules[key]) fd.set(`module_${key}`, 'on');
-                else fd.delete(`module_${key}`);
+          startTransition(() => {
+            void withFormPending(async () => {
+              try {
+                fd.set('module_touch', '1');
+                for (const key of MODULE_KEYS) {
+                  if (modules[key]) fd.set(`module_${key}`, 'on');
+                  else fd.delete(`module_${key}`);
+                }
+                await createPlatformCompanyFromForm(fd);
+              } catch (e) {
+                // redirect() throws; let Next.js handle navigation
+                if (
+                  e &&
+                  typeof e === 'object' &&
+                  'digest' in e &&
+                  String((e as { digest?: string }).digest).startsWith('NEXT_REDIRECT')
+                ) {
+                  throw e;
+                }
+                pushStatusToast({
+                  kind: 'error',
+                  message: e instanceof Error ? e.message : 'Could not create company',
+                });
               }
-              await createPlatformCompanyFromForm(fd);
-            } catch (e) {
-              // redirect() throws; let Next.js handle navigation
-              if (
-                e &&
-                typeof e === 'object' &&
-                'digest' in e &&
-                String((e as { digest?: string }).digest).startsWith('NEXT_REDIRECT')
-              ) {
-                throw e;
-              }
-              pushStatusToast({
-                kind: 'error',
-                message: e instanceof Error ? e.message : 'Could not create company',
-              });
-            }
+            });
           });
         }}
       >
@@ -333,22 +336,24 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
         onSubmit={(e: FormEvent<HTMLFormElement>) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
-          startTransition(async () => {
-            try {
-              fd.set('id', company.id);
-              fd.set('module_touch', '1');
-              for (const key of MODULE_KEYS) {
-                if (modules[key]) fd.set(`module_${key}`, 'on');
-                else fd.delete(`module_${key}`);
+          startTransition(() => {
+            void withFormPending(async () => {
+              try {
+                fd.set('id', company.id);
+                fd.set('module_touch', '1');
+                for (const key of MODULE_KEYS) {
+                  if (modules[key]) fd.set(`module_${key}`, 'on');
+                  else fd.delete(`module_${key}`);
+                }
+                await updatePlatformCompanyFromForm(fd);
+                pushStatusToast({ kind: 'success', message: 'Company saved' });
+              } catch (err) {
+                pushStatusToast({
+                  kind: 'error',
+                  message: err instanceof Error ? err.message : 'Save failed',
+                });
               }
-              await updatePlatformCompanyFromForm(fd);
-              pushStatusToast({ kind: 'success', message: 'Company saved' });
-            } catch (err) {
-              pushStatusToast({
-                kind: 'error',
-                message: err instanceof Error ? err.message : 'Save failed',
-              });
-            }
+            });
           });
         }}
         onReset={(e) => e.preventDefault()}
@@ -406,19 +411,21 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
                   fd.set('id', company.id);
                   fd.set('entityKind', entityKind);
                   fd.set('capabilityTier', capabilityTier);
-                  startTransition(async () => {
-                    try {
-                      await adminSetTenantEntityTierFromForm(fd);
-                      pushStatusToast({
-                        kind: 'success',
-                        message: `Entity tier updated → ${entityKindLabel(entityKind, capabilityTier)}`,
-                      });
-                    } catch (e) {
-                      pushStatusToast({
-                        kind: 'error',
-                        message: e instanceof Error ? e.message : 'Entity update failed',
-                      });
-                    }
+                  startTransition(() => {
+                    void withFormPending(async () => {
+                      try {
+                        await adminSetTenantEntityTierFromForm(fd);
+                        pushStatusToast({
+                          kind: 'success',
+                          message: `Entity tier updated → ${entityKindLabel(entityKind, capabilityTier)}`,
+                        });
+                      } catch (e) {
+                        pushStatusToast({
+                          kind: 'error',
+                          message: e instanceof Error ? e.message : 'Entity update failed',
+                        });
+                      }
+                    });
                   });
                 }}
               >
@@ -484,17 +491,19 @@ export function CompanyEditForm({ company }: { company: PlatformCompanyDetail })
                 onClick={() => {
                   const fd = new FormData();
                   fd.set('id', company.id);
-                  startTransition(async () => {
-                    try {
-                      await applyPlanModulesFromForm(fd);
-                      setModules(modulesForPlan(plan));
-                      pushStatusToast({ kind: 'success', message: 'Modules reset to plan defaults' });
-                    } catch (e) {
-                      pushStatusToast({
-                        kind: 'error',
-                        message: e instanceof Error ? e.message : 'Reset failed',
-                      });
-                    }
+                  startTransition(() => {
+                    void withFormPending(async () => {
+                      try {
+                        await applyPlanModulesFromForm(fd);
+                        setModules(modulesForPlan(plan));
+                        pushStatusToast({ kind: 'success', message: 'Modules reset to plan defaults' });
+                      } catch (e) {
+                        pushStatusToast({
+                          kind: 'error',
+                          message: e instanceof Error ? e.message : 'Reset failed',
+                        });
+                      }
+                    });
                   });
                 }}
               >

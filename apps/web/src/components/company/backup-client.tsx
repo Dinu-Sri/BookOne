@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/bookone-ui';
-import { emitFormPending } from '@/components/ui/form-busy';
+import { withFormPending } from '@/components/ui/form-busy';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import type { PreparedArchiveMeta } from '@/lib/tenant-archive-types';
 
@@ -22,30 +22,30 @@ export function BackupClient({ initialMeta }: { initialMeta: PreparedArchiveMeta
     e.preventDefault();
     if (busy) return;
     setBusy(true);
-    emitFormPending(true);
     try {
-      const res = await fetch('/api/company/backup/prepare', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ password, confirm }),
-      });
-      const json = (await res.json()) as { ok?: boolean; error?: string; meta?: PreparedArchiveMeta };
-      if (!res.ok || !json.ok || !json.meta) {
-        pushStatusToast({ kind: 'error', message: json.error ?? 'Could not create the backup.' });
-        return;
-      }
-      setMeta(json.meta);
-      setPassword('');
-      setConfirm('');
-      pushStatusToast({
-        kind: 'success',
-        message: 'Backup ready. Download both files and keep the password.',
+      await withFormPending(async () => {
+        const res = await fetch('/api/company/backup/prepare', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ password, confirm }),
+        });
+        const json = (await res.json()) as { ok?: boolean; error?: string; meta?: PreparedArchiveMeta };
+        if (!res.ok || !json.ok || !json.meta) {
+          pushStatusToast({ kind: 'error', message: json.error ?? 'Could not create the backup.' });
+          return;
+        }
+        setMeta(json.meta);
+        setPassword('');
+        setConfirm('');
+        pushStatusToast({
+          kind: 'success',
+          message: 'Backup ready. Download both files and keep the password.',
+        });
       });
     } catch {
       pushStatusToast({ kind: 'error', message: 'Could not create the backup.' });
     } finally {
-      emitFormPending(false);
       setBusy(false);
     }
   }
@@ -127,32 +127,32 @@ export function RestoreClient({ restoreEnabled }: { restoreEnabled: boolean }) {
       return;
     }
     setRestoreBusy(true);
-    emitFormPending(true);
     try {
-      const body = new FormData();
-      body.set('file', chosen);
-      body.set('password', restorePassword);
-      const res = await fetch('/api/company/backup/restore', {
-        method: 'POST',
-        credentials: 'same-origin',
-        body,
+      await withFormPending(async () => {
+        const body = new FormData();
+        body.set('file', chosen);
+        body.set('password', restorePassword);
+        const res = await fetch('/api/company/backup/restore', {
+          method: 'POST',
+          credentials: 'same-origin',
+          body,
+        });
+        const json = (await res.json()) as { ok?: boolean; error?: string; exportId?: string };
+        if (!res.ok || !json.ok) {
+          pushStatusToast({ kind: 'error', message: json.error ?? 'Could not restore this backup.' });
+          return;
+        }
+        setRestorePassword('');
+        form.reset();
+        pushStatusToast({
+          kind: 'success',
+          message: 'Company data restored. Upload the matching attachments pack later if you have it.',
+        });
+        window.location.reload();
       });
-      const json = (await res.json()) as { ok?: boolean; error?: string; exportId?: string };
-      if (!res.ok || !json.ok) {
-        pushStatusToast({ kind: 'error', message: json.error ?? 'Could not restore this backup.' });
-        return;
-      }
-      setRestorePassword('');
-      form.reset();
-      pushStatusToast({
-        kind: 'success',
-        message: 'Company data restored. Upload the matching attachments pack later if you have it.',
-      });
-      window.location.reload();
     } catch {
       pushStatusToast({ kind: 'error', message: 'Could not restore this backup.' });
     } finally {
-      emitFormPending(false);
       setRestoreBusy(false);
     }
   }
@@ -231,8 +231,8 @@ export function FilesRestoreClient({
     }
     setBusy(true);
     setProgress('Uploading…');
-    emitFormPending(true);
     try {
+      await withFormPending(async () => {
       let json: {
         ok?: boolean;
         error?: string;
@@ -316,10 +316,10 @@ export function FilesRestoreClient({
         message: `Attachments restored (${applied} copied${skipped ? `, ${skipped} already present` : ''}).`,
       });
       window.location.reload();
+      });
     } catch {
       pushStatusToast({ kind: 'error', message: 'Could not restore this backup.' });
     } finally {
-      emitFormPending(false);
       setBusy(false);
       setProgress('');
     }

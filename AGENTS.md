@@ -38,6 +38,24 @@ A prior pass never certifies a new build. Record product/QA revisions, schema/co
 
 ---
 
+## Form busy overlay (mandatory)
+
+`FormBusyGuard` in the root layout shows **Working… please wait** after 1.5s. It clears on `emitFormPending(false)`, route change, submit-button unmount, or 45s.
+
+**Do not add a document `submit` capture listener.** That is how the overlay got stuck after backup, reverse, login, and GET filters (same pathname, query only).
+
+When adding a submit or long client write:
+
+| Kind | Required |
+|------|----------|
+| `<form action={serverAction}>` | Shared `Button type="submit"` from `bookone-ui` (`useFormStatus` emits pending). |
+| `preventDefault` + `fetch` / Better Auth / `startTransition` write | `await withFormPending(async () => { ... })` from `@/components/ui/form-busy`. Always clears in `finally`. |
+| Search, GET filters, Cancel, `type="button"` | Do not emit pending. |
+
+Never call `emitFormPending(true)` without a matching `false` in `finally`. Prefer `withFormPending`. POS / rental / recon / import wizards may keep a local spinner; if they should show the global overlay, wrap with `withFormPending`.
+
+---
+
 ## Release versioning (MANDATORY before every commit)
 
 Full contract: **[docs/VERSIONING.md](docs/VERSIONING.md)**. Read it. Follow it. Do not invent a second scheme.

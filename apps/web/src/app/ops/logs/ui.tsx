@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { withFormPending } from '@/components/ui/form-busy';
 import { unlockOpsLogs } from './actions';
 
 export function OpsLogGate() {
@@ -9,9 +10,11 @@ export function OpsLogGate() {
     <form
       className="ops-log-gate"
       action={async (fd) => {
-        const res = await unlockOpsLogs(fd);
-        if (!res.ok) setError(res.error);
-        else window.location.reload();
+        await withFormPending(async () => {
+          const res = await unlockOpsLogs(fd);
+          if (!res.ok) setError(res.error);
+          else window.location.reload();
+        });
       }}
     >
       <h1>Ops log</h1>

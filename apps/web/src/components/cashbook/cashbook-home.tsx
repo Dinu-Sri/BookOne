@@ -30,7 +30,7 @@ import { listLiquidAccounts, type LiquidAccount } from '@/app/actions/cashbook-b
 import { CashbookShell } from '@/components/cashbook/cashbook-shell';
 import { PeriodSelector } from '@/components/layout/period-selector';
 import { DateField } from '@/components/ui/date-field';
-import { emitFormPending } from '@/components/ui/form-busy';
+import { withFormPending } from '@/components/ui/form-busy';
 import { gloss, readSiGlossPreference } from '@/lib/si-gloss';
 import { readBookDomainPref, writeBookDomainPref, type BookDomainPref } from '@/lib/book-domain';
 import { canAccessFullErp, type EntityKind } from '@/lib/entity-kind';
@@ -373,9 +373,9 @@ export function CashbookHomeClient({
     }
 
     startTransition(async () => {
-      emitFormPending(true);
       setError('');
       try {
+      await withFormPending(async () => {
       // Edit = reverse original then re-post (keeps double-entry integrity)
       if (editingId) {
         const rev = await reverseTransactionById(editingId);
@@ -594,8 +594,9 @@ export function CashbookHomeClient({
       setMode(null);
       setEditingId(null);
       setSavedFlash(true);
-      } finally {
-        emitFormPending(false);
+      });
+      } catch {
+        setError(si ? 'සුරැකීම අසාර්ථකයි.' : 'Could not save');
       }
     });
   }

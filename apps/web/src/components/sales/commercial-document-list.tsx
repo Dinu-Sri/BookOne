@@ -387,9 +387,9 @@ export function CommercialDocumentList({
         <form key="convert" action={convertDocumentAction}>
           <input type="hidden" name="sourceId" value={row.id} />
           <input type="hidden" name="targetType" value={config.convertTo} />
-          <button type="submit" className="doc-action-item" role="menuitem">
+          <Button variant="ghost" type="submit" className="doc-action-item" role="menuitem">
             {config.convertLabel ?? 'Convert'}
-          </button>
+          </Button>
         </form>,
       );
     }

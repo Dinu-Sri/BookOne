@@ -12,6 +12,16 @@ export function emitFormPending(pending: boolean) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: pending }));
 }
 
+/** Pair pending on/off around client fetch / startTransition work. Prefer this over emitFormPending. */
+export async function withFormPending<T>(work: () => Promise<T>): Promise<T> {
+  emitFormPending(true);
+  try {
+    return await work();
+  } finally {
+    emitFormPending(false);
+  }
+}
+
 export function FormBusyGuard() {
   const pathname = usePathname();
   const [pending, setPending] = useState(false);
@@ -66,18 +76,9 @@ export function FormBusyGuard() {
       }
     }
 
-    function onSubmit(e: Event) {
-      queueMicrotask(() => {
-        if (e.defaultPrevented) return;
-        onPending(new CustomEvent(EVENT, { detail: true }));
-      });
-    }
-
     window.addEventListener(EVENT, onPending);
-    document.addEventListener('submit', onSubmit, true);
     return () => {
       window.removeEventListener(EVENT, onPending);
-      document.removeEventListener('submit', onSubmit, true);
       clearTimers();
     };
   }, []);

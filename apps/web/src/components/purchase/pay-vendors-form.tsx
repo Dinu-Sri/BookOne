@@ -8,6 +8,7 @@ import type { OpenApBill } from '@/app/actions/commercial-docs';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { withFormPending } from '@/components/ui/form-busy';
 
 export function PayVendorsForm({
   bills,
@@ -77,31 +78,33 @@ export function PayVendorsForm({
       return;
     }
 
-    startTransition(async () => {
-      const res = await payVendorBills({
-        paymentDate,
-        paymentAccountCode: accountCode,
-        allocations,
+    startTransition(() => {
+      void withFormPending(async () => {
+        const res = await payVendorBills({
+          paymentDate,
+          paymentAccountCode: accountCode,
+          allocations,
+        });
+        if (!res.ok) {
+          pushStatusToast({ kind: 'error', message: res.error ?? 'Payment failed' });
+          return;
+        }
+        pushStatusToast({
+          kind: 'success',
+          message: `Paid ${res.paidCount} bill${res.paidCount === 1 ? '' : 's'} · LKR ${totalPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        });
+        const params = new URLSearchParams({
+          date: paymentDate,
+          account: accountCode,
+          total: String(totalPay),
+        });
+        for (const a of allocations) {
+          params.append('doc', a.documentId);
+          params.append('amt', String(a.amount));
+        }
+        router.push(`/purchase/payments/remittance?${params.toString()}`);
+        router.refresh();
       });
-      if (!res.ok) {
-        pushStatusToast({ kind: 'error', message: res.error ?? 'Payment failed' });
-        return;
-      }
-      pushStatusToast({
-        kind: 'success',
-        message: `Paid ${res.paidCount} bill${res.paidCount === 1 ? '' : 's'} · LKR ${totalPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-      });
-      const params = new URLSearchParams({
-        date: paymentDate,
-        account: accountCode,
-        total: String(totalPay),
-      });
-      for (const a of allocations) {
-        params.append('doc', a.documentId);
-        params.append('amt', String(a.amount));
-      }
-      router.push(`/purchase/payments/remittance?${params.toString()}`);
-      router.refresh();
     });
   }
 

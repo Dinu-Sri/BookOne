@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { BrandLockup } from '@/components/ui/bookone-ui';
+import { withFormPending } from '@/components/ui/form-busy';
 import { GlossLabel } from '@/components/ui/gloss-label';
 import { SiToggle } from '@/components/ui/si-toggle';
 import { completeEntityOnboarding } from '@/app/actions/entity-onboarding';
@@ -33,17 +34,19 @@ export function OnboardingClient() {
       setError('Choose one option to continue.');
       return;
     }
-    startTransition(async () => {
-      const res = await completeEntityOnboarding({
-        entityKind: bucket,
-        capabilityTier: bucket === 'sole_prop' ? soleTier : undefined,
+    startTransition(() => {
+      void withFormPending(async () => {
+        const res = await completeEntityOnboarding({
+          entityKind: bucket,
+          capabilityTier: bucket === 'sole_prop' ? soleTier : undefined,
+        });
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        router.push(res.homePath);
+        router.refresh();
       });
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      router.push(res.homePath);
-      router.refresh();
     });
   }
 

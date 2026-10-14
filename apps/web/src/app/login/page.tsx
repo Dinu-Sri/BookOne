@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createAuthClient } from 'better-auth/react';
 import { Eye, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
-import { emitFormPending } from '@/components/ui/form-busy';
+import { withFormPending } from '@/components/ui/form-busy';
 import { migrateLegacyLogin } from '@/app/actions/legacy-auth';
 import { bookoneVersionLabel } from '@/lib/build-id';
 
@@ -48,62 +48,61 @@ function LoginContent() {
     setError('');
     setMessage('');
     setLoading(true);
-    emitFormPending(true);
-
     try {
-      if (mode === 'signin') {
-        const result = await authClient.signIn.email({
-          email,
-          password,
-          rememberMe,
-          callbackURL,
-        });
-        if (result.error) {
-          const migrated = await migrateLegacyLogin(email, password);
-          if (!migrated.ok) {
-            setError(migrated.error ?? result.error.message ?? 'Could not sign in.');
-            return;
-          }
-          const retry = await authClient.signIn.email({
+      await withFormPending(async () => {
+        if (mode === 'signin') {
+          const result = await authClient.signIn.email({
             email,
             password,
             rememberMe,
             callbackURL,
           });
-          if (retry.error) {
-            setError(retry.error.message ?? 'Could not sign in.');
-            return;
+          if (result.error) {
+            const migrated = await migrateLegacyLogin(email, password);
+            if (!migrated.ok) {
+              setError(migrated.error ?? result.error.message ?? 'Could not sign in.');
+              return;
+            }
+            const retry = await authClient.signIn.email({
+              email,
+              password,
+              rememberMe,
+              callbackURL,
+            });
+            if (retry.error) {
+              setError(retry.error.message ?? 'Could not sign in.');
+              return;
+            }
           }
+          router.push(callbackURL);
+          router.refresh();
+          return;
         }
-        router.push(callbackURL);
-        router.refresh();
-        return;
-      }
 
-      if (password !== confirmPassword) {
-        setError('Passwords do not match.');
-        return;
-      }
+        if (password !== confirmPassword) {
+          setError('Passwords do not match.');
+          return;
+        }
 
-      const name = `${firstName} ${lastName}`.trim();
-      const result = await authClient.signUp.email({
-        name,
-        email,
-        password,
-        callbackURL,
+        const name = `${firstName} ${lastName}`.trim();
+        const result = await authClient.signUp.email({
+          name,
+          email,
+          password,
+          callbackURL,
+        });
+        if (result.error) {
+          setError(result.error.message ?? 'Could not create account.');
+          return;
+        }
+        setMessage('Account created. Check your email to verify before signing in.');
+        setMode('signin');
+        setPassword('');
+        setConfirmPassword('');
       });
-      if (result.error) {
-        setError(result.error.message ?? 'Could not create account.');
-        return;
-      }
-      setMessage('Account created. Check your email to verify before signing in.');
-      setMode('signin');
-      setPassword('');
-      setConfirmPassword('');
     } catch {
       setError('Something went wrong.');
     } finally {
-      emitFormPending(false);
       setLoading(false);
     }
   }

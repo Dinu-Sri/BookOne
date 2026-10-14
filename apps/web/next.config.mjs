@@ -21,7 +21,8 @@ const nextConfig = {
   typescript: { ignoreBuildErrors: true },
   serverExternalPackages: ['bcryptjs', 'postgres', 'sharp', 'qrcode'],
   // Product photo uploads send the original image; server compresses to 400x400 WebP.
-  // Tenant archive restore uploads a .bookone-data file (cap 40 MB).
+  // Tenant archive data restore uploads a .bookone-data file (cap 40 MB).
+  // Attachments packs over 8 MB use chunked POST /api/company/backup/restore-files.
   experimental: {
     serverActions: {
       bodySizeLimit: '40mb',

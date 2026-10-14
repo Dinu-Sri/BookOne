@@ -2,7 +2,9 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -12,21 +14,31 @@ import {
   archiveObjectPrefix,
   auditLog,
   buildArchiveEnvelope,
+  collectLiveStoragePointers,
   collectStoragePointers,
   db,
+  desc,
   encryptArchivePayload,
   eq,
+  and,
   isArchiveObjectKey,
   sha256Hex,
   restoreTenantDataArchive,
+  restoreTenantFilesArchive,
+  loadLastDataRestore,
+  filesRestoreAlreadyApplied,
   snapshotTenantTables,
   tenantIsOperationallyEmpty,
   tenants,
   trialBalanceHash,
   withTenantContext,
+  ARCHIVE_EXPORT_NOTES,
   ARCHIVE_FORMAT,
+  ARCHIVE_REMINDER_DAYS,
   ARCHIVE_SCHEMA_VERSION,
+  MAX_FILES_UPLOAD_BYTES,
   type ArchiveManifest,
+  type ArchiveObjectStore,
 } from '@bookone/db';
 import { bookoneAppVersion, bookoneBuildId } from '@/lib/build-id';
 import { isOwnedTenantStorageKey } from '@/lib/storage-key';
@@ -41,6 +53,8 @@ const MAX_OBJECT_BYTES = 32 * 1024 * 1024;
 const MAX_PACK_BYTES = 250 * 1024 * 1024;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 128;
+const FILE_CHUNK_BYTES = 4 * 1024 * 1024;
+const CHUNK_TTL_MS = 30 * 60 * 1000;
 
 type StoredPair = {
   meta: PreparedArchiveMeta;
@@ -357,7 +371,7 @@ export async function prepareTenantArchive(password: string, confirm: string): P
           dataBytes: dataEnc.length,
           filesBytes: filesEnc.length,
         },
-        notes: 'tenant.archive.export',
+        notes: ARCHIVE_EXPORT_NOTES,
       });
 
       return { ok: true, meta };
@@ -410,4 +424,243 @@ export async function restoreTenantArchiveFromUpload(
     const message = error instanceof Error ? error.message : 'Could not restore this backup.';
     return { ok: false, error: message };
   }
+}
+
+function s3ObjectStore(): ArchiveObjectStore {
+  const client = s3Client();
+  const bucket = process.env.S3_BUCKET!;
+  return {
+    async exists(key) {
+      try {
+        await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    async put(key, body, contentType) {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+        }),
+      );
+    },
+  };
+}
+
+export async function restoreTenantFilesArchiveFromUpload(
+  file: Buffer,
+  password: string,
+): Promise<
+  | { ok: true; exportId: string; applied: number; skippedExisting: number; skippedInvalid: number }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await requireArchiveOwner();
+    if (!s3Configured()) {
+      return { ok: false, error: 'Attachments storage is not configured.' };
+    }
+    return await withTenantContext(user.tenantId, () =>
+      restoreTenantFilesArchive({
+        tenantId: user.tenantId,
+        restorerUserId: user.id,
+        file,
+        password,
+        store: s3ObjectStore(),
+      }),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not restore this backup.';
+    return { ok: false, error: message };
+  }
+}
+
+type FilesUploadSession = {
+  id: string;
+  tenantId: string;
+  userId: string;
+  totalBytes: number;
+  chunkCount: number;
+  received: Set<number>;
+  createdAt: number;
+};
+
+const filesUploads = new Map<string, FilesUploadSession>();
+
+function pruneFilesUploads() {
+  const now = Date.now();
+  for (const [id, session] of filesUploads) {
+    if (now - session.createdAt > CHUNK_TTL_MS) filesUploads.delete(id);
+  }
+}
+
+function chunkObjectKey(tenantId: string, sessionId: string, index: number): string {
+  return `${archiveObjectPrefix(tenantId)}restore-upload/${sessionId}/${index}`;
+}
+
+export async function initFilesRestoreUpload(
+  totalBytes: number,
+  chunkCount: number,
+): Promise<{ ok: true; sessionId: string; chunkCount: number } | { ok: false; error: string }> {
+  try {
+    const user = await requireArchiveOwner();
+    if (!s3Configured()) return { ok: false, error: 'Attachments storage is not configured.' };
+    if (!Number.isFinite(totalBytes) || totalBytes <= 0 || totalBytes > MAX_FILES_UPLOAD_BYTES) {
+      return { ok: false, error: 'That attachments pack is too large to restore.' };
+    }
+    const expected = Math.ceil(totalBytes / FILE_CHUNK_BYTES);
+    if (!Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > 128 || chunkCount !== expected) {
+      return { ok: false, error: 'That attachments pack is damaged or incomplete.' };
+    }
+    pruneFilesUploads();
+    const id = randomUUID();
+    filesUploads.set(id, {
+      id,
+      tenantId: user.tenantId,
+      userId: user.id,
+      totalBytes,
+      chunkCount,
+      received: new Set(),
+      createdAt: Date.now(),
+    });
+    return { ok: true, sessionId: id, chunkCount };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not restore this backup.';
+    return { ok: false, error: message };
+  }
+}
+
+export async function putFilesRestoreChunk(
+  sessionId: string,
+  index: number,
+  chunk: Buffer,
+): Promise<{ ok: true; received: number; chunkCount: number } | { ok: false; error: string }> {
+  try {
+    const user = await requireArchiveOwner();
+    if (!s3Configured()) return { ok: false, error: 'Attachments storage is not configured.' };
+    const session = filesUploads.get(sessionId);
+    if (!session || session.tenantId !== user.tenantId || session.userId !== user.id) {
+      return { ok: false, error: 'That upload session expired. Start again.' };
+    }
+    if (Date.now() - session.createdAt > CHUNK_TTL_MS) {
+      filesUploads.delete(sessionId);
+      return { ok: false, error: 'That upload session expired. Start again.' };
+    }
+    if (!Number.isInteger(index) || index < 0 || index >= session.chunkCount) {
+      return { ok: false, error: 'That attachments pack is damaged or incomplete.' };
+    }
+    if (!chunk.length || chunk.length > FILE_CHUNK_BYTES + 64 * 1024) {
+      return { ok: false, error: 'That attachments pack is damaged or incomplete.' };
+    }
+    await s3Client().send(
+      new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET!,
+        Key: chunkObjectKey(user.tenantId, sessionId, index),
+        Body: chunk,
+        ContentType: 'application/octet-stream',
+      }),
+    );
+    session.received.add(index);
+    return { ok: true, received: session.received.size, chunkCount: session.chunkCount };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not restore this backup.';
+    return { ok: false, error: message };
+  }
+}
+
+async function deleteUploadChunks(tenantId: string, sessionId: string, chunkCount: number) {
+  if (!s3Configured()) return;
+  const client = s3Client();
+  const bucket = process.env.S3_BUCKET!;
+  for (let i = 0; i < chunkCount; i++) {
+    try {
+      await client.send(
+        new DeleteObjectCommand({ Bucket: bucket, Key: chunkObjectKey(tenantId, sessionId, i) }),
+      );
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
+export async function commitFilesRestoreUpload(
+  sessionId: string,
+  password: string,
+): Promise<
+  | { ok: true; exportId: string; applied: number; skippedExisting: number; skippedInvalid: number }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await requireArchiveOwner();
+    if (!s3Configured()) return { ok: false, error: 'Attachments storage is not configured.' };
+    const session = filesUploads.get(sessionId);
+    if (!session || session.tenantId !== user.tenantId || session.userId !== user.id) {
+      return { ok: false, error: 'That upload session expired. Start again.' };
+    }
+    if (session.received.size !== session.chunkCount) {
+      return { ok: false, error: 'That attachments pack is damaged or incomplete.' };
+    }
+    const client = s3Client();
+    const bucket = process.env.S3_BUCKET!;
+    const parts: Buffer[] = [];
+    for (let i = 0; i < session.chunkCount; i++) {
+      const obj = await client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: chunkObjectKey(user.tenantId, sessionId, i) }),
+      );
+      parts.push(Buffer.from(await obj.Body!.transformToByteArray()));
+    }
+    const file = Buffer.concat(parts);
+    filesUploads.delete(sessionId);
+    const result = await restoreTenantFilesArchiveFromUpload(file, password);
+    await deleteUploadChunks(user.tenantId, sessionId, session.chunkCount);
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not restore this backup.';
+    return { ok: false, error: message };
+  }
+}
+
+export type ArchiveBackupStatus = {
+  lastExportAt: string | null;
+  lastRestoreExportId: string | null;
+  lastRestoreAt: string | null;
+  filesApplied: boolean;
+  missingAttachmentCount: number;
+  reminderNeeded: boolean;
+  reminderDays: number;
+};
+
+export async function getArchiveBackupStatus(tenantId: string): Promise<ArchiveBackupStatus> {
+  const [exportRow] = await db()
+    .select({ createdAt: auditLog.createdAt })
+    .from(auditLog)
+    .where(and(eq(auditLog.tenantId, tenantId), eq(auditLog.notes, ARCHIVE_EXPORT_NOTES)))
+    .orderBy(desc(auditLog.createdAt))
+    .limit(1);
+  const lastRestore = await loadLastDataRestore(tenantId);
+  const filesApplied = lastRestore
+    ? await filesRestoreAlreadyApplied(tenantId, lastRestore.exportId)
+    : false;
+  const pointers = await collectLiveStoragePointers(tenantId);
+  const listed = new Set(s3Configured() ? await listTenantObjectKeys(tenantId) : []);
+  let missingAttachmentCount = 0;
+  for (const key of pointers) {
+    if (!isOwnedTenantStorageKey(tenantId, key)) continue;
+    if (!listed.has(key)) missingAttachmentCount += 1;
+  }
+  const lastExportAt = exportRow?.createdAt ? exportRow.createdAt.toISOString() : null;
+  const ageMs = lastExportAt ? Date.now() - Date.parse(lastExportAt) : Number.POSITIVE_INFINITY;
+  const reminderNeeded = ageMs > ARCHIVE_REMINDER_DAYS * 24 * 60 * 60 * 1000;
+  return {
+    lastExportAt,
+    lastRestoreExportId: lastRestore?.exportId ?? null,
+    lastRestoreAt: lastRestore?.createdAt ? new Date(lastRestore.createdAt).toISOString() : null,
+    filesApplied,
+    missingAttachmentCount,
+    reminderNeeded,
+    reminderDays: ARCHIVE_REMINDER_DAYS,
+  };
 }

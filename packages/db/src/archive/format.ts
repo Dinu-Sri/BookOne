@@ -1,10 +1,23 @@
-/** Tenant portable archive format (export). Restore transformers land in later phases. */
+/** Tenant portable archive format. Transformers live in transform.ts. */
 
 export const ARCHIVE_FORMAT = 'bookone.tenant-archive';
 export const ARCHIVE_SCHEMA_VERSION = 1;
 export const ARCHIVE_MAGIC = Buffer.from('B1AR1');
 
 export const ARCHIVE_PREFIX = '_archive';
+
+export const ARCHIVE_EXPORT_NOTES = 'tenant.archive.export';
+export const ARCHIVE_RESTORE_NOTES = 'tenant.archive.restore';
+export const ARCHIVE_RESTORE_FILES_NOTES = 'tenant.archive.restore.files';
+export const ARCHIVE_REMINDER_DAYS = 30;
+
+/** Columns that store MinIO/S3 object keys. Remap tenant prefix only — never rewrite other UUIDs in the path. */
+export const STORAGE_POINTER_KEYS = [
+  'receiptRef',
+  'logoImageKey',
+  'imageKey',
+  'storageKey',
+] as const;
 
 export type ArchiveKind = 'data' | 'files';
 
@@ -190,6 +203,14 @@ export function isOperationallyEmpty(counts: Record<string, number>): boolean {
 
 export function archiveObjectPrefix(tenantId: string): string {
   return `tenants/${tenantId}/${ARCHIVE_PREFIX}/`;
+}
+
+/** Rewrite `tenants/{source}/…` to `tenants/{target}/…`. Other path segments stay as exported. */
+export function rewriteTenantPrefix(key: string, sourceTenantId: string, targetTenantId: string): string {
+  if (typeof key !== 'string' || !sourceTenantId || sourceTenantId === targetTenantId) return key;
+  const from = `tenants/${sourceTenantId}/`;
+  if (!key.startsWith(from)) return key;
+  return `tenants/${targetTenantId}/${key.slice(from.length)}`;
 }
 
 export function isArchiveObjectKey(tenantId: string, key: string): boolean {

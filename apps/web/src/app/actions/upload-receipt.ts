@@ -1,7 +1,7 @@
 'use server';
 
 import { requireTenantContext } from '@bookone/auth';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { isOwnedReceiptKey } from '@/lib/storage-key';
@@ -117,6 +117,11 @@ export async function getReceiptDownloadUrl(key: string): Promise<string | null>
     if (!bucket) return null;
 
     const client = makeClient();
+    try {
+      await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    } catch {
+      return null;
+    }
     const command = new GetObjectCommand({ Bucket: bucket, Key: key });
     return await getSignedUrl(client, command, { expiresIn: 600 });
   } catch (error) {

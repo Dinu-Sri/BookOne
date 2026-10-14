@@ -2,10 +2,14 @@ import { randomUUID } from 'node:crypto';
 import {
   ARCHIVE_FORMAT,
   ARCHIVE_SCHEMA_VERSION,
+  STORAGE_POINTER_KEYS,
+  rewriteTenantPrefix,
   type ArchiveKind,
   type ArchiveManifest,
 } from './format';
 import { sha256Hex } from './crypto';
+
+const STORAGE_POINTER_KEY_SET = new Set<string>(STORAGE_POINTER_KEYS);
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -80,9 +84,6 @@ export function validateDataEnvelope(envelope: ArchiveEnvelope): void {
   }
   if (m.schemaVersion > ARCHIVE_SCHEMA_VERSION) {
     throw new Error('This backup needs a newer BookOne.');
-  }
-  if (m.schemaVersion < ARCHIVE_SCHEMA_VERSION) {
-    throw new Error('This backup needs BookOne from an older schema window that is no longer loaded.');
   }
   if (!isUuid(m.exportId) || !isUuid(m.sourceTenantId)) {
     throw new Error('That backup file is damaged or incomplete.');
@@ -166,6 +167,23 @@ function remapValue(value: unknown, map: Map<string, string>): unknown {
   return value;
 }
 
+function remapRow(
+  row: Record<string, unknown>,
+  map: Map<string, string>,
+  sourceTenantId: string,
+  targetTenantId: string,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(row)) {
+    if (STORAGE_POINTER_KEY_SET.has(key) && typeof inner === 'string') {
+      out[key] = rewriteTenantPrefix(inner, sourceTenantId, targetTenantId);
+    } else {
+      out[key] = remapValue(inner, map);
+    }
+  }
+  return out;
+}
+
 export function remapArchiveTables(args: {
   tables: Record<string, Record<string, unknown>[]>;
   sourceTenantId: string;
@@ -185,7 +203,9 @@ export function remapArchiveTables(args: {
 
   const tables: Record<string, Record<string, unknown>[]> = {};
   for (const [name, rows] of Object.entries(filtered)) {
-    tables[name] = (rows ?? []).map((row) => remapValue(row, map) as Record<string, unknown>);
+    tables[name] = (rows ?? []).map((row) =>
+      remapRow(row, map, args.sourceTenantId, args.targetTenantId),
+    );
   }
 
   if (!tables.tenant_memberships?.length) {
@@ -267,4 +287,34 @@ export function trialBalanceHashFromTables(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([code, slot]) => `${code}|${slot.debit.toFixed(2)}|${slot.credit.toFixed(2)}`);
   return sha256Hex(lines.join('\n'));
+}
+
+const INVOICE_DOC_TYPES = new Set(['sales_invoice', 'customer_invoice', 'pos_sale']);
+
+/** Golden restore helper: posted sales invoice totals from the archive tables. */
+export function invoiceTotalsFromTables(tables: Record<string, Record<string, unknown>[]>): {
+  count: number;
+  total: number;
+} {
+  let count = 0;
+  let total = 0;
+  for (const row of tables.business_documents ?? []) {
+    if (row.voidedAt != null) continue;
+    if (!INVOICE_DOC_TYPES.has(String(row.documentType ?? ''))) continue;
+    const amount = Number(row.total ?? 0);
+    if (!Number.isFinite(amount)) continue;
+    count += 1;
+    total += amount;
+  }
+  return { count, total };
+}
+
+/** Golden restore helper: sum of qty on hand. */
+export function stockOnHandFromTables(tables: Record<string, Record<string, unknown>[]>): number {
+  let qty = 0;
+  for (const row of tables.inventory_stock_levels ?? []) {
+    const n = Number(row.qtyOnHand ?? 0);
+    if (Number.isFinite(n)) qty += n;
+  }
+  return qty;
 }

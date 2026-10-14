@@ -1,10 +1,22 @@
-import { eq, getTableColumns, getTableName } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, getTableName } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { db, pgClient } from '../db';
 import { auditLog, tenantInvites, tenants } from '../schema';
 import { decryptArchivePayload } from './crypto';
 import { tenantIsOperationallyEmpty } from './empty';
-import { ARCHIVE_RESTORE_INSERT_ORDER } from './format';
+import {
+  applyArchiveObjects,
+  assertFilesPackMatchesDataRestore,
+  parsePackedObjects,
+  validateFilesEnvelope,
+  type ArchiveObjectStore,
+  MAX_FILES_UPLOAD_BYTES,
+} from './files';
+import {
+  ARCHIVE_RESTORE_FILES_NOTES,
+  ARCHIVE_RESTORE_INSERT_ORDER,
+  ARCHIVE_RESTORE_NOTES,
+} from './format';
 import {
   journalsAreBalanced,
   parseArchiveEnvelope,
@@ -12,6 +24,7 @@ import {
   validateDataEnvelope,
 } from './remap';
 import { ARCHIVE_DUMP_TABLES, trialBalanceHash } from './snapshot';
+import { transformArchiveToCurrent } from './transform';
 
 const MAX_DATA_BYTES = 40 * 1024 * 1024;
 const ADVISORY_NS = 881002;
@@ -68,7 +81,9 @@ function friendlyError(error: unknown): string {
     msg.includes('already has records') ||
     msg.includes('already running') ||
     msg.includes('integrity') ||
-    msg.includes('chart of accounts')
+    msg.includes('chart of accounts') ||
+    msg.includes('attachments') ||
+    msg.includes('Attachments')
   ) {
     return msg;
   }
@@ -92,8 +107,9 @@ export async function restoreTenantDataArchive(args: {
     if (!args.password) return { ok: false, error: 'Password is required.' };
 
     const json = decryptArchivePayload(args.file, args.password);
-    const envelope = parseArchiveEnvelope(json);
-    validateDataEnvelope(envelope);
+    const parsed = parseArchiveEnvelope(json);
+    validateDataEnvelope(parsed);
+    const envelope = transformArchiveToCurrent(parsed);
 
     const { tables } = remapArchiveTables({
       tables: envelope.tables,
@@ -211,12 +227,142 @@ export async function restoreTenantDataArchive(args: {
           schemaVersion: envelope.manifest.schemaVersion,
           sourceTenantId: envelope.manifest.sourceTenantId,
           dataSha256: envelope.manifest.dataSha256,
+          filesSha256: envelope.manifest.filesSha256,
           rowCount,
         },
-        notes: 'tenant.archive.restore',
+        notes: ARCHIVE_RESTORE_NOTES,
       });
 
       return { ok: true as const, exportId: envelope.manifest.exportId, rowCount };
+    });
+  } catch (error) {
+    return { ok: false, error: friendlyError(error) };
+  }
+}
+
+type RestoreAuditValues = { exportId: string; filesSha256?: string };
+
+function parseRestoreValues(raw: unknown): RestoreAuditValues | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const rec = raw as Record<string, unknown>;
+  if (typeof rec.exportId !== 'string') return null;
+  return {
+    exportId: rec.exportId,
+    filesSha256: typeof rec.filesSha256 === 'string' ? rec.filesSha256 : undefined,
+  };
+}
+
+export async function loadLastDataRestore(tenantId: string): Promise<{
+  exportId: string;
+  filesSha256?: string;
+  createdAt: Date;
+} | null> {
+  const [row] = await db()
+    .select({
+      newValues: auditLog.newValues,
+      createdAt: auditLog.createdAt,
+    })
+    .from(auditLog)
+    .where(and(eq(auditLog.tenantId, tenantId), eq(auditLog.notes, ARCHIVE_RESTORE_NOTES)))
+    .orderBy(desc(auditLog.createdAt))
+    .limit(1);
+  if (!row) return null;
+  const parsed = parseRestoreValues(row.newValues);
+  if (!parsed) return null;
+  return { ...parsed, createdAt: row.createdAt };
+}
+
+export async function filesRestoreAlreadyApplied(tenantId: string, exportId: string): Promise<boolean> {
+  const [row] = await db()
+    .select({ id: auditLog.id })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.tenantId, tenantId),
+        eq(auditLog.notes, ARCHIVE_RESTORE_FILES_NOTES),
+        eq(auditLog.recordId, exportId),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function restoreTenantFilesArchive(args: {
+  tenantId: string;
+  restorerUserId: string;
+  file: Buffer;
+  password: string;
+  store: ArchiveObjectStore;
+}): Promise<
+  | { ok: true; exportId: string; applied: number; skippedExisting: number; skippedInvalid: number }
+  | { ok: false; error: string }
+> {
+  try {
+    if (!args.file?.length) return { ok: false, error: 'Choose an attachments pack to restore.' };
+    if (args.file.length > MAX_FILES_UPLOAD_BYTES) {
+      return { ok: false, error: 'That attachments pack is too large to restore.' };
+    }
+    if (!args.password) return { ok: false, error: 'Password is required.' };
+
+    const json = decryptArchivePayload(args.file, args.password);
+    const parsed = parseArchiveEnvelope(json);
+    validateFilesEnvelope(parsed);
+    const envelope = transformArchiveToCurrent(parsed);
+    const objects = parsePackedObjects(envelope.objects);
+
+    return await db().transaction(async (tx) => {
+      const lockRows = await pgClient()<Array<{ locked: boolean | string | number }>>`
+        select pg_try_advisory_xact_lock(${ADVISORY_NS}, hashtext(${args.tenantId})) as locked
+      `;
+      const lockVal = lockRows[0]?.locked;
+      const locked = lockVal === true || lockVal === 't' || lockVal === 'true' || lockVal === 1;
+      if (!locked) {
+        throw new Error('A restore is already running for this company.');
+      }
+
+      const lastRestore = await loadLastDataRestore(args.tenantId);
+      const already = lastRestore
+        ? await filesRestoreAlreadyApplied(args.tenantId, lastRestore.exportId)
+        : false;
+      assertFilesPackMatchesDataRestore({
+        packExportId: envelope.manifest.exportId,
+        packFilesSha256: envelope.manifest.filesSha256,
+        lastRestore,
+        filesAlreadyApplied: already,
+      });
+
+      const result = await applyArchiveObjects({
+        targetTenantId: args.tenantId,
+        sourceTenantId: envelope.manifest.sourceTenantId,
+        objects,
+        store: args.store,
+      });
+
+      await tx.insert(auditLog).values({
+        tenantId: args.tenantId,
+        userId: args.restorerUserId,
+        action: 'IMPORT',
+        tableName: 'tenant.archive',
+        recordId: envelope.manifest.exportId,
+        newValues: {
+          exportId: envelope.manifest.exportId,
+          schemaVersion: envelope.manifest.schemaVersion,
+          sourceTenantId: envelope.manifest.sourceTenantId,
+          filesSha256: envelope.manifest.filesSha256,
+          applied: result.applied,
+          skippedExisting: result.skippedExisting,
+          skippedInvalid: result.skippedInvalid,
+        },
+        notes: ARCHIVE_RESTORE_FILES_NOTES,
+      });
+
+      return {
+        ok: true as const,
+        exportId: envelope.manifest.exportId,
+        applied: result.applied,
+        skippedExisting: result.skippedExisting,
+        skippedInvalid: result.skippedInvalid,
+      };
     });
   } catch (error) {
     return { ok: false, error: friendlyError(error) };

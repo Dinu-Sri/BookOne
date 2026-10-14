@@ -167,6 +167,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                               <Link className="receipt-link" href={receiptUrl} target="_blank" rel="noreferrer">
                                 <Paperclip size={14} aria-hidden /> View
                               </Link>
+                            ) : tx.receiptRef?.startsWith('tenants/') ? (
+                              <span className="receipt-link muted"><Paperclip size={14} aria-hidden /> Missing attachment</span>
                             ) : tx.receiptRef ? (
                               <span className="receipt-link muted"><Paperclip size={14} aria-hidden /> Attached</span>
                             ) : (

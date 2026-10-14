@@ -1,3 +1,9 @@
+## 2026-10-14 — Tenant archive files pack, transformers, reminder (v2.5.0)
+
+- Record: [CHG-20261014-tenant-archive-files](changes/CHG-20261014-tenant-archive-files.md). Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md) phases 3–5.
+- Owner uploads the matching `.bookone-files` pack after data restore. Storage keys rewrite tenant prefix only. Transactions show Missing attachment when the object is gone. Backup page reminds after 30 days. `schemaVersion` transformers are identity at v1 with golden unit tests.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.0 · <sha7>`.
+
 ## 2026-10-13 — Tenant archive restore + Control Room nav (v2.4.0)
 
 - Record: [CHG-20261013-tenant-archive-restore](changes/CHG-20261013-tenant-archive-restore.md). Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md) phase 2.

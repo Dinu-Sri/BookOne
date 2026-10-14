@@ -207,6 +207,38 @@ export async function trialBalanceHash(tenantId: string): Promise<string> {
   return sha256Hex(lines.join('\n'));
 }
 
+export async function collectLiveStoragePointers(tenantId: string): Promise<string[]> {
+  const [txns, styles, products, photos, imports] = await Promise.all([
+    db()
+      .select({ receiptRef: transactions.receiptRef })
+      .from(transactions)
+      .where(eq(transactions.tenantId, tenantId)),
+    db()
+      .select({ logoImageKey: documentStyles.logoImageKey })
+      .from(documentStyles)
+      .where(eq(documentStyles.tenantId, tenantId)),
+    db()
+      .select({ imageKey: inventoryProducts.imageKey })
+      .from(inventoryProducts)
+      .where(eq(inventoryProducts.tenantId, tenantId)),
+    db()
+      .select({ imageKey: rentalReturnPhotos.imageKey })
+      .from(rentalReturnPhotos)
+      .where(eq(rentalReturnPhotos.tenantId, tenantId)),
+    db()
+      .select({ storageKey: bankStatementImports.storageKey })
+      .from(bankStatementImports)
+      .where(eq(bankStatementImports.tenantId, tenantId)),
+  ]);
+  return collectStoragePointers({
+    transactions: txns as Record<string, unknown>[],
+    document_styles: styles as Record<string, unknown>[],
+    inventory_products: products as Record<string, unknown>[],
+    rental_return_photos: photos as Record<string, unknown>[],
+    bank_statement_imports: imports as Record<string, unknown>[],
+  });
+}
+
 export function collectStoragePointers(tables: Record<string, Record<string, unknown>[]>): string[] {
   const keys = new Set<string>();
   const take = (value: unknown) => {

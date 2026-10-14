@@ -3,9 +3,14 @@ import { Archive } from 'lucide-react';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CompanyCard } from '../_components';
-import { BackupClient, RestoreClient } from '@/components/company/backup-client';
+import { BackupClient, FilesRestoreClient, RestoreClient } from '@/components/company/backup-client';
 import { assertScreenAccess } from '@/lib/access';
-import { getArchiveEmptyState, peekPreparedArchive, requireArchiveOwner } from '@/lib/tenant-archive';
+import {
+  getArchiveBackupStatus,
+  getArchiveEmptyState,
+  peekPreparedArchive,
+  requireArchiveOwner,
+} from '@/lib/tenant-archive';
 import { withTenantContext } from '@bookone/db';
 
 export default async function CompanyBackupPage() {
@@ -22,9 +27,21 @@ export default async function CompanyBackupPage() {
     redirect('/?denied=1');
   }
 
-  const [emptyState, prepared] = await withTenantContext(tenant.id, () =>
-    Promise.all([getArchiveEmptyState(tenant.id), peekPreparedArchive()]),
+  const [emptyState, prepared, backupStatus] = await withTenantContext(tenant.id, () =>
+    Promise.all([
+      getArchiveEmptyState(tenant.id),
+      peekPreparedArchive(),
+      getArchiveBackupStatus(tenant.id),
+    ]),
   );
+
+  const lastExportLabel = backupStatus.lastExportAt
+    ? new Date(backupStatus.lastExportAt).toISOString().slice(0, 10)
+    : null;
+  const filesEnabled = Boolean(backupStatus.lastRestoreExportId) && !backupStatus.filesApplied;
+  const filesReason = backupStatus.filesApplied
+    ? 'Attachments already applied'
+    : 'Restore company data first';
 
   const tradingBits = Object.entries(emptyState.counts)
     .filter(([, n]) => n > 0)
@@ -42,8 +59,31 @@ export default async function CompanyBackupPage() {
           >
             <p style={{ color: 'var(--ink-muted)', fontSize: 13, marginTop: 0 }}>
               Data holds the books (invoices, journals, stock, settings). Attachments holds receipts and photos.
-              Keep both files and the password together. Restore only into a new empty company.
+              Keep both files and the password together. Restore only into a new empty company. Prepared files stay
+              available to download for 15 minutes.
             </p>
+            {backupStatus.reminderNeeded ? (
+              <p
+                role="status"
+                style={{
+                  color: 'var(--ink)',
+                  fontSize: 13,
+                  margin: '0 0 12px',
+                  padding: '10px 12px',
+                  border: '1px solid var(--line)',
+                  borderRadius: 8,
+                  background: 'var(--surface-2, #f8f5ef)',
+                }}
+              >
+                {lastExportLabel
+                  ? `Last backup was ${lastExportLabel}. Create a new pair if it has been more than ${backupStatus.reminderDays} days, and keep both files off this computer.`
+                  : 'No backup has been downloaded yet. Create a pair and keep both files and the password.'}
+              </p>
+            ) : lastExportLabel ? (
+              <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '0 0 12px' }}>
+                Last backup: {lastExportLabel}.
+              </p>
+            ) : null}
             <BackupClient initialMeta={prepared} />
           </CompanyCard>
 
@@ -65,6 +105,20 @@ export default async function CompanyBackupPage() {
                 chart of accounts.
               </p>
               <RestoreClient restoreEnabled={emptyState.empty} />
+            </div>
+            <div className="field field-full" style={{ marginTop: 16 }}>
+              <label>Restore attachments</label>
+              <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '6px 0 8px' }}>
+                Upload the matching .bookone-files pack after company data is restored. Existing uploads are not
+                overwritten.
+              </p>
+              {backupStatus.missingAttachmentCount > 0 ? (
+                <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '0 0 8px' }}>
+                  {backupStatus.missingAttachmentCount} attachment
+                  {backupStatus.missingAttachmentCount === 1 ? '' : 's'} missing. Upload the matching pack.
+                </p>
+              ) : null}
+              <FilesRestoreClient enabled={filesEnabled} disabledReason={filesReason} />
             </div>
           </CompanyCard>
         </div>

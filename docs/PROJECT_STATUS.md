@@ -1,6 +1,10 @@
+## 2026-10-14 — Tenant archive files pack, transformers, reminder (v2.5.0)
+
+Owner applies the matching attachments pack after data restore, sees missing receipts, and gets a 30-day backup reminder. See [CHG-20261014-tenant-archive-files](changes/CHG-20261014-tenant-archive-files.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.5.0 · <sha7>`.
+
 ## 2026-10-13 — Tenant archive restore + Control Room nav (v2.4.0)
 
-Owner restores encrypted company data into an empty tenant (phase 2). Control Room menu children show for platform super_admin. Files pack apply is later. See [CHG-20261013-tenant-archive-restore](changes/CHG-20261013-tenant-archive-restore.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.4.0 · <sha7>`.
+Owner restores encrypted company data into an empty tenant (phase 2). Control Room menu children show for platform super_admin. Files pack apply shipped later in v2.5.0. See [CHG-20261013-tenant-archive-restore](changes/CHG-20261013-tenant-archive-restore.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.4.0 · <sha7>`.
 
 ## 2026-10-13 — Tenant archive export (v2.3.0)
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/bookone-ui';
+import { emitFormPending } from '@/components/ui/form-busy';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import type { PreparedArchiveMeta } from '@/lib/tenant-archive-types';
 
@@ -21,6 +22,7 @@ export function BackupClient({ initialMeta }: { initialMeta: PreparedArchiveMeta
     e.preventDefault();
     if (busy) return;
     setBusy(true);
+    emitFormPending(true);
     try {
       const res = await fetch('/api/company/backup/prepare', {
         method: 'POST',
@@ -43,6 +45,7 @@ export function BackupClient({ initialMeta }: { initialMeta: PreparedArchiveMeta
     } catch {
       pushStatusToast({ kind: 'error', message: 'Could not create the backup.' });
     } finally {
+      emitFormPending(false);
       setBusy(false);
     }
   }
@@ -124,6 +127,7 @@ export function RestoreClient({ restoreEnabled }: { restoreEnabled: boolean }) {
       return;
     }
     setRestoreBusy(true);
+    emitFormPending(true);
     try {
       const body = new FormData();
       body.set('file', chosen);
@@ -148,6 +152,7 @@ export function RestoreClient({ restoreEnabled }: { restoreEnabled: boolean }) {
     } catch {
       pushStatusToast({ kind: 'error', message: 'Could not restore this backup.' });
     } finally {
+      emitFormPending(false);
       setRestoreBusy(false);
     }
   }
@@ -226,6 +231,7 @@ export function FilesRestoreClient({
     }
     setBusy(true);
     setProgress('Uploading…');
+    emitFormPending(true);
     try {
       let json: {
         ok?: boolean;
@@ -313,6 +319,7 @@ export function FilesRestoreClient({
     } catch {
       pushStatusToast({ kind: 'error', message: 'Could not restore this backup.' });
     } finally {
+      emitFormPending(false);
       setBusy(false);
       setProgress('');
     }

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button } from '@/components/ui/bookone-ui';
+import { emitFormPending } from '@/components/ui/form-busy';
 import { recordEntry, type RecordEntryResult } from '@/app/actions/record-entry';
 import {
   getActiveAccounts,
@@ -367,16 +368,19 @@ export function SimpleEntryScreen() {
       };
     }
 
+    emitFormPending(true);
     startTransition(() => {
-      recordEntry(input).then((res) => {
-        setResult(res);
-        if (res.success) {
-          setForceDuplicate(false);
-          clearForm({ keepResult: true });
-        } else if (res.error?.includes('Possible double-post')) {
-          setForceDuplicate(true);
-        }
-      });
+      recordEntry(input)
+        .then((res) => {
+          setResult(res);
+          if (res.success) {
+            setForceDuplicate(false);
+            clearForm({ keepResult: true });
+          } else if (res.error?.includes('Possible double-post')) {
+            setForceDuplicate(true);
+          }
+        })
+        .finally(() => emitFormPending(false));
     });
   }
 

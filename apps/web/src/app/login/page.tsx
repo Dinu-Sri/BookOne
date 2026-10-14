@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createAuthClient } from 'better-auth/react';
 import { Eye, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
+import { emitFormPending } from '@/components/ui/form-busy';
 import { migrateLegacyLogin } from '@/app/actions/legacy-auth';
 import { bookoneVersionLabel } from '@/lib/build-id';
 
@@ -47,6 +48,7 @@ function LoginContent() {
     setError('');
     setMessage('');
     setLoading(true);
+    emitFormPending(true);
 
     try {
       if (mode === 'signin') {
@@ -101,6 +103,7 @@ function LoginContent() {
     } catch {
       setError('Something went wrong.');
     } finally {
+      emitFormPending(false);
       setLoading(false);
     }
   }

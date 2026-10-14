@@ -47,7 +47,11 @@ export const Button = forwardRef<
   const locked = Boolean(disabled) || pending;
 
   useEffect(() => {
-    if (isSubmit) emitFormPending(pending);
+    if (!isSubmit) return;
+    emitFormPending(pending);
+    return () => {
+      if (pending) emitFormPending(false);
+    };
   }, [pending, isSubmit]);
 
   function handleClick(e: MouseEvent<HTMLButtonElement>) {

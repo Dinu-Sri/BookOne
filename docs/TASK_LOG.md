@@ -1,3 +1,9 @@
+## 2026-10-14 — Stuck “Working… please wait” overlay (v2.5.2)
+
+- Record: [CHG-20261014-form-busy-overlay-stuck](changes/CHG-20261014-form-busy-overlay-stuck.md).
+- Client `FormBusyGuard` stayed pending after preventDefault + fetch (backup, login) and after Reverse buttons unmounted. Overlay now clears on completion, navigation, unmount, or 45s. Stuck waits POST `/api/ops/client-timing`.
+- Next: Docker web image green, Portainer Update Re-pull ON, confirm `v2.5.2 · <sha7>` and overlay dismisses after backup/reverse/login.
+
 ## 2026-10-14 — Backup page NoSuchKey (v2.5.1)
 
 - Record: [CHG-20261014-tenant-archive-backup-nosuchkey](changes/CHG-20261014-tenant-archive-backup-nosuchkey.md). Digest `182952617` on `/company/backup`.

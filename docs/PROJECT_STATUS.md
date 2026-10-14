@@ -1,3 +1,7 @@
+## 2026-10-14 — Stuck form overlay (v2.5.2)
+
+“Working… please wait” stayed up after backup, reverse, and sometimes login. Client pending never cleared. See [CHG-20261014-form-busy-overlay-stuck](changes/CHG-20261014-form-busy-overlay-stuck.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.5.2 · <sha7>`.
+
 ## 2026-10-14 — Backup page NoSuchKey (v2.5.1)
 
 Company → Backup crashed with MinIO `NoSuchKey` (digest 182952617) when no prepared archive object existed. See [CHG-20261014-tenant-archive-backup-nosuchkey](changes/CHG-20261014-tenant-archive-backup-nosuchkey.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.5.1 · <sha7>`.

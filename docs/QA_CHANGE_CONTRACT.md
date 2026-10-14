@@ -39,3 +39,11 @@ Public records must use synthetic data and sanitized summaries. Never publish pa
 The inbuilt `/e2e` runner was removed from BookOne (Wave 1b). New test maintenance belongs in the external QA repository. The extraction does not yet certify all inherited tests, staging acceptance or a production release gate.
 
 The owner must wire trusted external QA status checks to branch protection and deployment promotion. Until implemented, report that gates are advisory. Do not claim that this documentation alone prevents release. Product build/lint/typecheck and schema readiness still belong to engineering even when executable QA tests live externally.
+
+## Canonical business rulebook (2026-10-14)
+
+The single maintained intended-behaviour reference is https://github.com/Dinu-Sri/bookone-qa/blob/main/docs/rulebook/README.md; readable rules are RULES.md in that directory and the structured source is rules/rulebook.json. QA companion PR: https://github.com/Dinu-Sri/bookone-qa/pull/16.
+
+Before coding, identify applicable stable rule IDs/revisions and rulebook version/Git SHA/JSON hash in the CHG record. Applicable Sri Lankan law and the eligible accounting framework take precedence; current implementation is descriptive evidence, not its own expected result. Initial professional product defaults were delegated by the owner and remain independently expert-pending. Read RF-01–10 in the QA review queue for unresolved applicability and conflicting contracts.
+
+Do not copy a second editable rulebook here, silently change adopted rules/settings or rewrite old assertions/results to match code. Material policy changes use the QA RULE_CHANGE template, responsible rule-owner review, independent worked examples, effective dates and compatibility/migration assessment. New-company defaults do not silently change existing companies or issued facts. Tests and full current-build acceptance remain independent from documentation or code review.

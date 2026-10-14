@@ -1,3 +1,9 @@
+## 2026-10-14 — Backup page NoSuchKey (v2.5.1)
+
+- Record: [CHG-20261014-tenant-archive-backup-nosuchkey](changes/CHG-20261014-tenant-archive-backup-nosuchkey.md). Digest `182952617` on `/company/backup`.
+- Missing MinIO archive objects no longer crash the Backup page. List-before-get; status helper fails soft.
+- Next: Docker web image green, Portainer Update Re-pull ON, confirm `v2.5.1 · <sha7>`.
+
 ## 2026-10-14 — Tenant archive files pack, transformers, reminder (v2.5.0)
 
 - Record: [CHG-20261014-tenant-archive-files](changes/CHG-20261014-tenant-archive-files.md). Spec: [TENANT_BACKUP_ARCHIVE.md](TENANT_BACKUP_ARCHIVE.md) phases 3–5.

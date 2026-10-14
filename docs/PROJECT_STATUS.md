@@ -1,3 +1,7 @@
+## 2026-10-14 — Backup page NoSuchKey (v2.5.1)
+
+Company → Backup crashed with MinIO `NoSuchKey` (digest 182952617) when no prepared archive object existed. See [CHG-20261014-tenant-archive-backup-nosuchkey](changes/CHG-20261014-tenant-archive-backup-nosuchkey.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.5.1 · <sha7>`.
+
 ## 2026-10-14 — Tenant archive files pack, transformers, reminder (v2.5.0)
 
 Owner applies the matching attachments pack after data restore, sees missing receipts, and gets a 30-day backup reminder. See [CHG-20261014-tenant-archive-files](changes/CHG-20261014-tenant-archive-files.md). Portainer Re-pull ON after Docker web image is green. Quote `v2.5.0 · <sha7>`.

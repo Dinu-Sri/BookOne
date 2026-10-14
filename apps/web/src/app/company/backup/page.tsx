@@ -27,13 +27,12 @@ export default async function CompanyBackupPage() {
     redirect('/?denied=1');
   }
 
-  const [emptyState, prepared, backupStatus] = await withTenantContext(tenant.id, () =>
-    Promise.all([
-      getArchiveEmptyState(tenant.id),
-      peekPreparedArchive(),
-      getArchiveBackupStatus(tenant.id),
-    ]),
-  );
+  const [emptyState, prepared, backupStatus] = await withTenantContext(tenant.id, async () => {
+    const empty = await getArchiveEmptyState(tenant.id);
+    const peek = await peekPreparedArchive();
+    const status = await getArchiveBackupStatus(tenant.id);
+    return [empty, peek, status] as const;
+  });
 
   const lastExportLabel = backupStatus.lastExportAt
     ? new Date(backupStatus.lastExportAt).toISOString().slice(0, 10)

@@ -86,6 +86,34 @@ function s3Client(): S3Client {
   });
 }
 
+function isS3MissingKey(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const rec = error as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
+  return (
+    rec.name === 'NoSuchKey' ||
+    rec.Code === 'NoSuchKey' ||
+    rec.name === 'NotFound' ||
+    rec.$metadata?.httpStatusCode === 404
+  );
+}
+
+/** List-before-get so a missing object never throws NoSuchKey during RSC render. */
+async function s3KeyExists(key: string): Promise<boolean> {
+  if (!s3Configured()) return false;
+  try {
+    const res = await s3Client().send(
+      new ListObjectsV2Command({
+        Bucket: process.env.S3_BUCKET!,
+        Prefix: key,
+        MaxKeys: 1,
+      }),
+    );
+    return (res.Contents ?? []).some((obj) => obj.Key === key);
+  } catch {
+    return false;
+  }
+}
+
 export function isPrimaryCompanyOwner(user: Pick<SessionUser, 'jobSlug' | 'role'>): boolean {
   return (user.jobSlug || user.role || '').toLowerCase() === 'owner';
 }
@@ -120,28 +148,35 @@ function stampDate(d: Date): string {
 
 async function listTenantObjectKeys(tenantId: string): Promise<string[]> {
   if (!s3Configured()) return [];
-  const client = s3Client();
-  const bucket = process.env.S3_BUCKET!;
-  const prefix = `tenants/${tenantId}/`;
-  const keys: string[] = [];
-  let token: string | undefined;
-  do {
-    const res = await client.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: prefix,
-        ContinuationToken: token,
-      }),
-    );
-    for (const obj of res.Contents ?? []) {
-      if (!obj.Key) continue;
-      if (isArchiveObjectKey(tenantId, obj.Key)) continue;
-      if (!isOwnedTenantStorageKey(tenantId, obj.Key)) continue;
-      keys.push(obj.Key);
+  try {
+    const client = s3Client();
+    const bucket = process.env.S3_BUCKET!;
+    const prefix = `tenants/${tenantId}/`;
+    const keys: string[] = [];
+    let token: string | undefined;
+    do {
+      const res = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
+      for (const obj of res.Contents ?? []) {
+        if (!obj.Key) continue;
+        if (isArchiveObjectKey(tenantId, obj.Key)) continue;
+        if (!isOwnedTenantStorageKey(tenantId, obj.Key)) continue;
+        keys.push(obj.Key);
+      }
+      token = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (token);
+    return keys;
+  } catch (error) {
+    if (!isS3MissingKey(error)) {
+      console.error('listTenantObjectKeys failed');
     }
-    token = res.IsTruncated ? res.NextContinuationToken : undefined;
-  } while (token);
-  return keys;
+    return [];
+  }
 }
 
 async function getObjectBytes(
@@ -200,18 +235,21 @@ async function readStored(tenantId: string): Promise<StoredPair | null> {
   try {
     const client = s3Client();
     const bucket = process.env.S3_BUCKET!;
-    const latest = await client.send(
-      new GetObjectCommand({ Bucket: bucket, Key: `${archiveObjectPrefix(tenantId)}latest.json` }),
-    );
+    const latestKey = `${archiveObjectPrefix(tenantId)}latest.json`;
+    if (!(await s3KeyExists(latestKey))) return null;
+    const latest = await client.send(new GetObjectCommand({ Bucket: bucket, Key: latestKey }));
     const raw = latest.Body ? await latest.Body.transformToString() : '';
     const meta = JSON.parse(raw) as PreparedArchiveMeta;
     if (!meta?.exportId) return null;
     const createdMs = Date.parse(meta.createdAt);
     if (!Number.isFinite(createdMs) || Date.now() - createdMs > MEMORY_TTL_MS) return null;
     const base = `${archiveObjectPrefix(tenantId)}${meta.exportId}`;
+    const dataKey = `${base}/data.bookone-data`;
+    const filesKey = `${base}/files.bookone-files`;
+    if (!(await s3KeyExists(dataKey)) || !(await s3KeyExists(filesKey))) return null;
     const [dataObj, filesObj] = await Promise.all([
-      client.send(new GetObjectCommand({ Bucket: bucket, Key: `${base}/data.bookone-data` })),
-      client.send(new GetObjectCommand({ Bucket: bucket, Key: `${base}/files.bookone-files` })),
+      client.send(new GetObjectCommand({ Bucket: bucket, Key: dataKey })),
+      client.send(new GetObjectCommand({ Bucket: bucket, Key: filesKey })),
     ]);
     const data = Buffer.from(await dataObj.Body!.transformToByteArray());
     const files = Buffer.from(await filesObj.Body!.transformToByteArray());
@@ -223,7 +261,10 @@ async function readStored(tenantId: string): Promise<StoredPair | null> {
     };
     memoryByTenant.set(tenantId, pair);
     return pair;
-  } catch {
+  } catch (error) {
+    if (!isS3MissingKey(error)) {
+      console.error('readStored archive pair failed');
+    }
     return null;
   }
 }
@@ -633,34 +674,60 @@ export type ArchiveBackupStatus = {
   reminderDays: number;
 };
 
+const EMPTY_BACKUP_STATUS: ArchiveBackupStatus = {
+  lastExportAt: null,
+  lastRestoreExportId: null,
+  lastRestoreAt: null,
+  filesApplied: false,
+  missingAttachmentCount: 0,
+  reminderNeeded: true,
+  reminderDays: ARCHIVE_REMINDER_DAYS,
+};
+
 export async function getArchiveBackupStatus(tenantId: string): Promise<ArchiveBackupStatus> {
-  const [exportRow] = await db()
-    .select({ createdAt: auditLog.createdAt })
-    .from(auditLog)
-    .where(and(eq(auditLog.tenantId, tenantId), eq(auditLog.notes, ARCHIVE_EXPORT_NOTES)))
-    .orderBy(desc(auditLog.createdAt))
-    .limit(1);
-  const lastRestore = await loadLastDataRestore(tenantId);
-  const filesApplied = lastRestore
-    ? await filesRestoreAlreadyApplied(tenantId, lastRestore.exportId)
-    : false;
-  const pointers = await collectLiveStoragePointers(tenantId);
-  const listed = new Set(s3Configured() ? await listTenantObjectKeys(tenantId) : []);
-  let missingAttachmentCount = 0;
-  for (const key of pointers) {
-    if (!isOwnedTenantStorageKey(tenantId, key)) continue;
-    if (!listed.has(key)) missingAttachmentCount += 1;
+  try {
+    const [exportRow] = await db()
+      .select({ createdAt: auditLog.createdAt })
+      .from(auditLog)
+      .where(and(eq(auditLog.tenantId, tenantId), eq(auditLog.notes, ARCHIVE_EXPORT_NOTES)))
+      .orderBy(desc(auditLog.createdAt))
+      .limit(1);
+    const lastRestore = await loadLastDataRestore(tenantId);
+    const filesApplied = lastRestore
+      ? await filesRestoreAlreadyApplied(tenantId, lastRestore.exportId)
+      : false;
+    let missingAttachmentCount = 0;
+    try {
+      const pointers = await collectLiveStoragePointers(tenantId);
+      const listed = new Set(s3Configured() ? await listTenantObjectKeys(tenantId) : []);
+      for (const key of pointers) {
+        if (!isOwnedTenantStorageKey(tenantId, key)) continue;
+        if (!listed.has(key)) missingAttachmentCount += 1;
+      }
+    } catch (error) {
+      if (!isS3MissingKey(error)) {
+        console.error('archive missing-attachment count failed');
+      }
+      missingAttachmentCount = 0;
+    }
+    const lastExportAt = exportRow?.createdAt ? new Date(exportRow.createdAt).toISOString() : null;
+    const ageMs = lastExportAt ? Date.now() - Date.parse(lastExportAt) : Number.POSITIVE_INFINITY;
+    const reminderNeeded = !Number.isFinite(ageMs)
+      ? true
+      : ageMs > ARCHIVE_REMINDER_DAYS * 24 * 60 * 60 * 1000;
+    return {
+      lastExportAt,
+      lastRestoreExportId: lastRestore?.exportId ?? null,
+      lastRestoreAt: lastRestore?.createdAt ? new Date(lastRestore.createdAt).toISOString() : null,
+      filesApplied,
+      missingAttachmentCount,
+      reminderNeeded,
+      reminderDays: ARCHIVE_REMINDER_DAYS,
+    };
+  } catch (error) {
+    if (!isS3MissingKey(error)) {
+      console.error('getArchiveBackupStatus failed');
+    }
+    return EMPTY_BACKUP_STATUS;
   }
-  const lastExportAt = exportRow?.createdAt ? exportRow.createdAt.toISOString() : null;
-  const ageMs = lastExportAt ? Date.now() - Date.parse(lastExportAt) : Number.POSITIVE_INFINITY;
-  const reminderNeeded = ageMs > ARCHIVE_REMINDER_DAYS * 24 * 60 * 60 * 1000;
-  return {
-    lastExportAt,
-    lastRestoreExportId: lastRestore?.exportId ?? null,
-    lastRestoreAt: lastRestore?.createdAt ? new Date(lastRestore.createdAt).toISOString() : null,
-    filesApplied,
-    missingAttachmentCount,
-    reminderNeeded,
-    reminderDays: ARCHIVE_REMINDER_DAYS,
-  };
 }

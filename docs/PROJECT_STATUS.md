@@ -1,3 +1,7 @@
+## 2026-10-15 — Module-off historical document reads (v2.5.7)
+
+QA STATUS on v2.5.6: 292 checks, 291 passed, 1 failed (BUG-0043 / RT-047). Live stamp confirmed **v2.5.6 · d5377d8**. Backup page opens; restore is disabled on a company with records (empty-tenant gate, not restore acceptance). Owner historical invoice detail is now allowed after Sales-off while create/pay stay denied; Warehouse, scope-fault, deny-override and Viewer writes are unchanged. See [CHG-20261015-module-off-historical-read](changes/CHG-20261015-module-off-historical-read.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.7 · <sha7>`. Restore remains unverified. BookOne is not customer-ready.
+
 ## 2026-10-14 — QA batch all-or-nothing, returns, VAT, scope (v2.5.6)
 
 QA STATUS on v2.5.5: 292 checks, 273 passed, 19 failed (13 groups). Product now rolls back mixed payment batches, fingerprints payment keys, requires files-pack `dataSha256` when the restore stored it, restores original return cost/discount/tax, charges VAT from classification, refuses excessive discounts and repeat refunds, settles cash credits on liquid tender, and fail-closes document detail plus shop-scope metadata errors. See [CHG-20261014-qa-batch-atomicity-sales-scope](changes/CHG-20261014-qa-batch-atomicity-sales-scope.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.6 · <sha7>`. Restore remains unverified. Browser workflows still pending Admin grant. BookOne is not customer-ready.

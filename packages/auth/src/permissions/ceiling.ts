@@ -22,6 +22,17 @@ export function canViewModule(
   return Boolean(modules?.[module]);
 }
 
+/**
+ * Optional ERP modules (sales, purchase, inventory, POS, rental) are a write
+ * ceiling. Authorised company/sole_prop members may still open existing
+ * documents after a module is switched off. Personal/pending never receive
+ * those modules. Nav continues to use canViewModule so disabled suites stay
+ * off the menu (BUG-0043).
+ */
+export function entityCanReadModularHistory(entityKind: EntityKind): boolean {
+  return entityKind !== 'personal' && entityKind !== 'pending';
+}
+
 export function canWriteModule(
   entityKind: EntityKind,
   capabilityTier: string | null | undefined,

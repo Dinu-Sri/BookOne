@@ -903,6 +903,7 @@ async function assertCanReadCommercialDocument(doc: {
   const { assertPermission } = await import('@/lib/access');
   const perm = permissionForDocumentType(doc.documentType, 'read');
   if (!perm) throw new Error('You do not have permission to do that.');
+  // Job read + dimension scope. Disabled modules are a write ceiling in allows() (BUG-0043).
   await assertPermission(perm, 'read');
   await assertDimensionScope({ locationId: doc.locationId, brandId: doc.brandId });
 }

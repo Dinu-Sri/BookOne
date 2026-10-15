@@ -5,8 +5,8 @@ import {
   type PermissionKey,
 } from './catalog';
 import {
-  canViewModule,
   canWriteModule,
+  entityCanReadModularHistory,
   parseEntityKind,
   type ModuleWriteKey,
 } from './ceiling';
@@ -68,7 +68,7 @@ export function ceilingAllows(
   const mod = moduleOfKey(key);
   const kind = parseEntityKind(tenant.entityKind);
   if (mod === 'pos' || mod === 'inventory' || mod === 'sales' || mod === 'purchase' || mod === 'rental') {
-    if (need === 'read') return canViewModule(kind, tenant.modules, mod);
+    if (need === 'read') return entityCanReadModularHistory(kind);
     return canWriteModule(kind, tenant.capabilityTier, tenant.modules, mod);
   }
   if (kind === 'personal') {

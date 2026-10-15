@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { canViewModule } from '../src/permissions/ceiling';
 import { templateByKey } from '../src/permissions/templates';
 import { allows, type ResolveInput } from '../src/permissions/resolve';
 
@@ -103,5 +104,80 @@ describe('Sales job', () => {
     expect(allows(sales, 'sales.invoices.write', 'write')).toBe(true);
     expect(allows(sales, 'parties.customers.write', 'write')).toBe(true);
     expect(allows(sales, 'parties.vendors.write', 'write')).toBe(false);
+  });
+});
+
+describe('module-off historical reads (BUG-0043)', () => {
+  const salesOff = { ...modules, sales: false };
+
+  it('Owner can open existing invoices when Sales is off and cannot create or pay', () => {
+    const owner = input({ primaryTemplateKey: 'owner', modules: salesOff });
+    expect(canViewModule('company', owner.modules, 'sales')).toBe(false);
+    expect(allows(owner, 'sales.invoices.read', 'read')).toBe(true);
+    expect(allows(owner, 'sales.invoices.write', 'write')).toBe(false);
+    expect(allows(owner, 'sales.payments.write', 'write')).toBe(false);
+    expect(allows(owner, 'accounting.reports.read', 'read')).toBe(true);
+  });
+
+  it('Viewer can read historical invoices when Sales is off and cannot write', () => {
+    const viewer = input({ primaryTemplateKey: 'viewer', modules: salesOff });
+    expect(allows(viewer, 'sales.invoices.read', 'read')).toBe(true);
+    expect(allows(viewer, 'sales.invoices.write', 'write')).toBe(false);
+    expect(allows(viewer, 'sales.payments.write', 'write')).toBe(false);
+  });
+
+  it('Warehouse cannot read invoices when Sales is off', () => {
+    const warehouse = input({ primaryTemplateKey: 'warehouse', modules: salesOff });
+    expect(allows(warehouse, 'sales.invoices.read', 'read')).toBe(false);
+    expect(allows(warehouse, 'sales.invoices.write', 'write')).toBe(false);
+    expect(allows(warehouse, 'inventory.transfers.read', 'read')).toBe(true);
+  });
+
+  it('Sales job cannot create invoices when Sales is off and can still read them', () => {
+    const sales = input({ primaryTemplateKey: 'sales', modules: salesOff });
+    expect(allows(sales, 'sales.invoices.read', 'read')).toBe(true);
+    expect(allows(sales, 'sales.invoices.write', 'write')).toBe(false);
+    expect(allows(sales, 'sales.payments.write', 'write')).toBe(false);
+  });
+
+  it('Cashier cannot receive payment when Sales is off and can still read invoices', () => {
+    const cashier = input({ primaryTemplateKey: 'cashier', modules: salesOff });
+    expect(allows(cashier, 'sales.invoices.read', 'read')).toBe(true);
+    expect(allows(cashier, 'sales.invoices.write', 'write')).toBe(false);
+    expect(allows(cashier, 'sales.payments.write', 'write')).toBe(false);
+  });
+
+  it('explicit deny still blocks historical invoice read', () => {
+    const owner = input({
+      primaryTemplateKey: 'owner',
+      modules: salesOff,
+      overrides: [{ key: 'sales.invoices.read', effect: 'deny' }],
+    });
+    expect(allows(owner, 'sales.invoices.read', 'read')).toBe(false);
+  });
+
+  it('personal entity cannot read sales invoices', () => {
+    const owner = input({
+      primaryTemplateKey: 'owner',
+      entityKind: 'personal',
+      modules: { ...modules, sales: true },
+    });
+    expect(allows(owner, 'sales.invoices.read', 'read')).toBe(false);
+    expect(allows(owner, 'sales.invoices.write', 'write')).toBe(false);
+  });
+
+  it('Owner can read purchase, inventory, POS and rental history when those modules are off', () => {
+    const owner = input({
+      primaryTemplateKey: 'owner',
+      modules: { ...modules, purchase: false, inventory: false, pos: false, rental: false },
+    });
+    expect(allows(owner, 'purchase.bills.read', 'read')).toBe(true);
+    expect(allows(owner, 'purchase.bills.write', 'write')).toBe(false);
+    expect(allows(owner, 'inventory.transfers.read', 'read')).toBe(true);
+    expect(allows(owner, 'inventory.transfers.write', 'write')).toBe(false);
+    expect(allows(owner, 'pos.history.read', 'read')).toBe(true);
+    expect(allows(owner, 'pos.terminal.write', 'write')).toBe(false);
+    expect(allows(owner, 'rental.dispatch.read', 'read')).toBe(true);
+    expect(allows(owner, 'rental.dispatch.write', 'write')).toBe(false);
   });
 });

@@ -1,3 +1,9 @@
+## 2026-10-15 — Module-off historical document reads (v2.5.7)
+
+- Record: [CHG-20261015-module-off-historical-read](changes/CHG-20261015-module-off-historical-read.md). QA [HANDOFF-20261015-v256-retest](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261015-v256-retest.md) BUG-0043 / RT-047 on v2.5.6 · d5377d8 (291/292; sole failure historical invoice detail after Sales-off).
+- Optional ERP modules are a write ceiling. Owner and other job-authorised readers can open existing invoices, bills, POS, rental and inventory documents after the module is switched off. Writes, Viewer hard-deny, Warehouse no-read, explicit deny, personal/pending, tenant and dimension scope stay in force. Nav still hides disabled suites.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.7 · <sha7>` and reruns RT-045–051 plus the full 292. Continue physical-goods, permissions, and A→empty-B restore in parallel. BookOne is not customer-ready.
+
 ## 2026-10-14 — QA batch all-or-nothing, returns, VAT, scope (v2.5.6)
 
 - Record: [CHG-20261014-qa-batch-atomicity-sales-scope](changes/CHG-20261014-qa-batch-atomicity-sales-scope.md). QA STATUS 292 checks (273 passed, 19 failed) on v2.5.5 · 8e1a2b8; BUG-0031–0042 plus omitted files `dataSha256`.

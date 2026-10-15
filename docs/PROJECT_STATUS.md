@@ -1,3 +1,7 @@
+## 2026-10-15 — HTTP permissions, session identity, BS as-of (v2.5.9)
+
+QA HANDOFF on v2.5.8: HTTP 9 passed / 8 failed / 9 blocked; PostgreSQL 127 passed / 2 failed. Viewer wrote company details and four settings forms. Product now splits period P&L from as-of balance sheet, seeds Starter modules on additional companies, asserts Viewer-denied settings writes, repairs Owner jobs only, and resolves credential identity without BYPASSRLS. See [CHG-20261015-http-permissions-session](changes/CHG-20261015-http-permissions-session.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.9 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-15 — Physical browser reports, receipt, PO vendor, SO preview (v2.5.8)
 
 QA HANDOFF on v2.5.7: physical browser 19 pass / 4 fail; campaign 300 pass / 1 fail (RT-060). Balance Sheet now includes unclosed current earnings so assets 1520 equal liabilities 400 + equity 1120. Receipt print is a client boundary. First PO alternative vendor name saves. Sales-order View uses sales-order labels. See [CHG-20261015-physical-browser-reports-print](changes/CHG-20261015-physical-browser-reports-print.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.8 · <sha7>`. Restore remains unverified. BookOne is not customer-ready.

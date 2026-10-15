@@ -1,6 +1,9 @@
 import { and, db, eq, isNull, tenantMemberships, tenantRoles } from '@bookone/db';
 import { CATALOG_VERSION } from './catalog';
+import { shouldRepairOwnerJob } from './owner-repair';
 import { JOB_TEMPLATES } from './templates';
+
+export { shouldRepairOwnerJob } from './owner-repair';
 
 export async function seedJobsForTenant(tenantId: string): Promise<void> {
   const existing = await db()
@@ -24,7 +27,11 @@ export async function seedJobsForTenant(tenantId: string): Promise<void> {
 export async function ensureOwnerMembership(tenantId: string, userId: string): Promise<void> {
   await seedJobsForTenant(tenantId);
   const [existing] = await db()
-    .select({ id: tenantMemberships.id })
+    .select({
+      id: tenantMemberships.id,
+      role: tenantMemberships.role,
+      primaryRoleId: tenantMemberships.primaryRoleId,
+    })
     .from(tenantMemberships)
     .where(
       and(
@@ -40,11 +47,11 @@ export async function ensureOwnerMembership(tenantId: string, userId: string): P
     .where(and(eq(tenantRoles.tenantId, tenantId), eq(tenantRoles.slug, 'owner'), isNull(tenantRoles.voidedAt)))
     .limit(1);
   if (existing) {
-    if (owner) {
+    if (owner && shouldRepairOwnerJob(existing)) {
       await db()
         .update(tenantMemberships)
         .set({ primaryRoleId: owner.id, role: 'owner' })
-        .where(and(eq(tenantMemberships.id, existing.id), isNull(tenantMemberships.primaryRoleId)));
+        .where(eq(tenantMemberships.id, existing.id));
     }
     return;
   }

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { DEFAULT_CHART_OF_ACCOUNTS } from '@bookone/accounting';
-import { requireTenantContext } from '@bookone/auth';
+import { requireTenantContext, seedJobsForTenant } from '@bookone/auth';
 import {
   accounts,
   auditLog,
@@ -29,11 +29,14 @@ import {
   rentalBookingLines,
   taxProfiles,
   tenantMemberships,
+  tenantRoles,
   tenants,
   transactions,
   users,
   withTenantContext,
 } from '@bookone/db';
+import { assertPermission } from '@/lib/access';
+import { modulesForPlan } from '@/lib/platform-modules';
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -306,6 +309,7 @@ export async function getCompanySettingsData(): Promise<CompanySettingsData> {
 
 export async function saveCompanyProfile(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
+  await assertPermission('company.details.write', 'write');
   const parsed = companyProfileSchema.parse({
     legalName: String(formData.get('legalName') ?? ''),
     tradingName: String(formData.get('tradingName') ?? ''),
@@ -374,6 +378,7 @@ export async function saveCompanyProfile(formData: FormData): Promise<void> {
 
 export async function saveTaxProfile(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
+  await assertPermission('company.tax.write', 'write');
   const parsed = taxProfileSchema.parse({
     tin: String(formData.get('tin') ?? ''),
     vatNumber: String(formData.get('vatNumber') ?? ''),
@@ -416,6 +421,7 @@ export async function saveTaxProfile(formData: FormData): Promise<void> {
 
 export async function createFinancialYear(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
+  await assertPermission('company.details.write', 'write');
   const parsed = financialYearSchema.parse({
     label: String(formData.get('label') ?? ''),
     startDate: String(formData.get('startDate') ?? ''),
@@ -431,6 +437,7 @@ export async function createFinancialYear(formData: FormData): Promise<void> {
 
 export async function createBrand(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
+  await assertPermission('company.brands.write', 'write');
   const parsed = brandSchema.parse({
     name: String(formData.get('name') ?? ''),
     code: String(formData.get('code') ?? ''),
@@ -454,6 +461,11 @@ export async function createBrand(formData: FormData): Promise<void> {
 
 export async function saveBrandForm(_state: CompanyActionState = emptyActionState, formData: FormData): Promise<CompanyActionState> {
   const user = await requireTenantContext();
+  try {
+    await assertPermission('company.brands.write', 'write');
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'You do not have permission to do that.' };
+  }
   const id = formString(formData, 'id').trim();
   const parsed = brandSchema.safeParse({
     name: formString(formData, 'name'),
@@ -515,6 +527,7 @@ export async function saveBrandForm(_state: CompanyActionState = emptyActionStat
 
 export async function createLocation(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
+  await assertPermission('company.locations.write', 'write');
   const parsed = locationSchema.parse({
     name: String(formData.get('name') ?? ''),
     code: String(formData.get('code') ?? ''),
@@ -538,6 +551,11 @@ export async function createLocation(formData: FormData): Promise<void> {
 
 export async function saveLocationForm(_state: CompanyActionState = emptyActionState, formData: FormData): Promise<CompanyActionState> {
   const user = await requireTenantContext();
+  try {
+    await assertPermission('company.locations.write', 'write');
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'You do not have permission to do that.' };
+  }
   const id = formString(formData, 'id').trim();
   const parsed = locationSchema.safeParse({
     name: formString(formData, 'name'),
@@ -754,6 +772,7 @@ export async function deleteLocationFromForm(formData: FormData): Promise<void> 
   if (!id) throw new Error('Location not found.');
 
   const user = await requireTenantContext();
+  await assertPermission('company.locations.write', 'write');
   await withTenantContext(user.tenantId, async () => {
     const [existing] = await db()
       .select({ id: locations.id, name: locations.name })
@@ -789,7 +808,6 @@ export async function deleteLocationFromForm(formData: FormData): Promise<void> 
 
 export async function createCompany(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
-  const { assertPermission } = await import('@/lib/access');
   await assertPermission('company.lifecycle.write', 'write');
   const name = String(formData.get('name') ?? '');
   const parsed = createCompanySchema.parse({
@@ -802,6 +820,7 @@ export async function createCompany(formData: FormData): Promise<void> {
   const [slugExists] = await db().select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, parsed.slug)).limit(1);
   if (slugExists) throw new Error('Company slug already exists.');
 
+  let createdId: string | null = null;
   await db().transaction(async (tx) => {
     const [createdTenant] = await tx
       .insert(tenants)
@@ -809,10 +828,14 @@ export async function createCompany(formData: FormData): Promise<void> {
         name: parsed.name.trim(),
         slug: parsed.slug,
         plan: 'starter',
+        entityKind: 'company',
+        rbacEnforced: true,
+        modules: modulesForPlan('starter'),
       })
       .returning({ id: tenants.id });
 
     if (!createdTenant) throw new Error('Could not create company.');
+    createdId = createdTenant.id;
 
     await tx.insert(tenantMemberships).values({
       tenantId: createdTenant.id,
@@ -851,6 +874,30 @@ export async function createCompany(formData: FormData): Promise<void> {
       notes: 'Created additional company and seeded chart of accounts.',
     });
   });
+
+  if (createdId) {
+    const newTenantId = createdId;
+    await withTenantContext(newTenantId, async () => {
+      await seedJobsForTenant(newTenantId);
+      const [owner] = await db()
+        .select({ id: tenantRoles.id })
+        .from(tenantRoles)
+        .where(and(eq(tenantRoles.tenantId, newTenantId), eq(tenantRoles.slug, 'owner'), isNull(tenantRoles.voidedAt)))
+        .limit(1);
+      if (owner) {
+        await db()
+          .update(tenantMemberships)
+          .set({ primaryRoleId: owner.id, role: 'owner' })
+          .where(
+            and(
+              eq(tenantMemberships.tenantId, newTenantId),
+              eq(tenantMemberships.userId, user.id),
+              isNull(tenantMemberships.voidedAt),
+            ),
+          );
+      }
+    });
+  }
 
   revalidatePath('/settings');
 }

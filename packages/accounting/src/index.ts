@@ -33,10 +33,13 @@ export { CASH_ACCOUNT_CODES, signedCashFlow } from './cash-flow';
 export {
   signedAccountBalance,
   withUnclosedEarnings,
+  journalDateWindow,
+  netIncomeFromRows,
+  composeFinancialStatements,
   CURRENT_EARNINGS_CODE,
   CURRENT_EARNINGS_NAME,
 } from './statement-sign';
-export type { StatementRow } from './statement-sign';
+export type { StatementRow, BalanceMode } from './statement-sign';
 export type { CashFlowLine, SignedCashFlow } from './cash-flow';
 export { amountInWordsLkr, formatDateMmDdYyyy } from './amount-in-words';
 export { datesOverlap, padHireTo, availableQty } from './rental-availability';

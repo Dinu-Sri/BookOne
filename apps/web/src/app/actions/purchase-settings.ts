@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
 import { db, eq, purchaseSettings, withTenantContext } from '@bookone/db';
+import { assertPermission } from '@/lib/access';
 
 const schema = z.object({
   requireBillApproval: z.boolean(),
@@ -86,6 +87,7 @@ export async function savePurchaseSettingsFromForm(formData: FormData): Promise<
   });
 
   const user = await requireTenantContext();
+  await assertPermission('company.purchase_settings.write', 'write');
   await withTenantContext(user.tenantId, async () => {
     const [existing] = await db()
       .select({ id: purchaseSettings.id })

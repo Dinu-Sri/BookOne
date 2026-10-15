@@ -1,0 +1,28 @@
+# CHG-20261015-http-permissions-session — BS as-of, starter modules, Viewer settings, session identity (v2.5.9)
+
+Status: ready-for-QA.
+
+- Author/agent and date: Grok coding agent, 2026-10-15.
+- Product version (`VERSION` file) and base SHA / branch/PR: 2.5.9 on `master` after `cf35da1` (v2.5.8).
+- QA repository revision and companion PR/change ID: [HANDOFF-20261015-real-http-permissions](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261015-real-http-permissions.md). Companion [HANDOFF-20261015-v258-bootstrap-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261015-v258-bootstrap-findings.md). Live pin **v2.5.8 · cf35da1**. HTTP v4: 9 passed / 8 failed / 9 blocked. PostgreSQL: 127 passed / 2 failed (RT-061 / BUG-0049, RT-062 / BUG-0050). Viewer writes confirmed on company details plus four settings forms.
+- Intended before/after behaviour with a concrete example:
+  - BUG-0049 / RT-061: September invoice 600 then October 200 stored AR 800. October P&L stays 200; October and quiet November balance sheets show assets/equity 800. Trial balance is labelled as closing balances as of the cutoff. Same-month RT-060 remains 600/600.
+  - BUG-0050 / RT-062: Additional-company create persists Starter modules (sales/purchase on, inventory/POS off), seeds Owner jobs, and permission load uses plan defaults when flags are empty. Owner saves the first included service PO. Inventory on Starter stays off.
+  - BUG-0051 / HTTP-004,010–013: Viewer cannot persist company profile, tax, sales, purchase or inventory settings. Owner same-action positives stay allowed. Adjacent brand/location/financial-year/rental-settings writes also assert their keys.
+  - BUG-0052 / HTTP-009: A legacy Viewer membership with a null job is not promoted to Owner. Existing Owner rows with a missing job still receive the Owner job.
+  - BUG-0053 / HTTP-102/109: Credential identity is resolved through `bookone_lookup_user_by_email` (SECURITY DEFINER, email-only), then tenant context is pinned before membership/session work. No BYPASSRLS, SUPERUSER, or shared global tenant GUC.
+- Existing behaviour that must remain correct: RT-060 same-period equity; withUnclosedEarnings closed NI=0; BUG-0043 historical reads; Viewer hard-deny on money; v2.5.4 privileged keys; v2.5.6 payment atomicity; receipt client print; party-name override; snapshot types; original HTTP 301/303 expectations; assigned Viewer still denied (HTTP-002/008). Do not reopen BUG-0010–0048 originals.
+- Actual changed paths/symbols/routes: `composeFinancialStatements` / `journalDateWindow`; `getReports` and dashboard cash/AR/AP as-of vs period P&L; reports closing-balance labels; `createCompany` modules + job seed; `effectiveModules` in `loadAccessForUserInner`; `assertPermission` on company profile/tax/sales/purchase/inventory/rental/brands/locations/financial years; `shouldRepairOwnerJob`; `findBookOneUser` + `requireTenantContext` tenant pin; migration `042_lookup_user_by_email.sql`.
+- Business rule/profile/scenario IDs: BUG-0049 / RT-061; BUG-0050 / RT-062; BUG-0051 / HTTP-004,010–013; BUG-0052 / HTTP-009; BUG-0053 / HTTP-102/109. Required retests listed in the handoff.
+- Accounting, stock/rental, tenant/access and customer-data effects: reporting split only (journals unchanged). New additional companies store explicit Starter flags. Viewer settings writes fail closed. Session lookup is a narrow identity read then tenant-scoped work.
+- Migrations, schema/history compatibility and recovery implications: additive function `bookone_lookup_user_by_email`. Applied by `scripts/init-db.ts` on container start. No table rewrite. Rollback is `DROP FUNCTION bookone_lookup_user_by_email(text)`.
+- Dependencies, settings/flags, deployment and external-service changes: Portainer Re-pull ON after Docker web image. Quote `v2.5.9 · <sha7>`. SQL 042 must run (entrypoint init-db).
+- Independent diff/impact review and uncertainties: Restricted HTTP-110–113 remain blocked until 0053 session positives work; do not treat those as new denials. Anonymous localhost:3443 mismatch is a QA harness correction. Restore A→empty-B remains unverified. BookOne is not customer-ready. Backup testing stays last.
+- Checks executed: 2026-10-15 local Windows. `pnpm --dir packages/accounting test` (84 pass, including 5 BUG-0049 cases: period vs as-of window, RT-060 600/600, October income 200 with assets 800, quiet November income 0 with assets 800), `pnpm --dir packages/accounting typecheck` green, `pnpm --dir packages/auth test` (63 pass, including starter defaults, Viewer settings denials, Owner-only job repair), `pnpm --dir packages/auth typecheck` green, `pnpm --dir packages/statement-import test` (30 pass / 4 skip). Isolated HTTP/PostgreSQL rerun is QA-owned.
+- Failed/skipped/flaky/blocked/not-run checks and reasons: no live staging mutation by the coding agent. Isolated HTTP/PostgreSQL rerun and Viewer settings retest are QA-owned.
+- New QA assertions or outstanding work: pin `v2.5.9 · <sha7>` and rerun RT-061, RT-062, HTTP-002/004/008/009/010–013, HTTP-102/109, and the five Viewer settings writes. Then costing/GRNI/permissions; backup last.
+- Created staging records/cleanup, if any: none in this change.
+- Documentation updated: this record, TASK_LOG, PROJECT_STATUS.
+- Next exact action and responsible role: Docker web image green, Portainer Update Re-pull ON; QA pins the stamp. Do not bypass Admin grant. Do not grant BYPASSRLS. Do not weaken QA assertions.
+
+Final product/QA SHAs belong in PR metadata and external run manifests after commit. Do not label the change verified from code review alone.

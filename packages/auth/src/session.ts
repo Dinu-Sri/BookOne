@@ -168,13 +168,17 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
 
   if (existing) {
     if (existing.voidedAt) return null;
-    existing.role = await persistPlatformAdminRole(existing);
-    try {
-      await ensureOwnerMembership(existing.tenantId, existing.id);
-    } catch {
-      /* jobs table may not exist until migration 031 applies */
-    }
-    return toSessionUser(existing);
+    const homeTenantId = existing.tenantId;
+    const activeTenantId = existing.activeTenantId || existing.tenantId;
+    await withTenantContext(homeTenantId, async () => {
+      existing.role = await persistPlatformAdminRole(existing);
+      try {
+        await ensureOwnerMembership(homeTenantId, existing.id);
+      } catch {
+        /* jobs table may not exist until migration 031 applies */
+      }
+    });
+    return withTenantContext(activeTenantId, () => toSessionUser(existing));
   }
 
   if (await hasInviteCookie()) {
@@ -247,24 +251,25 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
     return createdUser;
   });
 
-  try {
-    await seedJobsForTenant(created.tenantId);
-    const [owner] = await db()
-      .select({ id: tenantRoles.id })
-      .from(tenantRoles)
-      .where(and(eq(tenantRoles.tenantId, created.tenantId), eq(tenantRoles.slug, 'owner'), isNull(tenantRoles.voidedAt)))
-      .limit(1);
-    if (owner) {
-      await db()
-        .update(tenantMemberships)
-        .set({ primaryRoleId: owner.id, role: 'owner' })
-        .where(and(eq(tenantMemberships.userId, created.id), eq(tenantMemberships.tenantId, created.tenantId)));
+  return withTenantContext(created.tenantId, async () => {
+    try {
+      await seedJobsForTenant(created.tenantId);
+      const [owner] = await db()
+        .select({ id: tenantRoles.id })
+        .from(tenantRoles)
+        .where(and(eq(tenantRoles.tenantId, created.tenantId), eq(tenantRoles.slug, 'owner'), isNull(tenantRoles.voidedAt)))
+        .limit(1);
+      if (owner) {
+        await db()
+          .update(tenantMemberships)
+          .set({ primaryRoleId: owner.id, role: 'owner' })
+          .where(and(eq(tenantMemberships.userId, created.id), eq(tenantMemberships.tenantId, created.tenantId)));
+      }
+    } catch {
+      /* jobs table may not exist until migration 031 applies */
     }
-  } catch {
-    /* jobs table may not exist until migration 031 applies */
-  }
-
-  return toSessionUser(created);
+    return toSessionUser(created);
+  });
 }
 
 async function persistPlatformAdminRole(row: { id: string; email: string; role: string }): Promise<string> {
@@ -281,8 +286,24 @@ async function persistPlatformAdminRole(row: { id: string; email: string; role: 
   return 'super_admin';
 }
 
-function andEqEmail(email: string) {
-  return sql`lower(${users.email}) = ${email} and ${users.voidedAt} is null`;
+function lookupRow(result: unknown): Record<string, unknown> | null {
+  if (Array.isArray(result) && result.length > 0) return result[0] as Record<string, unknown>;
+  if (result && typeof result === 'object' && 'rows' in result) {
+    const rows = (result as { rows: unknown[] }).rows;
+    if (Array.isArray(rows) && rows.length > 0) return rows[0] as Record<string, unknown>;
+  }
+  return null;
+}
+
+function textField(row: Record<string, unknown>, snake: string, camel: string): string {
+  const value = row[snake] ?? row[camel];
+  return value == null ? '' : String(value);
+}
+
+function optionalField(row: Record<string, unknown>, snake: string, camel: string): string | null {
+  const value = row[snake] ?? row[camel];
+  if (value == null || value === '') return null;
+  return String(value);
 }
 
 async function findBookOneUser(normalizedEmail: string): Promise<{
@@ -295,35 +316,26 @@ async function findBookOneUser(normalizedEmail: string): Promise<{
   voidedAt: Date | null;
 } | null> {
   try {
-    const [row] = await db()
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        tenantId: users.tenantId,
-        activeTenantId: users.activeTenantId,
-        role: users.role,
-        voidedAt: users.voidedAt,
-      })
-      .from(users)
-      .where(andEqEmail(normalizedEmail))
-      .limit(1);
-    return row ?? null;
-  } catch {
-    const [row] = await db()
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        tenantId: users.tenantId,
-        role: users.role,
-        voidedAt: users.voidedAt,
-      })
-      .from(users)
-      .where(andEqEmail(normalizedEmail))
-      .limit(1);
+    const result = await db().execute(sql`
+      SELECT id, email, name, tenant_id, active_tenant_id, role, voided_at
+      FROM bookone_lookup_user_by_email(${normalizedEmail})
+    `);
+    const row = lookupRow(result);
     if (!row) return null;
-    return { ...row, activeTenantId: row.tenantId };
+    const tenantId = textField(row, 'tenant_id', 'tenantId');
+    if (!tenantId) return null;
+    const voidedRaw = row.voided_at ?? row.voidedAt ?? null;
+    return {
+      id: textField(row, 'id', 'id'),
+      email: textField(row, 'email', 'email'),
+      name: textField(row, 'name', 'name'),
+      tenantId,
+      activeTenantId: optionalField(row, 'active_tenant_id', 'activeTenantId') || tenantId,
+      role: textField(row, 'role', 'role'),
+      voidedAt: voidedRaw ? new Date(String(voidedRaw)) : null,
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -345,23 +357,25 @@ export async function requireTenantContext(): Promise<SessionUser> {
     throw new Error('No authenticated session with tenant context.');
   }
   const user = session.user;
-  const [membership] = await db()
-    .select({ id: tenantMemberships.id, status: tenantMemberships.status })
-    .from(tenantMemberships)
-    .where(andMem(user.tenantId, user.id))
-    .limit(1);
-  if (!membership || membership.status !== 'active') {
-    if (user.platformRole === 'super_admin') return user;
-    throw new Error('No active membership in this workspace.');
-  }
-  const [tenant] = await db()
-    .select({ status: tenants.status, voidedAt: tenants.voidedAt })
-    .from(tenants)
-    .where(eq(tenants.id, user.tenantId))
-    .limit(1);
-  if (!tenant || tenant.voidedAt) throw new Error('Workspace is not available.');
-  if (tenant.status === 'suspended') throw new Error('Workspace is suspended.');
-  return user;
+  return withTenantContext(user.tenantId, async () => {
+    const [membership] = await db()
+      .select({ id: tenantMemberships.id, status: tenantMemberships.status })
+      .from(tenantMemberships)
+      .where(andMem(user.tenantId, user.id))
+      .limit(1);
+    if (!membership || membership.status !== 'active') {
+      if (user.platformRole === 'super_admin') return user;
+      throw new Error('No active membership in this workspace.');
+    }
+    const [tenant] = await db()
+      .select({ status: tenants.status, voidedAt: tenants.voidedAt })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1);
+    if (!tenant || tenant.voidedAt) throw new Error('Workspace is not available.');
+    if (tenant.status === 'suspended') throw new Error('Workspace is suspended.');
+    return user;
+  });
 }
 
 export async function withTenantAuth<T>(fn: () => Promise<T>): Promise<T> {

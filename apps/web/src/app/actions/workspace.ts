@@ -21,9 +21,12 @@ import {
 } from '@bookone/db';
 import {
   CASH_ACCOUNT_CODES,
+  composeFinancialStatements,
+  journalDateWindow,
   signedAccountBalance,
   signedCashFlow,
-  withUnclosedEarnings,
+  type BalanceMode,
+  type StatementRow,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
@@ -198,16 +201,20 @@ export async function getTenantInfo(): Promise<TenantInfo> {
 async function computeAccountBalances(
   tenantId: string,
   period?: string | null,
+  mode: BalanceMode = 'period',
 ): Promise<AccountBalance[]> {
   const bounds = resolvePeriodBounds(period ?? 'all');
+  const window = journalDateWindow(bounds, mode);
   return withTenantContext(tenantId, async () => {
     const journalJoinConditions = [
       eq(journalEntries.id, journalLines.journalEntryId),
       isNull(journalEntries.voidedAt),
     ];
-    if (bounds.from && bounds.to) {
-      journalJoinConditions.push(gte(journalEntries.entryDate, bounds.from));
-      journalJoinConditions.push(lte(journalEntries.entryDate, bounds.to));
+    if (window.from) {
+      journalJoinConditions.push(gte(journalEntries.entryDate, window.from));
+    }
+    if (window.to) {
+      journalJoinConditions.push(lte(journalEntries.entryDate, window.to));
     }
 
     // Sum debits - credits per account, then adjust for normalSide.
@@ -363,17 +370,18 @@ export async function getDashboardData(period?: string): Promise<DashboardData> 
   const bounds = resolvePeriodBounds(selectedPeriod);
 
   return withTenantContext(user.tenantId, async () => {
-    const balances = await computeAccountBalances(user.tenantId, selectedPeriod);
+    const periodBalances = await computeAccountBalances(user.tenantId, selectedPeriod, 'period');
+    const asOfBalances = await computeAccountBalances(user.tenantId, selectedPeriod, 'asOf');
 
-    const find = (code: string) => balances.find((b) => b.code === code)?.balance ?? 0;
+    const find = (code: string) => asOfBalances.find((b) => b.code === code)?.balance ?? 0;
 
     const cash = find('1000') + find('1100') + find('1200'); // Cash on Hand + Bank + Card Clearing
     const receivable = find('1300');
     const payable = find('2100');
-    const revenue = balances
+    const revenue = periodBalances
       .filter((b) => b.type === 'revenue')
       .reduce((sum, b) => sum + b.balance, 0);
-    const expense = balances
+    const expense = periodBalances
       .filter((b) => b.type === 'expense')
       .reduce((sum, b) => sum + b.balance, 0);
     const net = revenue - expense;
@@ -814,29 +822,32 @@ export interface ReportsData {
   };
   generalLedger: JournalEntryRow[];
   asOfPeriod: string;
+  trialBalanceBasis: 'closing';
 }
 
-export async function getReports(period?: string): Promise<ReportsData> {
-  const user = await requireTenantContext();
-  const selectedPeriod = selectedPeriodFromInput(period);
-  const bounds = resolvePeriodBounds(selectedPeriod);
-  const balances = await computeAccountBalances(user.tenantId, selectedPeriod);
-  const trialBalance: ReportRow[] = balances.map((b) => ({
+function toStatementRow(b: AccountBalance): StatementRow {
+  return {
     accountCode: b.code,
     accountName: b.name,
     type: b.type,
     debit: b.debit,
     credit: b.credit,
     balance: b.balance,
-  }));
+  };
+}
 
-  const revenue = trialBalance.filter((r) => r.type === 'revenue');
-  const expense = trialBalance.filter((r) => r.type === 'expense');
-  const assets = trialBalance.filter((r) => r.type === 'asset');
-  const liabilities = trialBalance.filter((r) => r.type === 'liability');
-  const postedEquity = trialBalance.filter((r) => r.type === 'equity');
-  const netIncome = revenue.reduce((s, r) => s + r.balance, 0) - expense.reduce((s, r) => s + r.balance, 0);
-  const { equity, totalEquity } = withUnclosedEarnings(postedEquity, netIncome);
+export async function getReports(period?: string): Promise<ReportsData> {
+  const user = await requireTenantContext();
+  const selectedPeriod = selectedPeriodFromInput(period);
+  const bounds = resolvePeriodBounds(selectedPeriod);
+  const [periodBalances, asOfBalances] = await Promise.all([
+    computeAccountBalances(user.tenantId, selectedPeriod, 'period'),
+    computeAccountBalances(user.tenantId, selectedPeriod, 'asOf'),
+  ]);
+  const statements = composeFinancialStatements(
+    periodBalances.map(toStatementRow),
+    asOfBalances.map(toStatementRow),
+  );
 
   const cashMovement = await withTenantContext(user.tenantId, async () => {
     return cashFlowForPeriod(user.tenantId, bounds);
@@ -845,16 +856,10 @@ export async function getReports(period?: string): Promise<ReportsData> {
   const moneyOut = cashMovement.moneyOut;
 
   return {
-    trialBalance,
-    income: { revenue, expense, netIncome },
-    balanceSheet: {
-      assets,
-      liabilities,
-      equity,
-      totalAssets: assets.reduce((sum, row) => sum + row.balance, 0),
-      totalLiabilities: liabilities.reduce((sum, row) => sum + row.balance, 0),
-      totalEquity,
-    },
+    trialBalance: statements.trialBalance,
+    trialBalanceBasis: statements.trialBalanceBasis,
+    income: statements.income,
+    balanceSheet: statements.balanceSheet,
     cashFlow: {
       moneyIn,
       moneyOut,

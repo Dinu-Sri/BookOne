@@ -14,7 +14,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import type { AccessLevel } from './catalog';
-import type { ModuleWriteKey } from './ceiling';
+import { effectiveModules } from './ceiling';
 import { allows, isReadOnlyJob, type ResolveInput } from './resolve';
 import { templateByKey } from './templates';
 import type { PermissionKey } from './catalog';
@@ -57,6 +57,7 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
       id: tenants.id,
       entityKind: tenants.entityKind,
       capabilityTier: tenants.capabilityTier,
+      plan: tenants.plan,
       modules: tenants.modules,
       rbacEnforced: tenants.rbacEnforced,
       status: tenants.status,
@@ -168,7 +169,7 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
       ),
     );
 
-  const modules = (tenant.modules ?? {}) as Partial<Record<ModuleWriteKey, boolean>>;
+  const modules = effectiveModules(tenant.modules, tenant.plan);
   const input: ResolveInput = {
     platformRole,
     rbacEnforced: Boolean(tenant.rbacEnforced),

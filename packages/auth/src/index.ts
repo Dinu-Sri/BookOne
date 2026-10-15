@@ -27,3 +27,12 @@ export {
   type DimensionScope,
 } from './permissions/scope';
 export { seedJobsForTenant, ensureOwnerMembership } from './permissions/seed-jobs';
+export { shouldRepairOwnerJob } from './permissions/owner-repair';
+export {
+  canViewModule,
+  canWriteModule,
+  entityCanReadModularHistory,
+  effectiveModules,
+  modulesForPlan,
+  parseEntityKind,
+} from './permissions/ceiling';

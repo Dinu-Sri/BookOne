@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   CURRENT_EARNINGS_CODE,
+  composeFinancialStatements,
+  journalDateWindow,
   signedAccountBalance,
   withUnclosedEarnings,
 } from '../src/statement-sign';
@@ -64,5 +66,70 @@ describe('withUnclosedEarnings (BUG-0048)', () => {
   it('reduces equity for an unclosed loss', () => {
     const { totalEquity } = withUnclosedEarnings([ownerEquity], -80);
     expect(totalEquity).toBe(920);
+  });
+});
+
+describe('journalDateWindow (BUG-0049)', () => {
+  const october = { from: '2026-10-01', to: '2026-10-31' };
+
+  it('keeps both bounds for period activity', () => {
+    expect(journalDateWindow(october, 'period')).toEqual(october);
+  });
+
+  it('drops the lower bound for a closing snapshot', () => {
+    expect(journalDateWindow(october, 'asOf')).toEqual({ from: null, to: '2026-10-31' });
+  });
+});
+
+describe('composeFinancialStatements (BUG-0049 / RT-061)', () => {
+  function row(
+    code: string,
+    name: string,
+    type: string,
+    balance: number,
+  ): {
+    accountCode: string;
+    accountName: string;
+    type: string;
+    debit: number;
+    credit: number;
+    balance: number;
+  } {
+    const debitNormal = type === 'asset' || type === 'expense';
+    return {
+      accountCode: code,
+      accountName: name,
+      type,
+      debit: debitNormal ? balance : 0,
+      credit: debitNormal ? 0 : balance,
+      balance,
+    };
+  }
+
+  const sept = [row('1300', 'Accounts Receivable', 'asset', 600), row('4000', 'Sales', 'revenue', 600)];
+  const octPeriod = [row('1300', 'Accounts Receivable', 'asset', 200), row('4000', 'Sales', 'revenue', 200)];
+  const octAsOf = [row('1300', 'Accounts Receivable', 'asset', 800), row('4000', 'Sales', 'revenue', 800)];
+  const novAsOf = octAsOf;
+
+  it('keeps same-period income and equity together (RT-060)', () => {
+    const statements = composeFinancialStatements(sept, sept);
+    expect(statements.income.netIncome).toBe(600);
+    expect(statements.balanceSheet.totalAssets).toBe(600);
+    expect(statements.balanceSheet.totalEquity).toBe(600);
+    expect(statements.trialBalanceBasis).toBe('closing');
+  });
+
+  it('uses October activity for P&L and the cumulative snapshot for the balance sheet', () => {
+    const statements = composeFinancialStatements(octPeriod, octAsOf);
+    expect(statements.income.netIncome).toBe(200);
+    expect(statements.balanceSheet.totalAssets).toBe(800);
+    expect(statements.balanceSheet.totalEquity).toBe(800);
+  });
+
+  it('keeps quiet November income at zero and carries forward August-to-October AR', () => {
+    const statements = composeFinancialStatements([], novAsOf);
+    expect(statements.income.netIncome).toBe(0);
+    expect(statements.balanceSheet.totalAssets).toBe(800);
+    expect(statements.balanceSheet.totalEquity).toBe(800);
   });
 });

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
 import { db, eq, inventorySettings, withTenantContext } from '@bookone/db';
+import { assertPermission } from '@/lib/access';
 
 const schema = z.object({
   negativeStockPolicy: z.enum(['allow', 'block']),
@@ -51,6 +52,7 @@ export async function saveInventorySettingsFromForm(formData: FormData): Promise
   });
 
   const user = await requireTenantContext();
+  await assertPermission('company.inventory_settings.write', 'write');
   await withTenantContext(user.tenantId, async () => {
     const [existing] = await db()
       .select({ id: inventorySettings.id })

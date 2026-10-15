@@ -50,6 +50,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   const activeReport = reportTabs.some((tab) => tab.id === params?.report) ? params.report! : 'pnl';
   const periodLabel = periodOptions.label || 'All time';
+  const asOfLabel = periodOptions.to ? `As of ${periodOptions.to}` : periodLabel;
+  const trialLabel = data.trialBalanceBasis === 'closing'
+    ? periodOptions.to
+      ? `Closing balances as of ${periodOptions.to}`
+      : 'Closing balances (all time)'
+    : periodLabel;
+  const headingLabel =
+    activeReport === 'balance' ? asOfLabel : activeReport === 'trial' ? trialLabel : periodLabel;
 
   return (
     <BookOneShell active="Reports" tenant={tenant} period={periodOptions}>
@@ -77,7 +85,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <Card className="metric-card">
             <p className="metric-label">Assets</p>
             <p className="metric-value">{formatLKR(data.balanceSheet.totalAssets)}</p>
-            <p className="metric-note">Asset accounts in view</p>
+            <p className="metric-note">{asOfLabel}</p>
           </Card>
           <Card className="metric-card">
             <p className="metric-label">Ledger entries</p>
@@ -89,7 +97,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Card style={{ marginTop: 16 }}>
           <div className="card-header">
             <div>
-              <p className="eyebrow">{periodLabel}</p>
+              <p className="eyebrow">{headingLabel}</p>
               <h2 className="card-title" style={{ marginTop: 4 }}>{reportTabs.find((tab) => tab.id === activeReport)?.label}</h2>
             </div>
             <Badge tone="info">Live from journals</Badge>

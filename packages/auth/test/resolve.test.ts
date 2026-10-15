@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canViewModule } from '../src/permissions/ceiling';
+import { canViewModule, effectiveModules, modulesForPlan } from '../src/permissions/ceiling';
 import { templateByKey } from '../src/permissions/templates';
 import { allows, type ResolveInput } from '../src/permissions/resolve';
 
@@ -179,5 +179,59 @@ describe('module-off historical reads (BUG-0043)', () => {
     expect(allows(owner, 'pos.terminal.write', 'write')).toBe(false);
     expect(allows(owner, 'rental.dispatch.read', 'read')).toBe(true);
     expect(allows(owner, 'rental.dispatch.write', 'write')).toBe(false);
+  });
+});
+
+describe('starter plan module defaults (BUG-0050)', () => {
+  it('treats empty flags as starter sales and purchase, not inventory or POS', () => {
+    const starter = effectiveModules({}, 'starter');
+    expect(starter).toEqual(modulesForPlan('starter'));
+    expect(canViewModule('company', starter, 'sales')).toBe(true);
+    expect(canViewModule('company', starter, 'purchase')).toBe(true);
+    expect(canViewModule('company', starter, 'inventory')).toBe(false);
+    expect(canViewModule('company', starter, 'pos')).toBe(false);
+  });
+
+  it('keeps explicit false when flags are present', () => {
+    const flags = effectiveModules({ sales: true, purchase: false, inventory: false }, 'starter');
+    expect(canViewModule('company', flags, 'sales')).toBe(true);
+    expect(canViewModule('company', flags, 'purchase')).toBe(false);
+    expect(canViewModule('company', flags, 'inventory')).toBe(false);
+  });
+
+  it('lets an additional-company Owner write the first starter PO and not inventory', () => {
+    const owner = input({
+      primaryTemplateKey: 'owner',
+      modules: effectiveModules({}, 'starter'),
+      rbacEnforced: true,
+    });
+    expect(allows(owner, 'purchase.orders.write', 'write')).toBe(true);
+    expect(allows(owner, 'inventory.products.write', 'write')).toBe(false);
+  });
+
+  it('denies Owner purchase write when stored flags are empty and not normalized', () => {
+    const owner = input({ primaryTemplateKey: 'owner', modules: {}, rbacEnforced: true });
+    expect(allows(owner, 'purchase.orders.write', 'write')).toBe(false);
+  });
+});
+
+describe('Viewer company settings writes (BUG-0051)', () => {
+  it('denies Viewer writes on company profile and the four settings forms', () => {
+    const viewer = input({ primaryTemplateKey: 'viewer' });
+    expect(allows(viewer, 'company.details.write', 'write')).toBe(false);
+    expect(allows(viewer, 'company.tax.write', 'write')).toBe(false);
+    expect(allows(viewer, 'company.sales_settings.write', 'write')).toBe(false);
+    expect(allows(viewer, 'company.purchase_settings.write', 'write')).toBe(false);
+    expect(allows(viewer, 'company.inventory_settings.write', 'write')).toBe(false);
+    expect(allows(viewer, 'company.details.read', 'read')).toBe(true);
+  });
+
+  it('keeps Owner writes on those company keys', () => {
+    const owner = input({ primaryTemplateKey: 'owner' });
+    expect(allows(owner, 'company.details.write', 'write')).toBe(true);
+    expect(allows(owner, 'company.tax.write', 'write')).toBe(true);
+    expect(allows(owner, 'company.sales_settings.write', 'write')).toBe(true);
+    expect(allows(owner, 'company.purchase_settings.write', 'write')).toBe(true);
+    expect(allows(owner, 'company.inventory_settings.write', 'write')).toBe(true);
   });
 });

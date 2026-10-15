@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
 import { db, eq, rentalSettings, withTenantContext } from '@bookone/db';
+import { assertPermission } from '@/lib/access';
 import {
   DEFAULT_RENTAL_SETTINGS,
   DEPOSIT_MODES,
@@ -84,6 +85,7 @@ export async function saveRentalSettingsFromForm(formData: FormData): Promise<vo
   const reconciled = reconcileRentalSettings(parsed);
 
   const user = await requireTenantContext();
+  await assertPermission('company.rental_settings.write', 'write');
   await withTenantContext(user.tenantId, async () => {
     const [existing] = await db()
       .select({ id: rentalSettings.id })

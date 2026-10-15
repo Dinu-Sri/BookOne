@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
 import { db, eq, salesSettings, withTenantContext } from '@bookone/db';
+import { assertPermission } from '@/lib/access';
 
 const schema = z.object({
   vatRatePercent: z.number().min(0).max(100),
@@ -114,6 +115,7 @@ export async function saveSalesSettingsFromForm(formData: FormData): Promise<voi
   });
 
   const user = await requireTenantContext();
+  await assertPermission('company.sales_settings.write', 'write');
   await withTenantContext(user.tenantId, async () => {
     const [existing] = await db()
       .select({ id: salesSettings.id })

@@ -51,3 +51,63 @@ export function withUnclosedEarnings(
   const totalEquity = roundMoney(rows.reduce((sum, row) => sum + row.balance, 0));
   return { equity: rows, totalEquity };
 }
+
+/** Period activity keeps both bounds; a closing snapshot is cumulative through `to`. */
+export type BalanceMode = 'period' | 'asOf';
+
+export function journalDateWindow(
+  bounds: { from: string | null; to: string | null },
+  mode: BalanceMode,
+): { from: string | null; to: string | null } {
+  if (mode === 'asOf') return { from: null, to: bounds.to };
+  return { from: bounds.from, to: bounds.to };
+}
+
+export function netIncomeFromRows(rows: StatementRow[]): number {
+  const revenue = rows.filter((row) => row.type === 'revenue').reduce((sum, row) => sum + row.balance, 0);
+  const expense = rows.filter((row) => row.type === 'expense').reduce((sum, row) => sum + row.balance, 0);
+  return roundMoney(revenue - expense);
+}
+
+/**
+ * Profit and loss and cash movement stay period-bounded. Balance sheet, trial
+ * balance and unclosed earnings use the cumulative snapshot through the cutoff
+ * (BUG-0049 / RT-061).
+ */
+export function composeFinancialStatements(
+  periodRows: StatementRow[],
+  asOfRows: StatementRow[],
+): {
+  trialBalance: StatementRow[];
+  trialBalanceBasis: 'closing';
+  income: { revenue: StatementRow[]; expense: StatementRow[]; netIncome: number };
+  balanceSheet: {
+    assets: StatementRow[];
+    liabilities: StatementRow[];
+    equity: StatementRow[];
+    totalAssets: number;
+    totalLiabilities: number;
+    totalEquity: number;
+  };
+} {
+  const revenue = periodRows.filter((row) => row.type === 'revenue');
+  const expense = periodRows.filter((row) => row.type === 'expense');
+  const netIncome = netIncomeFromRows(periodRows);
+  const assets = asOfRows.filter((row) => row.type === 'asset');
+  const liabilities = asOfRows.filter((row) => row.type === 'liability');
+  const postedEquity = asOfRows.filter((row) => row.type === 'equity');
+  const { equity, totalEquity } = withUnclosedEarnings(postedEquity, netIncomeFromRows(asOfRows));
+  return {
+    trialBalance: asOfRows,
+    trialBalanceBasis: 'closing',
+    income: { revenue, expense, netIncome },
+    balanceSheet: {
+      assets,
+      liabilities,
+      equity,
+      totalAssets: roundMoney(assets.reduce((sum, row) => sum + row.balance, 0)),
+      totalLiabilities: roundMoney(liabilities.reduce((sum, row) => sum + row.balance, 0)),
+      totalEquity,
+    },
+  };
+}

@@ -1,3 +1,9 @@
+## 2026-10-15 — HTTP permissions, session identity, BS as-of (v2.5.9)
+
+- Record: [CHG-20261015-http-permissions-session](changes/CHG-20261015-http-permissions-session.md). QA [HANDOFF-20261015-real-http-permissions](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261015-real-http-permissions.md) BUG-0049–0053 on v2.5.8 · cf35da1 (HTTP 9/8/9, PostgreSQL 127/2, Viewer settings writes confirmed).
+- Balance sheet and trial use cumulative balances through the cutoff; P&L and cash stay period-bounded. Additional companies persist Starter modules and an Owner job. Viewer cannot save company profile or the four settings forms. Legacy Viewer null-job memberships stay Viewer. Credential login looks up identity via a narrow SECURITY DEFINER function, then pins tenant context.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.9 · <sha7>` and reruns RT-061/062 plus HTTP-002/004/008/009/010–013/102/109. Continue costing/GRNI/permissions; backup last. BookOne is not customer-ready.
+
 ## 2026-10-15 — Physical browser: BS earnings, receipt print, PO vendor, SO preview (v2.5.8)
 
 - Record: [CHG-20261015-physical-browser-reports-print](changes/CHG-20261015-physical-browser-reports-print.md). QA [HANDOFF-20261015-v257-physical-browser-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261015-v257-physical-browser-findings.md) BUG-0048/0045/0046/0047 on v2.5.7 · 7ffafab (campaign 300/1, RT-060).

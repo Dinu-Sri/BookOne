@@ -717,7 +717,14 @@ export function CommercialDocumentList({
 
       {menuPortal}
 
-      {preview ? <QuotationSnapshotDialog doc={preview} onClose={() => setPreview(null)} /> : null}
+      {preview ? (
+        <QuotationSnapshotDialog
+          doc={preview}
+          onClose={() => setPreview(null)}
+          listTitle={config.title}
+          editHref={hrefFromPattern(config.editHrefPattern, preview.id)}
+        />
+      ) : null}
       {printDocId ? <PrintPreviewModal documentId={printDocId} onClose={() => setPrintDocId(null)} /> : null}
 
       <ConfirmDialog

@@ -19,7 +19,12 @@ import {
   inArray,
   sql,
 } from '@bookone/db';
-import { CASH_ACCOUNT_CODES, signedAccountBalance, signedCashFlow } from '@bookone/accounting';
+import {
+  CASH_ACCOUNT_CODES,
+  signedAccountBalance,
+  signedCashFlow,
+  withUnclosedEarnings,
+} from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import {
@@ -829,8 +834,9 @@ export async function getReports(period?: string): Promise<ReportsData> {
   const expense = trialBalance.filter((r) => r.type === 'expense');
   const assets = trialBalance.filter((r) => r.type === 'asset');
   const liabilities = trialBalance.filter((r) => r.type === 'liability');
-  const equity = trialBalance.filter((r) => r.type === 'equity');
+  const postedEquity = trialBalance.filter((r) => r.type === 'equity');
   const netIncome = revenue.reduce((s, r) => s + r.balance, 0) - expense.reduce((s, r) => s + r.balance, 0);
+  const { equity, totalEquity } = withUnclosedEarnings(postedEquity, netIncome);
 
   const cashMovement = await withTenantContext(user.tenantId, async () => {
     return cashFlowForPeriod(user.tenantId, bounds);
@@ -847,7 +853,7 @@ export async function getReports(period?: string): Promise<ReportsData> {
       equity,
       totalAssets: assets.reduce((sum, row) => sum + row.balance, 0),
       totalLiabilities: liabilities.reduce((sum, row) => sum + row.balance, 0),
-      totalEquity: equity.reduce((sum, row) => sum + row.balance, 0),
+      totalEquity,
     },
     cashFlow: {
       moneyIn,

@@ -15,6 +15,7 @@ import {
   type BrandOption,
   type LocationOption,
 } from '@/components/module/brand-location-fields';
+import { PartyNameFields } from '@/components/module/party-name-fields';
 import { documentHasRentalLines, EventHireFields } from '@/components/sales/event-hire-fields';
 import { Button } from '@/components/ui/bookone-ui';
 import { IdempotencyField } from '@/components/ui/form-busy';
@@ -143,25 +144,12 @@ export function QuotationForm({
         ) : null}
 
         <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
-          <div className="field field-span-2">
-            <label>Customer *</label>
-            {partyOptions.length > 0 ? (
-              <select className="input" name="partyName" defaultValue={partyOptions[0]?.name ?? ''} required>
-                {partyOptions.map((p) => (
-                  <option key={p.id} value={p.name}>
-                    {p.code ? `${p.code} — ` : ''}
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input className="input" name="partyName" required placeholder="Customer name" />
-            )}
-          </div>
-          <div className="field">
-            <label>Or type new name</label>
-            <input className="input" name="partyNameOverride" placeholder="Walk-in / new" />
-          </div>
+          <PartyNameFields
+            label="Customer"
+            placeholder="Customer name"
+            partyOptions={partyOptions}
+            overridePlaceholder="Walk-in / new"
+          />
           <div className="field">
             <label>Quote date *</label>
             <input

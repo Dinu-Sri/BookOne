@@ -25,6 +25,7 @@ import {
   type BrandOption,
   type LocationOption,
 } from '@/components/module/brand-location-fields';
+import { PartyNameFields } from '@/components/module/party-name-fields';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { IdempotencyField } from '@/components/ui/form-busy';
 
@@ -317,30 +318,11 @@ export function CommercialDocNewForm({
           ) : null}
 
           <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
-            <div className="field field-span-2">
-              <label>{partyLabel} *</label>
-              {partyOptions && partyOptions.length > 0 ? (
-                <select
-                  className="input"
-                  name="partyName"
-                  defaultValue={partyOptions[0]?.name ?? ''}
-                  required
-                >
-                  {partyOptions.map((p) => (
-                    <option key={p.id} value={p.name}>
-                      {p.code ? `${p.code} — ` : ''}
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input className="input" name="partyName" placeholder={partyPlaceholder} required />
-              )}
-            </div>
-            <div className="field">
-              <label>Or type new name</label>
-              <input className="input" name="partyNameOverride" placeholder={partyPlaceholder} />
-            </div>
+            <PartyNameFields
+              label={partyLabel}
+              placeholder={partyPlaceholder}
+              partyOptions={partyOptions}
+            />
             <div className="field">
               <label>Date *</label>
               <input className="input" name="issueDate" type="date" defaultValue={todayString()} required />

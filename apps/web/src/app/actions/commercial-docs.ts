@@ -2472,10 +2472,43 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
 
   const selectedParty = String(formData.get('partyName') ?? '').trim();
   const overrideParty = String(formData.get('partyNameOverride') ?? '').trim();
-  const partyName =
+  let partyName =
     overrideParty ||
     (selectedParty && selectedParty !== '__new__' ? selectedParty : '') ||
     overrideParty;
+
+  const listPath: Record<string, string> = {
+    quotation: '/sales/quotations',
+    sales_order: '/sales/orders',
+    sales_invoice: '/sales/invoices',
+    sales_return: '/sales/returns',
+    pos_sale: '/sales/pos',
+    purchase_order: '/purchase/orders',
+    purchase: '/purchase/purchases',
+    import_purchase: '/purchase/import',
+    cash_purchase: '/purchase/expenses',
+    goods_receipt: '/purchase/receipts',
+    purchase_return: '/purchase/returns',
+    vendor_bill: '/purchase/purchases',
+  };
+  const purchasePartyTypes = new Set([
+    'purchase_order',
+    'purchase',
+    'import_purchase',
+    'cash_purchase',
+    'goods_receipt',
+    'purchase_return',
+    'vendor_bill',
+  ]);
+  if (!partyName) {
+    if (purchasePartyTypes.has(documentType)) {
+      const { redirect } = await import('next/navigation');
+      redirect(
+        `${listPath[documentType] ?? '/purchase/orders'}?err=${encodeURIComponent('Enter a vendor name or pick a vendor.')}`,
+      );
+    }
+    partyName = 'Walk-in';
+  }
 
   const sourceOrderIds = formData
     .getAll('sourceOrderIds')
@@ -2484,7 +2517,7 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
 
   const result = await createCommercialDocument({
     documentType,
-    partyName: partyName || 'Walk-in',
+    partyName,
     issueDate: String(formData.get('issueDate') ?? new Date().toISOString().slice(0, 10)),
     dueDate: String(formData.get('dueDate') ?? ''),
     deliveryDate: String(formData.get('deliveryDate') ?? ''),
@@ -2539,20 +2572,6 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
   });
 
   const { redirect } = await import('next/navigation');
-  const listPath: Record<string, string> = {
-    quotation: '/sales/quotations',
-    sales_order: '/sales/orders',
-    sales_invoice: '/sales/invoices',
-    sales_return: '/sales/returns',
-    pos_sale: '/sales/pos',
-    purchase_order: '/purchase/orders',
-    purchase: '/purchase/purchases',
-    import_purchase: '/purchase/import',
-    cash_purchase: '/purchase/expenses',
-    goods_receipt: '/purchase/receipts',
-    purchase_return: '/purchase/returns',
-    vendor_bill: '/purchase/purchases',
-  };
   const base = listPath[documentType] ?? '/sales/invoices';
   if (!result.ok) {
     const error = result.error ?? 'Could not create document.';

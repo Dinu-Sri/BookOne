@@ -1,3 +1,9 @@
+## 2026-10-15 — Physical browser: BS earnings, receipt print, PO vendor, SO preview (v2.5.8)
+
+- Record: [CHG-20261015-physical-browser-reports-print](changes/CHG-20261015-physical-browser-reports-print.md). QA [HANDOFF-20261015-v257-physical-browser-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261015-v257-physical-browser-findings.md) BUG-0048/0045/0046/0047 on v2.5.7 · 7ffafab (campaign 300/1, RT-060).
+- Balance Sheet equity includes unclosed current earnings (journals unchanged). Receipt Print is a client button. First PO can save from "Or type new name" alone. Sales-order preview uses sales-order identity.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.8 · <sha7>` and reruns RT-060, read-only receipt, PO alternative name, SO View. Continue costing/GRNI/permissions; backup last. BookOne is not customer-ready.
+
 ## 2026-10-15 — Module-off historical document reads (v2.5.7)
 
 - Record: [CHG-20261015-module-off-historical-read](changes/CHG-20261015-module-off-historical-read.md). QA [HANDOFF-20261015-v256-retest](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261015-v256-retest.md) BUG-0043 / RT-047 on v2.5.6 · d5377d8 (291/292; sole failure historical invoice detail after Sales-off).

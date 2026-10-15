@@ -6,13 +6,43 @@ import type { CommercialDocDetail } from '@/app/actions/commercial-docs';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { Button } from '@/components/ui/bookone-ui';
 
+const SNAPSHOT_BY_TYPE: Record<string, { kicker: string; dateLabel: string; avatar: string }> = {
+  quotation: { kicker: 'Quotation', dateLabel: 'Good thru', avatar: 'Q' },
+  sales_order: { kicker: 'Sales order', dateLabel: 'Dispatch by', avatar: 'SO' },
+  sales_invoice: { kicker: 'Invoice', dateLabel: 'Due date', avatar: 'INV' },
+  customer_invoice: { kicker: 'Invoice', dateLabel: 'Due date', avatar: 'INV' },
+  sales_return: { kicker: 'Sales return', dateLabel: 'Date', avatar: 'SR' },
+  purchase_order: { kicker: 'Purchase order', dateLabel: 'Due date', avatar: 'PO' },
+  purchase: { kicker: 'Purchase', dateLabel: 'Due date', avatar: 'BILL' },
+  vendor_bill: { kicker: 'Vendor bill', dateLabel: 'Due date', avatar: 'BILL' },
+  import_purchase: { kicker: 'Import purchase', dateLabel: 'Due date', avatar: 'IMP' },
+  cash_purchase: { kicker: 'Cash purchase', dateLabel: 'Date', avatar: 'EXP' },
+  goods_receipt: { kicker: 'Goods receipt', dateLabel: 'Date', avatar: 'GRN' },
+  purchase_return: { kicker: 'Purchase return', dateLabel: 'Date', avatar: 'PR' },
+};
+
+function snapshotMeta(doc: CommercialDocDetail, fallbackTitle?: string) {
+  const mapped = SNAPSHOT_BY_TYPE[doc.documentType];
+  const kicker = mapped?.kicker ?? fallbackTitle ?? 'Document';
+  return {
+    kicker,
+    dateLabel: mapped?.dateLabel ?? 'Due date',
+    avatar: mapped?.avatar ?? kicker.slice(0, 2).toUpperCase(),
+  };
+}
+
 export function QuotationSnapshotDialog({
   doc,
   onClose,
+  listTitle,
+  editHref,
 }: {
   doc: CommercialDocDetail;
   onClose: () => void;
+  listTitle?: string;
+  editHref?: string | null;
 }) {
+  const meta = snapshotMeta(doc, listTitle);
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -29,10 +59,10 @@ export function QuotationSnapshotDialog({
 
         <div className="party-snapshot-hero">
           <div className="party-snapshot-avatar" aria-hidden>
-            Q
+            {meta.avatar}
           </div>
           <div className="party-snapshot-hero-text">
-            <p className="party-snapshot-kicker">Quotation</p>
+            <p className="party-snapshot-kicker">{meta.kicker}</p>
             <h2 id="quote-snapshot-title">{doc.documentNumber}</h2>
             <div className="party-snapshot-meta">
               <StatusBadge status={doc.status} />
@@ -47,7 +77,7 @@ export function QuotationSnapshotDialog({
             <strong>{doc.issueDate}</strong>
           </div>
           <div>
-            <span>Good thru</span>
+            <span>{meta.dateLabel}</span>
             <strong>{doc.dueDate || '—'}</strong>
           </div>
           <div>
@@ -96,11 +126,13 @@ export function QuotationSnapshotDialog({
           <Button variant="secondary" type="button" onClick={onClose}>
             Close
           </Button>
-          <Link href={`/sales/quotations/${doc.id}/edit`}>
-            <Button variant="primary" type="button">
-              Edit
-            </Button>
-          </Link>
+          {editHref ? (
+            <Link href={editHref}>
+              <Button variant="primary" type="button">
+                Edit
+              </Button>
+            </Link>
+          ) : null}
         </div>
       </div>
     </div>

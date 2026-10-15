@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { CURRENT_EARNINGS_CODE } from '@bookone/accounting';
 import { getPeriodOptions, getReports, getTenantInfo, type ReportRow } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Card } from '@/components/ui/bookone-ui';
@@ -159,6 +160,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   );
 }
 
+function statementLineLabel(row: ReportRow): string {
+  if (!row.accountCode || row.accountCode === CURRENT_EARNINGS_CODE) return row.accountName;
+  return `${row.accountCode} - ${row.accountName}`;
+}
+
 function StatementSection({ title, rows, normal }: { title: string; rows: ReportRow[]; normal: 'debit' | 'credit' }) {
   return (
     <section className="statement-section">
@@ -166,8 +172,8 @@ function StatementSection({ title, rows, normal }: { title: string; rows: Report
       {rows.length === 0 ? (
         <p>No {title.toLowerCase()} recorded.</p>
       ) : rows.map((row) => (
-        <div className="statement-line" key={row.accountCode}>
-          <span>{row.accountCode} - {row.accountName}</span>
+        <div className="statement-line" key={row.accountCode || row.accountName}>
+          <span>{statementLineLabel(row)}</span>
           <strong className={normal === 'debit' ? 'amount-positive' : 'amount-positive'}>{formatLKR(row.balance)}</strong>
         </div>
       ))}

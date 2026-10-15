@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatDateMmDdYyyy } from '@bookone/accounting';
 import type { DocumentPrintModel } from '@/app/actions/document-print';
+import { PrintSheetButton } from '@/components/print/print-sheet-button';
 import { scaleRatio } from '@/lib/document-style';
 
 function money(n: number) {
@@ -42,9 +43,7 @@ export function DocumentPrintSheet({
         <div className="doc-print-toolbar no-print">
           {backHref ? <Link href={backHref}>← {backLabel}</Link> : <span>{model.title}</span>}
           <span className="doc-print-hint">In the print dialog, turn off Headers and footers.</span>
-          <button type="button" onClick={() => window.print()}>
-            Print
-          </button>
+          <PrintSheetButton />
         </div>
       ) : null}
 

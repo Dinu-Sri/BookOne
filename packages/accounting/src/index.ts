@@ -30,7 +30,13 @@ export type {
 } from './engine/document-posting';
 export { lineIsOutputTaxable, salesOutputVatRatePercent } from './engine/sales-vat';
 export { CASH_ACCOUNT_CODES, signedCashFlow } from './cash-flow';
-export { signedAccountBalance } from './statement-sign';
+export {
+  signedAccountBalance,
+  withUnclosedEarnings,
+  CURRENT_EARNINGS_CODE,
+  CURRENT_EARNINGS_NAME,
+} from './statement-sign';
+export type { StatementRow } from './statement-sign';
 export type { CashFlowLine, SignedCashFlow } from './cash-flow';
 export { amountInWordsLkr, formatDateMmDdYyyy } from './amount-in-words';
 export { datesOverlap, padHireTo, availableQty } from './rental-availability';

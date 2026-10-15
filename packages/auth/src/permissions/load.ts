@@ -204,8 +204,7 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
       locationIds = loc.length ? loc : null;
       brandIds = br.length ? br : null;
     } catch {
-      locationIds = null;
-      brandIds = null;
+      throw new Error('Could not load your shop assignments. Try again.');
     }
   }
 

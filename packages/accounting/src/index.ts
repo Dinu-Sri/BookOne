@@ -28,6 +28,7 @@ export type {
   BuiltSalePosting,
   PurchaseLineBucket,
 } from './engine/document-posting';
+export { lineIsOutputTaxable, salesOutputVatRatePercent } from './engine/sales-vat';
 export { CASH_ACCOUNT_CODES, signedCashFlow } from './cash-flow';
 export { signedAccountBalance } from './statement-sign';
 export type { CashFlowLine, SignedCashFlow } from './cash-flow';

@@ -155,6 +155,39 @@ describe('sales return posting', () => {
     );
     expect(sumSides(result.lines)).toEqual({ debit: 1180, credit: 1180 });
   });
+
+  it('restores header discount and VAT on a full credit (BUG-0035)', () => {
+    const result = buildSalesReturnPosting({
+      lines: [
+        {
+          description: 'Service A',
+          quantity: 1,
+          unitPrice: 200,
+          unitCost: 0,
+          productType: 'service',
+          discountAmount: 10,
+        },
+        {
+          description: 'Digital B',
+          quantity: 1,
+          unitPrice: 200,
+          unitCost: 0,
+          productType: 'digital',
+          discountAmount: 10,
+        },
+      ],
+      headerDiscount: 30,
+      vatRatePercent: 18,
+    });
+    expect(result.netTotal).toBe(350);
+    expect(result.vatTotal).toBe(63);
+    expect(result.grandTotal).toBe(413);
+    expect(result.lines.some((l) => l.accountCode === '4100' && l.amount === 350)).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '2200' && l.side === 'debit' && l.amount === 63)).toBe(
+      true,
+    );
+    expect(sumSides(result.lines)).toEqual({ debit: 413, credit: 413 });
+  });
 });
 
 describe('vendor bill + purchase return + stock adjustment', () => {

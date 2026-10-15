@@ -11,6 +11,9 @@ import {
   buildGrnPosting,
   isPhysicalProduct,
   isRentalProduct,
+  isLiquidTenderCode,
+  lineIsOutputTaxable,
+  salesOutputVatRatePercent,
   amountInWordsLkr,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
@@ -43,6 +46,7 @@ import {
   settlementAllocations,
   sql,
   transactions,
+  pgClient,
   withTenantContext,
 } from '@bookone/db';
 import { ensureParty } from '@/app/actions/parties';
@@ -195,7 +199,7 @@ async function nextTaxInvoiceNumber(tenantId: string, issueDate: string, deptCod
   return `${yy}${mmm}_${dept}/${serial}`;
 }
 
-async function loadSalesVatConfig(tenantId: string, saleChannel: string, invoiceKind: string) {
+async function loadSalesVatConfig(tenantId: string, saleChannel: string) {
   const [settings] = await db()
     .select()
     .from(salesSettings)
@@ -203,13 +207,12 @@ async function loadSalesVatConfig(tenantId: string, saleChannel: string, invoice
     .limit(1);
   const vatRegistered = settings?.vatRegistered === '1';
   const dept = settings?.taxInvoiceDeptCode ?? '01';
-  let vatRate = 0;
-  if (invoiceKind === 'tax_invoice' && vatRegistered) {
-    vatRate =
-      saleChannel === 'export'
-        ? Number(settings?.exportVatRatePercent ?? 0)
-        : Number(settings?.vatRatePercent ?? 18);
-  }
+  const vatRate = salesOutputVatRatePercent({
+    vatRegistered,
+    saleChannel,
+    domesticRatePercent: Number(settings?.vatRatePercent ?? 18),
+    exportRatePercent: Number(settings?.exportVatRatePercent ?? 0),
+  });
   return { vatRate, dept, vatRegistered };
 }
 
@@ -325,12 +328,24 @@ async function receivedQtyByLineKey(tenantId: string, sourceId: string): Promise
 
 async function resolveAccount(tenantId: string, code: string) {
   const [account] = await db()
-    .select({ id: accounts.id, code: accounts.code, name: accounts.name, type: accounts.type })
+    .select({
+      id: accounts.id,
+      code: accounts.code,
+      name: accounts.name,
+      type: accounts.type,
+      isActive: accounts.isActive,
+    })
     .from(accounts)
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.code, code), isNull(accounts.voidedAt)))
     .limit(1);
   if (!account) throw new Error(`Account ${code} not found.`);
   return account;
+}
+
+function assertEligibleDocumentTender(account: { code: string; type: string; isActive: string }) {
+  if (account.type !== 'asset' || account.isActive !== '1' || !isLiquidTenderCode(account.code)) {
+    throw new Error('Payment must use an active cash, bank, or card account.');
+  }
 }
 
 /** Ensure system account exists (e.g. GRNI 2150 on older tenants). */
@@ -836,34 +851,60 @@ export async function listCommercialDocuments(types: string[], period?: string):
   });
 }
 
-function permissionForDocumentType(documentType: string): string {
+function permissionForDocumentType(documentType: string, need: 'read' | 'write' = 'write'): string {
+  let key = '';
   switch (documentType) {
     case 'quotation':
-      return 'sales.quotations.write';
+      key = 'sales.quotations.write';
+      break;
     case 'sales_order':
-      return 'sales.orders.write';
+      key = 'sales.orders.write';
+      break;
     case 'sales_invoice':
     case 'customer_invoice':
-      return 'sales.invoices.write';
+      key = 'sales.invoices.write';
+      break;
     case 'sales_return':
-      return 'sales.returns.write';
+      key = 'sales.returns.write';
+      break;
     case 'pos_sale':
-      return 'pos.terminal.write';
+      key = 'pos.terminal.write';
+      break;
     case 'purchase_order':
-      return 'purchase.orders.write';
+      key = 'purchase.orders.write';
+      break;
     case 'goods_receipt':
-      return 'purchase.receipts.write';
+      key = 'purchase.receipts.write';
+      break;
     case 'purchase':
     case 'vendor_bill':
     case 'import_purchase':
-      return documentType === 'import_purchase' ? 'purchase.import.write' : 'purchase.bills.write';
+      key = documentType === 'import_purchase' ? 'purchase.import.write' : 'purchase.bills.write';
+      break;
     case 'cash_purchase':
-      return 'purchase.expenses.write';
+      key = 'purchase.expenses.write';
+      break;
     case 'purchase_return':
-      return 'purchase.returns.write';
+      key = 'purchase.returns.write';
+      break;
     default:
-      return '';
+      key = '';
   }
+  if (!key) return '';
+  if (need === 'read') return key.replace(/\.write$/, '.read');
+  return key;
+}
+
+async function assertCanReadCommercialDocument(doc: {
+  documentType: string;
+  locationId: string | null;
+  brandId: string | null;
+}): Promise<void> {
+  const { assertPermission } = await import('@/lib/access');
+  const perm = permissionForDocumentType(doc.documentType, 'read');
+  if (!perm) throw new Error('You do not have permission to do that.');
+  await assertPermission(perm, 'read');
+  await assertDimensionScope({ locationId: doc.locationId, brandId: doc.brandId });
 }
 
 const PRODUCT_NOT_IN_COMPANY = 'That product is not in this company.';
@@ -1191,7 +1232,22 @@ export async function createCommercialDocument(
         sourceLines.map((line) => line.productId),
       );
 
-      const enriched = [];
+      const enriched: Array<{
+        productId?: string | null;
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        unitCost: number;
+        discountAmount: number;
+        lineTotal: number;
+        productType: string;
+        taxStatus: string;
+        accountCode?: string;
+        revenueAccountCode: string;
+        cogsAccountCode: string;
+        inventoryAccountCode: string;
+      }> = [];
+      const linkedReturn = parsed.documentType === 'sales_return' && Boolean(parsed.sourceDocumentId);
       for (const line of sourceLines) {
         let unitCost = line.unitCost ?? 0;
         let productType = 'service';
@@ -1199,6 +1255,7 @@ export async function createCommercialDocument(
         let revenueAccountCode = '4000';
         let cogsAccountCode = '5000';
         let inventoryAccountCode = '5100';
+        let taxStatus = 'unknown';
         if (line.productId) {
           const [product] = await db()
             .select()
@@ -1214,11 +1271,14 @@ export async function createCommercialDocument(
           if (!product) {
             throw new Error(PRODUCT_NOT_IN_COMPANY);
           }
-          // Purchases: cost is what we pay (line unit price). Sales: use product cost for COGS.
+          // Purchases: cost is what we pay (line unit price). Linked returns keep source slices.
           unitCost = isPurchaseDoc
             ? line.unitPrice
-            : Number(product.unitCost) || line.unitCost || 0;
+            : linkedReturn
+              ? Number(line.unitCost) || Number(product.unitCost) || 0
+              : Number(product.unitCost) || line.unitCost || 0;
           productType = product.productType === 'stocked' ? 'physical' : product.productType;
+          taxStatus = String(product.taxStatus ?? 'unknown');
           if (!description) description = product.name;
           revenueAccountCode = String(product.revenueAccountCode ?? '4000') || '4000';
           cogsAccountCode = String(product.cogsAccountCode ?? '5000') || '5000';
@@ -1240,6 +1300,7 @@ export async function createCommercialDocument(
           description,
           unitCost,
           productType,
+          taxStatus,
           lineTotal,
           discountAmount,
           revenueAccountCode,
@@ -1307,6 +1368,81 @@ export async function createCommercialDocument(
         }
       }
 
+      type LinkedSourceLine = {
+        productId: string | null;
+        description: string;
+        quantity: string | number;
+        unitPrice: string | number;
+        unitCost: string | number;
+        discountAmount: string | number;
+      };
+      let linkedSource: {
+        id: string;
+        total: string | number;
+        discountTotal: string | number;
+        vatRate: string | number | null;
+        invoiceKind: string | null;
+      } | null = null;
+      let linkedSourceLines: LinkedSourceLine[] = [];
+      if (linkedReturn && parsed.sourceDocumentId) {
+        await pgClient()`
+          select id from business_documents
+          where id = ${parsed.sourceDocumentId}::uuid and tenant_id = ${user.tenantId}::uuid
+          for update
+        `;
+        const [src] = await db()
+          .select({
+            id: businessDocuments.id,
+            total: businessDocuments.total,
+            discountTotal: businessDocuments.discountTotal,
+            vatRate: businessDocuments.vatRate,
+            invoiceKind: businessDocuments.invoiceKind,
+          })
+          .from(businessDocuments)
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.id, parsed.sourceDocumentId),
+              isNull(businessDocuments.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (!src) throw new Error('Source document was not found in this company.');
+        linkedSource = src;
+        linkedSourceLines = await db()
+          .select({
+            productId: businessDocumentLines.productId,
+            description: businessDocumentLines.description,
+            quantity: businessDocumentLines.quantity,
+            unitPrice: businessDocumentLines.unitPrice,
+            unitCost: businessDocumentLines.unitCost,
+            discountAmount: businessDocumentLines.discountAmount,
+          })
+          .from(businessDocumentLines)
+          .where(
+            and(
+              eq(businessDocumentLines.documentId, src.id),
+              isNull(businessDocumentLines.voidedAt),
+            ),
+          );
+        const usedSource = new Set<number>();
+        for (const line of enriched) {
+          const idx = linkedSourceLines.findIndex((s, i) => {
+            if (usedSource.has(i)) return false;
+            return lineMatchKey(s.productId, s.description) === lineMatchKey(line.productId, line.description);
+          });
+          if (idx < 0) continue;
+          usedSource.add(idx);
+          const srcLine = linkedSourceLines[idx]!;
+          const srcQty = Number(srcLine.quantity);
+          const ratio = srcQty > 0 ? line.quantity / srcQty : 0;
+          line.unitPrice = Number(srcLine.unitPrice);
+          line.unitCost = Number(srcLine.unitCost);
+          line.discountAmount = Math.round(Number(srcLine.discountAmount) * ratio * 100) / 100;
+          line.lineTotal = Math.max(0, line.quantity * line.unitPrice - line.discountAmount);
+        }
+      }
+
       let subtotal = enriched.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
       let lineDiscountSum = enriched.reduce((s, l) => s + l.discountAmount, 0);
       let headerDiscount = parsed.headerDiscount ?? 0;
@@ -1332,6 +1468,29 @@ export async function createCommercialDocument(
         }
       }
 
+      if (linkedSource) {
+        const srcHeader = Number(linkedSource.discountTotal) || 0;
+        const srcLineNet = linkedSourceLines.reduce(
+          (s, l) => s + Number(l.quantity) * Number(l.unitPrice) - Number(l.discountAmount),
+          0,
+        );
+        const retLineNet = subtotal - lineDiscountSum;
+        if (srcHeader > 0 && srcLineNet > 0) {
+          headerDiscount = Math.round((srcHeader * (retLineNet / srcLineNet)) * 100) / 100;
+        }
+      }
+
+      for (const line of enriched) {
+        const lineGross = Math.round(line.quantity * line.unitPrice * 100) / 100;
+        if (line.discountAmount > lineGross + 0.005) {
+          throw new Error('Line discount cannot exceed the line amount.');
+        }
+      }
+      const afterLines = Math.round((subtotal - lineDiscountSum) * 100) / 100;
+      if (headerDiscount > afterLines + 0.005) {
+        throw new Error('Header discount cannot exceed the document total after line discounts.');
+      }
+
       const supplyExVat = Math.max(0, Math.round((subtotal - lineDiscountSum - headerDiscount) * 100) / 100);
       const saleChannel = parsed.saleChannel ?? 'local';
       const invoiceKind = parsed.invoiceKind ?? 'commercial';
@@ -1341,28 +1500,16 @@ export async function createCommercialDocument(
         isPurchaseBillType(parsed.documentType) ||
         parsed.documentType === 'cash_purchase' ||
         parsed.documentType === 'purchase_return';
-      const appliesSalesVat = isSalesInvoiceType || isPosSale;
+      const appliesSalesVat =
+        isSalesInvoiceType || isPosSale || parsed.documentType === 'sales_return';
       const appliesPurchaseVat =
         isPurchaseSide && invoiceKind === 'tax_invoice' && parsed.documentType !== 'goods_receipt';
 
       const vatCfg =
         appliesSalesVat || appliesPurchaseVat
-          ? await loadSalesVatConfig(
-              user.tenantId,
-              saleChannel,
-              appliesPurchaseVat ? 'tax_invoice' : invoiceKind,
-            )
+          ? await loadSalesVatConfig(user.tenantId, saleChannel)
           : { vatRate: 0, dept: '01', vatRegistered: false };
 
-      // Purchase input VAT only when company is VAT registered
-      const vatRate =
-        appliesSalesVat && invoiceKind === 'tax_invoice'
-          ? vatCfg.vatRate
-          : appliesPurchaseVat && vatCfg.vatRegistered
-            ? vatCfg.vatRate || Number((await loadSalesVatConfig(user.tenantId, 'local', 'tax_invoice')).vatRate) || 18
-            : 0;
-
-      // For purchase VAT config load with tax_invoice may return 0 if not registered — fix rate
       let purchaseVatRate = 0;
       if (appliesPurchaseVat) {
         const [settings] = await db()
@@ -1375,15 +1522,28 @@ export async function createCommercialDocument(
         }
       }
 
-      const effectiveVatRate = appliesSalesVat
-        ? vatRate
-        : appliesPurchaseVat
-          ? purchaseVatRate
-          : 0;
+      const lineNetSumForVat = enriched.reduce((s, l) => s + l.lineTotal, 0) || 1;
+      let taxableNet = 0;
+      for (const line of enriched) {
+        const afterHeader = Math.max(0, line.lineTotal - headerDiscount * (line.lineTotal / lineNetSumForVat));
+        if (lineIsOutputTaxable(line.taxStatus)) taxableNet += afterHeader;
+      }
+      taxableNet = Math.round(taxableNet * 100) / 100;
 
+      let effectiveVatRate = 0;
+      if (linkedSource) {
+        effectiveVatRate = Number(linkedSource.vatRate) || 0;
+      } else if (appliesSalesVat) {
+        effectiveVatRate = vatCfg.vatRate;
+      } else if (appliesPurchaseVat) {
+        effectiveVatRate = purchaseVatRate;
+      }
+
+      const vatBase =
+        appliesSalesVat && !linkedSource ? taxableNet : supplyExVat;
       const vatTotal =
         effectiveVatRate > 0
-          ? Math.round(((supplyExVat * effectiveVatRate) / 100) * 100) / 100
+          ? Math.round(((vatBase * effectiveVatRate) / 100) * 100) / 100
           : 0;
       // Document total includes landed extras + VAT (landed not VAT'd for simplicity)
       const total = Math.round((supplyExVat + landedExtra + vatTotal) * 100) / 100;
@@ -1419,7 +1579,11 @@ export async function createCommercialDocument(
         documentNumber = await nextDocumentNumber(user.tenantId, parsed.documentType, parsed.issueDate);
       }
       let taxInvoiceNumber: string | null = null;
-      if (appliesSalesVat && invoiceKind === 'tax_invoice' && parsed.intent !== 'draft') {
+      if (
+        (isSalesInvoiceType || isPosSale) &&
+        invoiceKind === 'tax_invoice' &&
+        parsed.intent !== 'draft'
+      ) {
         taxInvoiceNumber = await nextTaxInvoiceNumber(user.tenantId, parsed.issueDate, vatCfg.dept);
       }
 
@@ -1430,12 +1594,71 @@ export async function createCommercialDocument(
       if (parsed.documentType === 'quotation' && parsed.intent !== 'draft') {
         status = 'sent';
       }
+      if (linkedSource) {
+        const priorReturns = await db()
+          .select({
+            id: businessDocuments.id,
+            total: businessDocuments.total,
+          })
+          .from(businessDocuments)
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.sourceDocumentId, linkedSource.id),
+              eq(businessDocuments.documentType, 'sales_return'),
+              isNull(businessDocuments.voidedAt),
+            ),
+          );
+        const priorIds = priorReturns.map((row) => row.id);
+        const priorLines =
+          priorIds.length > 0
+            ? await db()
+                .select({
+                  productId: businessDocumentLines.productId,
+                  description: businessDocumentLines.description,
+                  quantity: businessDocumentLines.quantity,
+                })
+                .from(businessDocumentLines)
+                .where(
+                  and(
+                    inArray(businessDocumentLines.documentId, priorIds),
+                    isNull(businessDocumentLines.voidedAt),
+                  ),
+                )
+            : [];
+        const returnedQty = new Map<string, number>();
+        for (const line of priorLines) {
+          const k = lineMatchKey(line.productId, line.description);
+          returnedQty.set(k, (returnedQty.get(k) ?? 0) + Number(line.quantity));
+        }
+        for (const line of enriched) {
+          const k = lineMatchKey(line.productId, line.description);
+          const srcLine = linkedSourceLines.find(
+            (s) => lineMatchKey(s.productId, s.description) === k,
+          );
+          const srcQty = srcLine ? Number(srcLine.quantity) : 0;
+          const already = returnedQty.get(k) ?? 0;
+          if (line.quantity + already > srcQty + 0.0001) {
+            throw new Error('This return exceeds the remaining quantity on the original invoice.');
+          }
+        }
+        const alreadyValue = priorReturns.reduce((s, row) => s + Number(row.total), 0);
+        if (total + alreadyValue > Number(linkedSource.total) + 0.005) {
+          throw new Error('This return exceeds the remaining value on the original invoice.');
+        }
+      }
+
+      if (parsed.paymentAccountCode) {
+        const tender = await resolveAccount(user.tenantId, parsed.paymentAccountCode);
+        assertEligibleDocumentTender(tender);
+      }
+
+      const cashRefund =
+        parsed.documentType === 'sales_return' && Boolean(parsed.paymentAccountCode);
       const settled =
         parsed.documentType === 'pos_sale' ||
         parsed.documentType === 'cash_purchase' ||
-        (parsed.documentType === 'sales_return' &&
-          Boolean(parsed.paymentAccountCode) &&
-          parsed.posMode === 'return') ||
+        cashRefund ||
         Boolean(
           parsed.paymentAccountCode &&
             postsToGl(parsed.documentType) &&
@@ -1544,45 +1767,10 @@ export async function createCommercialDocument(
           paymentAccountCode = '5100';
           postedTotal = grnInvAmt;
         } else if (parsed.documentType === 'sales_return') {
-          // Reverse output VAT when original sale / return is tax-rated
-          let returnVatRate = 0;
-          if (parsed.sourceDocumentId) {
-            const [src] = await db()
-              .select({
-                vatRate: businessDocuments.vatRate,
-                invoiceKind: businessDocuments.invoiceKind,
-              })
-              .from(businessDocuments)
-              .where(eq(businessDocuments.id, parsed.sourceDocumentId))
-              .limit(1);
-            if (src?.invoiceKind === 'tax_invoice' || Number(src?.vatRate) > 0) {
-              returnVatRate = Number(src?.vatRate) || 0;
-              if (returnVatRate <= 0) {
-                const [settings] = await db()
-                  .select()
-                  .from(salesSettings)
-                  .where(eq(salesSettings.tenantId, user.tenantId))
-                  .limit(1);
-                if (settings?.vatRegistered === '1') {
-                  returnVatRate = Number(settings.vatRatePercent ?? 18);
-                }
-              }
-            }
-          } else if (invoiceKind === 'tax_invoice') {
-            returnVatRate = effectiveVatRate || purchaseVatRate || 0;
-            if (returnVatRate <= 0) {
-              const [settings] = await db()
-                .select()
-                .from(salesSettings)
-                .where(eq(salesSettings.tenantId, user.tenantId))
-                .limit(1);
-              if (settings?.vatRegistered === '1') {
-                returnVatRate = Number(settings.vatRatePercent ?? 18);
-              }
-            }
-          }
+          const returnVatRate = effectiveVatRate;
           const built = buildSalesReturnPosting({
             lines: saleLines,
+            headerDiscount,
             refundCashAccountCode: parsed.paymentAccountCode ?? null,
             vatRatePercent: returnVatRate,
             memo: documentNumber,
@@ -1687,11 +1875,13 @@ export async function createCommercialDocument(
             parsed.documentType === 'pos_sale'
               ? parsed.paymentAccountCode || '1000'
               : parsed.paymentAccountCode || null;
+          const postingVatRate =
+            appliesSalesVat && supplyExVat > 0 ? (vatTotal / supplyExVat) * 100 : 0;
           const built = buildSalesInvoicePosting({
             lines: saleLines,
             headerDiscount,
             settledCashAccountCode: cashCode,
-            vatRatePercent: appliesSalesVat && invoiceKind === 'tax_invoice' ? vatRate : 0,
+            vatRatePercent: postingVatRate,
             memo: taxInvoiceNumber ?? documentNumber,
           });
           postingLines = built.lines;
@@ -2001,6 +2191,25 @@ export async function createCommercialDocument(
             }
           }
           if (delta !== 0) {
+            if (delta > 0 && (isPurchase || isGrn)) {
+              const [laterSale] = await db()
+                .select({ id: inventoryMovements.id })
+                .from(inventoryMovements)
+                .where(
+                  and(
+                    eq(inventoryMovements.tenantId, user.tenantId),
+                    eq(inventoryMovements.productId, line.productId),
+                    eq(inventoryMovements.movementType, 'sale'),
+                    sql`${inventoryMovements.movementDate} > ${parsed.issueDate}`,
+                  ),
+                )
+                .limit(1);
+              if (laterSale) {
+                throw new Error(
+                  'Cannot backdate a stock receipt before a later valued sale. Use a controlled correction.',
+                );
+              }
+            }
             // For average cost receipts, read qty before this movement
             let qtyBefore = 0;
             let costBefore = 0;
@@ -2111,13 +2320,14 @@ export async function createCommercialDocument(
 
       // P1: apply return against source open balance (subledger integrity).
       // Marks both source invoice/bill and this credit as settled for the applied amount
-      // so party AR/AP rollups do not double-count. Cash sources (balanceDue=0) skip —
-      // refund is already on the return GL via cash/bank control account.
+      // so party AR/AP rollups do not double-count. Cash refunds keep the original receipt
+      // and settle the credit through the cash/bank control account.
       if (
         parsed.sourceDocumentId &&
         ['sales_return', 'purchase_return'].includes(parsed.documentType) &&
         postsToGl(parsed.documentType) &&
-        !needsApproval
+        !needsApproval &&
+        !cashRefund
       ) {
         const [src] = await db()
           .select()
@@ -2860,6 +3070,7 @@ export async function getInvoicePrintData(invoiceId: string) {
       )
       .limit(1);
     if (!doc) return null;
+    await assertCanReadCommercialDocument(doc);
 
     const [party] = await db()
       .select()
@@ -2970,6 +3181,7 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       )
       .limit(1);
     if (!doc) return null;
+    await assertCanReadCommercialDocument(doc);
 
     const [party] = await db()
       .select({ name: parties.name })

@@ -1,3 +1,9 @@
+## 2026-10-14 — QA batch all-or-nothing, returns, VAT, scope (v2.5.6)
+
+- Record: [CHG-20261014-qa-batch-atomicity-sales-scope](changes/CHG-20261014-qa-batch-atomicity-sales-scope.md). QA STATUS 292 checks (273 passed, 19 failed) on v2.5.5 · 8e1a2b8; BUG-0031–0042 plus omitted files `dataSha256`.
+- Payment batches are one transaction; payment keys fingerprint date+account+allocations. Current files packs must present matching `dataSha256` when the restore stored it. Linked returns restore original cost, discount and tax; remaining qty/value are locked. Output VAT follows tax classification; excessive discounts refuse; cash refunds settle the credit on liquid tender. Document detail requires read + shop scope; scope query errors deny.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.6 · <sha7>` and reruns the campaign, then browser workflows and A→empty-B restore. BookOne is not customer-ready.
+
 ## 2026-10-14 — QA campaign atomicity, auth, restore pair (v2.5.5)
 
 - Record: [CHG-20261014-qa-campaign-atomicity-auth](changes/CHG-20261014-qa-campaign-atomicity-auth.md). QA [HANDOFF-20261014-full-campaign-findings](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261014-full-campaign-findings.md) BUG-0022–0030 (BUG-0021 already in v2.5.4).

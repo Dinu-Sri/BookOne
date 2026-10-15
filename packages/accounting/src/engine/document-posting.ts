@@ -189,21 +189,23 @@ export function buildSalesInvoicePosting(input: {
  */
 export function buildSalesReturnPosting(input: {
   lines: SaleLineInput[];
+  headerDiscount?: number;
   refundCashAccountCode?: string | null;
-  /** Reverse output VAT at this % on net (matches tax invoice sales) */
+  /** Reverse output VAT at this % on net (matches original supply) */
   vatRatePercent?: number;
   outputVatAccountCode?: string;
   memo?: string;
 }): BuiltSalePosting {
   const memo = input.memo ?? 'Sales return';
+  const headerDiscount = round2(input.headerDiscount ?? 0);
   const vatRate = Math.max(0, input.vatRatePercent ?? 0);
-  let netTotal = 0;
+  let lineNetSum = 0;
   let cogsTotal = 0;
   const cogsLines: PostingLine[] = [];
 
   for (const line of input.lines) {
     const lineNet = round2(line.quantity * line.unitPrice - (line.discountAmount ?? 0));
-    netTotal = round2(netTotal + lineNet);
+    lineNetSum = round2(lineNetSum + lineNet);
     if (isPhysicalProduct(line.productType) && line.quantity > 0) {
       const cogs = round2(line.quantity * line.unitCost);
       cogsTotal = round2(cogsTotal + cogs);
@@ -226,6 +228,7 @@ export function buildSalesReturnPosting(input: {
     }
   }
 
+  const netTotal = round2(Math.max(0, lineNetSum - headerDiscount));
   const vatTotal = round2((netTotal * vatRate) / 100);
   const grandTotal = round2(netTotal + vatTotal);
   const controlCode = input.refundCashAccountCode ?? '1300';

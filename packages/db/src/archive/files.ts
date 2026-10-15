@@ -87,11 +87,13 @@ export type FilesPackPairing = 'checksum' | 'legacy-export-id';
  * Pair a files pack to the last data restore.
  *
  * Current (v2.5+) data restores persist filesSha256 and dataSha256. Those packs
- * must match filesSha256, and dataSha256 when both sides supply it.
+ * must match filesSha256. When the restore stored dataSha256, the pack must
+ * present the same dataSha256 before any object write or complete marker.
  *
- * Legacy (v2.4.0) data restores omitted filesSha256 on the audit row. Those packs
- * may apply when exportId matches. That pairing is exportId-only and is not
- * cross-checksum proof.
+ * Legacy (v2.4.0) data restores omitted filesSha256 and dataSha256 on the audit
+ * row. Those packs may apply when exportId matches. That pairing is exportId-only
+ * and is not cross-checksum proof. Omitted pack dataSha256 is never a match
+ * against a stored dataSha256.
  */
 export function assertFilesPackMatchesDataRestore(args: {
   packExportId: string;
@@ -111,8 +113,8 @@ export function assertFilesPackMatchesDataRestore(args: {
   }
   const storedData = args.lastRestore.dataSha256;
   const packData = args.packDataSha256;
-  if (typeof storedData === 'string' && storedData.length > 0 && typeof packData === 'string' && packData.length > 0) {
-    if (storedData !== packData) {
+  if (typeof storedData === 'string' && storedData.length > 0) {
+    if (typeof packData !== 'string' || packData.length === 0 || storedData !== packData) {
       throw new Error('This attachments pack does not match the restored company data.');
     }
   }

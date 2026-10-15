@@ -1,3 +1,7 @@
+## 2026-10-14 — QA batch all-or-nothing, returns, VAT, scope (v2.5.6)
+
+QA STATUS on v2.5.5: 292 checks, 273 passed, 19 failed (13 groups). Product now rolls back mixed payment batches, fingerprints payment keys, requires files-pack `dataSha256` when the restore stored it, restores original return cost/discount/tax, charges VAT from classification, refuses excessive discounts and repeat refunds, settles cash credits on liquid tender, and fail-closes document detail plus shop-scope metadata errors. See [CHG-20261014-qa-batch-atomicity-sales-scope](changes/CHG-20261014-qa-batch-atomicity-sales-scope.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.6 · <sha7>`. Restore remains unverified. Browser workflows still pending Admin grant. BookOne is not customer-ready.
+
 ## 2026-10-14 — QA campaign atomicity, auth, restore pair (v2.5.5)
 
 Unified QA campaign (bookone-qa PR #15) on v2.5.3: 242 passed, 13 failed, 4 skipped; original 60 source + 49 DB still green. Nine new defect groups. Product now serializes AR payments, completes payment idempotency without `id`, denies Viewer rental-money and stock-transfer writes, rolls back failed deposit/transfer, pairs files packs on `dataSha256` when present, and refuses empty journals / posted AR without a transaction. See [CHG-20261014-qa-campaign-atomicity-auth](changes/CHG-20261014-qa-campaign-atomicity-auth.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.5 · <sha7>`. Restore remains unverified. Full coverage still unfinished (137 workflows; 57 partial, 80 none).

@@ -1,8 +1,8 @@
 # Tenant portable archive (company backup)
 
-> **Status:** Phases 1–5 shipped (v2.5.0). Integrity + owner-only backup resolver patched in v2.5.4. Restore journey still unverified.  
+> **Status:** Phases 1–5 shipped (v2.5.0). Integrity + owner-only backup resolver patched in v2.5.4. Files pack omitted `dataSha256` refused in v2.5.6 when the restore stored it. Restore journey still unverified.  
 > **Last updated:** 2026-10-14  
-> **Change records:** [CHG-20261012-tenant-backup-archive](changes/CHG-20261012-tenant-backup-archive.md) (spec), [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md) (export), [CHG-20261013-tenant-archive-restore](changes/CHG-20261013-tenant-archive-restore.md) (data restore), [CHG-20261014-tenant-archive-files](changes/CHG-20261014-tenant-archive-files.md) (files pack, transformers, reminder), [CHG-20261014-archive-backup-owner-integrity](changes/CHG-20261014-archive-backup-owner-integrity.md) (BUG-0021 + restore integrity).  
+> **Change records:** [CHG-20261012-tenant-backup-archive](changes/CHG-20261012-tenant-backup-archive.md) (spec), [CHG-20261013-tenant-archive-export](changes/CHG-20261013-tenant-archive-export.md) (export), [CHG-20261013-tenant-archive-restore](changes/CHG-20261013-tenant-archive-restore.md) (data restore), [CHG-20261014-tenant-archive-files](changes/CHG-20261014-tenant-archive-files.md) (files pack, transformers, reminder), [CHG-20261014-archive-backup-owner-integrity](changes/CHG-20261014-archive-backup-owner-integrity.md) (BUG-0021 + restore integrity), [CHG-20261014-qa-batch-atomicity-sales-scope](changes/CHG-20261014-qa-batch-atomicity-sales-scope.md) (BUG-0024 omitted hash).  
 > **Audience:** company **primary owner** (download + restore). Platform operators still run whole-stack DR separately.
 
 This document is the contract. UI and code follow it. Do not restore into a company that has already traded. Do not put invoice/journal rows in the files pack.
@@ -100,7 +100,7 @@ Both manifests carry:
 }
 ```
 
-Restore of a files pack is rejected unless `exportId` matches the data already applied to that tenant. Current (v2.5+) data restores persist `filesSha256` and `dataSha256` on the restore audit row; the pack must match both when the pack supplies `dataSha256`. **Legacy pairing:** v2.4.0 data restores omitted `filesSha256`. A matching pack may still apply when `exportId` matches. That pairing is **exportId-only** and is not cross-checksum proof (`pairing: 'legacy-export-id'` on the files restore audit). Missing checksum metadata is never treated as a matching checksum.
+Restore of a files pack is rejected unless `exportId` matches the data already applied to that tenant. Current (v2.5+) data restores persist `filesSha256` and `dataSha256` on the restore audit row. When the restore stored `dataSha256`, the pack must present the same `dataSha256` before any object write or complete marker; omitting it is not a match. Packs must also match `filesSha256` when that value was stored. **Legacy pairing:** v2.4.0 data restores omitted `filesSha256` and `dataSha256`. A matching pack may still apply when `exportId` matches. That pairing is **exportId-only** and is not cross-checksum proof (`pairing: 'legacy-export-id'` on the files restore audit). Missing checksum metadata is never treated as a matching checksum.
 
 Encryption: both files password-protected by the owner at download. BookOne does not store that password.
 

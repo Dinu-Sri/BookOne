@@ -453,6 +453,31 @@ describe('archive files pack', () => {
         filesAlreadyApplied: false,
       }),
     ).toBe('checksum');
+    expect(() =>
+      assertFilesPackMatchesDataRestore({
+        packExportId: exportId,
+        packFilesSha256: 'aaa',
+        lastRestore: { exportId, filesSha256: 'aaa', dataSha256: 'right-data' },
+        filesAlreadyApplied: false,
+      }),
+    ).toThrow(/does not match/i);
+    expect(() =>
+      assertFilesPackMatchesDataRestore({
+        packExportId: exportId,
+        packFilesSha256: 'aaa',
+        packDataSha256: '',
+        lastRestore: { exportId, filesSha256: 'aaa', dataSha256: 'right-data' },
+        filesAlreadyApplied: false,
+      }),
+    ).toThrow(/does not match/i);
+    expect(
+      assertFilesPackMatchesDataRestore({
+        packExportId: exportId,
+        packFilesSha256: 'aaa',
+        lastRestore: { exportId },
+        filesAlreadyApplied: false,
+      }),
+    ).toBe('legacy-export-id');
   });
 
   it('refuses to mark a files pack complete when objects were invalid', async () => {

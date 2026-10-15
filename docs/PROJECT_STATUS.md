@@ -1,3 +1,7 @@
+## 2026-10-15 — Restricted DB own invoices (v2.5.10)
+
+QA HANDOFF on v2.5.9: 303 campaign assertions pass; 13/13 owner-DB HTTP pass; HTTP-102 fail (restricted-DB own invoice 307 `/login`) with ten dependents blocked. `getTenantInfo` now re-pins tenant GUC for the `tenants` row after `requireTenantContext` returns. See [CHG-20261015-restricted-tenant-guc](changes/CHG-20261015-restricted-tenant-guc.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.10 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-15 — HTTP permissions, session identity, BS as-of (v2.5.9)
 
 QA HANDOFF on v2.5.8: HTTP 9 passed / 8 failed / 9 blocked; PostgreSQL 127 passed / 2 failed. Viewer wrote company details and four settings forms. Product now splits period P&L from as-of balance sheet, seeds Starter modules on additional companies, asserts Viewer-denied settings writes, repairs Owner jobs only, and resolves credential identity without BYPASSRLS. See [CHG-20261015-http-permissions-session](changes/CHG-20261015-http-permissions-session.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.9 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

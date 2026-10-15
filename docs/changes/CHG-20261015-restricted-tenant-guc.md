@@ -1,0 +1,24 @@
+# CHG-20261015-restricted-tenant-guc — own invoices under restricted DB role (v2.5.10)
+
+Status: ready-for-QA.
+
+- Author/agent and date: Grok coding agent, 2026-10-15.
+- Product version (`VERSION` file) and base SHA / branch/PR: 2.5.10 on `master` after `2e105cd` (v2.5.9).
+- QA repository revision and companion PR/change ID: [HANDOFF-20261015-v259-retest](https://github.com/Dinu-Sri/bookone-qa/blob/ee02c4dd823c9f2f388b2a9dbdd78e7a599594b3/handoffs/HANDOFF-20261015-v259-retest.md). Companion [QA PR #33](https://github.com/Dinu-Sri/bookone-qa/pull/33). Independent v2.5.9 retest: 303 campaign assertions pass; 13/13 owner-DB HTTP pass; HTTP remaining 15 pass / 1 fail / 10 blocked (HTTP-102). Live stamp not independently observed (browser tooling failed).
+- Intended before/after behaviour with a concrete example:
+  - BUG-0053 / HTTP-102: a restricted (NOBYPASSRLS) database role that can authenticate still opened `/sales/invoices/{id}` as 307 `/login`. `requireTenantContext` pins `app.current_tenant_id` only for its callback; ALS and GUC are cleared on return. `getTenantInfo` then selected `tenants` on the unbound pool, RLS `tenants_isolation` hid the row, and the invoice page catch redirected to login. After this change `getTenantInfo` re-enters `withTenantContext(user.tenantId)` for the tenants row and access labels. Same wrap on cashbook entity-kind reads.
+- Existing behaviour that must remain correct: RT-061 600/800/800 cumulative and 600/200/0 monthly income; all 13 owner-DB HTTPS checks (five Viewer settings denials with Owner positives, assigned Viewer deny, legacy Viewer no-promotion, legitimate Owner repair, payment 200/due 400); Starter PO60 and Inventory/POS off; BUG-0043 historical reads; Viewer hard-deny; v2.5.4 privileged keys; v2.5.6 payment atomicity; no Viewer promotion; no BYPASSRLS; no shared global tenant GUC. Do not reopen BUG-0010–0048 originals except as adjacent holes. Permission denials stay in force.
+- Actual changed paths/symbols/routes: `getTenantInfo`; `listCashbookRows`; `listYearDomainTotals`; `exportCashbookCsv`; source-contract tests in `packages/auth/test/tenant-scope-after-require.test.ts`. Invoice detail still uses `getTenantInfo` + `getCommercialDocument` + `listRentalJobs` (the latter two were already scoped).
+- Business rule/profile/scenario IDs: BUG-0053 / HTTP-102; dependents blocked on HTTP-102. Required retests: HTTP-102 plus the ten previously blocked restricted-DB cases; keep the 13 owner-DB HTTP checks and RT-061.
+- Accounting, stock/rental, tenant/access and customer-data effects: request-local reserved connection only for the callback. Nested same-tenant wraps still short-circuit. No RLS policy change. No identity-function change (042 stays a narrow email lookup pending dedicated security acceptance).
+- Migrations, schema/history compatibility and recovery implications: none.
+- Dependencies, settings/flags, deployment and external-service changes: Portainer Re-pull ON after Docker web image. Quote `v2.5.10 · <sha7>`. No new env vars.
+- Independent diff/impact review and uncertainties: invoice GET other deps (`getCommercialDocument`, `listRentalJobs`, `getRentalSettings`, `loadAccessForUser`, `getSalesSettings`, `listCommercialDocuments`, `getDocumentPrintModel`) already wrap. Remaining unscoped `tenants` reads (Control Room, slug uniqueness, invite preview, entity-lifecycle upgrades) are off the invoice path. Exact 307 cause remains source-supported until QA request evidence. Live stamp and restore A→empty-B unverified. BookOne is not customer-ready. Backup testing stays last.
+- Checks executed: 2026-10-15 local Windows. `pnpm --dir packages/auth test` (68 pass, including 5 BUG-0053 GUC/ALS/getTenantInfo/cashbook/invoice-page cases), `pnpm --dir packages/auth typecheck` green, `pnpm --dir packages/accounting test` (84 pass), `pnpm --dir packages/accounting typecheck` green, `pnpm --dir packages/statement-import test` (30 pass / 4 skip). Isolated HTTP/PostgreSQL rerun is QA-owned. No staging mutation.
+- Failed/skipped/flaky/blocked/not-run checks and reasons: no live restricted-DB HTTP from the coding agent. Browser live-stamp verification pending QA tooling. Backup last.
+- New QA assertions or outstanding work: pin `v2.5.10 · <sha7>` and rerun HTTP-102 plus blocked dependents; keep 13 owner-DB HTTP and RT-061. Then costing/GRNI/permissions; backup last. Migration 042 PUBLIC execute/search-path/ownership still needs dedicated security acceptance.
+- Created staging records/cleanup, if any: none in this change.
+- Documentation updated: this record, TASK_LOG, PROJECT_STATUS.
+- Next exact action and responsible role: Docker web image green, Portainer Update Re-pull ON; QA pins the stamp and reruns restricted-DB invoice GET. Do not grant BYPASSRLS. Do not weaken QA assertions.
+
+Final product/QA SHAs belong in PR metadata and external run manifests after commit. Do not label the change verified from code review alone.

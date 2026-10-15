@@ -1,3 +1,9 @@
+## 2026-10-15 — Restricted DB own invoices (v2.5.10)
+
+- Record: [CHG-20261015-restricted-tenant-guc](changes/CHG-20261015-restricted-tenant-guc.md). QA [HANDOFF-20261015-v259-retest](https://github.com/Dinu-Sri/bookone-qa/blob/ee02c4dd823c9f2f388b2a9dbdd78e7a599594b3/handoffs/HANDOFF-20261015-v259-retest.md) on v2.5.9 · 2e105cd (303 campaign pass; 13/13 owner-DB HTTP; HTTP-102 fail, ten dependents blocked).
+- `getTenantInfo` re-enters `withTenantContext` after `requireTenantContext` so RLS `tenants_isolation` can see the own-company row. Invoice detail no longer treats a missing tenant as an unauthenticated 307. Same wrap on cashbook entity-kind reads. No BYPASSRLS, no shared global tenant GUC.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.10 · <sha7>` and reruns HTTP-102 plus blocked restricted-DB cases, keeping owner-DB 13 and RT-061. Continue costing/GRNI/permissions; backup last. BookOne is not customer-ready.
+
 ## 2026-10-15 — HTTP permissions, session identity, BS as-of (v2.5.9)
 
 - Record: [CHG-20261015-http-permissions-session](changes/CHG-20261015-http-permissions-session.md). QA [HANDOFF-20261015-real-http-permissions](https://github.com/Dinu-Sri/bookone-qa/blob/main/handoffs/HANDOFF-20261015-real-http-permissions.md) BUG-0049–0053 on v2.5.8 · cf35da1 (HTTP 9/8/9, PostgreSQL 127/2, Viewer settings writes confirmed).

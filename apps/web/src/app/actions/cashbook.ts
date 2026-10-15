@@ -158,11 +158,14 @@ export async function listCashbookRows(opts?: {
 }): Promise<CashbookTotals> {
   const user = await requireTenantContext();
   const { tenants } = await import('@bookone/db');
-  const [t] = await db()
-    .select({ entityKind: tenants.entityKind })
-    .from(tenants)
-    .where(eq(tenants.id, user.tenantId))
-    .limit(1);
+  const t = await withTenantContext(user.tenantId, async () => {
+    const [row] = await db()
+      .select({ entityKind: tenants.entityKind })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1);
+    return row;
+  });
   const entityKind = parseEntityKind(t?.entityKind);
   const domain = resolveBookDomain(entityKind, opts?.bookDomain ?? null);
   const period = opts?.period ?? new Date().toISOString().slice(0, 7);
@@ -189,11 +192,14 @@ export async function listYearDomainTotals(opts?: {
 }> {
   const user = await requireTenantContext();
   const { tenants } = await import('@bookone/db');
-  const [t] = await db()
-    .select({ entityKind: tenants.entityKind })
-    .from(tenants)
-    .where(eq(tenants.id, user.tenantId))
-    .limit(1);
+  const t = await withTenantContext(user.tenantId, async () => {
+    const [row] = await db()
+      .select({ entityKind: tenants.entityKind })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1);
+    return row;
+  });
   const entityKind = parseEntityKind(t?.entityKind);
   const year = opts?.year ?? new Date().getFullYear();
   const from = `${year}-01-01`;

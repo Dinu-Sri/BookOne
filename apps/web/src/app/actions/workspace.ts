@@ -129,68 +129,72 @@ export async function getTenantInfo(): Promise<TenantInfo> {
   const user = await requireTenantContext();
   const { tenants } = await import('@bookone/db');
   const { normalizeModules } = await import('@/lib/platform-modules');
-  const [t] = await db()
-    .select({
-      id: tenants.id,
-      name: tenants.name,
-      slug: tenants.slug,
-      plan: tenants.plan,
-      environment: tenants.environment,
-      status: tenants.status,
-      modules: tenants.modules,
-      entityKind: tenants.entityKind,
-      capabilityTier: tenants.capabilityTier,
-    })
-    .from(tenants)
-    .where(eq(tenants.id, user.tenantId))
-    .limit(1);
-  if (!t) throw new Error('Tenant not found.');
-  const { loadAccessForUser, SCREEN_DEFS, isReadOnlyJob } = await import('@bookone/auth');
-  let access = null as Awaited<ReturnType<typeof loadAccessForUser>>;
-  try {
-    access = await loadAccessForUser(user.id, user.tenantId, user.platformRole);
-  } catch {
-    access = null;
-  }
-  const readOnlyJob = isReadOnlyJob({
-    primaryTemplateKey: access?.primaryTemplateKey,
-    legacyRole: access?.legacyRole,
-    jobSlug: access?.jobSlug ?? user.jobSlug,
+  // requireTenantContext pins then releases the GUC. Re-enter for the tenants
+  // row — RLS tenants_isolation needs app.current_tenant_id (BUG-0053 / HTTP-102).
+  return withTenantContext(user.tenantId, async () => {
+    const [t] = await db()
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        slug: tenants.slug,
+        plan: tenants.plan,
+        environment: tenants.environment,
+        status: tenants.status,
+        modules: tenants.modules,
+        entityKind: tenants.entityKind,
+        capabilityTier: tenants.capabilityTier,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1);
+    if (!t) throw new Error('Tenant not found.');
+    const { loadAccessForUser, SCREEN_DEFS, isReadOnlyJob } = await import('@bookone/auth');
+    let access = null as Awaited<ReturnType<typeof loadAccessForUser>>;
+    try {
+      access = await loadAccessForUser(user.id, user.tenantId, user.platformRole);
+    } catch {
+      access = null;
+    }
+    const readOnlyJob = isReadOnlyJob({
+      primaryTemplateKey: access?.primaryTemplateKey,
+      legacyRole: access?.legacyRole,
+      jobSlug: access?.jobSlug ?? user.jobSlug,
+    });
+    const accessByLabel: Record<string, 'none' | 'read' | 'write'> = {};
+    for (const screen of SCREEN_DEFS) {
+      if (!access) accessByLabel[screen.label] = 'none';
+      else if (!readOnlyJob && access.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
+      else if (access.allows(`${screen.keyPrefix}.read`, 'read')) accessByLabel[screen.label] = 'read';
+      else accessByLabel[screen.label] = 'none';
+    }
+    accessByLabel.Documentation = 'read';
+    accessByLabel['Low Stock'] = accessByLabel['Stock Levels'] ?? 'none';
+    accessByLabel['On rent'] = accessByLabel['Stock Levels'] ?? 'none';
+    accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
+    accessByLabel.Groups = accessByLabel.Team ?? 'none';
+    const { landingHrefForAccess } = await import('@/lib/access');
+    const { CONTROL_ROOM_NAV_LABELS } = await import('@/lib/nav-visibility');
+    if (user.platformRole === 'super_admin') {
+      for (const label of CONTROL_ROOM_NAV_LABELS) accessByLabel[label] = 'write';
+    }
+    return {
+      ...t,
+      environment: t.environment ?? 'production',
+      status: t.status ?? 'active',
+      entityKind: t.entityKind ?? 'company',
+      capabilityTier: t.capabilityTier ?? null,
+      modules: normalizeModules(t.modules, t.plan),
+      userEmail: user.email,
+      userName: user.name,
+      userFirstName: firstNameFrom(user.name, user.email),
+      userRole: user.role,
+      jobTitle: jobTitleFrom(access?.jobName, access?.jobSlug ?? user.jobSlug, user.role),
+      platformRole: user.platformRole,
+      jobSlug: user.jobSlug,
+      accessByLabel,
+      landingHref: landingHrefForAccess(access),
+    };
   });
-  const accessByLabel: Record<string, 'none' | 'read' | 'write'> = {};
-  for (const screen of SCREEN_DEFS) {
-    if (!access) accessByLabel[screen.label] = 'none';
-    else if (!readOnlyJob && access.allows(`${screen.keyPrefix}.write`, 'write')) accessByLabel[screen.label] = 'write';
-    else if (access.allows(`${screen.keyPrefix}.read`, 'read')) accessByLabel[screen.label] = 'read';
-    else accessByLabel[screen.label] = 'none';
-  }
-  accessByLabel.Documentation = 'read';
-  accessByLabel['Low Stock'] = accessByLabel['Stock Levels'] ?? 'none';
-  accessByLabel['On rent'] = accessByLabel['Stock Levels'] ?? 'none';
-  accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
-  accessByLabel.Groups = accessByLabel.Team ?? 'none';
-  const { landingHrefForAccess } = await import('@/lib/access');
-  const { CONTROL_ROOM_NAV_LABELS } = await import('@/lib/nav-visibility');
-  if (user.platformRole === 'super_admin') {
-    for (const label of CONTROL_ROOM_NAV_LABELS) accessByLabel[label] = 'write';
-  }
-  return {
-    ...t,
-    environment: t.environment ?? 'production',
-    status: t.status ?? 'active',
-    entityKind: t.entityKind ?? 'company',
-    capabilityTier: t.capabilityTier ?? null,
-    modules: normalizeModules(t.modules, t.plan),
-    userEmail: user.email,
-    userName: user.name,
-    userFirstName: firstNameFrom(user.name, user.email),
-    userRole: user.role,
-    jobTitle: jobTitleFrom(access?.jobName, access?.jobSlug ?? user.jobSlug, user.role),
-    platformRole: user.platformRole,
-    jobSlug: user.jobSlug,
-    accessByLabel,
-    landingHref: landingHrefForAccess(access),
-  };
 }
 
 /**

@@ -178,6 +178,7 @@ export function CommercialDocNewForm({
   banner,
   submitLabel = 'Save',
   sourceDocumentId,
+  initialHeaderDiscount,
   initialLines,
   defaultPaymentTerms,
   defaultExpenseAccount,
@@ -216,6 +217,7 @@ export function CommercialDocNewForm({
   banner?: string;
   submitLabel?: string;
   sourceDocumentId?: string | null;
+  initialHeaderDiscount?: number;
   initialLines?: DocLineState[];
   defaultPaymentTerms?: string;
   defaultExpenseAccount?: string;
@@ -232,8 +234,12 @@ export function CommercialDocNewForm({
     expenseAccounts?.[0]?.code ||
     '6800';
   const [expenseCode, setExpenseCode] = useState(preferredExpense);
-  const [headerDiscount, setHeaderDiscount] = useState('0');
-  const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [headerDiscount, setHeaderDiscount] = useState(
+    initialHeaderDiscount && initialHeaderDiscount > 0 ? String(initialHeaderDiscount) : '0',
+  );
+  const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>(
+    initialHeaderDiscount && initialHeaderDiscount > 0 ? 'fixed' : 'percent',
+  );
   const [discountId, setDiscountId] = useState('');
 
   const handleSearchActive = useCallback(

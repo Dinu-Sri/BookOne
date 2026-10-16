@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getCommercialDocument } from '@/app/actions/commercial-docs';
+import { loadPaymentPrintFacts } from '@/app/actions/documents';
 import { getReceiptPrintModel } from '@/app/actions/document-print';
 import { DocumentPrintSheet } from '@/components/print/document-print-sheet';
 
@@ -7,41 +7,30 @@ export default async function CustomerPaymentReceiptPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    date?: string;
-    account?: string;
-    total?: string;
-    doc?: string | string[];
-    amt?: string | string[];
+    payment?: string | string[];
   }>;
 }) {
   const sp = await searchParams;
-  const docIds = Array.isArray(sp.doc) ? sp.doc : sp.doc ? [sp.doc] : [];
-  const amts = Array.isArray(sp.amt) ? sp.amt : sp.amt ? [sp.amt] : [];
-  const rows: { number: string; customer: string; amount: number }[] = [];
+  const paymentIds = Array.isArray(sp.payment) ? sp.payment : sp.payment ? [sp.payment] : [];
+  let facts;
   try {
-    for (let i = 0; i < docIds.length; i++) {
-      const detail = await getCommercialDocument(docIds[i]!).catch(() => null);
-      if (!detail) continue;
-      rows.push({
-        number: detail.documentNumber,
-        customer: detail.partyName,
-        amount: Number(amts[i] ?? 0) || 0,
-      });
-    }
+    facts = await loadPaymentPrintFacts(paymentIds);
   } catch {
     redirect('/login');
   }
-  const total = Number(sp.total) || rows.reduce((s, r) => s + r.amount, 0);
-  const customerName = rows[0]?.customer ?? 'Customer';
-  const allSame = rows.every((r) => r.customer === customerName);
+  const rows = (facts?.rows ?? []).map((r) => ({
+    number: r.number,
+    customer: r.partyName,
+    amount: r.amount,
+  }));
   let model;
   try {
     model = await getReceiptPrintModel({
-      date: sp.date || '',
-      account: sp.account || '',
-      customer: allSame ? customerName : 'Multiple customers',
+      date: facts?.date || '',
+      account: facts?.account || '',
+      customer: facts?.partyName ?? 'Customer',
       rows,
-      total,
+      total: facts?.total ?? 0,
     });
   } catch {
     redirect('/login');

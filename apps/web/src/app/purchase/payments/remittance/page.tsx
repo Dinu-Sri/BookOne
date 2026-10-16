@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getCommercialDocument } from '@/app/actions/commercial-docs';
+import { loadPaymentPrintFacts } from '@/app/actions/documents';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { formatLKR } from '@/components/module/list-page';
 
 export default async function VendorRemittancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; account?: string; total?: string; doc?: string | string[]; amt?: string | string[] }>;
+  searchParams: Promise<{ payment?: string | string[] }>;
 }) {
   const sp = await searchParams;
   let tenant;
@@ -17,21 +17,16 @@ export default async function VendorRemittancePage({
     redirect('/login');
   }
 
-  const docIds = Array.isArray(sp.doc) ? sp.doc : sp.doc ? [sp.doc] : [];
-  const amts = Array.isArray(sp.amt) ? sp.amt : sp.amt ? [sp.amt] : [];
-  const rows: { number: string; vendor: string; amount: number }[] = [];
-  for (let i = 0; i < docIds.length; i++) {
-    const detail = await getCommercialDocument(docIds[i]!).catch(() => null);
-    if (!detail) continue;
-    rows.push({
-      number: detail.documentNumber,
-      vendor: detail.partyName,
-      amount: Number(amts[i] ?? detail.balanceDue) || 0,
-    });
-  }
-  const total = Number(sp.total) || rows.reduce((s, r) => s + r.amount, 0);
-  const vendorName = rows[0]?.vendor ?? 'Vendor';
-  const allSameVendor = rows.every((r) => r.vendor === vendorName);
+  const paymentIds = Array.isArray(sp.payment) ? sp.payment : sp.payment ? [sp.payment] : [];
+  const facts = await loadPaymentPrintFacts(paymentIds).catch(() => null);
+  const rows = (facts?.rows ?? []).map((r) => ({
+    number: r.number,
+    vendor: r.partyName,
+    amount: r.amount,
+  }));
+  const total = facts?.total ?? 0;
+  const vendorName = facts?.partyName ?? 'Vendor';
+  const allSameVendor = rows.length > 0 && rows.every((r) => r.vendor === vendorName);
 
   return (
     <div className="tax-invoice-print-root">
@@ -54,10 +49,10 @@ export default async function VendorRemittancePage({
             <strong>Company:</strong> {tenant.name}
           </div>
           <div>
-            <strong>Payment date:</strong> {sp.date || '—'}
+            <strong>Payment date:</strong> {facts?.date || '—'}
           </div>
           <div>
-            <strong>Paid from account:</strong> {sp.account || '—'}
+            <strong>Paid from account:</strong> {facts?.account || '—'}
           </div>
           <div>
             <strong>Payee:</strong> {allSameVendor ? vendorName : 'Multiple vendors'}

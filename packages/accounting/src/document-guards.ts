@@ -1,0 +1,150 @@
+/**
+ * Pure remaining-qty, discount, and as-of helpers for commercial documents.
+ * Independent of Next.js / DB so the expected examples can be unit-tested.
+ */
+
+export function documentLineKey(productId: string | null | undefined, description: string): string {
+  return `${productId ?? ''}|${description.trim().toLowerCase()}`;
+}
+
+export const PURCHASE_BILL_TYPES = ['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase'] as const;
+
+export type QtyLine = {
+  productId: string | null;
+  description: string;
+  quantity: number;
+};
+
+export type LinkedChildDoc = {
+  id: string;
+  documentType: string;
+  sourceDocumentId: string | null;
+  lines: QtyLine[];
+};
+
+export function addQtyMaps(into: Map<string, number>, lines: QtyLine[]): void {
+  for (const line of lines) {
+    const k = documentLineKey(line.productId, line.description);
+    into.set(k, (into.get(k) ?? 0) + Number(line.quantity));
+  }
+}
+
+/** Bills of the PO plus bills whose source is a GRN of the PO. */
+export function billedQtyAgainstPo(poId: string, children: LinkedChildDoc[]): Map<string, number> {
+  const grnIds = new Set(
+    children
+      .filter((c) => c.documentType === 'goods_receipt' && c.sourceDocumentId === poId)
+      .map((c) => c.id),
+  );
+  const map = new Map<string, number>();
+  for (const child of children) {
+    const isBill = (PURCHASE_BILL_TYPES as readonly string[]).includes(child.documentType);
+    if (!isBill) continue;
+    const fromPo = child.sourceDocumentId === poId;
+    const fromGrn = Boolean(child.sourceDocumentId && grnIds.has(child.sourceDocumentId));
+    if (!fromPo && !fromGrn) continue;
+    addQtyMaps(map, child.lines);
+  }
+  return map;
+}
+
+export function receivedQtyAgainstPo(poId: string, children: LinkedChildDoc[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const child of children) {
+    if (child.documentType !== 'goods_receipt' || child.sourceDocumentId !== poId) continue;
+    addQtyMaps(map, child.lines);
+  }
+  return map;
+}
+
+export function remainingQty(ordered: number, used: number): number {
+  return Math.max(0, Math.round((ordered - used) * 10000) / 10000);
+}
+
+export function qtyExceedsRemaining(thisQty: number, remaining: number): boolean {
+  return thisQty > remaining + 0.0001;
+}
+
+export function returnQtyExceeded(
+  sourceLines: QtyLine[],
+  priorReturnLines: QtyLine[],
+  thisLines: QtyLine[],
+): boolean {
+  const already = new Map<string, number>();
+  addQtyMaps(already, priorReturnLines);
+  const src = new Map<string, number>();
+  addQtyMaps(src, sourceLines);
+  for (const line of thisLines) {
+    const k = documentLineKey(line.productId, line.description);
+    const srcQty = src.get(k) ?? 0;
+    const prior = already.get(k) ?? 0;
+    if (line.quantity + prior > srcQty + 0.0001) return true;
+  }
+  return false;
+}
+
+export function returnValueExceeded(
+  sourceTotal: number,
+  priorReturnTotal: number,
+  thisTotal: number,
+): boolean {
+  return thisTotal + priorReturnTotal > sourceTotal + 0.005;
+}
+
+export function issuedOnOrBeforeAsOf<T extends { issueDate: string }>(items: T[], asOf: string): T[] {
+  return items.filter((item) => item.issueDate <= asOf);
+}
+
+export type LineDiscountInput = {
+  quantity: string | number;
+  unitPrice: string | number;
+  discountType?: 'percent' | 'fixed' | null;
+  discountValue?: string | number | null;
+};
+
+function moneyNum(v: string | number | null | undefined): number {
+  return Number(String(v ?? '0').replace(/[^0-9.-]/g, '')) || 0;
+}
+
+/** UI default is percent. Missing type is percent, matching the % select default. */
+export function resolvedDiscountType(
+  type: LineDiscountInput['discountType'],
+): 'percent' | 'fixed' {
+  return type === 'fixed' ? 'fixed' : 'percent';
+}
+
+export function lineDiscountAmount(line: LineDiscountInput): number {
+  const qty = moneyNum(line.quantity);
+  const price = moneyNum(line.unitPrice);
+  const gross = Math.round(qty * price * 100) / 100;
+  const v = moneyNum(line.discountValue);
+  if (v <= 0 || gross <= 0) return 0;
+  if (resolvedDiscountType(line.discountType) === 'percent') {
+    return Math.min(gross, Math.round(((gross * v) / 100) * 100) / 100);
+  }
+  return Math.min(gross, Math.round(v * 100) / 100);
+}
+
+export function percentDiscountOver100(
+  discountType: LineDiscountInput['discountType'],
+  discountValue: number,
+): boolean {
+  return resolvedDiscountType(discountType) === 'percent' && discountValue > 100 + 0.0001;
+}
+
+export const PERCENT_DISCOUNT_OVER_100_MESSAGE = 'Percentage line discount cannot exceed 100%.';
+export const GRN_REMAINING_MESSAGE =
+  'This receipt exceeds the remaining quantity on the purchase order.';
+export const BILL_REMAINING_MESSAGE =
+  'This bill exceeds the remaining quantity on the purchase order.';
+export const GRN_BILL_REMAINING_MESSAGE =
+  'This bill exceeds the remaining quantity on the goods receipt.';
+export const SALES_RETURN_QTY_MESSAGE =
+  'This return exceeds the remaining quantity on the original invoice.';
+export const SALES_RETURN_VALUE_MESSAGE =
+  'This return exceeds the remaining value on the original invoice.';
+export const PURCHASE_RETURN_QTY_MESSAGE =
+  'This return exceeds the remaining quantity on the original bill.';
+export const PURCHASE_RETURN_VALUE_MESSAGE =
+  'This return exceeds the remaining value on the original bill.';
+export const PAYMENT_OVER_BALANCE_MESSAGE = 'Payment cannot exceed balance due.';

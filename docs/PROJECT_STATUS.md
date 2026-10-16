@@ -1,3 +1,7 @@
+## 2026-10-16 — Broad-workflow findings (v2.5.12)
+
+QA HANDOFF on v2.5.11: 62 bounded manual checks, 45 passed / 17 failed → nine findings (five P1s). PO remaining now includes GRN-sourced bills and rejects over-receipt. Purchase returns reject a second full return. New line discounts default to percent (3×100 / 10% / header 5% = 256.50). Payment print is allocation-backed. As-of aging excludes later-issued documents. Convert duplicate-bill and over-balance payment return visible errors without posting. Linked return preview copies header discount. Percentage discounts above 100% refuse. See [CHG-20261016-broad-workflow-findings](changes/CHG-20261016-broad-workflow-findings.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.12 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-16 — Restricted DB company settings and platform catalog (v2.5.11)
 
 QA HANDOFF on v2.5.10: 303 campaign assertions pass; 129 PostgreSQL pass; HTTPS 23 pass / 2 fail / 1 blocked. BUG-0053 own-invoice GET now passes. `getCompanySettingsData` no longer bootstraps memberships outside tenant context. Platform Admin listing uses a privileged catalog; lookup functions are hardened in forward migration 043. See [CHG-20261016-restricted-settings-platform](changes/CHG-20261016-restricted-settings-platform.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.11 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

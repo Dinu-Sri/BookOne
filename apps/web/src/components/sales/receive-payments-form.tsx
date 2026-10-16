@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { receiveCustomerPayments } from '@/app/actions/documents';
 import type { OpenArInvoice } from '@/app/actions/commercial-docs';
+import { PAYMENT_OVER_BALANCE_MESSAGE } from '@bookone/accounting';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
@@ -71,6 +72,14 @@ export function ReceivePaymentsForm({
       pushStatusToast({ kind: 'error', message: 'Select at least one invoice and enter an amount.' });
       return;
     }
+    const over = allocations.find((a) => {
+      const inv = invoices.find((row) => row.id === a.documentId);
+      return inv != null && a.amount > inv.balanceDue + 0.005;
+    });
+    if (over) {
+      pushStatusToast({ kind: 'error', message: PAYMENT_OVER_BALANCE_MESSAGE });
+      return;
+    }
 
     const idempotencyKey = crypto.randomUUID();
     startTransition(() => {
@@ -89,15 +98,8 @@ export function ReceivePaymentsForm({
           kind: 'success',
           message: `Received ${res.paidCount} payment${res.paidCount === 1 ? '' : 's'} · LKR ${totalReceive.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
         });
-        const params = new URLSearchParams({
-          date: paymentDate,
-          account: accountCode,
-          total: String(totalReceive),
-        });
-        for (const a of allocations) {
-          params.append('doc', a.documentId);
-          params.append('amt', String(a.amount));
-        }
+        const params = new URLSearchParams();
+        for (const id of res.paymentIds ?? []) params.append('payment', id);
         router.push(`/sales/payments/receipt?${params.toString()}`);
         router.refresh();
       });

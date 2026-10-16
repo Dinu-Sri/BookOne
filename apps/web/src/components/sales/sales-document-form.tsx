@@ -138,6 +138,8 @@ export function SalesDocumentForm({
     setInvoiceHits([]);
     setInvoiceOpen(false);
     setLines([]);
+    setHeaderDiscount('0');
+    setHeaderDiscountType('fixed');
   }
 
   async function pickSourceInvoice(id: string, label: string) {
@@ -151,6 +153,9 @@ export function SalesDocumentForm({
     setInvoiceQuery(loaded.documentNumber);
     setInvoiceHits([]);
     setInvoiceOpen(false);
+    setHeaderDiscount(String(loaded.headerDiscount || 0));
+    setHeaderDiscountType('fixed');
+    setDiscountId('');
     setLines(
       loaded.lines.map((l) => ({
         key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,

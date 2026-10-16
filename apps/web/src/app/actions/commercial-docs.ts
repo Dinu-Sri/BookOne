@@ -15,6 +15,22 @@ import {
   lineIsOutputTaxable,
   salesOutputVatRatePercent,
   amountInWordsLkr,
+  billedQtyAgainstPo,
+  remainingQty,
+  qtyExceedsRemaining,
+  returnQtyExceeded,
+  returnValueExceeded,
+  issuedOnOrBeforeAsOf,
+  percentDiscountOver100,
+  documentLineKey,
+  PERCENT_DISCOUNT_OVER_100_MESSAGE,
+  GRN_REMAINING_MESSAGE,
+  BILL_REMAINING_MESSAGE,
+  GRN_BILL_REMAINING_MESSAGE,
+  SALES_RETURN_QTY_MESSAGE,
+  SALES_RETURN_VALUE_MESSAGE,
+  PURCHASE_RETURN_QTY_MESSAGE,
+  PURCHASE_RETURN_VALUE_MESSAGE,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { postedObligationSql } from '@/lib/posted-obligations';
@@ -90,6 +106,8 @@ const lineSchema = z.object({
   unitPrice: z.number().min(0),
   unitCost: z.number().min(0).optional().default(0),
   discountAmount: z.number().min(0).optional().default(0),
+  discountType: z.enum(['percent', 'fixed']).optional(),
+  discountValue: z.number().min(0).optional(),
   accountCode: z.string().max(20).optional(),
 });
 
@@ -277,7 +295,7 @@ function defaultStatus(type: string) {
 }
 
 function lineMatchKey(productId: string | null | undefined, description: string) {
-  return `${productId ?? ''}|${description.trim().toLowerCase()}`;
+  return documentLineKey(productId, description);
 }
 
 /** Qty already received via GRNs linked to this PO (or GRN itself). */
@@ -657,6 +675,7 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
   brandId: string | null;
   locationId: string | null;
   documentNumber: string;
+  headerDiscount: number;
   lines: {
     productId: string;
     description: string;
@@ -690,6 +709,7 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
       brandId: doc.brandId,
       locationId: doc.locationId,
       documentNumber: doc.documentNumber,
+      headerDiscount: Number(doc.discountTotal) || 0,
       lines: lines.map((l) => ({
         productId: l.productId ?? '',
         description: l.description,
@@ -1086,6 +1106,13 @@ export async function createCommercialDocument(
           await requireOwnedDocumentId(user.tenantId, orderId, 'Sales order');
         }
         await requireOwnedDocumentId(user.tenantId, parsed.existingDraftId, 'Draft');
+
+        for (const line of parsed.lines) {
+          if (line.discountType != null && percentDiscountOver100(line.discountType, line.discountValue ?? 0)) {
+            throw new Error(PERCENT_DISCOUNT_OVER_100_MESSAGE);
+          }
+        }
+
       // GRN-before-bill: if billing a PO that has physical lines, require at least one GRN
       if (
         isApBill &&
@@ -1121,6 +1148,89 @@ export async function createCommercialDocument(
               throw new Error(
                 'Receive goods (GRN) before billing this PO. Enable/disable in Purchase settings.',
               );
+            }
+          }
+        }
+      }
+
+      if (parsed.sourceDocumentId) {
+        const [srcDoc] = await db()
+          .select({
+            id: businessDocuments.id,
+            documentType: businessDocuments.documentType,
+          })
+          .from(businessDocuments)
+          .where(
+            and(
+              eq(businessDocuments.tenantId, user.tenantId),
+              eq(businessDocuments.id, parsed.sourceDocumentId),
+              isNull(businessDocuments.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (srcDoc?.documentType === 'purchase_order') {
+          const poLines = await db()
+            .select({
+              productId: businessDocumentLines.productId,
+              description: businessDocumentLines.description,
+              quantity: businessDocumentLines.quantity,
+            })
+            .from(businessDocumentLines)
+            .where(
+              and(
+                eq(businessDocumentLines.documentId, srcDoc.id),
+                isNull(businessDocumentLines.voidedAt),
+              ),
+            );
+          const ordered = new Map<string, number>();
+          for (const l of poLines) {
+            ordered.set(lineMatchKey(l.productId, l.description), Number(l.quantity));
+          }
+          if (parsed.documentType === 'goods_receipt') {
+            const received = await receivedQtyByLineKey(user.tenantId, srcDoc.id);
+            for (const line of parsed.lines) {
+              const k = lineMatchKey(line.productId, line.description);
+              const left = remainingQty(ordered.get(k) ?? 0, received.get(k) ?? 0);
+              if (qtyExceedsRemaining(line.quantity, left)) {
+                throw new Error(GRN_REMAINING_MESSAGE);
+              }
+            }
+          }
+          if (isApBill) {
+            const billed = await billedQtyByLineKey(user.tenantId, srcDoc.id);
+            for (const line of parsed.lines) {
+              const k = lineMatchKey(line.productId, line.description);
+              const left = remainingQty(ordered.get(k) ?? 0, billed.get(k) ?? 0);
+              if (qtyExceedsRemaining(line.quantity, left)) {
+                throw new Error(BILL_REMAINING_MESSAGE);
+              }
+            }
+          }
+        }
+        if (srcDoc?.documentType === 'goods_receipt' && isApBill) {
+          const grnLines = await db()
+            .select({
+              productId: businessDocumentLines.productId,
+              description: businessDocumentLines.description,
+              quantity: businessDocumentLines.quantity,
+            })
+            .from(businessDocumentLines)
+            .where(
+              and(
+                eq(businessDocumentLines.documentId, srcDoc.id),
+                isNull(businessDocumentLines.voidedAt),
+              ),
+            );
+          const ordered = new Map<string, number>();
+          for (const l of grnLines) {
+            ordered.set(lineMatchKey(l.productId, l.description), Number(l.quantity));
+          }
+          const billed = await billedQtyByLineKey(user.tenantId, srcDoc.id);
+          for (const line of parsed.lines) {
+            const k = lineMatchKey(line.productId, line.description);
+            const left = remainingQty(ordered.get(k) ?? 0, billed.get(k) ?? 0);
+            if (qtyExceedsRemaining(line.quantity, left)) {
+              throw new Error(GRN_BILL_REMAINING_MESSAGE);
             }
           }
         }
@@ -1248,7 +1358,9 @@ export async function createCommercialDocument(
         cogsAccountCode: string;
         inventoryAccountCode: string;
       }> = [];
-      const linkedReturn = parsed.documentType === 'sales_return' && Boolean(parsed.sourceDocumentId);
+      const linkedReturn =
+        Boolean(parsed.sourceDocumentId) &&
+        (parsed.documentType === 'sales_return' || parsed.documentType === 'purchase_return');
       for (const line of sourceLines) {
         let unitCost = line.unitCost ?? 0;
         let productType = 'service';
@@ -1606,7 +1718,7 @@ export async function createCommercialDocument(
             and(
               eq(businessDocuments.tenantId, user.tenantId),
               eq(businessDocuments.sourceDocumentId, linkedSource.id),
-              eq(businessDocuments.documentType, 'sales_return'),
+              eq(businessDocuments.documentType, parsed.documentType),
               isNull(businessDocuments.voidedAt),
             ),
           );
@@ -1627,25 +1739,28 @@ export async function createCommercialDocument(
                   ),
                 )
             : [];
-        const returnedQty = new Map<string, number>();
-        for (const line of priorLines) {
-          const k = lineMatchKey(line.productId, line.description);
-          returnedQty.set(k, (returnedQty.get(k) ?? 0) + Number(line.quantity));
-        }
-        for (const line of enriched) {
-          const k = lineMatchKey(line.productId, line.description);
-          const srcLine = linkedSourceLines.find(
-            (s) => lineMatchKey(s.productId, s.description) === k,
-          );
-          const srcQty = srcLine ? Number(srcLine.quantity) : 0;
-          const already = returnedQty.get(k) ?? 0;
-          if (line.quantity + already > srcQty + 0.0001) {
-            throw new Error('This return exceeds the remaining quantity on the original invoice.');
-          }
+        const isPurchaseReturn = parsed.documentType === 'purchase_return';
+        const thisQtyLines = enriched.map((line) => ({
+          productId: line.productId ?? null,
+          description: line.description,
+          quantity: line.quantity,
+        }));
+        const sourceQtyLines = linkedSourceLines.map((s) => ({
+          productId: s.productId,
+          description: s.description,
+          quantity: Number(s.quantity),
+        }));
+        const priorQtyLines = priorLines.map((line) => ({
+          productId: line.productId,
+          description: line.description,
+          quantity: Number(line.quantity),
+        }));
+        if (returnQtyExceeded(sourceQtyLines, priorQtyLines, thisQtyLines)) {
+          throw new Error(isPurchaseReturn ? PURCHASE_RETURN_QTY_MESSAGE : SALES_RETURN_QTY_MESSAGE);
         }
         const alreadyValue = priorReturns.reduce((s, row) => s + Number(row.total), 0);
-        if (total + alreadyValue > Number(linkedSource.total) + 0.005) {
-          throw new Error('This return exceeds the remaining value on the original invoice.');
+        if (returnValueExceeded(Number(linkedSource.total), alreadyValue, total)) {
+          throw new Error(isPurchaseReturn ? PURCHASE_RETURN_VALUE_MESSAGE : SALES_RETURN_VALUE_MESSAGE);
         }
       }
 
@@ -2440,13 +2555,18 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
   const documentType = String(formData.get('documentType') ?? 'quotation') as z.infer<typeof createSchema>['documentType'];
   const lineCount = Number(formData.get('lineCount') ?? 1);
   const lines = [];
+  let percentOver100 = false;
   for (let i = 0; i < lineCount; i++) {
     const description = String(formData.get(`line_${i}_description`) ?? '').trim();
     const quantity = Number(String(formData.get(`line_${i}_quantity`) ?? '1').replace(/[^0-9.-]/g, '')) || 1;
     const unitPrice = Number(String(formData.get(`line_${i}_unitPrice`) ?? '0').replace(/[^0-9.-]/g, '')) || 0;
     const productId = String(formData.get(`line_${i}_productId`) ?? '');
     const discountAmount = Number(String(formData.get(`line_${i}_discount`) ?? '0').replace(/[^0-9.-]/g, '')) || 0;
+    const discountTypeRaw = String(formData.get(`line_${i}_discountType`) ?? 'percent');
+    const discountType = discountTypeRaw === 'fixed' ? ('fixed' as const) : ('percent' as const);
+    const discountValue = Number(String(formData.get(`line_${i}_discountValue`) ?? '0').replace(/[^0-9.-]/g, '')) || 0;
     if (!description && !productId) continue;
+    if (percentDiscountOver100(discountType, discountValue)) percentOver100 = true;
     lines.push({
       productId: productId || null,
       description: description || 'Line item',
@@ -2454,6 +2574,8 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
       unitPrice,
       unitCost: 0,
       discountAmount,
+      discountType,
+      discountValue,
       accountCode: String(formData.get(`line_${i}_accountCode`) ?? '') || undefined,
     });
   }
@@ -2491,6 +2613,12 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     purchase_return: '/purchase/returns',
     vendor_bill: '/purchase/purchases',
   };
+  if (percentOver100) {
+    const { redirect } = await import('next/navigation');
+    redirect(
+      `${listPath[documentType] ?? '/sales/invoices'}?err=${encodeURIComponent(PERCENT_DISCOUNT_OVER_100_MESSAGE)}`,
+    );
+  }
   const purchasePartyTypes = new Set([
     'purchase_order',
     'purchase',
@@ -2592,33 +2720,95 @@ function lineKey(productId: string | null, description: string) {
   return lineMatchKey(productId, description);
 }
 
-/** Qty already billed from this PO (or other source) via child documents. */
+async function loadLinkedChildrenWithLines(
+  tenantId: string,
+  ids: string[],
+): Promise<
+  {
+    id: string;
+    documentType: string;
+    sourceDocumentId: string | null;
+    lines: { productId: string | null; description: string; quantity: number }[];
+  }[]
+> {
+  if (ids.length === 0) return [];
+  const docs = await db()
+    .select({
+      id: businessDocuments.id,
+      documentType: businessDocuments.documentType,
+      sourceDocumentId: businessDocuments.sourceDocumentId,
+    })
+    .from(businessDocuments)
+    .where(
+      and(
+        eq(businessDocuments.tenantId, tenantId),
+        inArray(businessDocuments.id, ids),
+        isNull(businessDocuments.voidedAt),
+      ),
+    );
+  const lineRows = await db()
+    .select({
+      documentId: businessDocumentLines.documentId,
+      productId: businessDocumentLines.productId,
+      description: businessDocumentLines.description,
+      quantity: businessDocumentLines.quantity,
+    })
+    .from(businessDocumentLines)
+    .where(
+      and(inArray(businessDocumentLines.documentId, ids), isNull(businessDocumentLines.voidedAt)),
+    );
+  const byDoc = new Map<string, { productId: string | null; description: string; quantity: number }[]>();
+  for (const l of lineRows) {
+    const arr = byDoc.get(l.documentId) ?? [];
+    arr.push({
+      productId: l.productId,
+      description: l.description,
+      quantity: Number(l.quantity),
+    });
+    byDoc.set(l.documentId, arr);
+  }
+  return docs.map((d) => ({
+    id: d.id,
+    documentType: d.documentType,
+    sourceDocumentId: d.sourceDocumentId,
+    lines: byDoc.get(d.id) ?? [],
+  }));
+}
+
+/** Qty already billed from this PO (direct bills + bills of GRNs of the PO). */
 async function billedQtyByLineKey(tenantId: string, sourceId: string): Promise<Map<string, number>> {
-  const children = await db()
-    .select({ id: businessDocuments.id })
+  const direct = await db()
+    .select({
+      id: businessDocuments.id,
+      documentType: businessDocuments.documentType,
+    })
     .from(businessDocuments)
     .where(
       and(
         eq(businessDocuments.tenantId, tenantId),
         eq(businessDocuments.sourceDocumentId, sourceId),
         isNull(businessDocuments.voidedAt),
-        inArray(businessDocuments.documentType, ['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase']),
       ),
     );
-  const map = new Map<string, number>();
-  for (const child of children) {
-    const lines = await db()
-      .select()
-      .from(businessDocumentLines)
+  const grnIds = direct.filter((d) => d.documentType === 'goods_receipt').map((d) => d.id);
+  let grnBillIds: string[] = [];
+  if (grnIds.length > 0) {
+    const grnBills = await db()
+      .select({ id: businessDocuments.id })
+      .from(businessDocuments)
       .where(
-        and(eq(businessDocumentLines.documentId, child.id), isNull(businessDocumentLines.voidedAt)),
+        and(
+          eq(businessDocuments.tenantId, tenantId),
+          inArray(businessDocuments.sourceDocumentId, grnIds),
+          inArray(businessDocuments.documentType, ['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase']),
+          isNull(businessDocuments.voidedAt),
+        ),
       );
-    for (const l of lines) {
-      const k = lineKey(l.productId, l.description);
-      map.set(k, (map.get(k) ?? 0) + Number(l.quantity));
-    }
+    grnBillIds = grnBills.map((b) => b.id);
   }
-  return map;
+  const allIds = [...new Set([...direct.map((d) => d.id), ...grnBillIds])];
+  const children = await loadLinkedChildrenWithLines(tenantId, allIds);
+  return billedQtyAgainstPo(sourceId, children);
 }
 
 export type PoRemainingLine = {
@@ -2627,7 +2817,9 @@ export type PoRemainingLine = {
   description: string;
   orderedQty: number;
   billedQty: number;
+  receivedQty: number;
   remainingQty: number;
+  remainingReceiveQty: number;
   unitPrice: number;
   unitCost: number;
   discountAmount: number;
@@ -2673,6 +2865,7 @@ export async function getPurchaseOrderRemainingLines(poId: string): Promise<{
           ),
         );
       const billed = await billedQtyByLineKey(user.tenantId, poId);
+      const received = await receivedQtyByLineKey(user.tenantId, poId);
       return {
         ok: true,
         partyName: party?.name ?? 'Unknown',
@@ -2681,13 +2874,16 @@ export async function getPurchaseOrderRemainingLines(poId: string): Promise<{
         lines: lines.map((l) => {
           const ordered = Number(l.quantity);
           const billedQty = billed.get(lineKey(l.productId, l.description)) ?? 0;
+          const receivedQty = received.get(lineKey(l.productId, l.description)) ?? 0;
           return {
             id: l.id,
             productId: l.productId,
             description: l.description,
             orderedQty: ordered,
             billedQty,
-            remainingQty: Math.max(0, Math.round((ordered - billedQty) * 10000) / 10000),
+            receivedQty,
+            remainingQty: remainingQty(ordered, billedQty),
+            remainingReceiveQty: remainingQty(ordered, receivedQty),
             unitPrice: Number(l.unitPrice),
             unitCost: Number(l.unitCost),
             discountAmount: Number(l.discountAmount),
@@ -2803,6 +2999,38 @@ export async function convertDocument(
       convertLines = convertLines.filter((l) => l.quantity > 0);
       if (convertLines.length === 0) throw new Error('No remaining quantity to convert.');
 
+      if (source.documentType === 'purchase_order') {
+        const used =
+          targetType === 'goods_receipt'
+            ? await receivedQtyByLineKey(user.tenantId, source.id)
+            : await billedQtyByLineKey(user.tenantId, source.id);
+        const ordered = new Map<string, number>();
+        for (const l of sourceLines) {
+          ordered.set(lineKey(l.productId, l.description), Number(l.quantity));
+        }
+        for (const line of convertLines) {
+          const k = lineKey(line.productId ?? null, line.description);
+          const left = remainingQty(ordered.get(k) ?? 0, used.get(k) ?? 0);
+          if (qtyExceedsRemaining(line.quantity, left)) {
+            throw new Error(targetType === 'goods_receipt' ? GRN_REMAINING_MESSAGE : BILL_REMAINING_MESSAGE);
+          }
+        }
+      }
+      if (source.documentType === 'goods_receipt' && targetType === 'purchase') {
+        const used = await billedQtyByLineKey(user.tenantId, source.id);
+        const ordered = new Map<string, number>();
+        for (const l of sourceLines) {
+          ordered.set(lineKey(l.productId, l.description), Number(l.quantity));
+        }
+        for (const line of convertLines) {
+          const k = lineKey(line.productId ?? null, line.description);
+          const left = remainingQty(ordered.get(k) ?? 0, used.get(k) ?? 0);
+          if (qtyExceedsRemaining(line.quantity, left)) {
+            throw new Error(GRN_BILL_REMAINING_MESSAGE);
+          }
+        }
+      }
+
       const rentalFrom = await loadRentalEventForDocument(user.tenantId, sourceId);
 
       // Create without auto-marking full converted when partial — createCommercialDocument always marks converted.
@@ -2854,6 +3082,23 @@ export async function convertDocument(
           .where(
             and(eq(businessDocuments.tenantId, user.tenantId), eq(businessDocuments.id, sourceId)),
           );
+        if (source.sourceDocumentId) {
+          const remaining = await getPurchaseOrderRemainingLines(source.sourceDocumentId);
+          const left = remaining.lines?.reduce((s, l) => s + l.remainingQty, 0) ?? 0;
+          await db()
+            .update(businessDocuments)
+            .set({
+              status: left > 0.0001 ? 'partial' : 'converted',
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(businessDocuments.tenantId, user.tenantId),
+                eq(businessDocuments.id, source.sourceDocumentId),
+                eq(businessDocuments.documentType, 'purchase_order'),
+              ),
+            );
+        }
       }
 
       return result;
@@ -2902,7 +3147,6 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
   }
 
   const result = await convertDocument(sourceId, targetType, lines ? { lines } : undefined);
-  if (!result.ok) throw new Error(result.error ?? 'Convert failed');
   const { redirect } = await import('next/navigation');
   const listPath: Record<string, string> = {
     sales_order: '/sales/orders',
@@ -2910,7 +3154,16 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
     purchase_order: '/purchase/orders',
     purchase: '/purchase/purchases',
     vendor_bill: '/purchase/purchases',
+    goods_receipt: '/purchase/receipts',
   };
+  if (!result.ok) {
+    const error = result.error ?? 'Convert failed';
+    const dest = listPath[targetType] ?? '/purchase/purchases';
+    if (/permission/i.test(error)) {
+      redirect(`${dest}?flash=denied_write`);
+    }
+    redirect(`${dest}?err=${encodeURIComponent(error.slice(0, 180))}`);
+  }
   if (targetType === 'purchase' && result.id) {
     redirect(`/purchase/purchases/${result.id}`);
   }
@@ -2924,10 +3177,16 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
 export async function createReturnFromBillAction(formData: FormData): Promise<void> {
   const sourceId = String(formData.get('sourceId') ?? '');
   const user = await requireTenantContext();
+  const { redirect } = await import('next/navigation');
+  const failDest = sourceId ? `/purchase/purchases/${sourceId}` : '/purchase/purchases';
   const detail = await getCommercialDocument(sourceId);
-  if (!detail) throw new Error('Bill not found.');
+  if (!detail) {
+    redirect(`${failDest}?err=${encodeURIComponent('Bill not found.')}`);
+    return;
+  }
   if (!['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase'].includes(detail.documentType)) {
-    throw new Error('Returns can only be created from purchase bills.');
+    redirect(`${failDest}?err=${encodeURIComponent('Returns can only be created from purchase bills.')}`);
+    return;
   }
 
   const lineCount = Number(formData.get('lineCount') ?? 0);
@@ -2983,14 +3242,21 @@ export async function createReturnFromBillAction(formData: FormData): Promise<vo
     issueDate: new Date().toISOString().slice(0, 10),
     notes: `Return from ${detail.documentNumber}`,
     sourceDocumentId: sourceId,
+    headerDiscount: detail.discountTotal,
     // Cash purchase returns refund cash (not AP)
     paymentAccountCode: detail.documentType === 'cash_purchase' ? '1000' : undefined,
     brandId: detail.brandId ?? null,
     locationId: detail.locationId ?? null,
     lines,
   });
-  if (!result.ok) throw new Error(result.error ?? 'Could not create return');
-  const { redirect } = await import('next/navigation');
+  if (!result.ok) {
+    const error = result.error ?? 'Could not create return';
+    const dest = `/purchase/purchases/${sourceId}`;
+    if (/permission/i.test(error)) {
+      redirect(`${dest}?flash=denied_write`);
+    }
+    redirect(`${dest}?err=${encodeURIComponent(error.slice(0, 180))}`);
+  }
   redirect(result.id ? `/purchase/returns/${result.id}` : '/purchase/returns');
 }
 
@@ -3182,6 +3448,7 @@ export interface CommercialDocDetail {
     description: string;
     quantity: number;
     unitPrice: number;
+    discountAmount: number;
     lineTotal: number;
   }[];
 }
@@ -3251,6 +3518,7 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
         description: l.description,
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
+        discountAmount: Number(l.discountAmount),
         lineTotal: Number(l.lineTotal),
       })),
     };
@@ -3421,21 +3689,21 @@ export async function listOpenArInvoices(): Promise<OpenArInvoice[]> {
   });
 }
 
-/** AP aging by due date (or issue date if no due). */
+/** AP aging by due date (or issue date if no due). Documents issued after as-of are excluded. */
 export async function getApAgingSummary(asOfDate?: string): Promise<ApAgingSummary> {
   const asOf = asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
     ? asOfDate
     : new Date().toISOString().slice(0, 10);
-  const bills = await listOpenApBills();
+  const bills = issuedOnOrBeforeAsOf(await listOpenApBills(), asOf);
   return buildAgingSummary(bills, asOf);
 }
 
-/** AR aging by due date (or issue date if no due). */
+/** AR aging by due date (or issue date if no due). Documents issued after as-of are excluded. */
 export async function getArAgingSummary(asOfDate?: string): Promise<ArAgingSummary> {
   const asOf = asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
     ? asOfDate
     : new Date().toISOString().slice(0, 10);
-  const invoices = await listOpenArInvoices();
+  const invoices = issuedOnOrBeforeAsOf(await listOpenArInvoices(), asOf);
   return buildAgingSummary(invoices, asOf);
 }
 

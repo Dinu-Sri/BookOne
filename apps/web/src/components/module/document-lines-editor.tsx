@@ -10,6 +10,7 @@ import { createQuickProduct } from '@/app/actions/inventory';
 import { ProductAddSearch, type ProductPick } from '@/components/module/product-add-search';
 import { QtyStepper } from '@/components/module/qty-stepper';
 import { pushStatusToast } from '@/components/layout/status-toast';
+import { lineDiscountAmount as computeLineDiscountAmount } from '@bookone/accounting';
 
 export type DocLineState = {
   key: string;
@@ -38,13 +39,12 @@ export function emptyDocLines(): DocLineState[] {
 }
 
 export function lineDiscountAmount(line: DocLineState): number {
-  const qty = Number(String(line.quantity).replace(/[^0-9.-]/g, '')) || 0;
-  const price = Number(String(line.unitPrice).replace(/[^0-9.-]/g, '')) || 0;
-  const gross = Math.round(qty * price * 100) / 100;
-  const v = Number(String(line.discountValue ?? '0').replace(/[^0-9.-]/g, '')) || 0;
-  if (v <= 0) return 0;
-  if (line.discountType === 'percent') return Math.min(gross, Math.round(((gross * v) / 100) * 100) / 100);
-  return Math.min(gross, Math.round(v * 100) / 100);
+  return computeLineDiscountAmount({
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    discountType: line.discountType,
+    discountValue: line.discountValue,
+  });
 }
 
 export function computeLineAmounts(lines: DocLineState[]) {
@@ -96,6 +96,8 @@ export function DocumentLinesEditor({
           description: c.name,
           quantity: String(c.qty),
           unitPrice: String(linePriceMode === 'cost' ? c.unitCost ?? c.sellPrice : c.sellPrice),
+          discountType: 'percent' as const,
+          discountValue: '',
           sku: c.sku,
           isManual: false,
         })),
@@ -114,6 +116,8 @@ export function DocumentLinesEditor({
         description: p.name,
         quantity: '1',
         unitPrice: String(linePriceMode === 'cost' ? p.unitCost : p.sellPrice),
+        discountType: 'percent',
+        discountValue: '',
         sku: p.sku,
         isManual: false,
       },
@@ -129,6 +133,8 @@ export function DocumentLinesEditor({
         description,
         quantity: '1',
         unitPrice: '',
+        discountType: 'percent' as const,
+        discountValue: '',
         sku: 'MANUAL',
         isManual: true,
         saveAsType: 'service',

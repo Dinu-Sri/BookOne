@@ -1,3 +1,9 @@
+## 2026-10-16 — Broad-workflow findings (v2.5.12)
+
+- Record: [CHG-20261016-broad-workflow-findings](changes/CHG-20261016-broad-workflow-findings.md). QA [HANDOFF-20261016-broad-workflows](https://github.com/Dinu-Sri/bookone-qa/blob/qa/broad-workflows-20261016/handoffs/HANDOFF-20261016-broad-workflows.md) on v2.5.11 · 0bcdf4d (62 checks: 45 pass / 17 fail → nine findings, five P1s). Draft QA PR #35.
+- PO billed remaining walks GRN-sourced bills; GRN qty cannot exceed remaining ordered. Purchase returns share remaining qty/value with sales returns. New lines default to percent discount; percentage above 100% refuses. Payment remittance/receipt print from persisted allocations. AR/AP as-of aging excludes later-issued documents. Convert/return failures redirect `?err=`. Over-balance payment toasts and does not post. Linked return preview copies source header discount.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.12 · <sha7>` and reruns the 62-check workflow plus unchanged 303/129/26. Do not replay staging payments. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-16 — Restricted DB company settings and platform catalog (v2.5.11)
 
 - Record: [CHG-20261016-restricted-settings-platform](changes/CHG-20261016-restricted-settings-platform.md). QA [HANDOFF-20261016-v2510-findings](https://github.com/Dinu-Sri/bookone-qa/blob/bb01b82014a1e3e3ebb611f0100a756bdfcdd7c3/handoffs/HANDOFF-20261016-v2510-findings.md) on v2.5.10 · 81a505c (303 campaign pass; 129 PostgreSQL pass; HTTPS 23/2/1; BUG-0053 invoice GET now passes).

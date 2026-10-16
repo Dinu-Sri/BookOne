@@ -17,12 +17,26 @@ export function PoConvertForm({
 }) {
   const [qtys, setQtys] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
-    for (const l of initial) m[l.id] = l.remainingQty > 0 ? String(l.remainingQty) : '0';
+    for (const l of initial) {
+      const cap = Math.max(l.remainingQty, l.remainingReceiveQty ?? 0);
+      m[l.id] = cap > 0 ? String(l.remainingQty > 0 ? l.remainingQty : l.remainingReceiveQty) : '0';
+    }
     return m;
   });
 
-  const openLines = useMemo(() => initial.filter((l) => l.remainingQty > 0), [initial]);
+  const openLines = useMemo(
+    () => initial.filter((l) => l.remainingQty > 0 || l.remainingReceiveQty > 0),
+    [initial],
+  );
   const any = openLines.some((l) => (Number(qtys[l.id]) || 0) > 0);
+  const grnOk = openLines.every((l) => {
+    const n = Number(qtys[l.id]) || 0;
+    return n <= (l.remainingReceiveQty ?? 0) + 0.0001;
+  });
+  const billOk = openLines.every((l) => {
+    const n = Number(qtys[l.id]) || 0;
+    return n <= l.remainingQty + 0.0001;
+  });
 
   if (openLines.length === 0) {
     return (
@@ -42,8 +56,8 @@ export function PoConvertForm({
         <div>
           <strong>Receive or bill from PO</strong>
           <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-soft)' }}>
-            Adjust quantities. GRN stocks inventory without AP; purchase bill opens AP (no double stock if
-            GRN already received).
+            Adjust quantities. Receive goods cannot exceed remaining unordered receipts. Purchase bill
+            remaining includes bills created from GRNs of this PO.
           </p>
         </div>
         <form action={convertDocumentAction} id="po-convert-form">
@@ -55,6 +69,7 @@ export function PoConvertForm({
                 <tr>
                   <th>Description</th>
                   <th>Ordered</th>
+                  <th>Received</th>
                   <th>Billed</th>
                   <th>Remaining</th>
                   <th>This qty</th>
@@ -72,6 +87,7 @@ export function PoConvertForm({
                       <input type="hidden" name={`line_${i}_unitCost`} value={String(l.unitCost)} />
                     </td>
                     <td>{l.orderedQty}</td>
+                    <td>{l.receivedQty ?? 0}</td>
                     <td>{l.billedQty}</td>
                     <td>{l.remainingQty}</td>
                     <td>
@@ -79,7 +95,8 @@ export function PoConvertForm({
                         name={`line_${i}_quantity`}
                         value={qtys[l.id] ?? '0'}
                         onChange={(v) => {
-                          const n = Math.min(l.remainingQty, Math.max(0, Number(v) || 0));
+                          const cap = Math.max(l.remainingQty, l.remainingReceiveQty ?? 0);
+                          const n = Math.min(cap, Math.max(0, Number(v) || 0));
                           setQtys((prev) => ({ ...prev, [l.id]: String(n) }));
                         }}
                         min={0}
@@ -97,7 +114,7 @@ export function PoConvertForm({
               type="submit"
               name="targetType"
               value="goods_receipt"
-              disabled={!any}
+              disabled={!any || !grnOk}
               form="po-convert-form"
             >
               Receive goods (GRN)
@@ -107,7 +124,7 @@ export function PoConvertForm({
               type="submit"
               name="targetType"
               value="purchase"
-              disabled={!any}
+              disabled={!any || !billOk}
               form="po-convert-form"
             >
               Create purchase bill

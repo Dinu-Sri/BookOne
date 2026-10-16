@@ -17,6 +17,7 @@ import {
   asc,
   gte,
   lte,
+  inArray,
   journalEntries,
   journalLines,
   parties,
@@ -387,7 +388,7 @@ async function allocateDocumentPaymentBody(
   tx: AllocateTx,
   user: { id: string; tenantId: string },
   parsed: { documentId: string; paymentDate: string; paymentAccountCode: string; amount: number },
-): Promise<void> {
+): Promise<string> {
   await pgClient()`
     select id from business_documents
     where id = ${parsed.documentId}::uuid and tenant_id = ${user.tenantId}::uuid
@@ -521,6 +522,7 @@ async function allocateDocumentPaymentBody(
     newValues: { documentId: document.id, paymentTransactionId: paymentTx.id, amount: parsed.amount },
     notes: 'Allocated payment to AR/AP document.',
   });
+  return paymentTx.id;
 }
 
 function revalidatePaymentPaths() {
@@ -573,23 +575,25 @@ async function allocatePaymentBatch(args: {
   paymentDate: string;
   paymentAccountCode: string;
   allocations: { documentId: string; amount: number }[];
-}): Promise<number> {
+}): Promise<{ paidCount: number; paymentIds: string[] }> {
   await assertOpenPeriod(args.user.tenantId, args.paymentDate);
+  const paymentIds: string[] = [];
   await db().transaction(async (tx) => {
     await lockDocumentsForUpdate(
       args.user.tenantId,
       args.allocations.map((row) => row.documentId),
     );
     for (const row of args.allocations) {
-      await allocateDocumentPaymentBody(tx as AllocateTx, args.user, {
+      const paymentId = await allocateDocumentPaymentBody(tx as AllocateTx, args.user, {
         documentId: row.documentId,
         paymentDate: args.paymentDate,
         paymentAccountCode: args.paymentAccountCode,
         amount: row.amount,
       });
+      paymentIds.push(paymentId);
     }
   });
-  return args.allocations.length;
+  return { paidCount: args.allocations.length, paymentIds };
 }
 
 /** Pay one or more AP bills in one transaction (same bank account / date). */
@@ -597,7 +601,7 @@ export async function payVendorBills(input: {
   paymentDate: string;
   paymentAccountCode: string;
   allocations: { documentId: string; amount: number }[];
-}): Promise<{ ok: boolean; error?: string; paidCount?: number }> {
+}): Promise<{ ok: boolean; error?: string; paidCount?: number; paymentIds?: string[] }> {
   try {
     const { assertPermission } = await import('@/lib/access');
     await assertPermission('purchase.payments.write', 'write');
@@ -607,7 +611,7 @@ export async function payVendorBills(input: {
     if (allocations.length === 0) return { ok: false, error: 'Select at least one bill with an amount.', paidCount: 0 };
 
     const user = await requireTenantContext();
-    const paidCount = await withTenantContext(user.tenantId, () =>
+    const batch = await withTenantContext(user.tenantId, () =>
       allocatePaymentBatch({
         user,
         paymentDate: date,
@@ -616,7 +620,7 @@ export async function payVendorBills(input: {
       }),
     );
     revalidatePaymentPaths();
-    return { ok: true, paidCount };
+    return { ok: true, paidCount: batch.paidCount, paymentIds: batch.paymentIds };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pay vendors failed.', paidCount: 0 };
   }
@@ -631,7 +635,7 @@ export async function receiveCustomerPayments(input: {
   paymentAccountCode: string;
   allocations: { documentId: string; amount: number }[];
   idempotencyKey?: string | null;
-}): Promise<{ ok: boolean; error?: string; paidCount?: number }> {
+}): Promise<{ ok: boolean; error?: string; paidCount?: number; paymentIds?: string[] }> {
   const started = Date.now();
   let tenantId: string | undefined;
   let key: string | null | undefined = input.idempotencyKey;
@@ -679,7 +683,7 @@ export async function receiveCustomerPayments(input: {
       });
     }
 
-    const paidCount = await withTenantContext(user.tenantId, () =>
+    const batch = await withTenantContext(user.tenantId, () =>
       allocatePaymentBatch({
         user,
         paymentDate: date,
@@ -688,10 +692,18 @@ export async function receiveCustomerPayments(input: {
       }),
     );
     revalidatePaymentPaths();
-    const out = { ok: true as const, paidCount, fingerprint };
+    const out = {
+      ok: true as const,
+      paidCount: batch.paidCount,
+      paymentIds: batch.paymentIds,
+      fingerprint,
+    };
     await persist(out);
     const { logIfSlow } = await import('@/lib/ops-log');
-    await logIfSlow('action:receiveCustomerPayments', started, { status: 'ok', message: String(paidCount) });
+    await logIfSlow('action:receiveCustomerPayments', started, {
+      status: 'ok',
+      message: String(batch.paidCount),
+    });
     return out;
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Receive payment failed.';
@@ -699,6 +711,85 @@ export async function receiveCustomerPayments(input: {
     await logOps({ kind: 'error', path: 'action:receiveCustomerPayments', status: 'error', message });
     return persist({ ok: false, error: message, paidCount: 0, fingerprint: fingerprint || undefined });
   }
+}
+
+export type PaymentPrintFacts = {
+  date: string;
+  account: string;
+  partyName: string;
+  rows: { number: string; partyName: string; amount: number }[];
+  total: number;
+};
+
+/** Load remittance/receipt rows from persisted payment allocations. Query amounts are ignored. */
+export async function loadPaymentPrintFacts(paymentIds: string[]): Promise<PaymentPrintFacts | null> {
+  const ids = [...new Set(paymentIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id)))];
+  if (ids.length === 0) return null;
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const pays = await db()
+      .select({
+        id: transactions.id,
+        date: transactions.date,
+        party: transactions.party,
+        accountCode: accounts.code,
+        accountName: accounts.name,
+      })
+      .from(transactions)
+      .leftJoin(accounts, eq(accounts.id, transactions.paymentAccountId))
+      .where(
+        and(
+          eq(transactions.tenantId, user.tenantId),
+          inArray(transactions.id, ids),
+          eq(transactions.accountingType, 'payment'),
+          isNull(transactions.voidedAt),
+        ),
+      );
+    if (pays.length === 0) return null;
+
+    const allocs = await db()
+      .select({
+        paymentTransactionId: settlementAllocations.paymentTransactionId,
+        allocatedAmount: settlementAllocations.allocatedAmount,
+        documentNumber: businessDocuments.documentNumber,
+        partyName: parties.name,
+      })
+      .from(settlementAllocations)
+      .innerJoin(
+        businessDocuments,
+        eq(businessDocuments.transactionId, settlementAllocations.invoiceTransactionId),
+      )
+      .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+      .where(
+        and(
+          eq(settlementAllocations.tenantId, user.tenantId),
+          inArray(settlementAllocations.paymentTransactionId, ids),
+          isNull(settlementAllocations.voidedAt),
+          isNull(businessDocuments.voidedAt),
+        ),
+      );
+
+    const rows = allocs.map((a) => ({
+      number: a.documentNumber,
+      partyName: a.partyName ?? 'Unknown',
+      amount: Number(a.allocatedAmount) || 0,
+    }));
+    const total = Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+    const first = pays[0]!;
+    const account =
+      first.accountCode && first.accountName
+        ? `${first.accountCode} — ${first.accountName}`
+        : first.accountCode || '—';
+    const partyName = rows[0]?.partyName ?? first.party;
+    const allSame = rows.every((r) => r.partyName === partyName);
+    return {
+      date: first.date,
+      account,
+      partyName: allSame ? partyName : rows.length ? 'Multiple' : partyName,
+      rows,
+      total,
+    };
+  });
 }
 
 export async function getDocumentFormOptions(): Promise<{

@@ -1,3 +1,7 @@
+## 2026-10-16 — Restricted DB company settings and platform catalog (v2.5.11)
+
+QA HANDOFF on v2.5.10: 303 campaign assertions pass; 129 PostgreSQL pass; HTTPS 23 pass / 2 fail / 1 blocked. BUG-0053 own-invoice GET now passes. `getCompanySettingsData` no longer bootstraps memberships outside tenant context. Platform Admin listing uses a privileged catalog; lookup functions are hardened in forward migration 043. See [CHG-20261016-restricted-settings-platform](changes/CHG-20261016-restricted-settings-platform.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.11 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-15 — Restricted DB own invoices (v2.5.10)
 
 QA HANDOFF on v2.5.9: 303 campaign assertions pass; 13/13 owner-DB HTTP pass; HTTP-102 fail (restricted-DB own invoice 307 `/login`) with ten dependents blocked. `getTenantInfo` now re-pins tenant GUC for the `tenants` row after `requireTenantContext` returns. See [CHG-20261015-restricted-tenant-guc](changes/CHG-20261015-restricted-tenant-guc.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.10 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

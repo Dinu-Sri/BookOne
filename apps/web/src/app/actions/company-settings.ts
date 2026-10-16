@@ -186,28 +186,8 @@ function slugify(value: string): string {
     .slice(0, 100);
 }
 
-async function ensureMembership(tenantId: string, userId: string, role: string) {
-  const [existing] = await db()
-    .select({ id: tenantMemberships.id })
-    .from(tenantMemberships)
-    .where(
-      and(
-        eq(tenantMemberships.tenantId, tenantId),
-        eq(tenantMemberships.userId, userId),
-        isNull(tenantMemberships.voidedAt),
-      ),
-    )
-    .limit(1);
-
-  if (!existing) {
-    await db().insert(tenantMemberships).values({ tenantId, userId, role, status: 'active' });
-  }
-}
-
 export async function getCompanySettingsData(): Promise<CompanySettingsData> {
   const user = await requireTenantContext();
-  await ensureMembership(user.tenantId, user.id, user.role === 'admin' ? 'owner' : user.role);
-
   return withTenantContext(user.tenantId, async () => {
     const [profile] = await db()
       .select({

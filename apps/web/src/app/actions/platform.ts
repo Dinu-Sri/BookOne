@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { DEFAULT_CHART_OF_ACCOUNTS } from '@bookone/accounting';
@@ -12,13 +13,12 @@ import {
   desc,
   and,
   isNull,
-  or,
-  ilike,
   sql,
   tenantMemberships,
   tenants,
   users,
   platformAuditEvents,
+  withTenantContext,
 } from '@bookone/db';
 import {
   modulesForPlan,
@@ -119,16 +119,119 @@ function slugify(value: string): string {
     .slice(0, 80);
 }
 
+function executeRows(result: unknown): Record<string, unknown>[] {
+  if (Array.isArray(result)) return result as Record<string, unknown>[];
+  if (result && typeof result === 'object' && 'rows' in result) {
+    const rows = (result as { rows: unknown[] }).rows;
+    return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
+  }
+  return [];
+}
+
+function textField(row: Record<string, unknown>, snake: string, camel: string): string {
+  const value = row[snake] ?? row[camel];
+  return value == null ? '' : String(value);
+}
+
+function optionalField(row: Record<string, unknown>, snake: string, camel: string): string | null {
+  const value = row[snake] ?? row[camel];
+  if (value == null || value === '') return null;
+  return String(value);
+}
+
+function isTruthyFlag(value: unknown): boolean {
+  return value === true || value === 't' || value === 'true' || value === 1 || value === '1';
+}
+
+const TENANT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseModules(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function mapCatalogRow(row: Record<string, unknown>): PlatformCompanyRow {
+  const plan = textField(row, 'plan', 'plan') || 'starter';
+  const createdRaw = row.created_at ?? row.createdAt;
+  return {
+    id: textField(row, 'id', 'id'),
+    name: textField(row, 'name', 'name'),
+    slug: textField(row, 'slug', 'slug'),
+    plan,
+    environment: textField(row, 'environment', 'environment') || 'production',
+    status: textField(row, 'status', 'status') || 'active',
+    entityKind: textField(row, 'entity_kind', 'entityKind') || 'company',
+    capabilityTier: optionalField(row, 'capability_tier', 'capabilityTier'),
+    modules: mapModules(parseModules(row.modules), plan),
+    createdAt:
+      createdRaw instanceof Date
+        ? createdRaw.toISOString()
+        : createdRaw
+          ? String(createdRaw)
+          : new Date(0).toISOString(),
+    userCount: Number(row.user_count ?? row.userCount ?? 0),
+  };
+}
+
+async function loadAllCatalogRows(): Promise<PlatformCompanyRow[]> {
+  const result = await db().execute(sql`
+    SELECT id, name, slug, plan, environment, status, entity_kind, capability_tier, modules, created_at, user_count
+    FROM public.bookone_platform_list_tenants()
+  `);
+  return executeRows(result).map(mapCatalogRow).filter((row) => row.id);
+}
+
+async function loadAllUserRows(): Promise<PlatformUserRow[]> {
+  const result = await db().execute(sql`
+    SELECT id, email, name, role, tenant_id, tenant_name, tenant_slug, entity_kind, capability_tier, tenant_status, created_at
+    FROM public.bookone_platform_list_users()
+  `);
+  return executeRows(result)
+    .map((row) => {
+      const createdRaw = row.created_at ?? row.createdAt;
+      return {
+        id: textField(row, 'id', 'id'),
+        email: textField(row, 'email', 'email'),
+        name: textField(row, 'name', 'name'),
+        role: textField(row, 'role', 'role'),
+        tenantId: textField(row, 'tenant_id', 'tenantId'),
+        tenantName: textField(row, 'tenant_name', 'tenantName'),
+        tenantSlug: textField(row, 'tenant_slug', 'tenantSlug'),
+        entityKind: textField(row, 'entity_kind', 'entityKind') || 'company',
+        capabilityTier: optionalField(row, 'capability_tier', 'capabilityTier'),
+        tenantStatus: textField(row, 'tenant_status', 'tenantStatus') || 'active',
+        createdAt:
+          createdRaw instanceof Date
+            ? createdRaw.toISOString()
+            : createdRaw
+              ? String(createdRaw)
+              : new Date(0).toISOString(),
+      };
+    })
+    .filter((row) => row.id);
+}
+
+async function lookupUserIdByEmail(email: string): Promise<string | null> {
+  const result = await db().execute(sql`
+    SELECT id FROM public.bookone_lookup_user_by_email(${email})
+  `);
+  const id = textField(executeRows(result)[0] ?? {}, 'id', 'id');
+  return id || null;
+}
+
 async function uniqueTenantSlug(base: string): Promise<string> {
   const safeBase = slugify(base) || 'company';
   for (let i = 0; i < 30; i += 1) {
     const candidate = i === 0 ? safeBase : `${safeBase}-${i + 1}`;
-    const [existing] = await db()
-      .select({ id: tenants.id })
-      .from(tenants)
-      .where(eq(tenants.slug, candidate))
-      .limit(1);
-    if (!existing) return candidate;
+    const result = await db().execute(sql`
+      SELECT public.bookone_platform_slug_exists(${candidate}) AS taken
+    `);
+    const taken = isTruthyFlag(executeRows(result)[0]?.taken);
+    if (!taken) return candidate;
   }
   return `${safeBase}-${Date.now()}`;
 }
@@ -160,75 +263,39 @@ async function loadCompanyRows(filter?: {
   environment?: string;
   entityKind?: string;
 }): Promise<PlatformCompanyRow[]> {
-  const conditions = [];
+  let rows = await loadAllCatalogRows();
   if (filter?.status && filter.status !== 'all') {
-    conditions.push(eq(tenants.status, filter.status));
+    rows = rows.filter((row) => row.status === filter.status);
   }
   if (filter?.plan && filter.plan !== 'all') {
-    conditions.push(eq(tenants.plan, filter.plan));
+    rows = rows.filter((row) => row.plan === filter.plan);
   }
   if (filter?.environment && filter.environment !== 'all') {
-    conditions.push(eq(tenants.environment, filter.environment));
+    rows = rows.filter((row) => row.environment === filter.environment);
   }
   if (filter?.entityKind && filter.entityKind !== 'all') {
-    conditions.push(eq(tenants.entityKind, filter.entityKind));
+    rows = rows.filter((row) => row.entityKind === filter.entityKind);
   }
   if (filter?.q?.trim()) {
-    const q = `%${filter.q.trim()}%`;
-    conditions.push(or(ilike(tenants.name, q), ilike(tenants.slug, q))!);
+    const q = filter.q.trim().toLowerCase();
+    rows = rows.filter((row) => row.name.toLowerCase().includes(q) || row.slug.toLowerCase().includes(q));
   }
-
-  const rows = await db()
-    .select({
-      id: tenants.id,
-      name: tenants.name,
-      slug: tenants.slug,
-      plan: tenants.plan,
-      environment: tenants.environment,
-      status: tenants.status,
-      entityKind: tenants.entityKind,
-      capabilityTier: tenants.capabilityTier,
-      modules: tenants.modules,
-      createdAt: tenants.createdAt,
-      userCount: sql<number>`(
-        select count(*)::int from tenant_memberships m
-        where m.tenant_id = ${tenants.id} and m.voided_at is null
-      )`,
-    })
-    .from(tenants)
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(tenants.createdAt))
-    .limit(200);
-
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    slug: r.slug,
-    plan: r.plan,
-    environment: r.environment ?? 'production',
-    status: r.status ?? 'active',
-    entityKind: r.entityKind ?? 'company',
-    capabilityTier: r.capabilityTier ?? null,
-    modules: mapModules(r.modules, r.plan),
-    createdAt: r.createdAt?.toISOString?.() ?? String(r.createdAt),
-    userCount: Number(r.userCount ?? 0),
-  }));
+  return rows.slice(0, 200);
 }
 
 export async function getPlatformOverview(): Promise<PlatformOverview> {
   await requirePlatformAdmin();
 
-  const [stats] = await db()
-    .select({
-      total: sql<number>`count(*)::int`,
-      active: sql<number>`count(*) filter (where coalesce(${tenants.status}, 'active') = 'active')::int`,
-      suspended: sql<number>`count(*) filter (where ${tenants.status} = 'suspended')::int`,
-      staging: sql<number>`count(*) filter (where coalesce(${tenants.environment}, 'production') = 'staging')::int`,
-      production: sql<number>`count(*) filter (where coalesce(${tenants.environment}, 'production') = 'production')::int`,
-    })
-    .from(tenants);
+  const catalog = await loadAllCatalogRows();
+  const stats = {
+    total: catalog.length,
+    active: catalog.filter((row) => row.status === 'active').length,
+    suspended: catalog.filter((row) => row.status === 'suspended').length,
+    staging: catalog.filter((row) => row.environment === 'staging').length,
+    production: catalog.filter((row) => row.environment === 'production').length,
+  };
 
-  const recent = await loadCompanyRows();
+  const recent = catalog.slice(0, 200);
   const recentAudit = await listPlatformAudit(12);
 
   const appEnv =
@@ -263,80 +330,83 @@ export async function listPlatformCompanies(filter?: {
 
 export async function getPlatformCompany(id: string): Promise<PlatformCompanyDetail | null> {
   await requirePlatformAdmin();
+  if (!TENANT_UUID.test(id)) return null;
 
-  const [row] = await db()
-    .select({
-      id: tenants.id,
-      name: tenants.name,
-      slug: tenants.slug,
-      plan: tenants.plan,
-      environment: tenants.environment,
-      status: tenants.status,
-      entityKind: tenants.entityKind,
-      capabilityTier: tenants.capabilityTier,
-      modules: tenants.modules,
-      createdAt: tenants.createdAt,
-    })
-    .from(tenants)
-    .where(eq(tenants.id, id))
-    .limit(1);
+  return withTenantContext(id, async () => {
+    const [row] = await db()
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        slug: tenants.slug,
+        plan: tenants.plan,
+        environment: tenants.environment,
+        status: tenants.status,
+        entityKind: tenants.entityKind,
+        capabilityTier: tenants.capabilityTier,
+        modules: tenants.modules,
+        createdAt: tenants.createdAt,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1);
 
-  if (!row) return null;
+    if (!row) return null;
 
-  const members = await db()
-    .select({
-      membershipId: tenantMemberships.id,
-      userId: users.id,
-      email: users.email,
-      name: users.name,
-      role: tenantMemberships.role,
-      status: tenantMemberships.status,
-    })
-    .from(tenantMemberships)
-    .innerJoin(users, eq(users.id, tenantMemberships.userId))
-    .where(and(eq(tenantMemberships.tenantId, id), isNull(tenantMemberships.voidedAt)))
-    .orderBy(desc(tenantMemberships.createdAt));
+    const members = await db()
+      .select({
+        membershipId: tenantMemberships.id,
+        userId: users.id,
+        email: users.email,
+        name: users.name,
+        role: tenantMemberships.role,
+        status: tenantMemberships.status,
+      })
+      .from(tenantMemberships)
+      .innerJoin(users, eq(users.id, tenantMemberships.userId))
+      .where(and(eq(tenantMemberships.tenantId, id), isNull(tenantMemberships.voidedAt)))
+      .orderBy(desc(tenantMemberships.createdAt));
 
-  const [profile] = await db()
-    .select({
-      legalName: companyProfiles.legalName,
-      baseCurrency: companyProfiles.baseCurrency,
-      timezone: companyProfiles.timezone,
-      country: companyProfiles.country,
-    })
-    .from(companyProfiles)
-    .where(and(eq(companyProfiles.tenantId, id), isNull(companyProfiles.voidedAt)))
-    .limit(1);
+    const [profile] = await db()
+      .select({
+        legalName: companyProfiles.legalName,
+        baseCurrency: companyProfiles.baseCurrency,
+        timezone: companyProfiles.timezone,
+        country: companyProfiles.country,
+      })
+      .from(companyProfiles)
+      .where(and(eq(companyProfiles.tenantId, id), isNull(companyProfiles.voidedAt)))
+      .limit(1);
 
-  return {
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    plan: row.plan,
-    environment: row.environment ?? 'production',
-    status: row.status ?? 'active',
-    entityKind: row.entityKind ?? 'company',
-    capabilityTier: row.capabilityTier ?? null,
-    modules: mapModules(row.modules, row.plan),
-    createdAt: row.createdAt?.toISOString?.() ?? String(row.createdAt),
-    userCount: members.length,
-    members: members.map((m) => ({
-      membershipId: m.membershipId,
-      userId: m.userId,
-      email: m.email,
-      name: m.name,
-      role: m.role,
-      status: m.status,
-    })),
-    profile: profile
-      ? {
-          legalName: profile.legalName,
-          baseCurrency: profile.baseCurrency,
-          timezone: profile.timezone,
-          country: profile.country,
-        }
-      : null,
-  };
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      plan: row.plan,
+      environment: row.environment ?? 'production',
+      status: row.status ?? 'active',
+      entityKind: row.entityKind ?? 'company',
+      capabilityTier: row.capabilityTier ?? null,
+      modules: mapModules(row.modules, row.plan),
+      createdAt: row.createdAt?.toISOString?.() ?? String(row.createdAt),
+      userCount: members.length,
+      members: members.map((m) => ({
+        membershipId: m.membershipId,
+        userId: m.userId,
+        email: m.email,
+        name: m.name,
+        role: m.role,
+        status: m.status,
+      })),
+      profile: profile
+        ? {
+            legalName: profile.legalName,
+            baseCurrency: profile.baseCurrency,
+            timezone: profile.timezone,
+            country: profile.country,
+          }
+        : null,
+    };
+  });
 }
 
 export async function createPlatformCompanyFromForm(formData: FormData): Promise<void> {
@@ -363,88 +433,83 @@ export async function createPlatformCompanyFromForm(formData: FormData): Promise
 
   // Auth is Better Auth–managed; owner signs in with this email via the app login.
   const passwordHash = 'better-auth-managed';
+  const tenantId = randomUUID();
+  const existingUserId = await lookupUserIdByEmail(ownerEmail);
 
-  const tenantId = await db().transaction(async (tx) => {
-    const [tenant] = await tx
-      .insert(tenants)
-      .values({
-        name,
-        slug,
-        plan,
-        environment,
-        status: 'active',
-        modules,
-        entityKind: 'company',
-      })
-      .returning({ id: tenants.id });
-
-    if (!tenant) throw new Error('Could not create company.');
-
-    await tx.insert(companyProfiles).values({
-      tenantId: tenant.id,
-      legalName: name,
-      tradingName: name,
-      country: 'Sri Lanka',
-      baseCurrency: 'LKR',
-      timezone: 'Asia/Colombo',
-    });
-
-    await tx.insert(accounts).values(
-      DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
-        tenantId: tenant.id,
-        code: account.code,
-        name: account.name,
-        type: account.type,
-        normalSide: account.normalSide,
-      })),
-    );
-
-    const [existingUser] = await tx
-      .select({ id: users.id, tenantId: users.tenantId })
-      .from(users)
-      .where(eq(users.email, ownerEmail))
-      .limit(1);
-
-    let userId: string;
-    if (existingUser) {
-      userId = existingUser.id;
-    } else {
-      const [created] = await tx
-        .insert(users)
+  await withTenantContext(tenantId, async () => {
+    await db().transaction(async (tx) => {
+      const [tenant] = await tx
+        .insert(tenants)
         .values({
-          tenantId: tenant.id,
-          email: ownerEmail,
-          name: ownerName,
-          passwordHash,
-          role: 'admin',
+          id: tenantId,
+          name,
+          slug,
+          plan,
+          environment,
+          status: 'active',
+          modules,
+          entityKind: 'company',
         })
-        .returning({ id: users.id });
-      if (!created) throw new Error('Could not create owner user.');
-      userId = created.id;
-    }
+        .returning({ id: tenants.id });
 
-    const [existingMembership] = await tx
-      .select({ id: tenantMemberships.id })
-      .from(tenantMemberships)
-      .where(
-        and(
-          eq(tenantMemberships.tenantId, tenant.id),
-          eq(tenantMemberships.userId, userId),
-          isNull(tenantMemberships.voidedAt),
-        ),
-      )
-      .limit(1);
+      if (!tenant) throw new Error('Could not create company.');
 
-    if (!existingMembership) {
-      await tx.insert(tenantMemberships).values({
+      await tx.insert(companyProfiles).values({
         tenantId: tenant.id,
-        userId,
-        role: 'owner',
-        status: 'active',
+        legalName: name,
+        tradingName: name,
+        country: 'Sri Lanka',
+        baseCurrency: 'LKR',
+        timezone: 'Asia/Colombo',
       });
-    }
 
-    return tenant.id;
+      await tx.insert(accounts).values(
+        DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
+          tenantId: tenant.id,
+          code: account.code,
+          name: account.name,
+          type: account.type,
+          normalSide: account.normalSide,
+        })),
+      );
+
+      let userId = existingUserId;
+      if (!userId) {
+        const [created] = await tx
+          .insert(users)
+          .values({
+            tenantId: tenant.id,
+            email: ownerEmail,
+            name: ownerName,
+            passwordHash,
+            role: 'admin',
+          })
+          .returning({ id: users.id });
+        if (!created) throw new Error('Could not create owner user.');
+        userId = created.id;
+      }
+
+      const [existingMembership] = await tx
+        .select({ id: tenantMemberships.id })
+        .from(tenantMemberships)
+        .where(
+          and(
+            eq(tenantMemberships.tenantId, tenant.id),
+            eq(tenantMemberships.userId, userId),
+            isNull(tenantMemberships.voidedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!existingMembership) {
+        await tx.insert(tenantMemberships).values({
+          tenantId: tenant.id,
+          userId,
+          role: 'owner',
+          status: 'active',
+        });
+      }
+    });
   });
 
   await writeAudit({
@@ -477,35 +542,38 @@ export async function updatePlatformCompanyFromForm(formData: FormData): Promise
 
   const modules = modulesFromForm(formData, plan);
 
-  const [before] = await db()
-    .select({
-      name: tenants.name,
-      plan: tenants.plan,
-      environment: tenants.environment,
-      modules: tenants.modules,
-    })
-    .from(tenants)
-    .where(eq(tenants.id, id))
-    .limit(1);
+  const before = await withTenantContext(id, async () => {
+    const [existing] = await db()
+      .select({
+        name: tenants.name,
+        plan: tenants.plan,
+        environment: tenants.environment,
+        modules: tenants.modules,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1);
 
-  if (!before) throw new Error('Company not found.');
+    if (!existing) throw new Error('Company not found.');
 
-  await db()
-    .update(tenants)
-    .set({
-      name,
-      plan,
-      environment,
-      modules,
-      updatedAt: sql`NOW()`,
-    })
-    .where(eq(tenants.id, id));
+    await db()
+      .update(tenants)
+      .set({
+        name,
+        plan,
+        environment,
+        modules,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(tenants.id, id));
 
-  // Keep legal name in sync when profile exists
-  await db()
-    .update(companyProfiles)
-    .set({ legalName: name, tradingName: name, updatedAt: sql`NOW()` })
-    .where(and(eq(companyProfiles.tenantId, id), isNull(companyProfiles.voidedAt)));
+    await db()
+      .update(companyProfiles)
+      .set({ legalName: name, tradingName: name, updatedAt: sql`NOW()` })
+      .where(and(eq(companyProfiles.tenantId, id), isNull(companyProfiles.voidedAt)));
+
+    return existing;
+  });
 
   await writeAudit({
     actorUserId: actor.id,
@@ -527,17 +595,19 @@ export async function setPlatformCompanyStatusFromForm(formData: FormData): Prom
   if (!id) throw new Error('Company id is required.');
   if (status !== 'active' && status !== 'suspended') throw new Error('Invalid status.');
 
-  // Prevent suspending your own home tenant by accident? allow but warn in UI.
-  await db()
-    .update(tenants)
-    .set({
-      status,
-      voidedAt: status === 'suspended' ? sql`NOW()` : null,
-      updatedAt: sql`NOW()`,
-    })
-    .where(eq(tenants.id, id));
+  const t = await withTenantContext(id, async () => {
+    await db()
+      .update(tenants)
+      .set({
+        status,
+        voidedAt: status === 'suspended' ? sql`NOW()` : null,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(tenants.id, id));
 
-  const [t] = await db().select({ name: tenants.name }).from(tenants).where(eq(tenants.id, id)).limit(1);
+    const [row] = await db().select({ name: tenants.name }).from(tenants).where(eq(tenants.id, id)).limit(1);
+    return row;
+  });
 
   await writeAudit({
     actorUserId: actor.id,
@@ -561,93 +631,56 @@ export async function listPlatformAudit(limit = 50): Promise<PlatformAuditRow[]>
       summary: platformAuditEvents.summary,
       targetTenantId: platformAuditEvents.targetTenantId,
       createdAt: platformAuditEvents.createdAt,
-      actorEmail: users.email,
-      targetName: tenants.name,
+      actorUserId: platformAuditEvents.actorUserId,
     })
     .from(platformAuditEvents)
-    .leftJoin(users, eq(users.id, platformAuditEvents.actorUserId))
-    .leftJoin(tenants, eq(tenants.id, platformAuditEvents.targetTenantId))
     .orderBy(desc(platformAuditEvents.createdAt))
     .limit(limit);
+
+  const tenantsById = new Map((await loadAllCatalogRows()).map((row) => [row.id, row]));
+  const usersById = new Map((await loadAllUserRows()).map((row) => [row.id, row]));
 
   return rows.map((r) => ({
     id: r.id,
     action: r.action,
     summary: r.summary,
     targetTenantId: r.targetTenantId,
-    targetName: r.targetName,
-    actorEmail: r.actorEmail,
+    targetName: r.targetTenantId ? tenantsById.get(r.targetTenantId)?.name ?? null : null,
+    actorEmail: usersById.get(r.actorUserId)?.email ?? null,
     createdAt: r.createdAt?.toISOString?.() ?? String(r.createdAt),
   }));
 }
 
 export async function listPlatformUsers(q?: string): Promise<PlatformUserRow[]> {
   await requirePlatformAdmin();
-
-  const conditions = [isNull(users.voidedAt)];
+  let rows = await loadAllUserRows();
   if (q?.trim()) {
-    const term = `%${q.trim()}%`;
-    conditions.push(or(ilike(users.email, term), ilike(users.name, term), ilike(tenants.name, term))!);
+    const term = q.trim().toLowerCase();
+    rows = rows.filter(
+      (row) =>
+        row.email.toLowerCase().includes(term) ||
+        row.name.toLowerCase().includes(term) ||
+        row.tenantName.toLowerCase().includes(term),
+    );
   }
-
-  const rows = await db()
-    .select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      role: users.role,
-      tenantId: users.tenantId,
-      tenantName: tenants.name,
-      tenantSlug: tenants.slug,
-      entityKind: tenants.entityKind,
-      capabilityTier: tenants.capabilityTier,
-      tenantStatus: tenants.status,
-      createdAt: users.createdAt,
-    })
-    .from(users)
-    .innerJoin(tenants, eq(tenants.id, users.tenantId))
-    .where(and(...conditions))
-    .orderBy(desc(users.createdAt))
-    .limit(100);
-
-  return rows.map((r) => ({
-    id: r.id,
-    email: r.email,
-    name: r.name,
-    role: r.role,
-    tenantId: r.tenantId,
-    tenantName: r.tenantName,
-    tenantSlug: r.tenantSlug,
-    entityKind: r.entityKind ?? 'company',
-    capabilityTier: r.capabilityTier ?? null,
-    tenantStatus: r.tenantStatus ?? 'active',
-    createdAt: r.createdAt?.toISOString?.() ?? String(r.createdAt),
-  }));
+  return rows.slice(0, 100);
 }
 
 export async function listModuleMatrix(): Promise<
   { id: string; name: string; plan: string; status: string; modules: TenantModules }[]
 > {
   await requirePlatformAdmin();
-  const rows = await db()
-    .select({
-      id: tenants.id,
-      name: tenants.name,
-      plan: tenants.plan,
-      status: tenants.status,
-      modules: tenants.modules,
-    })
-    .from(tenants)
-    .orderBy(tenants.name)
-    .limit(200);
-
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    plan: r.plan,
-    status: r.status ?? 'active',
-    modules: mapModules(r.modules, r.plan),
-  }));
+  return (await loadAllCatalogRows())
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 200)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      plan: row.plan,
+      status: row.status,
+      modules: row.modules,
+    }));
 }
 
 /**
@@ -668,73 +701,80 @@ export async function adminSetTenantEntityTierFromForm(formData: FormData): Prom
   const capabilityTier =
     entityKind === 'sole_prop' ? (tierRaw === 'full' ? 'full' : 'lite') : entityKind === 'company' ? null : null;
 
-  const [before] = await db()
-    .select({
-      name: tenants.name,
-      entityKind: tenants.entityKind,
-      capabilityTier: tenants.capabilityTier,
-      modules: tenants.modules,
-    })
-    .from(tenants)
-    .where(eq(tenants.id, id))
-    .limit(1);
-  if (!before) throw new Error('Workspace not found.');
-
   const { modulesForEntityKind, parseEntityKind } = await import('@/lib/entity-kind');
   const { chartOfAccountsForEntity } = await import('@bookone/accounting');
   const { accounts } = await import('@bookone/db');
 
-  const prevKind = parseEntityKind(before.entityKind);
-  const prevTier = String(before.capabilityTier ?? 'lite').toLowerCase() === 'full' ? 'full' : 'lite';
-  const nextTier = capabilityTier === 'full' ? 'full' : 'lite';
+  const { before, modules, nextTier, preserveAdvancedView } = await withTenantContext(id, async () => {
+    const [existing] = await db()
+      .select({
+        name: tenants.name,
+        entityKind: tenants.entityKind,
+        capabilityTier: tenants.capabilityTier,
+        modules: tenants.modules,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1);
+    if (!existing) throw new Error('Workspace not found.');
 
-  // Downgrade sole full → lite: preserve advanced module flags for read-only view
-  const preserveAdvancedView =
-    entityKind === 'sole_prop' &&
-    nextTier === 'lite' &&
-    (prevKind === 'sole_prop' && prevTier === 'full'
-      ? true
-      : Boolean((before.modules as { inventory?: boolean; pos?: boolean } | null)?.inventory) ||
-        Boolean((before.modules as { inventory?: boolean; pos?: boolean } | null)?.pos));
+    const prevKind = parseEntityKind(existing.entityKind);
+    const prevTier = String(existing.capabilityTier ?? 'lite').toLowerCase() === 'full' ? 'full' : 'lite';
+    const nextTierInner = capabilityTier === 'full' ? 'full' : 'lite';
 
-  const modules =
-    entityKind === 'personal' || entityKind === 'pending'
-      ? modulesForEntityKind(entityKind)
-      : entityKind === 'sole_prop'
-        ? modulesForEntityKind('sole_prop', nextTier, { preserveAdvancedView })
-        : normalizeModules(before.modules, 'starter');
+    const preserveAdvanced =
+      entityKind === 'sole_prop' &&
+      nextTierInner === 'lite' &&
+      (prevKind === 'sole_prop' && prevTier === 'full'
+        ? true
+        : Boolean((existing.modules as { inventory?: boolean; pos?: boolean } | null)?.inventory) ||
+          Boolean((existing.modules as { inventory?: boolean; pos?: boolean } | null)?.pos));
 
-  await db()
-    .update(tenants)
-    .set({
-      entityKind,
-      capabilityTier: entityKind === 'sole_prop' ? nextTier : null,
-      modules,
-      updatedAt: sql`NOW()`,
-    })
-    .where(eq(tenants.id, id));
+    const nextModules =
+      entityKind === 'personal' || entityKind === 'pending'
+        ? modulesForEntityKind(entityKind)
+        : entityKind === 'sole_prop'
+          ? modulesForEntityKind('sole_prop', nextTierInner, { preserveAdvancedView: preserveAdvanced })
+          : normalizeModules(existing.modules, 'starter');
 
-  // Merge CoA for target pack (never delete accounts)
-  if (entityKind !== 'pending') {
-    const pack = chartOfAccountsForEntity(entityKind);
-    const existing = await db()
-      .select({ code: accounts.code })
-      .from(accounts)
-      .where(eq(accounts.tenantId, id));
-    const have = new Set(existing.map((a) => a.code));
-    const missing = pack.filter((a) => !have.has(a.code));
-    if (missing.length) {
-      await db().insert(accounts).values(
-        missing.map((account) => ({
-          tenantId: id,
-          code: account.code,
-          name: account.name,
-          type: account.type,
-          normalSide: account.normalSide,
-        })),
-      );
+    await db()
+      .update(tenants)
+      .set({
+        entityKind,
+        capabilityTier: entityKind === 'sole_prop' ? nextTierInner : null,
+        modules: nextModules,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(tenants.id, id));
+
+    if (entityKind !== 'pending') {
+      const pack = chartOfAccountsForEntity(entityKind);
+      const existingAccounts = await db()
+        .select({ code: accounts.code })
+        .from(accounts)
+        .where(eq(accounts.tenantId, id));
+      const have = new Set(existingAccounts.map((a) => a.code));
+      const missing = pack.filter((a) => !have.has(a.code));
+      if (missing.length) {
+        await db().insert(accounts).values(
+          missing.map((account) => ({
+            tenantId: id,
+            code: account.code,
+            name: account.name,
+            type: account.type,
+            normalSide: account.normalSide,
+          })),
+        );
+      }
     }
-  }
+
+    return {
+      before: existing,
+      modules: nextModules,
+      nextTier: nextTierInner,
+      preserveAdvancedView: preserveAdvanced,
+    };
+  });
 
   await writeAudit({
     actorUserId: actor.id,
@@ -765,18 +805,21 @@ export async function applyPlanModulesFromForm(formData: FormData): Promise<void
   const id = String(formData.get('id') ?? '').trim();
   if (!id) throw new Error('Company id is required.');
 
-  const [row] = await db()
-    .select({ plan: tenants.plan, name: tenants.name })
-    .from(tenants)
-    .where(eq(tenants.id, id))
-    .limit(1);
-  if (!row) throw new Error('Company not found.');
+  const { row, modules } = await withTenantContext(id, async () => {
+    const [existing] = await db()
+      .select({ plan: tenants.plan, name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, id))
+      .limit(1);
+    if (!existing) throw new Error('Company not found.');
 
-  const modules = modulesForPlan(row.plan);
-  await db()
-    .update(tenants)
-    .set({ modules, updatedAt: sql`NOW()` })
-    .where(eq(tenants.id, id));
+    const nextModules = modulesForPlan(existing.plan);
+    await db()
+      .update(tenants)
+      .set({ modules: nextModules, updatedAt: sql`NOW()` })
+      .where(eq(tenants.id, id));
+    return { row: existing, modules: nextModules };
+  });
 
   await writeAudit({
     actorUserId: actor.id,

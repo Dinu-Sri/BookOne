@@ -1,3 +1,9 @@
+## 2026-10-16 — Restricted DB company settings and platform catalog (v2.5.11)
+
+- Record: [CHG-20261016-restricted-settings-platform](changes/CHG-20261016-restricted-settings-platform.md). QA [HANDOFF-20261016-v2510-findings](https://github.com/Dinu-Sri/bookone-qa/blob/bb01b82014a1e3e3ebb611f0100a756bdfcdd7c3/handoffs/HANDOFF-20261016-v2510-findings.md) on v2.5.10 · 81a505c (303 campaign pass; 129 PostgreSQL pass; HTTPS 23/2/1; BUG-0053 invoice GET now passes).
+- `getCompanySettingsData` no longer inserts memberships outside tenant context. Profile/tax GET re-enters `withTenantContext` and leaves existing roles unchanged. Platform Admin company listing uses a narrow SECURITY DEFINER catalog; single-company detail/writes pin request-local GUC. Migration 043 hardens lookup `search_path`/ownership without editing historical 042. No BYPASSRLS, no shared global tenant GUC.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.11 · <sha7>` and reruns HTTP-104/110/105 plus unchanged 303/129/26. Continue costing/GRNI/permissions; backup last. BookOne is not customer-ready.
+
 ## 2026-10-15 — Restricted DB own invoices (v2.5.10)
 
 - Record: [CHG-20261015-restricted-tenant-guc](changes/CHG-20261015-restricted-tenant-guc.md). QA [HANDOFF-20261015-v259-retest](https://github.com/Dinu-Sri/bookone-qa/blob/ee02c4dd823c9f2f388b2a9dbdd78e7a599594b3/handoffs/HANDOFF-20261015-v259-retest.md) on v2.5.9 · 2e105cd (303 campaign pass; 13/13 owner-DB HTTP; HTTP-102 fail, ten dependents blocked).

@@ -91,6 +91,57 @@ export function returnValueExceeded(
   return thisTotal + priorReturnTotal > sourceTotal + 0.005;
 }
 
+export function remainingReturnValue(sourceTotal: number, priorReturnTotal: number): number {
+  return Math.round(Math.max(0, Number(sourceTotal) - Number(priorReturnTotal)) * 100) / 100;
+}
+
+/** True when this return consumes every remaining source line quantity. */
+export function isClosingLinkedReturn(
+  sourceLines: QtyLine[],
+  priorReturnLines: QtyLine[],
+  thisLines: QtyLine[],
+): boolean {
+  const already = new Map<string, number>();
+  addQtyMaps(already, priorReturnLines);
+  const src = new Map<string, number>();
+  addQtyMaps(src, sourceLines);
+  const next = new Map<string, number>();
+  addQtyMaps(next, thisLines);
+  if (src.size === 0) return false;
+  for (const [k, srcQty] of src) {
+    const used = (already.get(k) ?? 0) + (next.get(k) ?? 0);
+    if (remainingQty(srcQty, used) > 0.0001) return false;
+  }
+  return true;
+}
+
+/** Last remaining quantity takes leftover source value so cents are conserved. */
+export function applyClosingReturnResidual(
+  computedTotal: number,
+  computedHeader: number,
+  sourceTotal: number,
+  priorReturnTotal: number,
+  closing: boolean,
+): { total: number; headerDiscount: number } {
+  if (!closing) {
+    return {
+      total: Math.round(Number(computedTotal) * 100) / 100,
+      headerDiscount: Math.round(Number(computedHeader) * 100) / 100,
+    };
+  }
+  const remaining = remainingReturnValue(sourceTotal, priorReturnTotal);
+  const lineNet = Math.round((Number(computedTotal) + Number(computedHeader)) * 100) / 100;
+  const headerDiscount = Math.max(0, Math.round((lineNet - remaining) * 100) / 100);
+  return { total: remaining, headerDiscount };
+}
+
+export function linkedReturnPartyMismatch(sourcePartyName: string, submittedPartyName: string): boolean {
+  const source = String(sourcePartyName ?? '').trim().toLowerCase();
+  const submitted = String(submittedPartyName ?? '').trim().toLowerCase();
+  if (!source || !submitted) return false;
+  return source !== submitted;
+}
+
 export function issuedOnOrBeforeAsOf<T extends { issueDate: string }>(items: T[], asOf: string): T[] {
   return items.filter((item) => item.issueDate <= asOf);
 }
@@ -141,11 +192,18 @@ export function prorateSourceHeader(
   return Math.round(sourceHeader * (returnLineNet / sourceLineNet) * 100) / 100;
 }
 
+export type LinkedReturnPrior = {
+  priorReturnLines?: QtyLine[];
+  priorReturnTotal?: number;
+  sourceTotal?: number;
+};
+
 /** Source-proportional line/header discounts for a linked return (shared by posting and preview). */
 export function prorateLinkedReturn(
   sourceLines: ProrateSourceLine[],
   sourceHeaderDiscount: number,
   returnLines: ProrateReturnLine[],
+  prior?: LinkedReturnPrior,
 ): {
   lines: {
     productId: string | null;
@@ -197,8 +255,30 @@ export function prorateLinkedReturn(
     0,
   );
   const lineNet = Math.round(lines.reduce((s, l) => s + l.lineTotal, 0) * 100) / 100;
-  const headerDiscount = prorateSourceHeader(sourceHeaderDiscount, srcLineNet, lineNet);
-  const total = Math.max(0, Math.round((lineNet - headerDiscount) * 100) / 100);
+  let headerDiscount = prorateSourceHeader(sourceHeaderDiscount, srcLineNet, lineNet);
+  let total = Math.max(0, Math.round((lineNet - headerDiscount) * 100) / 100);
+  if (prior) {
+    const sourceTotal =
+      prior.sourceTotal ?? Math.round((srcLineNet - sourceHeaderDiscount) * 100) / 100;
+    const closing = isClosingLinkedReturn(
+      sourceLines.map((l) => ({
+        productId: l.productId,
+        description: l.description,
+        quantity: l.quantity,
+      })),
+      prior.priorReturnLines ?? [],
+      returnLines,
+    );
+    const residual = applyClosingReturnResidual(
+      total,
+      headerDiscount,
+      sourceTotal,
+      prior.priorReturnTotal ?? 0,
+      closing,
+    );
+    headerDiscount = residual.headerDiscount;
+    total = residual.total;
+  }
   return { lines, headerDiscount, lineNet, total };
 }
 
@@ -263,4 +343,8 @@ export const PURCHASE_RETURN_QTY_MESSAGE =
   'This return exceeds the remaining quantity on the original bill.';
 export const PURCHASE_RETURN_VALUE_MESSAGE =
   'This return exceeds the remaining value on the original bill.';
+export const SALES_RETURN_PARTY_MESSAGE =
+  'This return must use the same customer as the original invoice.';
+export const PURCHASE_RETURN_PARTY_MESSAGE =
+  'This return must use the same supplier as the original bill.';
 export const PAYMENT_OVER_BALANCE_MESSAGE = 'Payment cannot exceed balance due.';

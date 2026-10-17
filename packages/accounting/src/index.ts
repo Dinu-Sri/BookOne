@@ -59,6 +59,10 @@ export {
   qtyExceedsRemaining,
   returnQtyExceeded,
   returnValueExceeded,
+  remainingReturnValue,
+  isClosingLinkedReturn,
+  applyClosingReturnResidual,
+  linkedReturnPartyMismatch,
   issuedOnOrBeforeAsOf,
   asOfOpenBalance,
   displayedLineNetSubtotal,
@@ -77,6 +81,15 @@ export {
   SALES_RETURN_VALUE_MESSAGE,
   PURCHASE_RETURN_QTY_MESSAGE,
   PURCHASE_RETURN_VALUE_MESSAGE,
+  SALES_RETURN_PARTY_MESSAGE,
+  PURCHASE_RETURN_PARTY_MESSAGE,
   PAYMENT_OVER_BALANCE_MESSAGE,
 } from './document-guards';
-export type { QtyLine, LinkedChildDoc, LineDiscountInput, ProrateSourceLine, ProrateReturnLine } from './document-guards';
+export type {
+  QtyLine,
+  LinkedChildDoc,
+  LineDiscountInput,
+  ProrateSourceLine,
+  ProrateReturnLine,
+  LinkedReturnPrior,
+} from './document-guards';

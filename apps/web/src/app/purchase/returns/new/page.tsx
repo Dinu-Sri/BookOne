@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getCommercialDocument } from '@/app/actions/commercial-docs';
+import { getCommercialDocument, loadInvoiceForReturn } from '@/app/actions/commercial-docs';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocNewForm } from '@/components/module/commercial-doc-screens';
@@ -14,9 +14,15 @@ export default async function NewPurchaseReturnPage({
   let tenant;
   let form;
   let source = null as Awaited<ReturnType<typeof getCommercialDocument>>;
+  let returnSource = null as Awaited<ReturnType<typeof loadInvoiceForReturn>>;
   try {
     [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData('vendor')]);
-    if (sp.from) source = await getCommercialDocument(sp.from);
+    if (sp.from) {
+      [source, returnSource] = await Promise.all([
+        getCommercialDocument(sp.from),
+        loadInvoiceForReturn(sp.from),
+      ]);
+    }
   } catch {
     redirect('/login');
   }
@@ -39,6 +45,19 @@ export default async function NewPurchaseReturnPage({
         submitLabel="Save purchase return"
         sourceDocumentId={sp.from ?? null}
         initialHeaderDiscount={source?.discountTotal ?? 0}
+        initialPartyName={source?.partyName ?? returnSource?.partyName ?? null}
+        sourceTotal={source?.total ?? returnSource?.sourceTotal ?? 0}
+        alreadyReturnedTotal={returnSource?.alreadyReturnedTotal ?? 0}
+        priorReturnLines={returnSource?.priorReturnLines ?? []}
+        sourceQtyLines={
+          source
+            ? source.lines.map((l) => ({
+                productId: l.productId,
+                description: l.description,
+                quantity: Number(l.quantity),
+              }))
+            : []
+        }
         initialLines={
           source
             ? source.lines.map((l) => ({

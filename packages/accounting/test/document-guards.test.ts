@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyClosingReturnResidual,
   asOfOpenBalance,
   billedQtyAgainstPo,
   displayedLineNetSubtotal,
+  isClosingLinkedReturn,
   issuedOnOrBeforeAsOf,
   lineDiscountAmount,
+  linkedReturnPartyMismatch,
   percentDiscountOver100,
   prorateLinkedReturn,
   qtyExceedsRemaining,
   receivedQtyAgainstPo,
   remainingQty,
+  remainingReturnValue,
   resolvedDiscountType,
   returnQtyExceeded,
   returnValueExceeded,
@@ -218,5 +222,91 @@ describe('linked return preview matches posting ratios', () => {
 describe('displayed subtotal is line net before header discount', () => {
   it('256.50 stored after 13.50 header displays as 270', () => {
     expect(displayedLineNetSubtotal(256.5, 13.5)).toBe(270);
+  });
+});
+
+describe('linked return party must match the source', () => {
+  it('rejects a different supplier or customer name', () => {
+    expect(linkedReturnPartyMismatch('D2513 Vendor', 'BW261016 Supplier')).toBe(true);
+    expect(linkedReturnPartyMismatch('RoundingCustomer', 'ReturnCustomer')).toBe(true);
+  });
+
+  it('allows the original party including surrounding case/space', () => {
+    expect(linkedReturnPartyMismatch('D2513 Vendor', 'D2513 Vendor')).toBe(false);
+    expect(linkedReturnPartyMismatch('Alice', ' alice ')).toBe(false);
+    expect(linkedReturnPartyMismatch('Alice', '')).toBe(false);
+  });
+});
+
+describe('closing return residual conserves source value', () => {
+  const sourceLines = [{ productId: 'sku', description: 'Digit', quantity: 3 }];
+  const unit = [{ productId: 'sku', description: 'Digit', quantity: 1 }];
+
+  it('3×1 header 0.01 remaining after 1+1 is 0.99', () => {
+    expect(remainingReturnValue(2.99, 2)).toBe(0.99);
+    expect(isClosingLinkedReturn(sourceLines, [...unit, ...unit], unit)).toBe(true);
+    expect(isClosingLinkedReturn(sourceLines, unit, unit)).toBe(false);
+  });
+
+  it('last unit takes the leftover cent', () => {
+    const residual = applyClosingReturnResidual(1, 0, 2.99, 2, true);
+    expect(residual.total).toBe(0.99);
+    expect(residual.headerDiscount).toBe(0.01);
+  });
+
+  it('non-closing units keep the prorated total', () => {
+    expect(applyClosingReturnResidual(1, 0, 2.99, 1, false)).toEqual({
+      total: 1,
+      headerDiscount: 0,
+    });
+  });
+
+  it('full qty 3 still posts 2.99', () => {
+    const out = prorateLinkedReturn(
+      [{ productId: 'sku', description: 'Digit', quantity: 3, unitPrice: 1, discountAmount: 0 }],
+      0.01,
+      [{ productId: 'sku', description: 'Digit', quantity: 3 }],
+      { priorReturnTotal: 0, sourceTotal: 2.99, priorReturnLines: [] },
+    );
+    expect(out.total).toBe(2.99);
+    expect(out.headerDiscount).toBe(0.01);
+  });
+
+  it('qty 1 after two accepted credits of 1 is 0.99', () => {
+    const out = prorateLinkedReturn(
+      [{ productId: 'sku', description: 'Digit', quantity: 3, unitPrice: 1, discountAmount: 0 }],
+      0.01,
+      [{ productId: 'sku', description: 'Digit', quantity: 1 }],
+      {
+        sourceTotal: 2.99,
+        priorReturnTotal: 2,
+        priorReturnLines: [
+          { productId: 'sku', description: 'Digit', quantity: 1 },
+          { productId: 'sku', description: 'Digit', quantity: 1 },
+        ],
+      },
+    );
+    expect(out.total).toBe(0.99);
+  });
+});
+
+describe('linked return posting ignores an edited unit price', () => {
+  it('qty 2 still credits 171 when the form price is 200', () => {
+    const out = prorateLinkedReturn(
+      [
+        {
+          productId: 'sku',
+          description: 'Widget',
+          quantity: 3,
+          unitPrice: 100,
+          unitCost: 60,
+          discountAmount: 30,
+        },
+      ],
+      13.5,
+      [{ productId: 'sku', description: 'Widget', quantity: 2 }],
+    );
+    expect(out.lines[0]?.unitPrice).toBe(100);
+    expect(out.total).toBe(171);
   });
 });

@@ -11,11 +11,16 @@ import {
   loadInvoiceForReturn,
   searchInvoicesForReturn,
 } from '@/app/actions/commercial-docs';
-import { prorateSourceHeader } from '@bookone/accounting';
+import {
+  applyClosingReturnResidual,
+  isClosingLinkedReturn,
+  prorateSourceHeader,
+} from '@bookone/accounting';
 import { todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
+  preventOver100DiscountSubmit,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -99,6 +104,14 @@ export function SalesDocumentForm({
   const [discountId, setDiscountId] = useState('');
   const [sourceHeaderDiscount, setSourceHeaderDiscount] = useState(0);
   const [sourceLineNet, setSourceLineNet] = useState(0);
+  const [sourceTotal, setSourceTotal] = useState(0);
+  const [alreadyReturnedTotal, setAlreadyReturnedTotal] = useState(0);
+  const [priorReturnLines, setPriorReturnLines] = useState<
+    { productId: string | null; description: string; quantity: number }[]
+  >([]);
+  const [sourceQtyLines, setSourceQtyLines] = useState<
+    { productId: string | null; description: string; quantity: number }[]
+  >([]);
   const [lines, setLines] = useState<DocLineState[]>([]);
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
@@ -145,6 +158,10 @@ export function SalesDocumentForm({
     setHeaderDiscountType('fixed');
     setSourceHeaderDiscount(0);
     setSourceLineNet(0);
+    setSourceTotal(0);
+    setAlreadyReturnedTotal(0);
+    setPriorReturnLines([]);
+    setSourceQtyLines([]);
   }
 
   async function pickSourceInvoice(id: string, label: string) {
@@ -169,6 +186,16 @@ export function SalesDocumentForm({
     }, 0);
     setSourceHeaderDiscount(loaded.headerDiscount || 0);
     setSourceLineNet(Math.round(srcLineNet * 100) / 100);
+    setSourceTotal(loaded.sourceTotal || 0);
+    setAlreadyReturnedTotal(loaded.alreadyReturnedTotal || 0);
+    setPriorReturnLines(loaded.priorReturnLines || []);
+    setSourceQtyLines(
+      loaded.lines.map((l) => ({
+        productId: l.productId || null,
+        description: l.description,
+        quantity: Number(l.quantity) || 0,
+      })),
+    );
     setLines(
       loaded.lines.map((l) => ({
         key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -222,11 +249,48 @@ export function SalesDocumentForm({
       }
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
-    return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
-  }, [lines, headerDiscount, headerDiscountType, discountId, discounts, sourceInvoiceId, sourceHeaderDiscount, sourceLineNet]);
+    let total = Math.round((subtotal - discountAmt) * 100) / 100;
+    if (sourceInvoiceId && sourceTotal > 0) {
+      const residual = applyClosingReturnResidual(
+        total,
+        discountAmt,
+        sourceTotal,
+        alreadyReturnedTotal,
+        isClosingLinkedReturn(
+          sourceQtyLines,
+          priorReturnLines,
+          lines.map((l) => ({
+            productId: l.productId || null,
+            description: l.description,
+            quantity: Number(String(l.quantity).replace(/[^0-9.-]/g, '')) || 0,
+          })),
+        ),
+      );
+      discountAmt = residual.headerDiscount;
+      total = residual.total;
+    }
+    return { subtotal, discountAmt, total };
+  }, [
+    lines,
+    headerDiscount,
+    headerDiscountType,
+    discountId,
+    discounts,
+    sourceInvoiceId,
+    sourceHeaderDiscount,
+    sourceLineNet,
+    sourceTotal,
+    alreadyReturnedTotal,
+    priorReturnLines,
+    sourceQtyLines,
+  ]);
 
   return (
-    <form action={createCommercialDocumentFromForm} className="doc-form-shell">
+    <form
+      action={createCommercialDocumentFromForm}
+      className="doc-form-shell"
+      onSubmit={(e) => preventOver100DiscountSubmit(e, lines)}
+    >
       <IdempotencyField />
       <input type="hidden" name="documentType" value={documentType} />
       <input type="hidden" name="saleChannel" value="local" />
@@ -341,6 +405,7 @@ export function SalesDocumentForm({
             partyName={partyName}
             onPartyNameChange={setPartyName}
             overridePlaceholder="Walk-in / new"
+            locked={Boolean(sourceInvoiceId)}
           />
           <div className="field">
             <label>Date *</label>

@@ -22,9 +22,9 @@ import {
   returnValueExceeded,
   asOfOpenBalance,
   prorateLinkedReturn,
-  prorateSourceHeader,
   percentDiscountOver100,
   documentLineKey,
+  linkedReturnPartyMismatch,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
   GRN_REMAINING_MESSAGE,
   BILL_REMAINING_MESSAGE,
@@ -33,6 +33,8 @@ import {
   SALES_RETURN_VALUE_MESSAGE,
   PURCHASE_RETURN_QTY_MESSAGE,
   PURCHASE_RETURN_VALUE_MESSAGE,
+  SALES_RETURN_PARTY_MESSAGE,
+  PURCHASE_RETURN_PARTY_MESSAGE,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { postedObligationSql } from '@/lib/posted-obligations';
@@ -672,12 +674,64 @@ export async function searchInvoicesForReturn(query: string): Promise<
   });
 }
 
+async function loadPriorReturnsForSource(
+  tenantId: string,
+  sourceId: string,
+  returnType: string,
+): Promise<{
+  alreadyReturnedTotal: number;
+  priorReturnLines: { productId: string | null; description: string; quantity: number }[];
+}> {
+  const priorReturns = await db()
+    .select({
+      id: businessDocuments.id,
+      total: businessDocuments.total,
+    })
+    .from(businessDocuments)
+    .where(
+      and(
+        eq(businessDocuments.tenantId, tenantId),
+        eq(businessDocuments.sourceDocumentId, sourceId),
+        eq(businessDocuments.documentType, returnType),
+        isNull(businessDocuments.voidedAt),
+      ),
+    );
+  const priorIds = priorReturns.map((row) => row.id);
+  const priorLines =
+    priorIds.length > 0
+      ? await db()
+          .select({
+            productId: businessDocumentLines.productId,
+            description: businessDocumentLines.description,
+            quantity: businessDocumentLines.quantity,
+          })
+          .from(businessDocumentLines)
+          .where(
+            and(
+              inArray(businessDocumentLines.documentId, priorIds),
+              isNull(businessDocumentLines.voidedAt),
+            ),
+          )
+      : [];
+  return {
+    alreadyReturnedTotal: priorReturns.reduce((s, row) => s + Number(row.total), 0),
+    priorReturnLines: priorLines.map((line) => ({
+      productId: line.productId,
+      description: line.description,
+      quantity: Number(line.quantity),
+    })),
+  };
+}
+
 export async function loadInvoiceForReturn(invoiceId: string): Promise<{
   partyName: string;
   brandId: string | null;
   locationId: string | null;
   documentNumber: string;
   headerDiscount: number;
+  sourceTotal: number;
+  alreadyReturnedTotal: number;
+  priorReturnLines: { productId: string | null; description: string; quantity: number }[];
   lines: {
     productId: string;
     description: string;
@@ -706,12 +760,20 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
       .select()
       .from(businessDocumentLines)
       .where(and(eq(businessDocumentLines.documentId, doc.id), isNull(businessDocumentLines.voidedAt)));
+    const returnType =
+      isPurchaseBillType(doc.documentType) || doc.documentType === 'cash_purchase'
+        ? 'purchase_return'
+        : 'sales_return';
+    const prior = await loadPriorReturnsForSource(user.tenantId, doc.id, returnType);
     return {
       partyName: party?.name ?? '',
       brandId: doc.brandId,
       locationId: doc.locationId,
       documentNumber: doc.documentNumber,
       headerDiscount: Number(doc.discountTotal) || 0,
+      sourceTotal: Number(doc.total) || 0,
+      alreadyReturnedTotal: prior.alreadyReturnedTotal,
+      priorReturnLines: prior.priorReturnLines,
       lines: lines.map((l) => ({
         productId: l.productId ?? '',
         description: l.description,
@@ -1060,8 +1122,40 @@ export async function createCommercialDocument(
 
     const id = await withTenantContext(user.tenantId, async () => {
       return db().transaction(async () => {
+        const isLinkedReturnDoc =
+          Boolean(parsed.sourceDocumentId) &&
+          (parsed.documentType === 'sales_return' || parsed.documentType === 'purchase_return');
+        let partyNameForEnsure = parsed.partyName;
+        if (isLinkedReturnDoc && parsed.sourceDocumentId) {
+          const [src] = await db()
+            .select({ partyId: businessDocuments.partyId })
+            .from(businessDocuments)
+            .where(
+              and(
+                eq(businessDocuments.tenantId, user.tenantId),
+                eq(businessDocuments.id, parsed.sourceDocumentId),
+                isNull(businessDocuments.voidedAt),
+              ),
+            )
+            .limit(1);
+          if (!src) throw new Error('Source document was not found in this company.');
+          const [srcParty] = await db()
+            .select({ name: parties.name })
+            .from(parties)
+            .where(eq(parties.id, src.partyId))
+            .limit(1);
+          if (!srcParty?.name) throw new Error('Source party was not found in this company.');
+          if (linkedReturnPartyMismatch(srcParty.name, parsed.partyName)) {
+            throw new Error(
+              parsed.documentType === 'purchase_return'
+                ? PURCHASE_RETURN_PARTY_MESSAGE
+                : SALES_RETURN_PARTY_MESSAGE,
+            );
+          }
+          partyNameForEnsure = srcParty.name;
+        }
         const party = await ensureParty({
-          name: parsed.partyName,
+          name: partyNameForEnsure,
           kind: isSales ? 'customer' : 'vendor',
           isCustomer: isSales,
           isVendor: !isSales,
@@ -1499,6 +1593,11 @@ export async function createCommercialDocument(
         invoiceKind: string | null;
       } | null = null;
       let linkedSourceLines: LinkedSourceLine[] = [];
+      let linkedPrior = {
+        alreadyReturnedTotal: 0,
+        priorReturnLines: [] as { productId: string | null; description: string; quantity: number }[],
+      };
+      let linkedProrated: ReturnType<typeof prorateLinkedReturn> | null = null;
       if (linkedReturn && parsed.sourceDocumentId) {
         await pgClient()`
           select id from business_documents
@@ -1540,7 +1639,12 @@ export async function createCommercialDocument(
               isNull(businessDocumentLines.voidedAt),
             ),
           );
-        const prorated = prorateLinkedReturn(
+        linkedPrior = await loadPriorReturnsForSource(
+          user.tenantId,
+          src.id,
+          parsed.documentType,
+        );
+        linkedProrated = prorateLinkedReturn(
           linkedSourceLines.map((s) => ({
             productId: s.productId,
             description: s.description,
@@ -1555,9 +1659,14 @@ export async function createCommercialDocument(
             description: line.description,
             quantity: line.quantity,
           })),
+          {
+            sourceTotal: Number(linkedSource.total) || 0,
+            priorReturnTotal: linkedPrior.alreadyReturnedTotal,
+            priorReturnLines: linkedPrior.priorReturnLines,
+          },
         );
         for (let i = 0; i < enriched.length; i++) {
-          const p = prorated.lines[i];
+          const p = linkedProrated.lines[i];
           const line = enriched[i];
           if (!p || !line) continue;
           line.unitPrice = p.unitPrice;
@@ -1592,13 +1701,8 @@ export async function createCommercialDocument(
         }
       }
 
-      if (linkedSource) {
-        const srcHeader = Number(linkedSource.discountTotal) || 0;
-        const srcLineNet = linkedSourceLines.reduce(
-          (s, l) => s + Number(l.quantity) * Number(l.unitPrice) - Number(l.discountAmount),
-          0,
-        );
-        headerDiscount = prorateSourceHeader(srcHeader, srcLineNet, subtotal - lineDiscountSum);
+      if (linkedSource && linkedProrated) {
+        headerDiscount = linkedProrated.headerDiscount;
       }
 
       for (const line of enriched) {
@@ -1716,37 +1820,6 @@ export async function createCommercialDocument(
         status = 'sent';
       }
       if (linkedSource) {
-        const priorReturns = await db()
-          .select({
-            id: businessDocuments.id,
-            total: businessDocuments.total,
-          })
-          .from(businessDocuments)
-          .where(
-            and(
-              eq(businessDocuments.tenantId, user.tenantId),
-              eq(businessDocuments.sourceDocumentId, linkedSource.id),
-              eq(businessDocuments.documentType, parsed.documentType),
-              isNull(businessDocuments.voidedAt),
-            ),
-          );
-        const priorIds = priorReturns.map((row) => row.id);
-        const priorLines =
-          priorIds.length > 0
-            ? await db()
-                .select({
-                  productId: businessDocumentLines.productId,
-                  description: businessDocumentLines.description,
-                  quantity: businessDocumentLines.quantity,
-                })
-                .from(businessDocumentLines)
-                .where(
-                  and(
-                    inArray(businessDocumentLines.documentId, priorIds),
-                    isNull(businessDocumentLines.voidedAt),
-                  ),
-                )
-            : [];
         const isPurchaseReturn = parsed.documentType === 'purchase_return';
         const thisQtyLines = enriched.map((line) => ({
           productId: line.productId ?? null,
@@ -1758,16 +1831,10 @@ export async function createCommercialDocument(
           description: s.description,
           quantity: Number(s.quantity),
         }));
-        const priorQtyLines = priorLines.map((line) => ({
-          productId: line.productId,
-          description: line.description,
-          quantity: Number(line.quantity),
-        }));
-        if (returnQtyExceeded(sourceQtyLines, priorQtyLines, thisQtyLines)) {
+        if (returnQtyExceeded(sourceQtyLines, linkedPrior.priorReturnLines, thisQtyLines)) {
           throw new Error(isPurchaseReturn ? PURCHASE_RETURN_QTY_MESSAGE : SALES_RETURN_QTY_MESSAGE);
         }
-        const alreadyValue = priorReturns.reduce((s, row) => s + Number(row.total), 0);
-        if (returnValueExceeded(Number(linkedSource.total), alreadyValue, total)) {
+        if (returnValueExceeded(Number(linkedSource.total), linkedPrior.alreadyReturnedTotal, total)) {
           throw new Error(isPurchaseReturn ? PURCHASE_RETURN_VALUE_MESSAGE : SALES_RETURN_VALUE_MESSAGE);
         }
       }

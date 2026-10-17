@@ -5,12 +5,16 @@
  * Product search + free text + qty steppers + Save as product (type).
  */
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { createQuickProduct } from '@/app/actions/inventory';
 import { ProductAddSearch, type ProductPick } from '@/components/module/product-add-search';
 import { QtyStepper } from '@/components/module/qty-stepper';
 import { pushStatusToast } from '@/components/layout/status-toast';
-import { lineDiscountAmount as computeLineDiscountAmount } from '@bookone/accounting';
+import {
+  lineDiscountAmount as computeLineDiscountAmount,
+  percentDiscountOver100,
+  PERCENT_DISCOUNT_OVER_100_MESSAGE,
+} from '@bookone/accounting';
 
 export type DocLineState = {
   key: string;
@@ -61,6 +65,26 @@ export function computeLineAmounts(lines: DocLineState[]) {
   });
 }
 
+export function linesHavePercentDiscountOver100(lines: DocLineState[]): boolean {
+  return lines.some((line) =>
+    percentDiscountOver100(
+      line.discountType,
+      Number(String(line.discountValue ?? '').replace(/[^0-9.-]/g, '')) || 0,
+    ),
+  );
+}
+
+export function preventOver100DiscountSubmit(e: FormEvent, lines: DocLineState[]): boolean {
+  if (!linesHavePercentDiscountOver100(lines)) return false;
+  e.preventDefault();
+  pushStatusToast({ kind: 'error', message: PERCENT_DISCOUNT_OVER_100_MESSAGE });
+  return true;
+}
+
+function isSourceLockedLine(line: DocLineState): boolean {
+  return line.sourceQuantity != null && line.sourceQuantity !== '';
+}
+
 export function DocumentLinesEditor({
   products,
   lines,
@@ -84,7 +108,20 @@ export function DocumentLinesEditor({
   const amounts = computeLineAmounts(lines);
 
   function updateLine(key: string, patch: Partial<DocLineState>) {
-    onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+    onChange(
+      lines.map((l) => {
+        if (l.key !== key) return l;
+        const next = { ...l, ...patch };
+        if (isSourceLockedLine(l)) {
+          next.unitPrice = l.unitPrice;
+          next.discountType = l.discountType;
+          next.discountValue = l.discountValue;
+          next.sourceQuantity = l.sourceQuantity;
+          next.sourceDiscountAmount = l.sourceDiscountAmount;
+        }
+        return next;
+      }),
+    );
   }
 
   function removeLine(key: string) {
@@ -241,6 +278,7 @@ export function DocumentLinesEditor({
                     name={`line_${i}_unitPrice`}
                     inputMode="decimal"
                     value={line.unitPrice}
+                    readOnly={isSourceLockedLine(line)}
                     onChange={(e) => updateLine(line.key, { unitPrice: e.target.value })}
                     placeholder={
                       linePriceMode === 'cost'
@@ -270,6 +308,7 @@ export function DocumentLinesEditor({
                         className="input"
                         name={`line_${i}_discountType`}
                         value={line.discountType ?? 'percent'}
+                        disabled={isSourceLockedLine(line)}
                         onChange={(e) =>
                           updateLine(line.key, { discountType: e.target.value as 'percent' | 'fixed' })
                         }
@@ -283,6 +322,7 @@ export function DocumentLinesEditor({
                         name={`line_${i}_discountValue`}
                         inputMode="decimal"
                         value={line.discountValue ?? ''}
+                        readOnly={isSourceLockedLine(line)}
                         onChange={(e) => updateLine(line.key, { discountValue: e.target.value })}
                         placeholder="0"
                         style={{ minWidth: 64 }}

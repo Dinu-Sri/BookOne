@@ -8,6 +8,7 @@ import { pushStatusToast } from '@/components/layout/status-toast';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
+  preventOver100DiscountSubmit,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -202,7 +203,11 @@ export function InvoiceDocumentForm({
   }
 
   return (
-    <form action={createCommercialDocumentFromForm} className="doc-form-shell">
+    <form
+      action={createCommercialDocumentFromForm}
+      className="doc-form-shell"
+      onSubmit={(e) => preventOver100DiscountSubmit(e, lines)}
+    >
       <input type="hidden" name="documentType" value="sales_invoice" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />

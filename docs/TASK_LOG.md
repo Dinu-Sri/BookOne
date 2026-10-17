@@ -1,3 +1,9 @@
+## 2026-10-17 — Linked return party, residual rounding, source price, retained validation (v2.5.14)
+
+- Record: [CHG-20261017-return-party-rounding-validation](changes/CHG-20261017-return-party-rounding-validation.md). QA [HANDOFF-20261017-v2513-next-wave](https://github.com/Dinu-Sri/bookone-qa/blob/qa/v2513-next-wave/handoffs/HANDOFF-20261017-v2513-next-wave.md) on v2.5.13 · 1a10201 (95 checks: 88 pass / 6 fail / 1 inconclusive). Draft QA PR #39.
+- Source-linked returns copy and lock the original party; the server rejects a different customer/supplier before GL or allocation. Source unit price is locked so remaining-two preview stays 171. Closing returns take leftover source value (last of 2.99 is 0.99). 150% line discount still refuses posting and keeps the invoice form. D12-008/D12-035 and N13-068 left unchanged.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.14 · <sha7>` and reruns N13-054/055/016/067/071/090 plus matching-party and original-price controls. Do not replay staging payments. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-17 — Historical aging, return preview, subtotal labels (v2.5.13)
 
 - Record: [CHG-20261017-aging-return-preview-subtotal](changes/CHG-20261017-aging-return-preview-subtotal.md). QA [HANDOFF-20261016-v2512-browser-deep](https://github.com/Dinu-Sri/bookone-qa/blob/qa/v2512-deep-browser/handoffs/HANDOFF-20261016-v2512-browser-deep.md) on v2.5.12 · ead3a82 (67 checks: 61 pass / 4 fail / 2 inconclusive). Draft QA PR #38.

@@ -1,3 +1,7 @@
+## 2026-10-17 — Linked return party, residual rounding, source price, retained validation (v2.5.14)
+
+QA HANDOFF on v2.5.13: 95 bounded manual checks, 88 passed / 6 failed / 1 inconclusive. Source-linked sales and purchase returns inherit and lock the original party; a different party is rejected before mutation. Linked return unit prices are locked so preview matches the posted source credit. The last remaining unit of a 2.99 source previews and posts 0.99. Invalid 150% line discount keeps the entered invoice form. See [CHG-20261017-return-party-rounding-validation](changes/CHG-20261017-return-party-rounding-validation.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.14 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-17 — Historical aging, return preview, subtotal labels (v2.5.13)
 
 QA HANDOFF on v2.5.12: 67 bounded manual checks, 61 passed / 4 failed / 2 inconclusive. As-of aging reconstructs later settlements so a 17 Oct receipt of 1 does not reduce 16 Oct AR (181; aggregate 251). Partial-return preview matches posted credits (85.50 / 171). Quote and invoice Subtotal labels show line-net 270 against Discount 13.50 and Total 256.50. Stored totals and journals are unchanged. See [CHG-20261017-aging-return-preview-subtotal](changes/CHG-20261017-aging-return-preview-subtotal.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.13 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -7,6 +7,7 @@ import { todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
+  preventOver100DiscountSubmit,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -109,7 +110,11 @@ export function QuotationForm({
   }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
 
   return (
-    <form action={createCommercialDocumentFromForm} className="doc-form-shell">
+    <form
+      action={createCommercialDocumentFromForm}
+      className="doc-form-shell"
+      onSubmit={(e) => preventOver100DiscountSubmit(e, lines)}
+    >
       <IdempotencyField />
       <input type="hidden" name="documentType" value="quotation" />
       <input type="hidden" name="saleChannel" value="local" />

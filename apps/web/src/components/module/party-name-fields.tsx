@@ -15,6 +15,8 @@ export function PartyNameFields({
   partyName,
   onPartyNameChange,
   overridePlaceholder,
+  locked = false,
+  defaultPartyName,
 }: {
   label: string;
   placeholder: string;
@@ -22,11 +24,39 @@ export function PartyNameFields({
   partyName?: string;
   onPartyNameChange?: (name: string) => void;
   overridePlaceholder?: string;
+  locked?: boolean;
+  defaultPartyName?: string;
 }) {
   const [override, setOverride] = useState('');
   const needPrimary = override.trim().length === 0;
   const hasOptions = Boolean(partyOptions && partyOptions.length > 0);
   const controlled = typeof onPartyNameChange === 'function';
+  const lockedName = (partyName || defaultPartyName || partyOptions?.[0]?.name || '').trim();
+
+  if (locked) {
+    return (
+      <div className="field field-span-2">
+        <label>{label} *</label>
+        <input type="hidden" name="partyName" value={lockedName} />
+        {hasOptions ? (
+          <select className="input" disabled value={lockedName} aria-readonly="true">
+            {lockedName && !partyOptions!.some((p) => p.name === lockedName) ? (
+              <option value={lockedName}>{lockedName}</option>
+            ) : null}
+            {partyOptions!.map((p) => (
+              <option key={p.id} value={p.name}>
+                {p.code ? `${p.code} — ` : ''}
+                {p.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input className="input" value={lockedName} disabled readOnly />
+        )}
+        <small className="muted-line">Copied from the original document and cannot be changed.</small>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -42,7 +72,7 @@ export function PartyNameFields({
                   value: partyName ?? '',
                   onChange: (e: ChangeEvent<HTMLSelectElement>) => onPartyNameChange!(e.target.value),
                 }
-              : { defaultValue: partyOptions![0]?.name ?? '' })}
+              : { defaultValue: defaultPartyName || partyOptions![0]?.name || '' })}
           >
             {controlled && partyName && !partyOptions!.some((p) => p.name === partyName) ? (
               <option value={partyName}>{partyName}</option>

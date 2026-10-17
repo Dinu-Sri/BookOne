@@ -8,7 +8,11 @@
 
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
-import { prorateSourceHeader } from '@bookone/accounting';
+import {
+  applyClosingReturnResidual,
+  isClosingLinkedReturn,
+  prorateSourceHeader,
+} from '@bookone/accounting';
 import {
   createCommercialDocumentFromForm,
   convertDocumentAction,
@@ -17,6 +21,7 @@ import {
 import {
   DocumentLinesEditor,
   computeLineAmounts,
+  preventOver100DiscountSubmit,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -180,6 +185,11 @@ export function CommercialDocNewForm({
   submitLabel = 'Save',
   sourceDocumentId,
   initialHeaderDiscount,
+  initialPartyName,
+  sourceTotal: sourceTotalProp,
+  alreadyReturnedTotal = 0,
+  priorReturnLines = [],
+  sourceQtyLines = [],
   initialLines,
   defaultPaymentTerms,
   defaultExpenseAccount,
@@ -219,6 +229,11 @@ export function CommercialDocNewForm({
   submitLabel?: string;
   sourceDocumentId?: string | null;
   initialHeaderDiscount?: number;
+  initialPartyName?: string | null;
+  sourceTotal?: number;
+  alreadyReturnedTotal?: number;
+  priorReturnLines?: { productId: string | null; description: string; quantity: number }[];
+  sourceQtyLines?: { productId: string | null; description: string; quantity: number }[];
   initialLines?: DocLineState[];
   defaultPaymentTerms?: string;
   defaultExpenseAccount?: string;
@@ -290,7 +305,35 @@ export function CommercialDocNewForm({
           : v;
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
-    return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
+    let total = Math.round((subtotal - discountAmt) * 100) / 100;
+    if (linkedReturn && (sourceTotalProp ?? 0) > 0) {
+      const residual = applyClosingReturnResidual(
+        total,
+        discountAmt,
+        sourceTotalProp ?? 0,
+        alreadyReturnedTotal,
+        isClosingLinkedReturn(
+          sourceQtyLines.length
+            ? sourceQtyLines
+            : lines
+                .filter((l) => l.sourceQuantity)
+                .map((l) => ({
+                  productId: l.productId || null,
+                  description: l.description,
+                  quantity: Number(String(l.sourceQuantity).replace(/[^0-9.-]/g, '')) || 0,
+                })),
+          priorReturnLines,
+          lines.map((l) => ({
+            productId: l.productId || null,
+            description: l.description,
+            quantity: Number(String(l.quantity).replace(/[^0-9.-]/g, '')) || 0,
+          })),
+        ),
+      );
+      discountAmt = residual.headerDiscount;
+      total = residual.total;
+    }
+    return { subtotal, discountAmt, total };
   }, [
     lines,
     headerDiscount,
@@ -300,11 +343,19 @@ export function CommercialDocNewForm({
     linkedReturn,
     sourceHeaderSnapshot,
     sourceLineNetSnapshot,
+    sourceTotalProp,
+    alreadyReturnedTotal,
+    priorReturnLines,
+    sourceQtyLines,
   ]);
 
   return (
     <div className="workspace party-workspace">
-      <form action={createCommercialDocumentFromForm} className="doc-form-shell">
+      <form
+        action={createCommercialDocumentFromForm}
+        className="doc-form-shell"
+        onSubmit={(e) => preventOver100DiscountSubmit(e, lines)}
+      >
         <IdempotencyField />
         <input type="hidden" name="documentType" value={documentType} />
         <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
@@ -353,6 +404,9 @@ export function CommercialDocNewForm({
               label={partyLabel}
               placeholder={partyPlaceholder}
               partyOptions={partyOptions}
+              defaultPartyName={initialPartyName ?? undefined}
+              locked={linkedReturn}
+              partyName={linkedReturn ? initialPartyName ?? undefined : undefined}
             />
             <div className="field">
               <label>Date *</label>

@@ -20,6 +20,9 @@ export type DocLineState = {
   unitPrice: string;
   discountType?: 'percent' | 'fixed';
   discountValue?: string;
+  /** Original invoice/bill qty when this line was loaded for a linked return. */
+  sourceQuantity?: string;
+  sourceDiscountAmount?: string;
   sku?: string;
   isManual?: boolean;
   /** Pending save-as-product type before linking */
@@ -44,6 +47,8 @@ export function lineDiscountAmount(line: DocLineState): number {
     unitPrice: line.unitPrice,
     discountType: line.discountType,
     discountValue: line.discountValue,
+    sourceQuantity: line.sourceQuantity,
+    sourceDiscountAmount: line.sourceDiscountAmount,
   });
 }
 

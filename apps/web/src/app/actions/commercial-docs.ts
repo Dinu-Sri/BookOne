@@ -20,7 +20,9 @@ import {
   qtyExceedsRemaining,
   returnQtyExceeded,
   returnValueExceeded,
-  issuedOnOrBeforeAsOf,
+  asOfOpenBalance,
+  prorateLinkedReturn,
+  prorateSourceHeader,
   percentDiscountOver100,
   documentLineKey,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
@@ -1538,21 +1540,30 @@ export async function createCommercialDocument(
               isNull(businessDocumentLines.voidedAt),
             ),
           );
-        const usedSource = new Set<number>();
-        for (const line of enriched) {
-          const idx = linkedSourceLines.findIndex((s, i) => {
-            if (usedSource.has(i)) return false;
-            return lineMatchKey(s.productId, s.description) === lineMatchKey(line.productId, line.description);
-          });
-          if (idx < 0) continue;
-          usedSource.add(idx);
-          const srcLine = linkedSourceLines[idx]!;
-          const srcQty = Number(srcLine.quantity);
-          const ratio = srcQty > 0 ? line.quantity / srcQty : 0;
-          line.unitPrice = Number(srcLine.unitPrice);
-          line.unitCost = Number(srcLine.unitCost);
-          line.discountAmount = Math.round(Number(srcLine.discountAmount) * ratio * 100) / 100;
-          line.lineTotal = Math.max(0, line.quantity * line.unitPrice - line.discountAmount);
+        const prorated = prorateLinkedReturn(
+          linkedSourceLines.map((s) => ({
+            productId: s.productId,
+            description: s.description,
+            quantity: Number(s.quantity),
+            unitPrice: Number(s.unitPrice),
+            unitCost: Number(s.unitCost),
+            discountAmount: Number(s.discountAmount),
+          })),
+          Number(linkedSource.discountTotal) || 0,
+          enriched.map((line) => ({
+            productId: line.productId ?? null,
+            description: line.description,
+            quantity: line.quantity,
+          })),
+        );
+        for (let i = 0; i < enriched.length; i++) {
+          const p = prorated.lines[i];
+          const line = enriched[i];
+          if (!p || !line) continue;
+          line.unitPrice = p.unitPrice;
+          line.unitCost = p.unitCost;
+          line.discountAmount = p.discountAmount;
+          line.lineTotal = p.lineTotal;
         }
       }
 
@@ -1587,10 +1598,7 @@ export async function createCommercialDocument(
           (s, l) => s + Number(l.quantity) * Number(l.unitPrice) - Number(l.discountAmount),
           0,
         );
-        const retLineNet = subtotal - lineDiscountSum;
-        if (srcHeader > 0 && srcLineNet > 0) {
-          headerDiscount = Math.round((srcHeader * (retLineNet / srcLineNet)) * 100) / 100;
-        }
+        headerDiscount = prorateSourceHeader(srcHeader, srcLineNet, subtotal - lineDiscountSum);
       }
 
       for (const line of enriched) {
@@ -3689,21 +3697,102 @@ export async function listOpenArInvoices(): Promise<OpenArInvoice[]> {
   });
 }
 
-/** AP aging by due date (or issue date if no due). Documents issued after as-of are excluded. */
+async function laterSettlementsByDocumentTx(
+  tenantId: string,
+  asOf: string,
+): Promise<Map<string, number>> {
+  const rows = await db()
+    .select({
+      invoiceTransactionId: settlementAllocations.invoiceTransactionId,
+      allocatedAmount: settlementAllocations.allocatedAmount,
+    })
+    .from(settlementAllocations)
+    .innerJoin(transactions, eq(transactions.id, settlementAllocations.paymentTransactionId))
+    .where(
+      and(
+        eq(settlementAllocations.tenantId, tenantId),
+        isNull(settlementAllocations.voidedAt),
+        isNull(transactions.voidedAt),
+        sql`${transactions.date} > ${asOf}`,
+      ),
+    );
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    map.set(
+      row.invoiceTransactionId,
+      (map.get(row.invoiceTransactionId) ?? 0) + Number(row.allocatedAmount),
+    );
+  }
+  return map;
+}
+
+async function listPostedObligationsAsOf(
+  types: readonly string[],
+  asOf: string,
+): Promise<OpenApBill[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const rows = await db()
+      .select({
+        id: businessDocuments.id,
+        documentType: businessDocuments.documentType,
+        documentNumber: businessDocuments.documentNumber,
+        partyName: parties.name,
+        issueDate: businessDocuments.issueDate,
+        dueDate: businessDocuments.dueDate,
+        total: businessDocuments.total,
+        balanceDue: businessDocuments.balanceDue,
+        status: businessDocuments.status,
+        transactionId: businessDocuments.transactionId,
+      })
+      .from(businessDocuments)
+      .leftJoin(parties, eq(parties.id, businessDocuments.partyId))
+      .where(
+        and(
+          eq(businessDocuments.tenantId, user.tenantId),
+          inArray(businessDocuments.documentType, [...types]),
+          isNull(businessDocuments.voidedAt),
+          sql`${businessDocuments.issueDate} <= ${asOf}`,
+          postedObligationSql(),
+        ),
+      )
+      .orderBy(desc(businessDocuments.issueDate));
+
+    const later = await laterSettlementsByDocumentTx(user.tenantId, asOf);
+    return rows
+      .map((r) => {
+        const laterAmt = r.transactionId ? (later.get(r.transactionId) ?? 0) : 0;
+        return {
+          id: r.id,
+          documentType: r.documentType,
+          documentNumber: r.documentNumber,
+          partyName: r.partyName ?? 'Unknown',
+          issueDate: r.issueDate,
+          dueDate: r.dueDate,
+          total: Number(r.total),
+          balanceDue: asOfOpenBalance(Number(r.balanceDue), laterAmt),
+          status: r.status,
+        };
+      })
+      .filter((r) => r.balanceDue > 0.005);
+  });
+}
+
+/** AP aging by due date (or issue date if no due). Later payments/credits do not reduce the cutoff. */
 export async function getApAgingSummary(asOfDate?: string): Promise<ApAgingSummary> {
   const asOf = asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
     ? asOfDate
     : new Date().toISOString().slice(0, 10);
-  const bills = issuedOnOrBeforeAsOf(await listOpenApBills(), asOf);
+  const bills = await listPostedObligationsAsOf(AP_BILL_TYPES, asOf);
   return buildAgingSummary(bills, asOf);
 }
 
-/** AR aging by due date (or issue date if no due). Documents issued after as-of are excluded. */
+/** AR aging by due date (or issue date if no due). Later payments/credits do not reduce the cutoff. */
 export async function getArAgingSummary(asOfDate?: string): Promise<ArAgingSummary> {
   const asOf = asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
     ? asOfDate
     : new Date().toISOString().slice(0, 10);
-  const invoices = issuedOnOrBeforeAsOf(await listOpenArInvoices(), asOf);
+  const invoices = await listPostedObligationsAsOf(AR_INVOICE_TYPES, asOf);
   return buildAgingSummary(invoices, asOf);
 }
 

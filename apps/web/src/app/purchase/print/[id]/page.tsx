@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getPurchasePrintData } from '@/app/actions/commercial-docs';
+import { displayedLineNetSubtotal } from '@bookone/accounting';
 import { formatLKR } from '@/components/module/list-page';
 
 const TITLE: Record<string, string> = {
@@ -122,7 +123,7 @@ export default async function PurchasePrintPage({ params }: { params: Promise<{ 
         </table>
 
         <div style={{ marginTop: 16, textAlign: 'right' }}>
-          <div>Subtotal: {formatLKR(doc.subtotal)}</div>
+          <div>Subtotal: {formatLKR(displayedLineNetSubtotal(doc.subtotal, doc.discountTotal))}</div>
           {doc.discountTotal > 0 ? <div>Discount: {formatLKR(doc.discountTotal)}</div> : null}
           <div style={{ fontWeight: 800, fontSize: 16, marginTop: 6 }}>Total: {formatLKR(doc.total)}</div>
           {doc.balanceDue > 0.005 ? (

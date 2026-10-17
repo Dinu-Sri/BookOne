@@ -12,6 +12,7 @@ import {
   rejectPurchaseDocumentAction,
   type CommercialDocDetail,
 } from '@/app/actions/commercial-docs';
+import { displayedLineNetSubtotal } from '@bookone/accounting';
 import { formatLKR } from '@/components/module/list-page';
 import { StatusBadge } from '@/components/ui/status-help';
 import { statusFamilyFromDocType } from '@/lib/status-guide';
@@ -222,7 +223,7 @@ export function CommercialDocumentDetail({
             <div className="doc-totals" style={{ minWidth: 200 }}>
               <div className="doc-totals-row">
                 <span>Subtotal</span>
-                <strong>{formatLKR(doc.subtotal)}</strong>
+                <strong>{formatLKR(displayedLineNetSubtotal(doc.subtotal, doc.discountTotal))}</strong>
               </div>
               <div className="doc-totals-row">
                 <span>Discount</span>

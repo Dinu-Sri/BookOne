@@ -1,3 +1,9 @@
+## 2026-10-17 — Historical aging, return preview, subtotal labels (v2.5.13)
+
+- Record: [CHG-20261017-aging-return-preview-subtotal](changes/CHG-20261017-aging-return-preview-subtotal.md). QA [HANDOFF-20261016-v2512-browser-deep](https://github.com/Dinu-Sri/bookone-qa/blob/qa/v2512-deep-browser/handoffs/HANDOFF-20261016-v2512-browser-deep.md) on v2.5.12 · ead3a82 (67 checks: 61 pass / 4 fail / 2 inconclusive). Draft QA PR #38.
+- As-of AR/AP reconstructs open amounts as current due plus settlements dated after the cutoff (16 Oct as-of stays 181 after a 17 Oct receipt of 1; aggregate 251). Pay/Receive still use current balances. Linked return preview prorates line and header discounts the same way as posting (qty 1 = 85.50, remaining 2 = 171). Quote/invoice/print Subtotal is line-net (270) while stored `subtotal` stays after-header supply. D12-008/D12-035 left unchanged.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.13 · <sha7>` and reruns D12-029/041/044/048 plus adjacent passes. Do not replay staging payments. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-16 — Broad-workflow findings (v2.5.12)
 
 - Record: [CHG-20261016-broad-workflow-findings](changes/CHG-20261016-broad-workflow-findings.md). QA [HANDOFF-20261016-broad-workflows](https://github.com/Dinu-Sri/bookone-qa/blob/qa/broad-workflows-20261016/handoffs/HANDOFF-20261016-broad-workflows.md) on v2.5.11 · 0bcdf4d (62 checks: 45 pass / 17 fail → nine findings, five P1s). Draft QA PR #35.

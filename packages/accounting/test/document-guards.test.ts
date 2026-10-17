@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asOfOpenBalance,
   billedQtyAgainstPo,
+  displayedLineNetSubtotal,
   issuedOnOrBeforeAsOf,
   lineDiscountAmount,
   percentDiscountOver100,
+  prorateLinkedReturn,
   qtyExceedsRemaining,
   receivedQtyAgainstPo,
   remainingQty,
@@ -144,5 +147,76 @@ describe('as-of aging excludes later-issued documents', () => {
     const asOf = issuedOnOrBeforeAsOf(open, '2026-10-15');
     expect(asOf.map((r) => r.id)).toEqual(['a']);
     expect(asOf.reduce((s, r) => s + r.balanceDue, 0)).toBe(690);
+  });
+});
+
+describe('as-of open balance reconstructs later settlements', () => {
+  it('16 Oct as-of keeps 181 after a 17 Oct receipt of 1 against current 180', () => {
+    expect(asOfOpenBalance(180, 1)).toBe(181);
+    expect(asOfOpenBalance(180, 1) + 70).toBe(251);
+  });
+
+  it('does not change current due when there are no later settlements', () => {
+    expect(asOfOpenBalance(180, 0)).toBe(180);
+  });
+
+  it('includes a currently closed invoice that was paid after the cutoff', () => {
+    expect(asOfOpenBalance(0, 181)).toBe(181);
+  });
+});
+
+describe('linked return preview matches posting ratios', () => {
+  const source = [
+    {
+      productId: 'sku',
+      description: 'Widget',
+      quantity: 3,
+      unitPrice: 100,
+      unitCost: 60,
+      discountAmount: 30,
+    },
+  ];
+
+  it('qty 1 of 3×100 with line 10% and header 13.50 is 85.50', () => {
+    const out = prorateLinkedReturn(source, 13.5, [
+      { productId: 'sku', description: 'Widget', quantity: 1 },
+    ]);
+    expect(out.lines[0]?.discountAmount).toBe(10);
+    expect(out.lineNet).toBe(90);
+    expect(out.headerDiscount).toBe(4.5);
+    expect(out.total).toBe(85.5);
+  });
+
+  it('remaining qty 2 is 171', () => {
+    const out = prorateLinkedReturn(source, 13.5, [
+      { productId: 'sku', description: 'Widget', quantity: 2 },
+    ]);
+    expect(out.total).toBe(171);
+  });
+
+  it('full qty 3 is 256.50', () => {
+    const out = prorateLinkedReturn(source, 13.5, [
+      { productId: 'sku', description: 'Widget', quantity: 3 },
+    ]);
+    expect(out.total).toBe(256.5);
+  });
+
+  it('preview line discount follows source qty when the type is still fixed 30', () => {
+    expect(
+      lineDiscountAmount({
+        quantity: 1,
+        unitPrice: 100,
+        discountType: 'fixed',
+        discountValue: 30,
+        sourceQuantity: 3,
+        sourceDiscountAmount: 30,
+      }),
+    ).toBe(10);
+  });
+});
+
+describe('displayed subtotal is line net before header discount', () => {
+  it('256.50 stored after 13.50 header displays as 270', () => {
+    expect(displayedLineNetSubtotal(256.5, 13.5)).toBe(270);
   });
 });

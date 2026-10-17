@@ -60,6 +60,11 @@ export {
   returnQtyExceeded,
   returnValueExceeded,
   issuedOnOrBeforeAsOf,
+  asOfOpenBalance,
+  displayedLineNetSubtotal,
+  prorateLinkedReturn,
+  prorateSourceDiscount,
+  prorateSourceHeader,
   lineDiscountAmount,
   resolvedDiscountType,
   percentDiscountOver100,
@@ -74,4 +79,4 @@ export {
   PURCHASE_RETURN_VALUE_MESSAGE,
   PAYMENT_OVER_BALANCE_MESSAGE,
 } from './document-guards';
-export type { QtyLine, LinkedChildDoc, LineDiscountInput } from './document-guards';
+export type { QtyLine, LinkedChildDoc, LineDiscountInput, ProrateSourceLine, ProrateReturnLine } from './document-guards';

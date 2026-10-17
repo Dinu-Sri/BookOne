@@ -8,6 +8,7 @@
 
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
+import { prorateSourceHeader } from '@bookone/accounting';
 import {
   createCommercialDocumentFromForm,
   convertDocumentAction,
@@ -241,6 +242,19 @@ export function CommercialDocNewForm({
     initialHeaderDiscount && initialHeaderDiscount > 0 ? 'fixed' : 'percent',
   );
   const [discountId, setDiscountId] = useState('');
+  const linkedReturn = documentType === 'purchase_return' && Boolean(sourceDocumentId);
+  const sourceHeaderSnapshot = linkedReturn ? Number(initialHeaderDiscount) || 0 : 0;
+  const sourceLineNetSnapshot =
+    linkedReturn && initialLines?.length
+      ? Math.round(
+          initialLines.reduce((s, l) => {
+            const qty = Number(String(l.sourceQuantity ?? l.quantity).replace(/[^0-9.-]/g, '')) || 0;
+            const price = Number(String(l.unitPrice).replace(/[^0-9.-]/g, '')) || 0;
+            const disc = Number(String(l.sourceDiscountAmount ?? '0').replace(/[^0-9.-]/g, '')) || 0;
+            return s + qty * price - disc;
+          }, 0) * 100,
+        ) / 100
+      : 0;
 
   const handleSearchActive = useCallback(
     (active: boolean) => {
@@ -266,6 +280,8 @@ export function CommercialDocNewForm({
             ? Math.round(((subtotal * Number(d.value)) / 100) * 100) / 100
             : Number(d.value);
       }
+    } else if (linkedReturn && sourceHeaderSnapshot > 0 && sourceLineNetSnapshot > 0) {
+      discountAmt = prorateSourceHeader(sourceHeaderSnapshot, sourceLineNetSnapshot, subtotal);
     } else {
       const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
       discountAmt =
@@ -275,7 +291,16 @@ export function CommercialDocNewForm({
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
-  }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
+  }, [
+    lines,
+    headerDiscount,
+    headerDiscountType,
+    discountId,
+    discounts,
+    linkedReturn,
+    sourceHeaderSnapshot,
+    sourceLineNetSnapshot,
+  ]);
 
   return (
     <div className="workspace party-workspace">

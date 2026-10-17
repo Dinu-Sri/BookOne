@@ -95,11 +95,120 @@ export function issuedOnOrBeforeAsOf<T extends { issueDate: string }>(items: T[]
   return items.filter((item) => item.issueDate <= asOf);
 }
 
+/**
+ * Reconstruct open AR/AP at a cutoff: current due plus settlements dated after as-of.
+ * Payments/credits on the cutoff date have already reduced current due and stay applied.
+ */
+export function asOfOpenBalance(currentBalanceDue: number, laterSettlements: number): number {
+  return Math.round(Math.max(0, currentBalanceDue + laterSettlements) * 100) / 100;
+}
+
+/** Stored subtotal is after header discount. Display line-net as stored + header. */
+export function displayedLineNetSubtotal(storedSubtotal: number, headerDiscount: number): number {
+  return Math.round((Number(storedSubtotal) + Number(headerDiscount)) * 100) / 100;
+}
+
+export type ProrateSourceLine = {
+  productId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  unitCost?: number;
+  discountAmount: number;
+};
+
+export type ProrateReturnLine = {
+  productId: string | null;
+  description: string;
+  quantity: number;
+};
+
+export function prorateSourceDiscount(
+  sourceDiscount: number,
+  sourceQty: number,
+  thisQty: number,
+): number {
+  if (sourceQty <= 0) return 0;
+  return Math.round(sourceDiscount * (thisQty / sourceQty) * 100) / 100;
+}
+
+export function prorateSourceHeader(
+  sourceHeader: number,
+  sourceLineNet: number,
+  returnLineNet: number,
+): number {
+  if (sourceHeader <= 0 || sourceLineNet <= 0) return 0;
+  return Math.round(sourceHeader * (returnLineNet / sourceLineNet) * 100) / 100;
+}
+
+/** Source-proportional line/header discounts for a linked return (shared by posting and preview). */
+export function prorateLinkedReturn(
+  sourceLines: ProrateSourceLine[],
+  sourceHeaderDiscount: number,
+  returnLines: ProrateReturnLine[],
+): {
+  lines: {
+    productId: string | null;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    unitCost: number;
+    discountAmount: number;
+    lineTotal: number;
+  }[];
+  headerDiscount: number;
+  lineNet: number;
+  total: number;
+} {
+  const used = new Set<number>();
+  const lines = returnLines.map((line) => {
+    const idx = sourceLines.findIndex((s, i) => {
+      if (used.has(i)) return false;
+      return documentLineKey(s.productId, s.description) === documentLineKey(line.productId, line.description);
+    });
+    if (idx < 0) {
+      return {
+        productId: line.productId,
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: 0,
+        unitCost: 0,
+        discountAmount: 0,
+        lineTotal: 0,
+      };
+    }
+    used.add(idx);
+    const src = sourceLines[idx]!;
+    const discountAmount = prorateSourceDiscount(src.discountAmount, src.quantity, line.quantity);
+    const gross = Math.round(line.quantity * src.unitPrice * 100) / 100;
+    const lineTotal = Math.max(0, Math.round((gross - discountAmount) * 100) / 100);
+    return {
+      productId: line.productId,
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: src.unitPrice,
+      unitCost: Number(src.unitCost) || 0,
+      discountAmount,
+      lineTotal,
+    };
+  });
+  const srcLineNet = sourceLines.reduce(
+    (s, l) => s + Number(l.quantity) * Number(l.unitPrice) - Number(l.discountAmount),
+    0,
+  );
+  const lineNet = Math.round(lines.reduce((s, l) => s + l.lineTotal, 0) * 100) / 100;
+  const headerDiscount = prorateSourceHeader(sourceHeaderDiscount, srcLineNet, lineNet);
+  const total = Math.max(0, Math.round((lineNet - headerDiscount) * 100) / 100);
+  return { lines, headerDiscount, lineNet, total };
+}
+
 export type LineDiscountInput = {
   quantity: string | number;
   unitPrice: string | number;
   discountType?: 'percent' | 'fixed' | null;
   discountValue?: string | number | null;
+  sourceQuantity?: string | number | null;
+  sourceDiscountAmount?: string | number | null;
 };
 
 function moneyNum(v: string | number | null | undefined): number {
@@ -117,8 +226,15 @@ export function lineDiscountAmount(line: LineDiscountInput): number {
   const qty = moneyNum(line.quantity);
   const price = moneyNum(line.unitPrice);
   const gross = Math.round(qty * price * 100) / 100;
+  if (gross <= 0) return 0;
+  if (line.sourceQuantity != null && line.sourceQuantity !== '' && line.sourceDiscountAmount != null) {
+    const srcQty = moneyNum(line.sourceQuantity);
+    if (srcQty > 0) {
+      return Math.min(gross, prorateSourceDiscount(moneyNum(line.sourceDiscountAmount), srcQty, qty));
+    }
+  }
   const v = moneyNum(line.discountValue);
-  if (v <= 0 || gross <= 0) return 0;
+  if (v <= 0) return 0;
   if (resolvedDiscountType(line.discountType) === 'percent') {
     return Math.min(gross, Math.round(((gross * v) / 100) * 100) / 100);
   }

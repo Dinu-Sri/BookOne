@@ -49,6 +49,8 @@ export default async function NewPurchaseReturnPage({
                 unitPrice: String(l.unitPrice),
                 discountType: l.discountAmount > 0 ? ('fixed' as const) : ('percent' as const),
                 discountValue: l.discountAmount > 0 ? String(l.discountAmount) : '',
+                sourceQuantity: String(l.quantity),
+                sourceDiscountAmount: String(l.discountAmount ?? 0),
                 isManual: !l.productId,
               }))
             : undefined

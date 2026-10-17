@@ -1,6 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
+import { displayedLineNetSubtotal } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   and,
@@ -213,7 +214,7 @@ export async function getDocumentPrintModel(
         amount: Number(l.lineTotal),
       })),
       totals: {
-        subtotal: Number(doc.subtotal),
+        subtotal: displayedLineNetSubtotal(Number(doc.subtotal), Number(doc.discountTotal ?? 0)),
         discount: Number(doc.discountTotal ?? 0),
         vat: Number(doc.taxTotal),
         vatRate: Number(doc.vatRate),

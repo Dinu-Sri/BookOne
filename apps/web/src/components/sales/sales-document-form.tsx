@@ -11,6 +11,7 @@ import {
   loadInvoiceForReturn,
   searchInvoicesForReturn,
 } from '@/app/actions/commercial-docs';
+import { prorateSourceHeader } from '@bookone/accounting';
 import { todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
@@ -96,6 +97,8 @@ export function SalesDocumentForm({
   const [headerDiscount, setHeaderDiscount] = useState('0');
   const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>('fixed');
   const [discountId, setDiscountId] = useState('');
+  const [sourceHeaderDiscount, setSourceHeaderDiscount] = useState(0);
+  const [sourceLineNet, setSourceLineNet] = useState(0);
   const [lines, setLines] = useState<DocLineState[]>([]);
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
@@ -140,6 +143,8 @@ export function SalesDocumentForm({
     setLines([]);
     setHeaderDiscount('0');
     setHeaderDiscountType('fixed');
+    setSourceHeaderDiscount(0);
+    setSourceLineNet(0);
   }
 
   async function pickSourceInvoice(id: string, label: string) {
@@ -156,6 +161,14 @@ export function SalesDocumentForm({
     setHeaderDiscount(String(loaded.headerDiscount || 0));
     setHeaderDiscountType('fixed');
     setDiscountId('');
+    const srcLineNet = loaded.lines.reduce((s, l) => {
+      const qty = Number(l.quantity) || 0;
+      const price = Number(l.unitPrice) || 0;
+      const disc = Number(l.discountAmount) || 0;
+      return s + qty * price - disc;
+    }, 0);
+    setSourceHeaderDiscount(loaded.headerDiscount || 0);
+    setSourceLineNet(Math.round(srcLineNet * 100) / 100);
     setLines(
       loaded.lines.map((l) => ({
         key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -167,6 +180,8 @@ export function SalesDocumentForm({
         isManual: !l.productId,
         discountType: l.discountAmount ? 'fixed' : 'percent',
         discountValue: l.discountAmount ?? '',
+        sourceQuantity: l.quantity,
+        sourceDiscountAmount: l.discountAmount ?? '0',
       })),
     );
   }
@@ -195,6 +210,8 @@ export function SalesDocumentForm({
             ? Math.round(((subtotal * Number(d.value)) / 100) * 100) / 100
             : Number(d.value);
       }
+    } else if (sourceInvoiceId && sourceHeaderDiscount > 0 && sourceLineNet > 0) {
+      discountAmt = prorateSourceHeader(sourceHeaderDiscount, sourceLineNet, subtotal);
     } else {
       const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
       if (v > 0) {
@@ -206,7 +223,7 @@ export function SalesDocumentForm({
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     return { subtotal, discountAmt, total: Math.round((subtotal - discountAmt) * 100) / 100 };
-  }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
+  }, [lines, headerDiscount, headerDiscountType, discountId, discounts, sourceInvoiceId, sourceHeaderDiscount, sourceLineNet]);
 
   return (
     <form action={createCommercialDocumentFromForm} className="doc-form-shell">

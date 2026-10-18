@@ -680,12 +680,14 @@ async function loadPriorReturnsForSource(
   returnType: string,
 ): Promise<{
   alreadyReturnedTotal: number;
+  alreadyReturnedNet: number;
   priorReturnLines: { productId: string | null; description: string; quantity: number }[];
 }> {
   const priorReturns = await db()
     .select({
       id: businessDocuments.id,
       total: businessDocuments.total,
+      subtotal: businessDocuments.subtotal,
     })
     .from(businessDocuments)
     .where(
@@ -715,6 +717,7 @@ async function loadPriorReturnsForSource(
       : [];
   return {
     alreadyReturnedTotal: priorReturns.reduce((s, row) => s + Number(row.total), 0),
+    alreadyReturnedNet: priorReturns.reduce((s, row) => s + Number(row.subtotal), 0),
     priorReturnLines: priorLines.map((line) => ({
       productId: line.productId,
       description: line.description,
@@ -730,7 +733,11 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
   documentNumber: string;
   headerDiscount: number;
   sourceTotal: number;
+  sourceNet: number;
+  sourceTax: number;
+  vatRate: number;
   alreadyReturnedTotal: number;
+  alreadyReturnedNet: number;
   priorReturnLines: { productId: string | null; description: string; quantity: number }[];
   lines: {
     productId: string;
@@ -772,7 +779,11 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
       documentNumber: doc.documentNumber,
       headerDiscount: Number(doc.discountTotal) || 0,
       sourceTotal: Number(doc.total) || 0,
+      sourceNet: Number(doc.subtotal) || 0,
+      sourceTax: Number(doc.taxTotal) || 0,
+      vatRate: Number(doc.vatRate) || 0,
       alreadyReturnedTotal: prior.alreadyReturnedTotal,
+      alreadyReturnedNet: prior.alreadyReturnedNet,
       priorReturnLines: prior.priorReturnLines,
       lines: lines.map((l) => ({
         productId: l.productId ?? '',
@@ -1588,6 +1599,8 @@ export async function createCommercialDocument(
       let linkedSource: {
         id: string;
         total: string | number;
+        subtotal: string | number;
+        taxTotal: string | number;
         discountTotal: string | number;
         vatRate: string | number | null;
         invoiceKind: string | null;
@@ -1595,6 +1608,7 @@ export async function createCommercialDocument(
       let linkedSourceLines: LinkedSourceLine[] = [];
       let linkedPrior = {
         alreadyReturnedTotal: 0,
+        alreadyReturnedNet: 0,
         priorReturnLines: [] as { productId: string | null; description: string; quantity: number }[],
       };
       let linkedProrated: ReturnType<typeof prorateLinkedReturn> | null = null;
@@ -1608,6 +1622,8 @@ export async function createCommercialDocument(
           .select({
             id: businessDocuments.id,
             total: businessDocuments.total,
+            subtotal: businessDocuments.subtotal,
+            taxTotal: businessDocuments.taxTotal,
             discountTotal: businessDocuments.discountTotal,
             vatRate: businessDocuments.vatRate,
             invoiceKind: businessDocuments.invoiceKind,
@@ -1660,8 +1676,8 @@ export async function createCommercialDocument(
             quantity: line.quantity,
           })),
           {
-            sourceTotal: Number(linkedSource.total) || 0,
-            priorReturnTotal: linkedPrior.alreadyReturnedTotal,
+            sourceTotal: Number(linkedSource.subtotal) || 0,
+            priorReturnTotal: linkedPrior.alreadyReturnedNet,
             priorReturnLines: linkedPrior.priorReturnLines,
           },
         );
@@ -1716,7 +1732,10 @@ export async function createCommercialDocument(
         throw new Error('Header discount cannot exceed the document total after line discounts.');
       }
 
-      const supplyExVat = Math.max(0, Math.round((subtotal - lineDiscountSum - headerDiscount) * 100) / 100);
+      let supplyExVat = Math.max(0, Math.round((subtotal - lineDiscountSum - headerDiscount) * 100) / 100);
+      if (linkedProrated) {
+        supplyExVat = linkedProrated.total;
+      }
       const saleChannel = parsed.saleChannel ?? 'local';
       const invoiceKind = parsed.invoiceKind ?? 'commercial';
       const isSalesInvoiceType = parsed.documentType === 'sales_invoice';
@@ -2626,7 +2645,9 @@ export async function createCommercialDocument(
   }
 }
 
-export async function createCommercialDocumentFromForm(formData: FormData): Promise<void> {
+export async function createCommercialDocumentFromForm(
+  formData: FormData,
+): Promise<{ ok: false; error: string } | void> {
   const documentType = String(formData.get('documentType') ?? 'quotation') as z.infer<typeof createSchema>['documentType'];
   const lineCount = Number(formData.get('lineCount') ?? 1);
   const lines = [];
@@ -2689,10 +2710,7 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     vendor_bill: '/purchase/purchases',
   };
   if (percentOver100) {
-    const { redirect } = await import('next/navigation');
-    redirect(
-      `${listPath[documentType] ?? '/sales/invoices'}?err=${encodeURIComponent(PERCENT_DISCOUNT_OVER_100_MESSAGE)}`,
-    );
+    return { ok: false, error: PERCENT_DISCOUNT_OVER_100_MESSAGE };
   }
   const purchasePartyTypes = new Set([
     'purchase_order',
@@ -2705,10 +2723,7 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
   ]);
   if (!partyName) {
     if (purchasePartyTypes.has(documentType)) {
-      const { redirect } = await import('next/navigation');
-      redirect(
-        `${listPath[documentType] ?? '/purchase/orders'}?err=${encodeURIComponent('Enter a vendor name or pick a vendor.')}`,
-      );
+      return { ok: false, error: 'Enter a vendor name or pick a vendor.' };
     }
     partyName = 'Walk-in';
   }
@@ -2781,7 +2796,7 @@ export async function createCommercialDocumentFromForm(formData: FormData): Prom
     if (/permission/i.test(error)) {
       redirect(`${base}?flash=denied_write`);
     }
-    redirect(`${base}?err=${encodeURIComponent(error.slice(0, 180))}`);
+    return { ok: false, error };
   }
 
   const intent = String(formData.get('intent') ?? 'post');

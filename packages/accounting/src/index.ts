@@ -62,6 +62,8 @@ export {
   remainingReturnValue,
   isClosingLinkedReturn,
   applyClosingReturnResidual,
+  linkedReturnPreviewTotals,
+  remainingLinkedHeaderDiscount,
   linkedReturnPartyMismatch,
   issuedOnOrBeforeAsOf,
   asOfOpenBalance,

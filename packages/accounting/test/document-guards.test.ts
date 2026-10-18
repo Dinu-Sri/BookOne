@@ -8,6 +8,7 @@ import {
   issuedOnOrBeforeAsOf,
   lineDiscountAmount,
   linkedReturnPartyMismatch,
+  linkedReturnPreviewTotals,
   percentDiscountOver100,
   prorateLinkedReturn,
   qtyExceedsRemaining,
@@ -258,6 +259,7 @@ describe('closing return residual conserves source value', () => {
     expect(applyClosingReturnResidual(1, 0, 2.99, 1, false)).toEqual({
       total: 1,
       headerDiscount: 0,
+      lineNet: 1,
     });
   });
 
@@ -308,5 +310,131 @@ describe('linked return posting ignores an edited unit price', () => {
     );
     expect(out.lines[0]?.unitPrice).toBe(100);
     expect(out.total).toBe(171);
+  });
+});
+
+describe('closing residual conserves 7×1 header 0.05 = 6.95', () => {
+  const source = [
+    { productId: 'sku', description: 'Digit', quantity: 7, unitPrice: 1, discountAmount: 0 },
+  ];
+  const unit = { productId: 'sku', description: 'Digit', quantity: 1 };
+  const six = Array.from({ length: 6 }, () => unit);
+  const five = Array.from({ length: 5 }, () => unit);
+
+  it('last unit after six 0.99 credits previews and posts 1.01', () => {
+    expect(remainingReturnValue(6.95, 5.94)).toBe(1.01);
+    const residual = applyClosingReturnResidual(1, 0, 6.95, 5.94, true);
+    expect(residual.total).toBe(1.01);
+    expect(residual.headerDiscount).toBe(0);
+    expect(residual.lineNet).toBe(1.01);
+    const out = prorateLinkedReturn(source, 0.05, [unit], {
+      sourceTotal: 6.95,
+      priorReturnTotal: 5.94,
+      priorReturnLines: six,
+    });
+    expect(out.total).toBe(1.01);
+    expect(out.headerDiscount).toBe(0);
+    expect(out.lineNet).toBe(1.01);
+    expect(out.lineNet - out.headerDiscount).toBe(out.total);
+    const preview = linkedReturnPreviewTotals(1, 0, 6.95, 5.94, true);
+    expect(preview).toEqual({
+      subtotal: 1.01,
+      headerDiscount: 0,
+      net: 1.01,
+      vat: 0,
+      total: 1.01,
+    });
+  });
+
+  it('non-closing unit 6 after five 0.99 credits does not over-allocate header', () => {
+    const out = prorateLinkedReturn(source, 0.05, [unit], {
+      sourceTotal: 6.95,
+      priorReturnTotal: 4.95,
+      priorReturnLines: five,
+    });
+    expect(out.headerDiscount).toBe(0);
+    expect(out.total).toBe(1);
+  });
+});
+
+describe('duplicate return rows aggregate quantity', () => {
+  const source = [{ productId: 'sku', description: 'Widget', quantity: 3 }];
+  const priced = [
+    { productId: 'sku', description: 'Widget', quantity: 3, unitPrice: 100, discountAmount: 0 },
+  ];
+
+  it('refuses two rows of 2 against 3 sold', () => {
+    expect(
+      returnQtyExceeded(source, [], [
+        { productId: 'sku', description: 'Widget', quantity: 2 },
+        { productId: 'sku', description: 'Widget', quantity: 2 },
+      ]),
+    ).toBe(true);
+  });
+
+  it('allows split rows 1+1 of 3', () => {
+    expect(
+      returnQtyExceeded(source, [], [
+        { productId: 'sku', description: 'Widget', quantity: 1 },
+        { productId: 'sku', description: 'Widget', quantity: 1 },
+      ]),
+    ).toBe(false);
+  });
+
+  it('split 1+1 keeps source unit price 100 on both rows', () => {
+    const out = prorateLinkedReturn(priced, 0, [
+      { productId: 'sku', description: 'Widget', quantity: 1 },
+      { productId: 'sku', description: 'Widget', quantity: 1 },
+    ]);
+    expect(out.lines[0]?.unitPrice).toBe(100);
+    expect(out.lines[1]?.unitPrice).toBe(100);
+    expect(out.total).toBe(200);
+  });
+});
+
+describe('discounted taxable full return keeps net, header and gross', () => {
+  const source = [
+    {
+      productId: 'sku',
+      description: 'Widget',
+      quantity: 3,
+      unitPrice: 100,
+      discountAmount: 30,
+    },
+  ];
+
+  it('full return residual stays in net space: header 13.50, net 256.50, gross 302.67', () => {
+    const out = prorateLinkedReturn(source, 13.5, [
+      { productId: 'sku', description: 'Widget', quantity: 3 },
+    ], {
+      sourceTotal: 256.5,
+      priorReturnTotal: 0,
+      priorReturnLines: [],
+    });
+    expect(out.headerDiscount).toBe(13.5);
+    expect(out.lineNet).toBe(270);
+    expect(out.total).toBe(256.5);
+    const preview = linkedReturnPreviewTotals(256.5, 13.5, 256.5, 0, true, 18);
+    expect(preview.subtotal).toBe(270);
+    expect(preview.headerDiscount).toBe(13.5);
+    expect(preview.net).toBe(256.5);
+    expect(preview.vat).toBe(46.17);
+    expect(preview.total).toBe(302.67);
+    expect(returnValueExceeded(302.67, 0, 302.67)).toBe(false);
+  });
+
+  it('no-header tax 100 + 18% is 118', () => {
+    const out = prorateLinkedReturn(
+      [{ productId: 'sku', description: 'Item', quantity: 1, unitPrice: 100, discountAmount: 0 }],
+      0,
+      [{ productId: 'sku', description: 'Item', quantity: 1 }],
+      { sourceTotal: 100, priorReturnTotal: 0, priorReturnLines: [] },
+    );
+    expect(out.total).toBe(100);
+    expect(out.headerDiscount).toBe(0);
+    const preview = linkedReturnPreviewTotals(100, 0, 100, 0, true, 18);
+    expect(preview.vat).toBe(18);
+    expect(preview.total).toBe(118);
+    expect(returnValueExceeded(118, 0, 118)).toBe(false);
   });
 });

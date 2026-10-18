@@ -1,3 +1,9 @@
+## 2026-10-18 — Closing residual 1.01, aggregate return qty, taxed full credit, retained stock error (v2.5.15)
+
+- Record: [CHG-20261018-residual-duplicate-tax-form](changes/CHG-20261018-residual-duplicate-tax-form.md). QA [HANDOFF-20261018-v2514-resume](https://github.com/Dinu-Sri/bookone-qa/blob/a796051298e0e7e24bd318874c2f3cb835ede8bc/handoffs/HANDOFF-20261018-v2514-resume.md) on v2.5.14 · a36af04 (87 checks: 70 pass / 11 fail / 6 inconclusive). Draft QA PR #41.
+- Closing linked returns conserve source net: last of 6.95 after six 0.99 credits previews and posts 1.01. Duplicate return rows aggregate quantity (2+2 vs 3 refused; split 1+1 keeps source price). Taxed full return keeps header 13.50 and posts gross 302.67. Stock/validation errors stay on the form. D12-008/D12-035 and N13-068 left unchanged. N18 fixtures preserved.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.15 · <sha7>` and reruns N18-031–034, N18-036–039, N18-043–044, N18-079 plus 2.99, 85.50/171, 118, 150% retain, matching-party. Do not replay staging payments. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-17 — Linked return party, residual rounding, source price, retained validation (v2.5.14)
 
 - Record: [CHG-20261017-return-party-rounding-validation](changes/CHG-20261017-return-party-rounding-validation.md). QA [HANDOFF-20261017-v2513-next-wave](https://github.com/Dinu-Sri/bookone-qa/blob/qa/v2513-next-wave/handoffs/HANDOFF-20261017-v2513-next-wave.md) on v2.5.13 · 1a10201 (95 checks: 88 pass / 6 fail / 1 inconclusive). Draft QA PR #39.

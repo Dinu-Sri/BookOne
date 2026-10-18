@@ -9,6 +9,7 @@ import {
   DocumentLinesEditor,
   computeLineAmounts,
   preventOver100DiscountSubmit,
+  toastIfFormError,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -204,7 +205,9 @@ export function InvoiceDocumentForm({
 
   return (
     <form
-      action={createCommercialDocumentFromForm}
+      action={async (fd) => {
+        await toastIfFormError(await createCommercialDocumentFromForm(fd));
+      }}
       className="doc-form-shell"
       onSubmit={(e) => preventOver100DiscountSubmit(e, lines)}
     >

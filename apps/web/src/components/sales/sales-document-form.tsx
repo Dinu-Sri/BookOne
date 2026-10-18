@@ -12,15 +12,18 @@ import {
   searchInvoicesForReturn,
 } from '@/app/actions/commercial-docs';
 import {
-  applyClosingReturnResidual,
   isClosingLinkedReturn,
+  linkedReturnPreviewTotals,
   prorateSourceHeader,
+  SALES_RETURN_QTY_MESSAGE,
 } from '@bookone/accounting';
 import { todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
   preventOver100DiscountSubmit,
+  preventReturnQtyExceededSubmit,
+  toastIfFormError,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -105,7 +108,10 @@ export function SalesDocumentForm({
   const [sourceHeaderDiscount, setSourceHeaderDiscount] = useState(0);
   const [sourceLineNet, setSourceLineNet] = useState(0);
   const [sourceTotal, setSourceTotal] = useState(0);
+  const [sourceNet, setSourceNet] = useState(0);
+  const [sourceVatRate, setSourceVatRate] = useState(0);
   const [alreadyReturnedTotal, setAlreadyReturnedTotal] = useState(0);
+  const [alreadyReturnedNet, setAlreadyReturnedNet] = useState(0);
   const [priorReturnLines, setPriorReturnLines] = useState<
     { productId: string | null; description: string; quantity: number }[]
   >([]);
@@ -159,7 +165,10 @@ export function SalesDocumentForm({
     setSourceHeaderDiscount(0);
     setSourceLineNet(0);
     setSourceTotal(0);
+    setSourceNet(0);
+    setSourceVatRate(0);
     setAlreadyReturnedTotal(0);
+    setAlreadyReturnedNet(0);
     setPriorReturnLines([]);
     setSourceQtyLines([]);
   }
@@ -187,7 +196,10 @@ export function SalesDocumentForm({
     setSourceHeaderDiscount(loaded.headerDiscount || 0);
     setSourceLineNet(Math.round(srcLineNet * 100) / 100);
     setSourceTotal(loaded.sourceTotal || 0);
+    setSourceNet(loaded.sourceNet || loaded.sourceTotal || 0);
+    setSourceVatRate(loaded.vatRate || 0);
     setAlreadyReturnedTotal(loaded.alreadyReturnedTotal || 0);
+    setAlreadyReturnedNet(loaded.alreadyReturnedNet || loaded.alreadyReturnedTotal || 0);
     setPriorReturnLines(loaded.priorReturnLines || []);
     setSourceQtyLines(
       loaded.lines.map((l) => ({
@@ -250,12 +262,13 @@ export function SalesDocumentForm({
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     let total = Math.round((subtotal - discountAmt) * 100) / 100;
-    if (sourceInvoiceId && sourceTotal > 0) {
-      const residual = applyClosingReturnResidual(
+    const residualNet = sourceNet || sourceTotal;
+    if (sourceInvoiceId && residualNet > 0) {
+      const preview = linkedReturnPreviewTotals(
         total,
         discountAmt,
-        sourceTotal,
-        alreadyReturnedTotal,
+        residualNet,
+        alreadyReturnedNet || alreadyReturnedTotal,
         isClosingLinkedReturn(
           sourceQtyLines,
           priorReturnLines,
@@ -265,9 +278,9 @@ export function SalesDocumentForm({
             quantity: Number(String(l.quantity).replace(/[^0-9.-]/g, '')) || 0,
           })),
         ),
+        sourceVatRate,
       );
-      discountAmt = residual.headerDiscount;
-      total = residual.total;
+      return { subtotal: preview.subtotal, discountAmt: preview.headerDiscount, total: preview.total };
     }
     return { subtotal, discountAmt, total };
   }, [
@@ -280,16 +293,35 @@ export function SalesDocumentForm({
     sourceHeaderDiscount,
     sourceLineNet,
     sourceTotal,
+    sourceNet,
+    sourceVatRate,
     alreadyReturnedTotal,
+    alreadyReturnedNet,
     priorReturnLines,
     sourceQtyLines,
   ]);
 
   return (
     <form
-      action={createCommercialDocumentFromForm}
+      action={async (fd) => {
+        await toastIfFormError(await createCommercialDocumentFromForm(fd));
+      }}
       className="doc-form-shell"
-      onSubmit={(e) => preventOver100DiscountSubmit(e, lines)}
+      onSubmit={(e) => {
+        if (preventOver100DiscountSubmit(e, lines)) return;
+        if (
+          isReturn &&
+          preventReturnQtyExceededSubmit(
+            e,
+            sourceQtyLines,
+            priorReturnLines,
+            lines,
+            SALES_RETURN_QTY_MESSAGE,
+          )
+        ) {
+          return;
+        }
+      }}
     >
       <IdempotencyField />
       <input type="hidden" name="documentType" value={documentType} />

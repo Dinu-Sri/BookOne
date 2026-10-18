@@ -74,11 +74,12 @@ export function returnQtyExceeded(
   addQtyMaps(already, priorReturnLines);
   const src = new Map<string, number>();
   addQtyMaps(src, sourceLines);
-  for (const line of thisLines) {
-    const k = documentLineKey(line.productId, line.description);
+  const next = new Map<string, number>();
+  addQtyMaps(next, thisLines);
+  for (const [k, qty] of next) {
     const srcQty = src.get(k) ?? 0;
     const prior = already.get(k) ?? 0;
-    if (line.quantity + prior > srcQty + 0.0001) return true;
+    if (qty + prior > srcQty + 0.0001) return true;
   }
   return false;
 }
@@ -115,24 +116,80 @@ export function isClosingLinkedReturn(
   return true;
 }
 
-/** Last remaining quantity takes leftover source value so cents are conserved. */
+/**
+ * Last remaining quantity takes leftover source *net* so cents are conserved.
+ * When remaining net is below computed line net, keep enough header to close.
+ * When remaining net is above computed line net (prior units over-allocated header),
+ * lift line net to remaining and clear header. Never invent a surcharge.
+ */
 export function applyClosingReturnResidual(
   computedTotal: number,
   computedHeader: number,
   sourceTotal: number,
   priorReturnTotal: number,
   closing: boolean,
-): { total: number; headerDiscount: number } {
+): { total: number; headerDiscount: number; lineNet: number } {
+  const lineNet = Math.round((Number(computedTotal) + Number(computedHeader)) * 100) / 100;
   if (!closing) {
     return {
       total: Math.round(Number(computedTotal) * 100) / 100,
       headerDiscount: Math.round(Number(computedHeader) * 100) / 100,
+      lineNet,
     };
   }
   const remaining = remainingReturnValue(sourceTotal, priorReturnTotal);
-  const lineNet = Math.round((Number(computedTotal) + Number(computedHeader)) * 100) / 100;
+  if (remaining >= lineNet) {
+    return { total: remaining, headerDiscount: 0, lineNet: remaining };
+  }
   const headerDiscount = Math.max(0, Math.round((lineNet - remaining) * 100) / 100);
-  return { total: remaining, headerDiscount };
+  return { total: remaining, headerDiscount, lineNet };
+}
+
+/** Preview totals: lifted line net, conserved header, optional source VAT on net. */
+export function linkedReturnPreviewTotals(
+  computedTotal: number,
+  computedHeader: number,
+  sourceNet: number,
+  priorReturnNet: number,
+  closing: boolean,
+  vatRatePercent = 0,
+): { subtotal: number; headerDiscount: number; net: number; vat: number; total: number } {
+  const residual = applyClosingReturnResidual(
+    computedTotal,
+    computedHeader,
+    sourceNet,
+    priorReturnNet,
+    closing,
+  );
+  const vat =
+    vatRatePercent > 0
+      ? Math.round(((residual.total * vatRatePercent) / 100) * 100) / 100
+      : 0;
+  return {
+    subtotal: residual.lineNet,
+    headerDiscount: residual.headerDiscount,
+    net: residual.total,
+    vat,
+    total: Math.round((residual.total + vat) * 100) / 100,
+  };
+}
+
+/** Header still available after prior returns, estimated from prior net vs qty-ratio line net. */
+export function remainingLinkedHeaderDiscount(
+  sourceHeader: number,
+  sourceLineNet: number,
+  sourceQty: number,
+  priorQty: number,
+  priorReturnNet: number,
+): number {
+  const header = Math.round(Number(sourceHeader) * 100) / 100;
+  if (sourceQty <= 0) return Math.max(0, header);
+  const priorLineNetEst = Math.round((sourceLineNet * (priorQty / sourceQty)) * 100) / 100;
+  const priorHeaderTaken = Math.max(
+    0,
+    Math.round((priorLineNetEst - Number(priorReturnNet)) * 100) / 100,
+  );
+  return Math.max(0, Math.round((header - priorHeaderTaken) * 100) / 100);
 }
 
 export function linkedReturnPartyMismatch(sourcePartyName: string, submittedPartyName: string): boolean {
@@ -194,8 +251,18 @@ export function prorateSourceHeader(
 
 export type LinkedReturnPrior = {
   priorReturnLines?: QtyLine[];
+  /** Sum of prior return *net* (stored subtotal / supply ex VAT). */
   priorReturnTotal?: number;
+  /** Source *net* (stored subtotal / supply ex VAT). */
   sourceTotal?: number;
+};
+
+type SourceQtyPool = {
+  remainingQty: number;
+  unitPrice: number;
+  unitCost: number;
+  discountAmount: number;
+  sourceQty: number;
 };
 
 /** Source-proportional line/header discounts for a linked return (shared by posting and preview). */
@@ -218,13 +285,34 @@ export function prorateLinkedReturn(
   lineNet: number;
   total: number;
 } {
-  const used = new Set<number>();
+  const pool = new Map<string, SourceQtyPool>();
+  for (const s of sourceLines) {
+    const k = documentLineKey(s.productId, s.description);
+    const existing = pool.get(k);
+    if (existing) {
+      existing.remainingQty += Number(s.quantity);
+      existing.sourceQty += Number(s.quantity);
+      existing.discountAmount += Number(s.discountAmount);
+    } else {
+      pool.set(k, {
+        remainingQty: Number(s.quantity),
+        unitPrice: Number(s.unitPrice),
+        unitCost: Number(s.unitCost) || 0,
+        discountAmount: Number(s.discountAmount),
+        sourceQty: Number(s.quantity),
+      });
+    }
+  }
+  for (const p of prior?.priorReturnLines ?? []) {
+    const k = documentLineKey(p.productId, p.description);
+    const src = pool.get(k);
+    if (src) src.remainingQty = remainingQty(src.remainingQty, Number(p.quantity));
+  }
+
   const lines = returnLines.map((line) => {
-    const idx = sourceLines.findIndex((s, i) => {
-      if (used.has(i)) return false;
-      return documentLineKey(s.productId, s.description) === documentLineKey(line.productId, line.description);
-    });
-    if (idx < 0) {
+    const k = documentLineKey(line.productId, line.description);
+    const src = pool.get(k);
+    if (!src || src.remainingQty <= 0.0001) {
       return {
         productId: line.productId,
         description: line.description,
@@ -235,9 +323,8 @@ export function prorateLinkedReturn(
         lineTotal: 0,
       };
     }
-    used.add(idx);
-    const src = sourceLines[idx]!;
-    const discountAmount = prorateSourceDiscount(src.discountAmount, src.quantity, line.quantity);
+    src.remainingQty = remainingQty(src.remainingQty, line.quantity);
+    const discountAmount = prorateSourceDiscount(src.discountAmount, src.sourceQty, line.quantity);
     const gross = Math.round(line.quantity * src.unitPrice * 100) / 100;
     const lineTotal = Math.max(0, Math.round((gross - discountAmount) * 100) / 100);
     return {
@@ -245,7 +332,7 @@ export function prorateLinkedReturn(
       description: line.description,
       quantity: line.quantity,
       unitPrice: src.unitPrice,
-      unitCost: Number(src.unitCost) || 0,
+      unitCost: src.unitCost,
       discountAmount,
       lineTotal,
     };
@@ -254,8 +341,20 @@ export function prorateLinkedReturn(
     (s, l) => s + Number(l.quantity) * Number(l.unitPrice) - Number(l.discountAmount),
     0,
   );
-  const lineNet = Math.round(lines.reduce((s, l) => s + l.lineTotal, 0) * 100) / 100;
+  let lineNet = Math.round(lines.reduce((s, l) => s + l.lineTotal, 0) * 100) / 100;
   let headerDiscount = prorateSourceHeader(sourceHeaderDiscount, srcLineNet, lineNet);
+  if (prior) {
+    const sourceQty = sourceLines.reduce((s, l) => s + Number(l.quantity), 0);
+    const priorQty = (prior.priorReturnLines ?? []).reduce((s, l) => s + Number(l.quantity), 0);
+    const budget = remainingLinkedHeaderDiscount(
+      sourceHeaderDiscount,
+      srcLineNet,
+      sourceQty,
+      priorQty,
+      prior.priorReturnTotal ?? 0,
+    );
+    headerDiscount = Math.min(headerDiscount, budget);
+  }
   let total = Math.max(0, Math.round((lineNet - headerDiscount) * 100) / 100);
   if (prior) {
     const sourceTotal =
@@ -278,6 +377,7 @@ export function prorateLinkedReturn(
     );
     headerDiscount = residual.headerDiscount;
     total = residual.total;
+    lineNet = residual.lineNet;
   }
   return { lines, headerDiscount, lineNet, total };
 }

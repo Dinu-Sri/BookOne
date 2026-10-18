@@ -9,9 +9,10 @@
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import {
-  applyClosingReturnResidual,
   isClosingLinkedReturn,
+  linkedReturnPreviewTotals,
   prorateSourceHeader,
+  PURCHASE_RETURN_QTY_MESSAGE,
 } from '@bookone/accounting';
 import {
   createCommercialDocumentFromForm,
@@ -22,6 +23,8 @@ import {
   DocumentLinesEditor,
   computeLineAmounts,
   preventOver100DiscountSubmit,
+  preventReturnQtyExceededSubmit,
+  toastIfFormError,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -187,6 +190,7 @@ export function CommercialDocNewForm({
   initialHeaderDiscount,
   initialPartyName,
   sourceTotal: sourceTotalProp,
+  sourceVatRate = 0,
   alreadyReturnedTotal = 0,
   priorReturnLines = [],
   sourceQtyLines = [],
@@ -231,6 +235,7 @@ export function CommercialDocNewForm({
   initialHeaderDiscount?: number;
   initialPartyName?: string | null;
   sourceTotal?: number;
+  sourceVatRate?: number;
   alreadyReturnedTotal?: number;
   priorReturnLines?: { productId: string | null; description: string; quantity: number }[];
   sourceQtyLines?: { productId: string | null; description: string; quantity: number }[];
@@ -307,7 +312,7 @@ export function CommercialDocNewForm({
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     let total = Math.round((subtotal - discountAmt) * 100) / 100;
     if (linkedReturn && (sourceTotalProp ?? 0) > 0) {
-      const residual = applyClosingReturnResidual(
+      const preview = linkedReturnPreviewTotals(
         total,
         discountAmt,
         sourceTotalProp ?? 0,
@@ -329,9 +334,9 @@ export function CommercialDocNewForm({
             quantity: Number(String(l.quantity).replace(/[^0-9.-]/g, '')) || 0,
           })),
         ),
+        sourceVatRate,
       );
-      discountAmt = residual.headerDiscount;
-      total = residual.total;
+      return { subtotal: preview.subtotal, discountAmt: preview.headerDiscount, total: preview.total };
     }
     return { subtotal, discountAmt, total };
   }, [
@@ -344,6 +349,7 @@ export function CommercialDocNewForm({
     sourceHeaderSnapshot,
     sourceLineNetSnapshot,
     sourceTotalProp,
+    sourceVatRate,
     alreadyReturnedTotal,
     priorReturnLines,
     sourceQtyLines,
@@ -352,9 +358,25 @@ export function CommercialDocNewForm({
   return (
     <div className="workspace party-workspace">
       <form
-        action={createCommercialDocumentFromForm}
+        action={async (fd) => {
+          await toastIfFormError(await createCommercialDocumentFromForm(fd));
+        }}
         className="doc-form-shell"
-        onSubmit={(e) => preventOver100DiscountSubmit(e, lines)}
+        onSubmit={(e) => {
+          if (preventOver100DiscountSubmit(e, lines)) return;
+          if (
+            linkedReturn &&
+            preventReturnQtyExceededSubmit(
+              e,
+              sourceQtyLines,
+              priorReturnLines,
+              lines,
+              PURCHASE_RETURN_QTY_MESSAGE,
+            )
+          ) {
+            return;
+          }
+        }}
       >
         <IdempotencyField />
         <input type="hidden" name="documentType" value={documentType} />

@@ -1,3 +1,7 @@
+## 2026-10-18 — Closing residual 1.01, aggregate return qty, taxed full credit, retained stock error (v2.5.15)
+
+QA HANDOFF on v2.5.14: 87 bounded manual checks, 70 passed / 11 failed / 6 inconclusive. Closing linked returns take leftover source net so the last of 6.95 after 5.94 previews and posts 1.01. Return rows of the same SKU are aggregated (2+2 vs 3 refused). A discounted taxable full return keeps header 13.50 and credits 302.67. Stock shortage keeps the invoice form. See [CHG-20261018-residual-duplicate-tax-form](changes/CHG-20261018-residual-duplicate-tax-form.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.15 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-17 — Linked return party, residual rounding, source price, retained validation (v2.5.14)
 
 QA HANDOFF on v2.5.13: 95 bounded manual checks, 88 passed / 6 failed / 1 inconclusive. Source-linked sales and purchase returns inherit and lock the original party; a different party is rejected before mutation. Linked return unit prices are locked so preview matches the posted source credit. The last remaining unit of a 2.99 source previews and posts 0.99. Invalid 150% line discount keeps the entered invoice form. See [CHG-20261017-return-party-rounding-validation](changes/CHG-20261017-return-party-rounding-validation.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.14 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -46,8 +46,9 @@ export default async function NewPurchaseReturnPage({
         sourceDocumentId={sp.from ?? null}
         initialHeaderDiscount={source?.discountTotal ?? 0}
         initialPartyName={source?.partyName ?? returnSource?.partyName ?? null}
-        sourceTotal={source?.total ?? returnSource?.sourceTotal ?? 0}
-        alreadyReturnedTotal={returnSource?.alreadyReturnedTotal ?? 0}
+        sourceTotal={returnSource?.sourceNet ?? source?.subtotal ?? 0}
+        sourceVatRate={returnSource?.vatRate ?? 0}
+        alreadyReturnedTotal={returnSource?.alreadyReturnedNet ?? 0}
         priorReturnLines={returnSource?.priorReturnLines ?? []}
         sourceQtyLines={
           source

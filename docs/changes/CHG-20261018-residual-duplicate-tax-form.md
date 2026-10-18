@@ -1,0 +1,27 @@
+# CHG-20261018-residual-duplicate-tax-form — closing residual 1.01, aggregate return qty, taxed full credit, retained stock error (v2.5.15)
+
+Status: ready-for-QA.
+
+- Author/agent and date: Grok coding agent, 2026-10-18.
+- Product version (`VERSION` file) and base SHA / branch/PR: 2.5.15 on `master` after `a36af04` (v2.5.14).
+- QA repository revision and companion PR/change ID: [HANDOFF-20261018-v2514-resume](https://github.com/Dinu-Sri/bookone-qa/blob/a796051298e0e7e24bd318874c2f3cb835ede8bc/handoffs/HANDOFF-20261018-v2514-resume.md); [RUN-20261018-v2514-resume](https://github.com/Dinu-Sri/bookone-qa/blob/a796051298e0e7e24bd318874c2f3cb835ede8bc/runs/RUN-20261018-v2514-resume.md). Companion QA remains [draft PR #41](https://github.com/Dinu-Sri/bookone-qa/pull/41). Pin `a796051`. No QA merge/deploy by this change.
+- Intended before/after behaviour with a concrete example:
+  - P1 OBS-N18-RESIDUAL / N18-031–034: INV0003 is 7×1 header 0.05 = 6.95. Six credits of 0.99 leave 1.01. The final unit previews Subtotal 1.01 / Discount 0 / Total 1.01 and posts 1.01 so source due is 0. New ladders cap remaining header so later non-closing units do not over-allocate. The 3×1 header 0.01 control still previews and posts 1+1+0.99.
+  - P1 OBS-N18-DUPLICATE-QTY / N18-036–039: INV0004 sold 3. Two return rows of 2+2 are refused atomically (client toast and server). Split 1+1 of 3 keeps source unit price 100 on both rows. Add-product remains.
+  - P1 OBS-N18-TAX-GROSS-NET / N18-043–044: INV0005 net 256.50, VAT 46.17, gross 302.67. A valid full return keeps header 13.50 and posts gross 302.67. Residual runs in net space. No-header 100+18=118 still posts 118.
+  - P2 OBS-N18-INPUT-RETENTION / N18-079: stock shortage (and other business/validation errors) return `{ok:false,error}` without redirecting to the list. The invoice form keeps entered customer/lines and toasts the message. 150% still refuses posting and stays on the form.
+- Existing behaviour that must remain correct: matching-party linked returns; source-price lock 85.50/171; 2.99 last unit 0.99; historical AR 181/251; quote/invoice Subtotal 270 / Discount 13.50 / Total 256.50; 150% client denial; D12-008/D12-035/N13-068 unchanged.
+- Actual changed paths/symbols/routes: `packages/accounting/src/document-guards.ts` (`returnQtyExceeded` aggregates this-document rows; remaining-header cap; `applyClosingReturnResidual` lifts net when remaining > line net; `prorateLinkedReturn` consumes a source qty pool; `linkedReturnPreviewTotals`); `createCommercialDocument` residual net + posted `supplyExVat` from residual total; `createCommercialDocumentFromForm` returns errors instead of `?err=` list redirects; sales/purchase/invoice/quote create forms toast and stay.
+- Business rule/profile/scenario IDs: N18-031, N18-032, N18-033, N18-034, N18-036, N18-037, N18-038, N18-039, N18-043, N18-044, N18-079. Rulebook 1.0.0 / hash `abcdd8970b1c36e62a97c6a111d6088ca97067ad3d6e954f64250b67989b39fc`.
+- Accounting, stock/rental, tenant/access and customer-data effects: closing linked credits conserve source net (and gross after source VAT). Excess return quantity cannot post. Invalid stock/validation does not discard the form or mutate money/stock. No tenant GUC or RLS change. Keep N18/D2513/D2512 fixtures including INV0003/SR0003–0009, INV0004/SR0010, INV0005, INV0006, PR0004.
+- Migrations, schema/history compatibility and recovery implications: none. Do not collect or write off the 0.01 on INV0003; do not delete SR0010 or repair INV0005.
+- Dependencies, settings/flags, deployment and external-service changes: Portainer Re-pull ON after Docker web image. Quote `v2.5.15 · <sha7>`. No new env vars. No migration.
+- Independent diff/impact review and uncertainties: live browser stamp blocked. Do not replay staging payments. Encrypted backup last. BookOne is not customer-ready. Same-tenant party tests do not prove cross-tenant isolation. Stock quantity/layer/location still largely unobserved except this form-retention path.
+- Checks executed: `Set-Location packages/accounting; node node_modules/vitest/vitest.mjs run` — 10 files, 118 passed. Independent cases: last of 6.95 after 5.94 is 1.01 with Subtotal 1.01 / Discount 0; 3×1 header 0.01 still 0.99; 2+2 vs 3 qty exceeded; split 1+1 keeps unit price 100; full TAX header 13.50 net 256.50 VAT 46.17 gross 302.67 not exceeded; no-header 118. Live browser stamp blocked. Do not replay staging payments.
+- Failed/skipped/flaky/blocked/not-run checks and reasons: no live restricted-DB HTTP. Browser live-stamp pending QA. Do not replay staging payments. Backup last.
+- New QA assertions or outstanding work: pin `v2.5.15 · <sha7>` and rerun N18-031–034, N18-036–039, N18-043–044, N18-079 plus 2.99 control, 85.50/171, 118 no-header tax, 150% form retain, matching-party. Do not close observations from this code change alone. Do not blanket-close BUG-0062. Next QA coverage: PO, partial GRN, billing/GRNI, approval and stock layers.
+- Created staging records/cleanup, if any: none. Preserve INV0003/SR0003–0009 residual 0.01, INV0004/SR0010, INV0005 at 302.67, INV0006 at 3.53, INV0009 remainder 0.99, PR0004, older SR0010, INV0003 future receipt.
+- Documentation updated: this record, TASK_LOG, PROJECT_STATUS.
+- Next exact action and responsible role: Docker web image green, Portainer Update Re-pull ON; QA pins the stamp and reruns. Do not weaken assertions.
+
+Final product/QA SHAs belong in PR metadata and external run manifests after commit. Do not label the change verified from code review alone.

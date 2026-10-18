@@ -14,6 +14,8 @@ import {
   lineDiscountAmount as computeLineDiscountAmount,
   percentDiscountOver100,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
+  returnQtyExceeded,
+  type QtyLine,
 } from '@bookone/accounting';
 
 export type DocLineState = {
@@ -79,6 +81,36 @@ export function preventOver100DiscountSubmit(e: FormEvent, lines: DocLineState[]
   e.preventDefault();
   pushStatusToast({ kind: 'error', message: PERCENT_DISCOUNT_OVER_100_MESSAGE });
   return true;
+}
+
+export function qtyLinesFromDocState(lines: DocLineState[]): QtyLine[] {
+  return lines.map((line) => ({
+    productId: line.productId || null,
+    description: line.description,
+    quantity: Number(String(line.quantity).replace(/[^0-9.-]/g, '')) || 0,
+  }));
+}
+
+export function preventReturnQtyExceededSubmit(
+  e: FormEvent,
+  sourceLines: QtyLine[],
+  priorReturnLines: QtyLine[],
+  thisLines: DocLineState[],
+  message: string,
+): boolean {
+  if (!sourceLines.length) return false;
+  if (!returnQtyExceeded(sourceLines, priorReturnLines, qtyLinesFromDocState(thisLines))) return false;
+  e.preventDefault();
+  pushStatusToast({ kind: 'error', message });
+  return true;
+}
+
+export async function toastIfFormError(
+  result: { ok: false; error: string } | void | undefined,
+): Promise<void> {
+  if (result && result.ok === false) {
+    pushStatusToast({ kind: 'error', message: result.error });
+  }
 }
 
 function isSourceLockedLine(line: DocLineState): boolean {

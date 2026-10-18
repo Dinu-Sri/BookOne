@@ -10,6 +10,7 @@ import { createQuickProduct } from '@/app/actions/inventory';
 import { ProductAddSearch, type ProductPick } from '@/components/module/product-add-search';
 import { QtyStepper } from '@/components/module/qty-stepper';
 import { pushStatusToast } from '@/components/layout/status-toast';
+import { withFormPending } from '@/components/ui/form-busy';
 import {
   lineDiscountAmount as computeLineDiscountAmount,
   percentDiscountOver100,
@@ -111,6 +112,29 @@ export async function toastIfFormError(
   if (result && result.ok === false) {
     pushStatusToast({ kind: 'error', message: result.error });
   }
+}
+
+function appendSubmitter(fd: FormData, event: FormEvent<HTMLFormElement>): void {
+  const submitter = (event.nativeEvent as SubmitEvent).submitter;
+  if (submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement) {
+    if (submitter.name) fd.set(submitter.name, submitter.value);
+  }
+}
+
+/**
+ * Submit a commercial create form without letting React reset uncontrolled fields.
+ * Business errors toast and leave dates/notes/selects as entered. Redirects still throw through.
+ */
+export async function submitRetainingFields(
+  event: FormEvent<HTMLFormElement>,
+  action: (formData: FormData) => Promise<{ ok: false; error: string } | void>,
+): Promise<void> {
+  event.preventDefault();
+  const fd = new FormData(event.currentTarget);
+  appendSubmitter(fd, event);
+  await withFormPending(async () => {
+    await toastIfFormError(await action(fd));
+  });
 }
 
 function isSourceLockedLine(line: DocLineState): boolean {

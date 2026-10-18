@@ -1,0 +1,26 @@
+# CHG-20261018-preview-cap-residual-form-retain — preview header cap, residual line representation, retain fields on error (v2.5.16)
+
+Status: ready-for-QA.
+
+- Author/agent and date: Grok coding agent, 2026-10-18.
+- Product version (`VERSION` file) and base SHA / branch/PR: 2.5.16 on `master` after `158ddc2` (v2.5.15).
+- QA repository revision and companion PR/change ID: [HANDOFF-20261018-pr43-review](https://github.com/Dinu-Sri/bookone-qa/blob/qa/pr43-review-20261018/handoffs/HANDOFF-20261018-pr43-review.md); [REVIEW-20261018-pr43](https://github.com/Dinu-Sri/bookone-qa/blob/qa/pr43-review-20261018/reviews/REVIEW-20261018-pr43.md); [CHECKS-20261018-pr43-source-review](https://github.com/Dinu-Sri/bookone-qa/blob/qa/pr43-review-20261018/runs/CHECKS-20261018-pr43-source-review.json). Companion QA remains [draft PR #44](https://github.com/Dinu-Sri/bookone-qa/pull/44). No QA merge/deploy by this change.
+- Intended before/after behaviour with a concrete example:
+  - P2 OBS-R43 field loss / R43-E01: a stock (or other business) refusal toasts and keeps every submitted invoice field, including uncontrolled dates, notes and payment mode. Client 150% denial still stays on the form. Success still redirects. Draft/post/print intent and the idempotency key still submit.
+  - P2 OBS-R43-PREVIEW-HEADER-CAP / R43-F07/F10: fresh 7×1 header 0.05 credits are 0.99,0.99,0.99,0.99,0.99,1.00,1.00 with preview equal to posting at every step. Fresh 10×1 is five 0.99 then five 1.00. The 3×1 / 2.99 control stays 1.00,1.00,0.99.
+  - P1 OBS-R43-LEGACY-REPRESENTATION / R43-U07/U10: legacy last credit stays 1.01 (after 5.94) and 1.04 (after 8.91). The helper returns an explicit `allocationAdjustment` applied to the last line total; line sum minus header equals the credit. Source unit price stays 1.00. Issued prior credits are unchanged.
+- Existing behaviour that must remain correct: matching-party linked returns; source-price lock 85.50/171; taxed full return 302.67; no-header 118; 150% client denial; D12-008/D12-035/N13-068 unchanged. Frozen P15-01 stays blocked and untouched.
+- Actual changed paths/symbols/routes: `prorateLinkedReturn` writes `allocationAdjustment` onto the last line total; `linkedReturnDocumentTotals` is the shared preview/posting path; sales and purchase return previews call it; commercial create forms submit through `submitRetainingFields` (preventDefault + `withFormPending`) so React does not reset uncontrolled fields on a resolved error.
+- Business rule/profile/scenario IDs: R43-E01, R43-E02, R43-F07, R43-F10, R43-C03, R43-U07, R43-U10. WB-HYB.J02.C10/C11, WB-CORE.J06.C06/C07. Rulebook 1.0.0 / hash `abcdd8970b1c36e62a97c6a111d6088ca97067ad3d6e954f64250b67989b39fc`.
+- Accounting, stock/rental, tenant/access and customer-data effects: preview and posting share remaining-header and residual math. Legacy residual cents stay 1.01/1.04 with a represented line adjustment. Failed creates do not mutate documents, journals, AR or stock. No tenant GUC or RLS change. Keep N18/D2513/D2512 fixtures.
+- Migrations, schema/history compatibility and recovery implications: none. Do not fabricate upgrade fixtures in SQL. Isolated upgrade of v2.5.14 `a36af04` remains blocked until that environment exists.
+- Dependencies, settings/flags, deployment and external-service changes: Portainer Re-pull ON after Docker web image. Quote `v2.5.16 · <sha7>`. No new env vars. No migration. No new dependencies.
+- Independent diff/impact review and uncertainties: live browser stamp blocked here. Source diagnostic re-run belongs to QA on a new manifest. Isolated upgrade execution remains blocked. Encrypted backup last. BookOne is not customer-ready.
+- Checks executed: `Set-Location packages/accounting; node node_modules/vitest/vitest.mjs run` — 10 files, 123 passed. Independent cases: fresh 7-unit 0.99×5 then 1.00×2 preview=posting conserved 6.95; fresh 10-unit 0.99×5 then 1.00×5 conserved 9.95; 2.99 control 1+1+0.99; legacy 5.94→1.01 line sum 1.01 adjustment 0.01 unit price 1; legacy 8.91→1.04 line sum 1.04 adjustment 0.04. Live browser stamp blocked. Do not replay staging payments.
+- Failed/skipped/flaky/blocked/not-run checks and reasons: no live restricted-DB HTTP. Browser live-stamp and React DOM lifecycle pending QA. Isolated upgrade environment not prepared. Do not replay staging payments. Backup last.
+- New QA assertions or outstanding work: pin `v2.5.16 · <sha7>`, rerun source diagnostics on a new manifest, then R43-E01 (all fields), R43-E02, R43-F07, R43-F10, R43-C03, plus 85.50/171, 302.67, 118, matching-party. R43-U07/U10 stay blocked until isolated upgrade infrastructure exists. Do not close observations from this code change alone. Do not blanket-close return findings.
+- Created staging records/cleanup, if any: none. Preserve INV0003/SR0003–0009, INV0004/SR0010, INV0005, INV0006, INV0009, PR0004, P15-01 blocked result.
+- Documentation updated: this record, TASK_LOG, PROJECT_STATUS.
+- Next exact action and responsible role: Docker web image green, Portainer Update Re-pull ON; QA pins the stamp, reruns source diagnostics, then field-retention and fresh ladder browser cases.
+
+Final product/QA SHAs belong in PR metadata and external run manifests after commit. Do not label the change verified from code review alone.

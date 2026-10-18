@@ -7,6 +7,7 @@ import {
   isClosingLinkedReturn,
   issuedOnOrBeforeAsOf,
   lineDiscountAmount,
+  linkedReturnDocumentTotals,
   linkedReturnPartyMismatch,
   linkedReturnPreviewTotals,
   percentDiscountOver100,
@@ -335,6 +336,9 @@ describe('closing residual conserves 7×1 header 0.05 = 6.95', () => {
     expect(out.total).toBe(1.01);
     expect(out.headerDiscount).toBe(0);
     expect(out.lineNet).toBe(1.01);
+    expect(out.allocationAdjustment).toBe(0.01);
+    expect(out.lines[0]?.unitPrice).toBe(1);
+    expect(Math.round(out.lines.reduce((s, l) => s + l.lineTotal, 0) * 100) / 100).toBe(1.01);
     expect(out.lineNet - out.headerDiscount).toBe(out.total);
     const preview = linkedReturnPreviewTotals(1, 0, 6.95, 5.94, true);
     expect(preview).toEqual({
@@ -436,5 +440,108 @@ describe('discounted taxable full return keeps net, header and gross', () => {
     expect(preview.vat).toBe(18);
     expect(preview.total).toBe(118);
     expect(returnValueExceeded(118, 0, 118)).toBe(false);
+  });
+});
+
+function money(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function lineSum(lines: { lineTotal: number }[]) {
+  return money(lines.reduce((s, l) => s + l.lineTotal, 0));
+}
+
+function ladderStep(sourceQty: number, header: number, priorCount: number, priorTotal: number) {
+  const source = [
+    { productId: 'sku', description: 'Digit', quantity: sourceQty, unitPrice: 1, discountAmount: 0 },
+  ];
+  const unit = { productId: 'sku', description: 'Digit', quantity: 1 };
+  const prior = {
+    sourceTotal: money(sourceQty - header),
+    priorReturnTotal: priorTotal,
+    priorReturnLines: Array.from({ length: priorCount }, () => unit),
+  };
+  const posting = prorateLinkedReturn(source, header, [unit], prior);
+  const preview = linkedReturnDocumentTotals(source, header, [unit], prior);
+  return { posting, preview };
+}
+
+describe('fresh capped-header ladders preview equals posting', () => {
+  it('seven units: 0.99×5 then 1.00×2, conserved 6.95', () => {
+    const expected = [0.99, 0.99, 0.99, 0.99, 0.99, 1, 1];
+    let priorTotal = 0;
+    for (let i = 0; i < expected.length; i++) {
+      const { posting, preview } = ladderStep(7, 0.05, i, priorTotal);
+      expect(posting.total).toBe(expected[i]);
+      expect(preview.net).toBe(expected[i]);
+      expect(preview.total).toBe(expected[i]);
+      expect(lineSum(posting.lines) - posting.headerDiscount).toBe(posting.total);
+      priorTotal = money(priorTotal + posting.total);
+    }
+    expect(priorTotal).toBe(6.95);
+  });
+
+  it('ten units: 0.99×5 then 1.00×5, conserved 9.95', () => {
+    const expected = [0.99, 0.99, 0.99, 0.99, 0.99, 1, 1, 1, 1, 1];
+    let priorTotal = 0;
+    for (let i = 0; i < expected.length; i++) {
+      const { posting, preview } = ladderStep(10, 0.05, i, priorTotal);
+      expect(posting.total).toBe(expected[i]);
+      expect(preview.net).toBe(expected[i]);
+      expect(lineSum(posting.lines) - posting.headerDiscount).toBe(posting.total);
+      priorTotal = money(priorTotal + posting.total);
+    }
+    expect(priorTotal).toBe(9.95);
+  });
+
+  it('three-unit 2.99 control: 1.00, 1.00, 0.99', () => {
+    const expected = [1, 1, 0.99];
+    let priorTotal = 0;
+    for (let i = 0; i < expected.length; i++) {
+      const { posting, preview } = ladderStep(3, 0.01, i, priorTotal);
+      expect(posting.total).toBe(expected[i]);
+      expect(preview.net).toBe(expected[i]);
+      expect(lineSum(posting.lines) - posting.headerDiscount).toBe(posting.total);
+      priorTotal = money(priorTotal + posting.total);
+    }
+    expect(priorTotal).toBe(2.99);
+  });
+});
+
+describe('legacy residual represents allocation on the last line', () => {
+  it('six 0.99 credits against 6.95 close at 1.01 with line sum 1.01', () => {
+    const source = [
+      { productId: 'sku', description: 'Digit', quantity: 7, unitPrice: 1, discountAmount: 0 },
+    ];
+    const unit = { productId: 'sku', description: 'Digit', quantity: 1 };
+    const out = prorateLinkedReturn(source, 0.05, [unit], {
+      sourceTotal: 6.95,
+      priorReturnTotal: 5.94,
+      priorReturnLines: Array.from({ length: 6 }, () => unit),
+    });
+    expect(out.total).toBe(1.01);
+    expect(out.allocationAdjustment).toBe(0.01);
+    expect(out.headerDiscount).toBe(0);
+    expect(out.lines[0]?.unitPrice).toBe(1);
+    expect(lineSum(out.lines)).toBe(1.01);
+    expect(lineSum(out.lines) - out.headerDiscount).toBe(out.total);
+  });
+
+  it('nine 0.99 credits against 9.95 close at 1.04 with line sum 1.04', () => {
+    const source = [
+      { productId: 'sku', description: 'Digit', quantity: 10, unitPrice: 1, discountAmount: 0 },
+    ];
+    const unit = { productId: 'sku', description: 'Digit', quantity: 1 };
+    const out = prorateLinkedReturn(source, 0.05, [unit], {
+      sourceTotal: 9.95,
+      priorReturnTotal: 8.91,
+      priorReturnLines: Array.from({ length: 9 }, () => unit),
+    });
+    expect(out.total).toBe(1.04);
+    expect(out.allocationAdjustment).toBe(0.04);
+    expect(out.headerDiscount).toBe(0);
+    expect(out.lines[0]?.unitPrice).toBe(1);
+    expect(lineSum(out.lines)).toBe(1.04);
+    expect(lineSum(out.lines) - out.headerDiscount).toBe(out.total);
   });
 });

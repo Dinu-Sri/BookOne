@@ -284,6 +284,7 @@ export function prorateLinkedReturn(
   headerDiscount: number;
   lineNet: number;
   total: number;
+  allocationAdjustment: number;
 } {
   const pool = new Map<string, SourceQtyPool>();
   for (const s of sourceLines) {
@@ -356,6 +357,7 @@ export function prorateLinkedReturn(
     headerDiscount = Math.min(headerDiscount, budget);
   }
   let total = Math.max(0, Math.round((lineNet - headerDiscount) * 100) / 100);
+  let allocationAdjustment = 0;
   if (prior) {
     const sourceTotal =
       prior.sourceTotal ?? Math.round((srcLineNet - sourceHeaderDiscount) * 100) / 100;
@@ -378,8 +380,51 @@ export function prorateLinkedReturn(
     headerDiscount = residual.headerDiscount;
     total = residual.total;
     lineNet = residual.lineNet;
+    const persistable = Math.round(lines.reduce((s, l) => s + l.lineTotal, 0) * 100) / 100;
+    allocationAdjustment = Math.round((lineNet - persistable) * 100) / 100;
+    if (allocationAdjustment !== 0) {
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i];
+        if (!line || Number(line.quantity) <= 0) continue;
+        line.lineTotal = Math.round((line.lineTotal + allocationAdjustment) * 100) / 100;
+        break;
+      }
+    }
   }
-  return { lines, headerDiscount, lineNet, total };
+  return { lines, headerDiscount, lineNet, total, allocationAdjustment };
+}
+
+/**
+ * Shared sales/purchase preview and posting totals for a linked return.
+ * Remaining-header cap and closing residual run in prorateLinkedReturn.
+ */
+export function linkedReturnDocumentTotals(
+  sourceLines: ProrateSourceLine[],
+  sourceHeaderDiscount: number,
+  returnLines: ProrateReturnLine[],
+  prior: LinkedReturnPrior | undefined,
+  vatRatePercent = 0,
+): {
+  subtotal: number;
+  headerDiscount: number;
+  net: number;
+  vat: number;
+  total: number;
+  allocationAdjustment: number;
+} {
+  const out = prorateLinkedReturn(sourceLines, sourceHeaderDiscount, returnLines, prior);
+  const vat =
+    vatRatePercent > 0
+      ? Math.round(((out.total * vatRatePercent) / 100) * 100) / 100
+      : 0;
+  return {
+    subtotal: out.lineNet,
+    headerDiscount: out.headerDiscount,
+    net: out.total,
+    vat,
+    total: Math.round((out.total + vat) * 100) / 100,
+    allocationAdjustment: out.allocationAdjustment,
+  };
 }
 
 export type LineDiscountInput = {

@@ -63,6 +63,7 @@ export {
   isClosingLinkedReturn,
   applyClosingReturnResidual,
   linkedReturnPreviewTotals,
+  linkedReturnDocumentTotals,
   remainingLinkedHeaderDiscount,
   linkedReturnPartyMismatch,
   issuedOnOrBeforeAsOf,

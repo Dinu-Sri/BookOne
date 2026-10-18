@@ -12,10 +12,9 @@ import {
   searchInvoicesForReturn,
 } from '@/app/actions/commercial-docs';
 import {
-  isClosingLinkedReturn,
-  linkedReturnPreviewTotals,
-  prorateSourceHeader,
+  linkedReturnDocumentTotals,
   SALES_RETURN_QTY_MESSAGE,
+  type ProrateSourceLine,
 } from '@bookone/accounting';
 import { todayString } from '@/components/module/list-page';
 import {
@@ -23,7 +22,7 @@ import {
   computeLineAmounts,
   preventOver100DiscountSubmit,
   preventReturnQtyExceededSubmit,
-  toastIfFormError,
+  submitRetainingFields,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -106,7 +105,6 @@ export function SalesDocumentForm({
   const [headerDiscountType, setHeaderDiscountType] = useState<'percent' | 'fixed'>('fixed');
   const [discountId, setDiscountId] = useState('');
   const [sourceHeaderDiscount, setSourceHeaderDiscount] = useState(0);
-  const [sourceLineNet, setSourceLineNet] = useState(0);
   const [sourceTotal, setSourceTotal] = useState(0);
   const [sourceNet, setSourceNet] = useState(0);
   const [sourceVatRate, setSourceVatRate] = useState(0);
@@ -118,6 +116,7 @@ export function SalesDocumentForm({
   const [sourceQtyLines, setSourceQtyLines] = useState<
     { productId: string | null; description: string; quantity: number }[]
   >([]);
+  const [sourcePricedLines, setSourcePricedLines] = useState<ProrateSourceLine[]>([]);
   const [lines, setLines] = useState<DocLineState[]>([]);
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
@@ -163,7 +162,6 @@ export function SalesDocumentForm({
     setHeaderDiscount('0');
     setHeaderDiscountType('fixed');
     setSourceHeaderDiscount(0);
-    setSourceLineNet(0);
     setSourceTotal(0);
     setSourceNet(0);
     setSourceVatRate(0);
@@ -171,6 +169,7 @@ export function SalesDocumentForm({
     setAlreadyReturnedNet(0);
     setPriorReturnLines([]);
     setSourceQtyLines([]);
+    setSourcePricedLines([]);
   }
 
   async function pickSourceInvoice(id: string, label: string) {
@@ -187,14 +186,7 @@ export function SalesDocumentForm({
     setHeaderDiscount(String(loaded.headerDiscount || 0));
     setHeaderDiscountType('fixed');
     setDiscountId('');
-    const srcLineNet = loaded.lines.reduce((s, l) => {
-      const qty = Number(l.quantity) || 0;
-      const price = Number(l.unitPrice) || 0;
-      const disc = Number(l.discountAmount) || 0;
-      return s + qty * price - disc;
-    }, 0);
     setSourceHeaderDiscount(loaded.headerDiscount || 0);
-    setSourceLineNet(Math.round(srcLineNet * 100) / 100);
     setSourceTotal(loaded.sourceTotal || 0);
     setSourceNet(loaded.sourceNet || loaded.sourceTotal || 0);
     setSourceVatRate(loaded.vatRate || 0);
@@ -206,6 +198,15 @@ export function SalesDocumentForm({
         productId: l.productId || null,
         description: l.description,
         quantity: Number(l.quantity) || 0,
+      })),
+    );
+    setSourcePricedLines(
+      loaded.lines.map((l) => ({
+        productId: l.productId || null,
+        description: l.description,
+        quantity: Number(l.quantity) || 0,
+        unitPrice: Number(l.unitPrice) || 0,
+        discountAmount: Number(l.discountAmount) || 0,
       })),
     );
     setLines(
@@ -238,6 +239,24 @@ export function SalesDocumentForm({
   );
 
   const computed = useMemo(() => {
+    if (sourceInvoiceId && sourcePricedLines.length > 0) {
+      const preview = linkedReturnDocumentTotals(
+        sourcePricedLines,
+        sourceHeaderDiscount,
+        lines.map((l) => ({
+          productId: l.productId || null,
+          description: l.description,
+          quantity: Number(String(l.quantity).replace(/[^0-9.-]/g, '')) || 0,
+        })),
+        {
+          sourceTotal: sourceNet || sourceTotal,
+          priorReturnTotal: alreadyReturnedNet || alreadyReturnedTotal,
+          priorReturnLines,
+        },
+        sourceVatRate,
+      );
+      return { subtotal: preview.subtotal, discountAmt: preview.headerDiscount, total: preview.total };
+    }
     const lineAmounts = computeLineAmounts(lines);
     const subtotal = Math.round(lineAmounts.reduce((s, a) => s + a, 0) * 100) / 100;
     let discountAmt = 0;
@@ -249,8 +268,6 @@ export function SalesDocumentForm({
             ? Math.round(((subtotal * Number(d.value)) / 100) * 100) / 100
             : Number(d.value);
       }
-    } else if (sourceInvoiceId && sourceHeaderDiscount > 0 && sourceLineNet > 0) {
-      discountAmt = prorateSourceHeader(sourceHeaderDiscount, sourceLineNet, subtotal);
     } else {
       const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
       if (v > 0) {
@@ -261,27 +278,7 @@ export function SalesDocumentForm({
       }
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
-    let total = Math.round((subtotal - discountAmt) * 100) / 100;
-    const residualNet = sourceNet || sourceTotal;
-    if (sourceInvoiceId && residualNet > 0) {
-      const preview = linkedReturnPreviewTotals(
-        total,
-        discountAmt,
-        residualNet,
-        alreadyReturnedNet || alreadyReturnedTotal,
-        isClosingLinkedReturn(
-          sourceQtyLines,
-          priorReturnLines,
-          lines.map((l) => ({
-            productId: l.productId || null,
-            description: l.description,
-            quantity: Number(String(l.quantity).replace(/[^0-9.-]/g, '')) || 0,
-          })),
-        ),
-        sourceVatRate,
-      );
-      return { subtotal: preview.subtotal, discountAmt: preview.headerDiscount, total: preview.total };
-    }
+    const total = Math.round((subtotal - discountAmt) * 100) / 100;
     return { subtotal, discountAmt, total };
   }, [
     lines,
@@ -291,23 +288,19 @@ export function SalesDocumentForm({
     discounts,
     sourceInvoiceId,
     sourceHeaderDiscount,
-    sourceLineNet,
+    sourcePricedLines,
     sourceTotal,
     sourceNet,
     sourceVatRate,
     alreadyReturnedTotal,
     alreadyReturnedNet,
     priorReturnLines,
-    sourceQtyLines,
   ]);
 
   return (
     <form
-      action={async (fd) => {
-        await toastIfFormError(await createCommercialDocumentFromForm(fd));
-      }}
       className="doc-form-shell"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         if (preventOver100DiscountSubmit(e, lines)) return;
         if (
           isReturn &&
@@ -321,6 +314,7 @@ export function SalesDocumentForm({
         ) {
           return;
         }
+        await submitRetainingFields(e, createCommercialDocumentFromForm);
       }}
     >
       <IdempotencyField />

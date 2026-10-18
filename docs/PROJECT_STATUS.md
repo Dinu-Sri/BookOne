@@ -1,3 +1,7 @@
+## 2026-10-18 — Preview header cap, residual line representation, retain fields on error (v2.5.16)
+
+QA PR #44 review of v2.5.15: source diagnostics 13 checks, 7 passed / 6 failed. Linked-return preview now shares remaining-header cap and residual math with posting. Legacy 1.01/1.04 credits keep an explicit last-line allocation adjustment. Failed commercial creates keep submitted dates, notes and selects. See [CHG-20261018-preview-cap-residual-form-retain](changes/CHG-20261018-preview-cap-residual-form-retain.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.16 · <sha7>`. Isolated upgrade cases remain blocked. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-18 — Closing residual 1.01, aggregate return qty, taxed full credit, retained stock error (v2.5.15)
 
 QA HANDOFF on v2.5.14: 87 bounded manual checks, 70 passed / 11 failed / 6 inconclusive. Closing linked returns take leftover source net so the last of 6.95 after 5.94 previews and posts 1.01. Return rows of the same SKU are aggregated (2+2 vs 3 refused). A discounted taxable full return keeps header 13.50 and credits 302.67. Stock shortage keeps the invoice form. See [CHG-20261018-residual-duplicate-tax-form](changes/CHG-20261018-residual-duplicate-tax-form.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.15 · <sha7>`. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

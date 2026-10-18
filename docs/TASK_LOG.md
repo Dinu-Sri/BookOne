@@ -1,3 +1,9 @@
+## 2026-10-18 — Preview header cap, residual line representation, retain fields on error (v2.5.16)
+
+- Record: [CHG-20261018-preview-cap-residual-form-retain](changes/CHG-20261018-preview-cap-residual-form-retain.md). QA [HANDOFF-20261018-pr43-review](https://github.com/Dinu-Sri/bookone-qa/blob/qa/pr43-review-20261018/handoffs/HANDOFF-20261018-pr43-review.md) on v2.5.15 · 158ddc2 (source diagnostics 13 checks: 7 pass / 6 fail). Draft QA PR #44. PR43 10 pass / 1 fail / 1 blocked preserved.
+- Sales and purchase linked-return preview uses the same remaining-header and residual path as posting (fresh 7-unit 99×5 then 100×2; 10-unit 99×5 then 100×5). Legacy last credits stay 1.01 and 1.04 with `allocationAdjustment` on the last line total. Commercial create forms preventDefault and keep uncontrolled dates/notes/selects on business rejection. Isolated upgrade of v2.5.14 fixtures remains blocked. P15-01 stays untouched.
+- Next: Docker web image green, Portainer Update Re-pull ON, QA pins `v2.5.16 · <sha7>`, reruns source diagnostics on a new manifest, then R43-E01/E02/F07/F10/C03. R43-U07/U10 wait for isolated upgrade infrastructure. Do not replay staging payments. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-18 — Closing residual 1.01, aggregate return qty, taxed full credit, retained stock error (v2.5.15)
 
 - Record: [CHG-20261018-residual-duplicate-tax-form](changes/CHG-20261018-residual-duplicate-tax-form.md). QA [HANDOFF-20261018-v2514-resume](https://github.com/Dinu-Sri/bookone-qa/blob/a796051298e0e7e24bd318874c2f3cb835ede8bc/handoffs/HANDOFF-20261018-v2514-resume.md) on v2.5.14 · a36af04 (87 checks: 70 pass / 11 fail / 6 inconclusive). Draft QA PR #41.

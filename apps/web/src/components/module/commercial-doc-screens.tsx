@@ -9,10 +9,9 @@
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import {
-  isClosingLinkedReturn,
-  linkedReturnPreviewTotals,
-  prorateSourceHeader,
+  linkedReturnDocumentTotals,
   PURCHASE_RETURN_QTY_MESSAGE,
+  type ProrateSourceLine,
 } from '@bookone/accounting';
 import {
   createCommercialDocumentFromForm,
@@ -24,7 +23,7 @@ import {
   computeLineAmounts,
   preventOver100DiscountSubmit,
   preventReturnQtyExceededSubmit,
-  toastIfFormError,
+  submitRetainingFields,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -264,17 +263,21 @@ export function CommercialDocNewForm({
   const [discountId, setDiscountId] = useState('');
   const linkedReturn = documentType === 'purchase_return' && Boolean(sourceDocumentId);
   const sourceHeaderSnapshot = linkedReturn ? Number(initialHeaderDiscount) || 0 : 0;
-  const sourceLineNetSnapshot =
-    linkedReturn && initialLines?.length
-      ? Math.round(
-          initialLines.reduce((s, l) => {
-            const qty = Number(String(l.sourceQuantity ?? l.quantity).replace(/[^0-9.-]/g, '')) || 0;
-            const price = Number(String(l.unitPrice).replace(/[^0-9.-]/g, '')) || 0;
-            const disc = Number(String(l.sourceDiscountAmount ?? '0').replace(/[^0-9.-]/g, '')) || 0;
-            return s + qty * price - disc;
-          }, 0) * 100,
-        ) / 100
-      : 0;
+  const sourcePricedLines: ProrateSourceLine[] = useMemo(
+    () =>
+      linkedReturn
+        ? (initialLines ?? [])
+            .filter((l) => l.sourceQuantity != null && l.sourceQuantity !== '')
+            .map((l) => ({
+              productId: l.productId || null,
+              description: l.description,
+              quantity: Number(String(l.sourceQuantity).replace(/[^0-9.-]/g, '')) || 0,
+              unitPrice: Number(String(l.unitPrice).replace(/[^0-9.-]/g, '')) || 0,
+              discountAmount: Number(String(l.sourceDiscountAmount ?? '0').replace(/[^0-9.-]/g, '')) || 0,
+            }))
+        : [],
+    [linkedReturn, initialLines],
+  );
 
   const handleSearchActive = useCallback(
     (active: boolean) => {
@@ -289,6 +292,24 @@ export function CommercialDocNewForm({
   );
 
   const computed = useMemo(() => {
+    if (linkedReturn && sourcePricedLines.length > 0 && (sourceTotalProp ?? 0) > 0) {
+      const preview = linkedReturnDocumentTotals(
+        sourcePricedLines,
+        sourceHeaderSnapshot,
+        lines.map((l) => ({
+          productId: l.productId || null,
+          description: l.description,
+          quantity: Number(String(l.quantity).replace(/[^0-9.-]/g, '')) || 0,
+        })),
+        {
+          sourceTotal: sourceTotalProp ?? 0,
+          priorReturnTotal: alreadyReturnedTotal,
+          priorReturnLines,
+        },
+        sourceVatRate,
+      );
+      return { subtotal: preview.subtotal, discountAmt: preview.headerDiscount, total: preview.total };
+    }
     const lineAmounts = computeLineAmounts(lines);
     const subtotal = Math.round(lineAmounts.reduce((s, a) => s + a, 0) * 100) / 100;
     let discountAmt = 0;
@@ -300,8 +321,6 @@ export function CommercialDocNewForm({
             ? Math.round(((subtotal * Number(d.value)) / 100) * 100) / 100
             : Number(d.value);
       }
-    } else if (linkedReturn && sourceHeaderSnapshot > 0 && sourceLineNetSnapshot > 0) {
-      discountAmt = prorateSourceHeader(sourceHeaderSnapshot, sourceLineNetSnapshot, subtotal);
     } else {
       const v = Number(String(headerDiscount).replace(/[^0-9.-]/g, '')) || 0;
       discountAmt =
@@ -310,34 +329,7 @@ export function CommercialDocNewForm({
           : v;
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
-    let total = Math.round((subtotal - discountAmt) * 100) / 100;
-    if (linkedReturn && (sourceTotalProp ?? 0) > 0) {
-      const preview = linkedReturnPreviewTotals(
-        total,
-        discountAmt,
-        sourceTotalProp ?? 0,
-        alreadyReturnedTotal,
-        isClosingLinkedReturn(
-          sourceQtyLines.length
-            ? sourceQtyLines
-            : lines
-                .filter((l) => l.sourceQuantity)
-                .map((l) => ({
-                  productId: l.productId || null,
-                  description: l.description,
-                  quantity: Number(String(l.sourceQuantity).replace(/[^0-9.-]/g, '')) || 0,
-                })),
-          priorReturnLines,
-          lines.map((l) => ({
-            productId: l.productId || null,
-            description: l.description,
-            quantity: Number(String(l.quantity).replace(/[^0-9.-]/g, '')) || 0,
-          })),
-        ),
-        sourceVatRate,
-      );
-      return { subtotal: preview.subtotal, discountAmt: preview.headerDiscount, total: preview.total };
-    }
+    const total = Math.round((subtotal - discountAmt) * 100) / 100;
     return { subtotal, discountAmt, total };
   }, [
     lines,
@@ -347,22 +339,18 @@ export function CommercialDocNewForm({
     discounts,
     linkedReturn,
     sourceHeaderSnapshot,
-    sourceLineNetSnapshot,
+    sourcePricedLines,
     sourceTotalProp,
     sourceVatRate,
     alreadyReturnedTotal,
     priorReturnLines,
-    sourceQtyLines,
   ]);
 
   return (
     <div className="workspace party-workspace">
       <form
-        action={async (fd) => {
-          await toastIfFormError(await createCommercialDocumentFromForm(fd));
-        }}
         className="doc-form-shell"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           if (preventOver100DiscountSubmit(e, lines)) return;
           if (
             linkedReturn &&
@@ -376,6 +364,7 @@ export function CommercialDocNewForm({
           ) {
             return;
           }
+          await submitRetainingFields(e, createCommercialDocumentFromForm);
         }}
       >
         <IdempotencyField />

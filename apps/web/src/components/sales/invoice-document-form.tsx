@@ -9,7 +9,7 @@ import {
   DocumentLinesEditor,
   computeLineAmounts,
   preventOver100DiscountSubmit,
-  toastIfFormError,
+  submitRetainingFields,
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
@@ -205,11 +205,11 @@ export function InvoiceDocumentForm({
 
   return (
     <form
-      action={async (fd) => {
-        await toastIfFormError(await createCommercialDocumentFromForm(fd));
-      }}
       className="doc-form-shell"
-      onSubmit={(e) => preventOver100DiscountSubmit(e, lines)}
+      onSubmit={async (e) => {
+        if (preventOver100DiscountSubmit(e, lines)) return;
+        await submitRetainingFields(e, createCommercialDocumentFromForm);
+      }}
     >
       <input type="hidden" name="documentType" value="sales_invoice" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />

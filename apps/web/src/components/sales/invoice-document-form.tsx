@@ -23,6 +23,7 @@ import { documentHasRentalLines, EventHireFields } from '@/components/sales/even
 import { Button } from '@/components/ui/bookone-ui';
 import { IdempotencyField } from '@/components/ui/form-busy';
 import { DiscountPicker, type DiscountPick } from '@/components/sales/discount-picker';
+import { hydrateDraftLineState } from '@bookone/accounting';
 
 type PartyOpt = { id: string; name: string; code: string | null };
 type OrderOpt = { id: string; documentNumber: string; partyName: string; total: number; status: string };
@@ -46,7 +47,17 @@ type DraftInvoice = {
   brandId: string | null;
   locationId: string | null;
   headerDiscount: number;
-  lines: { id: string; productId: string | null; description: string; quantity: number; unitPrice: number }[];
+  lines: {
+    id: string;
+    productId: string | null;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    discountAmount?: number;
+    discountPercent?: number;
+    sku?: string | null;
+    productClass?: string | null;
+  }[];
 };
 
 export function InvoiceDocumentForm({
@@ -74,15 +85,7 @@ export function InvoiceDocumentForm({
   draft?: DraftInvoice;
 }) {
   const [lines, setLines] = useState<DocLineState[]>(() =>
-    draft
-      ? draft.lines.map((l) => ({
-          key: l.id,
-          productId: l.productId ?? '',
-          description: l.description,
-          quantity: String(l.quantity),
-          unitPrice: String(l.unitPrice),
-        }))
-      : [],
+    draft ? draft.lines.map((l) => hydrateDraftLineState(l)) : [],
   );
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);

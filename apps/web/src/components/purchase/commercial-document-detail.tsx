@@ -12,7 +12,11 @@ import {
   rejectPurchaseDocumentAction,
   type CommercialDocDetail,
 } from '@/app/actions/commercial-docs';
-import { displayedLineNetSubtotal } from '@bookone/accounting';
+import {
+  conversionTargetNeedsSupplierInvoice,
+  displayedLineNetSubtotal,
+  persistedDocumentBreakdown,
+} from '@bookone/accounting';
 import { formatLKR } from '@/components/module/list-page';
 import { StatusBadge } from '@/components/ui/status-help';
 import { statusFamilyFromDocType } from '@/lib/status-guide';
@@ -50,6 +54,7 @@ export function CommercialDocumentDetail({
   returnFromBill,
   convertPanel,
   extraPanel,
+  requireSupplierInvoiceNo = false,
 }: {
   doc: CommercialDocDetail;
   listHref: string;
@@ -65,6 +70,7 @@ export function CommercialDocumentDetail({
   /** Extra panel (e.g. partial PO convert) */
   convertPanel?: ReactNode;
   extraPanel?: ReactNode;
+  requireSupplierInvoiceNo?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -96,6 +102,11 @@ export function CommercialDocumentDetail({
     doc.status !== 'void' &&
     doc.status !== 'fully_invoiced' &&
     doc.status !== 'paid';
+  const isReturn = doc.documentType === 'sales_return' || doc.documentType === 'purchase_return';
+  const breakdown = isReturn
+    ? persistedDocumentBreakdown(doc.lines, doc.subtotal, doc.discountTotal, doc.taxTotal, doc.total)
+    : null;
+  const convertNeedsSupplierNo = Boolean(convertTo && conversionTargetNeedsSupplierInvoice(convertTo));
   const canReturn =
     returnFromBill &&
     ['purchase', 'import_purchase', 'vendor_bill', 'cash_purchase'].includes(doc.documentType) &&
@@ -183,9 +194,21 @@ export function CommercialDocumentDetail({
             </form>
           ) : null}
           {canConvert && convertTo && !convertPanel ? (
-            <form action={convertDocumentAction}>
+            <form action={convertDocumentAction} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input type="hidden" name="sourceId" value={doc.id} />
               <input type="hidden" name="targetType" value={convertTo} />
+              {convertNeedsSupplierNo ? (
+                <input
+                  className="input"
+                  name="supplierInvoiceNumber"
+                  placeholder={
+                    requireSupplierInvoiceNo ? 'Supplier invoice # (required)' : 'Supplier invoice # (optional)'
+                  }
+                  maxLength={80}
+                  required={requireSupplierInvoiceNo}
+                  style={{ minWidth: 180 }}
+                />
+              ) : null}
               <Button variant="secondary" type="submit" disabled={pending}>
                 {convertLabel ?? 'Convert'}
               </Button>
@@ -229,9 +252,15 @@ export function CommercialDocumentDetail({
                 <span>Discount</span>
                 <strong>{formatLKR(doc.discountTotal)}</strong>
               </div>
+              {breakdown && breakdown.allocationAdjustment !== 0 ? (
+                <div className="doc-totals-row">
+                  <span>Allocation adjustment</span>
+                  <strong>{formatLKR(breakdown.allocationAdjustment)}</strong>
+                </div>
+              ) : null}
               {doc.taxTotal > 0 ? (
                 <div className="doc-totals-row">
-                  <span>Tax</span>
+                  <span>VAT</span>
                   <strong>{formatLKR(doc.taxTotal)}</strong>
                 </div>
               ) : null}
@@ -353,21 +382,45 @@ export function CommercialDocumentDetail({
                   <th>Description</th>
                   <th>Qty</th>
                   <th>Unit price</th>
-                  <th>Amount</th>
+                  {breakdown ? (
+                    <>
+                      <th>Gross</th>
+                      <th>Discount</th>
+                      <th>Net</th>
+                    </>
+                  ) : (
+                    <th>Amount</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {doc.lines.map((l) => (
-                  <tr key={l.id}>
-                    <td>{l.description}</td>
-                    <td>{l.quantity}</td>
-                    <td>{formatLKR(l.unitPrice)}</td>
-                    <td>{formatLKR(l.lineTotal)}</td>
-                  </tr>
-                ))}
+                {breakdown
+                  ? breakdown.lines.map((l, i) => (
+                      <tr key={`${l.description}-${i}`}>
+                        <td>
+                          {l.description}
+                          {l.allocationAdjustment !== 0
+                            ? ` (adj ${formatLKR(l.allocationAdjustment)})`
+                            : ''}
+                        </td>
+                        <td>{l.quantity}</td>
+                        <td>{formatLKR(l.unitPrice)}</td>
+                        <td>{formatLKR(l.gross)}</td>
+                        <td>{formatLKR(l.discount)}</td>
+                        <td>{formatLKR(l.net)}</td>
+                      </tr>
+                    ))
+                  : doc.lines.map((l) => (
+                      <tr key={l.id}>
+                        <td>{l.description}</td>
+                        <td>{l.quantity}</td>
+                        <td>{formatLKR(l.unitPrice)}</td>
+                        <td>{formatLKR(l.lineTotal)}</td>
+                      </tr>
+                    ))}
                 {doc.lines.length === 0 ? (
                   <tr>
-                    <td colSpan={4} style={{ color: 'var(--ink-soft)' }}>
+                    <td colSpan={breakdown ? 6 : 4} style={{ color: 'var(--ink-soft)' }}>
                       No lines
                     </td>
                   </tr>

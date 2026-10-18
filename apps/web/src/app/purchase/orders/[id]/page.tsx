@@ -3,6 +3,7 @@ import {
   getCommercialDocument,
   getPurchaseOrderRemainingLines,
 } from '@/app/actions/commercial-docs';
+import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
@@ -17,11 +18,13 @@ export default async function PurchaseOrderDetailPage({
   let tenant;
   let doc;
   let remaining;
+  let purchaseSettings;
   try {
-    [tenant, doc, remaining] = await Promise.all([
+    [tenant, doc, remaining, purchaseSettings] = await Promise.all([
       getTenantInfo(),
       getCommercialDocument(id),
       getPurchaseOrderRemainingLines(id),
+      getPurchaseSettings().catch(() => ({ requireSupplierInvoiceNo: false })),
     ]);
   } catch {
     redirect('/login');
@@ -37,7 +40,12 @@ export default async function PurchaseOrderDetailPage({
         printHref={`/purchase/print/${doc.id}`}
         convertPanel={
           remaining.ok && remaining.lines ? (
-            <PoConvertForm poId={doc.id} lines={remaining.lines} documentNumber={doc.documentNumber} />
+            <PoConvertForm
+              poId={doc.id}
+              lines={remaining.lines}
+              documentNumber={doc.documentNumber}
+              requireSupplierInvoiceNo={purchaseSettings.requireSupplierInvoiceNo}
+            />
           ) : null
         }
       />

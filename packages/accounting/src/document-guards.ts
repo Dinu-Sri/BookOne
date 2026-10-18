@@ -493,3 +493,208 @@ export const SALES_RETURN_PARTY_MESSAGE =
 export const PURCHASE_RETURN_PARTY_MESSAGE =
   'This return must use the same supplier as the original bill.';
 export const PAYMENT_OVER_BALANCE_MESSAGE = 'Payment cannot exceed balance due.';
+
+function sumLineQty(lines: { quantity: number }[]): number {
+  return lines.reduce((s, l) => s + Number(l.quantity || 0), 0);
+}
+
+export type LinkedReturnPreviewDisplay =
+  | {
+      kind: 'invalid-quantity';
+      enteredQty: number;
+      remainingQty: number;
+    }
+  | {
+      kind: 'ok';
+      subtotal: number;
+      headerDiscount: number;
+      net: number;
+      vat: number;
+      total: number;
+      allocationAdjustment: number;
+    };
+
+/**
+ * Preview for a linked return. Invalid quantity is a distinct state so the UI
+ * does not present a source header discount that merely caps an over-qty total.
+ */
+export function linkedReturnPreviewDisplay(
+  sourceLines: ProrateSourceLine[],
+  sourceHeaderDiscount: number,
+  returnLines: ProrateReturnLine[],
+  prior: LinkedReturnPrior | undefined,
+  vatRatePercent = 0,
+): LinkedReturnPreviewDisplay {
+  const sourceQty: QtyLine[] = sourceLines.map((l) => ({
+    productId: l.productId,
+    description: l.description,
+    quantity: l.quantity,
+  }));
+  const priorQty = prior?.priorReturnLines ?? [];
+  if (returnQtyExceeded(sourceQty, priorQty, returnLines)) {
+    const already = new Map<string, number>();
+    addQtyMaps(already, priorQty);
+    const src = new Map<string, number>();
+    addQtyMaps(src, sourceQty);
+    let remaining = 0;
+    for (const [k, qty] of src) {
+      remaining += remainingQty(qty, already.get(k) ?? 0);
+    }
+    return {
+      kind: 'invalid-quantity',
+      enteredQty: Math.round(sumLineQty(returnLines) * 10000) / 10000,
+      remainingQty: Math.round(remaining * 10000) / 10000,
+    };
+  }
+  const totals = linkedReturnDocumentTotals(
+    sourceLines,
+    sourceHeaderDiscount,
+    returnLines,
+    prior,
+    vatRatePercent,
+  );
+  return { kind: 'ok', ...totals };
+}
+
+export type PersistedBreakdownLine = {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  discountAmount: number;
+  lineTotal: number;
+};
+
+export type PersistedDocumentBreakdown = {
+  lines: {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    gross: number;
+    discount: number;
+    net: number;
+    allocationAdjustment: number;
+  }[];
+  lineNet: number;
+  headerDiscount: number;
+  supplyNet: number;
+  tax: number;
+  credit: number;
+  allocationAdjustment: number;
+};
+
+/**
+ * Permission-checked View numbers from persisted rows. Stored subtotal is
+ * after-header supply (supplyNet), not the before-header line-net.
+ */
+export function persistedDocumentBreakdown(
+  lines: PersistedBreakdownLine[],
+  storedSubtotal: number,
+  headerDiscount: number,
+  taxTotal: number,
+  total: number,
+): PersistedDocumentBreakdown {
+  const mapped = lines.map((l) => {
+    const gross = Math.round(Number(l.quantity) * Number(l.unitPrice) * 100) / 100;
+    const discount = Math.round(Number(l.discountAmount) * 100) / 100;
+    const net = Math.round(Number(l.lineTotal) * 100) / 100;
+    const allocationAdjustment = Math.round((net - Math.max(0, gross - discount)) * 100) / 100;
+    return {
+      description: l.description,
+      quantity: Number(l.quantity),
+      unitPrice: Number(l.unitPrice),
+      gross,
+      discount,
+      net,
+      allocationAdjustment,
+    };
+  });
+  const lineNet = Math.round(mapped.reduce((s, l) => s + l.net, 0) * 100) / 100;
+  const allocationAdjustment =
+    Math.round(mapped.reduce((s, l) => s + l.allocationAdjustment, 0) * 100) / 100;
+  return {
+    lines: mapped,
+    lineNet,
+    headerDiscount: Math.round(Number(headerDiscount) * 100) / 100,
+    supplyNet: Math.round(Number(storedSubtotal) * 100) / 100,
+    tax: Math.round(Number(taxTotal) * 100) / 100,
+    credit: Math.round(Number(total) * 100) / 100,
+    allocationAdjustment,
+  };
+}
+
+export type HydrateDraftLineInput = {
+  id: string;
+  productId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  discountAmount?: number;
+  discountPercent?: number;
+  sku?: string | null;
+  productClass?: string | null;
+};
+
+export type HydratedDraftLineState = {
+  key: string;
+  productId: string;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  sku?: string;
+  isManual: boolean;
+  discountType: 'percent' | 'fixed';
+  discountValue: string;
+  productClass?: string;
+};
+
+/** Restore SKU, product class and line discount so a draft reopens at saved totals. */
+export function hydrateDraftLineState(line: HydrateDraftLineInput): HydratedDraftLineState {
+  const percent = Number(line.discountPercent ?? 0);
+  const amount = Number(line.discountAmount ?? 0);
+  const discountType: 'percent' | 'fixed' = percent > 0 ? 'percent' : amount > 0 ? 'fixed' : 'percent';
+  const discountValue =
+    discountType === 'percent' ? (percent > 0 ? String(percent) : '') : String(amount);
+  return {
+    key: line.id,
+    productId: line.productId ?? '',
+    description: line.description,
+    quantity: String(line.quantity),
+    unitPrice: String(line.unitPrice),
+    sku: line.sku || undefined,
+    isManual: !line.productId,
+    discountType,
+    discountValue,
+    productClass: line.productClass || undefined,
+  };
+}
+
+export function invoiceDraftDisplayedTotals(
+  lines: LineDiscountInput[],
+  headerDiscount: number,
+): { lineNet: number; headerDiscount: number; total: number } {
+  const lineNet =
+    Math.round(
+      lines.reduce((s, l) => {
+        const qty = moneyNum(l.quantity);
+        const price = moneyNum(l.unitPrice);
+        const gross = Math.round(qty * price * 100) / 100;
+        return s + Math.max(0, Math.round((gross - lineDiscountAmount(l)) * 100) / 100);
+      }, 0) * 100,
+    ) / 100;
+  const header = Math.min(Math.max(0, Math.round(Number(headerDiscount) * 100) / 100), lineNet);
+  return { lineNet, headerDiscount: header, total: Math.round((lineNet - header) * 100) / 100 };
+}
+
+export function conversionTargetNeedsSupplierInvoice(targetType: string): boolean {
+  return targetType === 'purchase' || targetType === 'vendor_bill' || targetType === 'import_purchase';
+}
+
+/** Bills take the entered supplier number only. Source PO/GRN references are not inherited. */
+export function conversionBillSupplierInvoiceNumber(
+  targetType: string,
+  entered: string | null | undefined,
+): string | undefined {
+  if (!conversionTargetNeedsSupplierInvoice(targetType)) return undefined;
+  const v = String(entered ?? '').trim();
+  return v || undefined;
+}

@@ -10,10 +10,12 @@ export function PoConvertForm({
   poId,
   lines: initial,
   documentNumber,
+  requireSupplierInvoiceNo = false,
 }: {
   poId: string;
   lines: PoRemainingLine[];
   documentNumber: string;
+  requireSupplierInvoiceNo?: boolean;
 }) {
   const [qtys, setQtys] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
@@ -107,6 +109,19 @@ export function PoConvertForm({
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="field" style={{ marginTop: 12, maxWidth: 320 }}>
+            <label>Supplier invoice # {requireSupplierInvoiceNo ? '(required for bills)' : '(bills)'}</label>
+            <input
+              className="input"
+              name="supplierInvoiceNumber"
+              placeholder="Vendor bill / invoice no. — not copied from the PO"
+              maxLength={80}
+            />
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--ink-soft)' }}>
+              Each bill needs its own number. The PO reference is not reused. Required-number
+              and duplicate-block still apply on save.
+            </p>
           </div>
           <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <Button

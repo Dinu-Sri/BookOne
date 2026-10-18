@@ -3,14 +3,20 @@ import {
   applyClosingReturnResidual,
   asOfOpenBalance,
   billedQtyAgainstPo,
+  conversionBillSupplierInvoiceNumber,
+  conversionTargetNeedsSupplierInvoice,
   displayedLineNetSubtotal,
+  hydrateDraftLineState,
+  invoiceDraftDisplayedTotals,
   isClosingLinkedReturn,
   issuedOnOrBeforeAsOf,
   lineDiscountAmount,
   linkedReturnDocumentTotals,
   linkedReturnPartyMismatch,
+  linkedReturnPreviewDisplay,
   linkedReturnPreviewTotals,
   percentDiscountOver100,
+  persistedDocumentBreakdown,
   prorateLinkedReturn,
   qtyExceedsRemaining,
   receivedQtyAgainstPo,
@@ -543,5 +549,173 @@ describe('legacy residual represents allocation on the last line', () => {
     expect(out.lines[0]?.unitPrice).toBe(1);
     expect(lineSum(out.lines)).toBe(1.04);
     expect(lineSum(out.lines) - out.headerDiscount).toBe(out.total);
+  });
+});
+
+describe('invalid quantity preview is not a source discount cap', () => {
+  const priced = [
+    { productId: 'sku', description: 'Widget', quantity: 3, unitPrice: 100, discountAmount: 0 },
+  ];
+
+  it('2+2 against 3 is invalid-quantity, not discount 100 on 400', () => {
+    const preview = linkedReturnPreviewDisplay(priced, 0, [
+      { productId: 'sku', description: 'Widget', quantity: 2 },
+      { productId: 'sku', description: 'Widget', quantity: 2 },
+    ], { sourceTotal: 300, priorReturnTotal: 0, priorReturnLines: [] });
+    expect(preview.kind).toBe('invalid-quantity');
+    if (preview.kind === 'invalid-quantity') {
+      expect(preview.enteredQty).toBe(4);
+      expect(preview.remainingQty).toBe(3);
+    }
+  });
+
+  it('valid 1+1+1 keeps source price 100 and total 300', () => {
+    const preview = linkedReturnPreviewDisplay(priced, 0, [
+      { productId: 'sku', description: 'Widget', quantity: 1 },
+      { productId: 'sku', description: 'Widget', quantity: 1 },
+      { productId: 'sku', description: 'Widget', quantity: 1 },
+    ], { sourceTotal: 300, priorReturnTotal: 0, priorReturnLines: [] });
+    expect(preview.kind).toBe('ok');
+    if (preview.kind === 'ok') {
+      expect(preview.headerDiscount).toBe(0);
+      expect(preview.total).toBe(300);
+    }
+  });
+
+  it('preserves 85.50 / 171 / 302.67 / 118', () => {
+    const disc = [
+      { productId: 'sku', description: 'Widget', quantity: 3, unitPrice: 100, discountAmount: 30 },
+    ];
+    const first = linkedReturnPreviewDisplay(disc, 13.5, [
+      { productId: 'sku', description: 'Widget', quantity: 1 },
+    ], { sourceTotal: 256.5, priorReturnTotal: 0, priorReturnLines: [] });
+    expect(first.kind).toBe('ok');
+    if (first.kind === 'ok') expect(first.net).toBe(85.5);
+    const rest = linkedReturnPreviewDisplay(disc, 13.5, [
+      { productId: 'sku', description: 'Widget', quantity: 2 },
+    ], {
+      sourceTotal: 256.5,
+      priorReturnTotal: 85.5,
+      priorReturnLines: [{ productId: 'sku', description: 'Widget', quantity: 1 }],
+    });
+    expect(rest.kind).toBe('ok');
+    if (rest.kind === 'ok') expect(rest.net).toBe(171);
+    const taxed = linkedReturnDocumentTotals(disc, 13.5, [
+      { productId: 'sku', description: 'Widget', quantity: 3 },
+    ], { sourceTotal: 256.5, priorReturnTotal: 0, priorReturnLines: [] }, 18);
+    expect(taxed.total).toBe(302.67);
+    const noHeader = linkedReturnPreviewDisplay(
+      [{ productId: 'sku', description: 'Item', quantity: 1, unitPrice: 100, discountAmount: 0 }],
+      0,
+      [{ productId: 'sku', description: 'Item', quantity: 1 }],
+      { sourceTotal: 100, priorReturnTotal: 0, priorReturnLines: [] },
+      18,
+    );
+    expect(noHeader.kind).toBe('ok');
+    if (noHeader.kind === 'ok') expect(noHeader.total).toBe(118);
+  });
+});
+
+describe('draft hydration restores 256.50 economics', () => {
+  it('saved 3×100 / 10% line / 5% header reopens at 256.50', () => {
+    const hydrated = hydrateDraftLineState({
+      id: 'line-1',
+      productId: 'prod-1',
+      description: 'Widget',
+      quantity: 3,
+      unitPrice: 100,
+      discountPercent: 10,
+      discountAmount: 30,
+      sku: 'N14',
+      productClass: 'digital',
+    });
+    expect(hydrated.sku).toBe('N14');
+    expect(hydrated.productClass).toBe('digital');
+    expect(hydrated.discountType).toBe('percent');
+    expect(hydrated.discountValue).toBe('10');
+    const totals = invoiceDraftDisplayedTotals(
+      [
+        {
+          quantity: hydrated.quantity,
+          unitPrice: hydrated.unitPrice,
+          discountType: hydrated.discountType,
+          discountValue: hydrated.discountValue,
+        },
+      ],
+      13.5,
+    );
+    expect(totals.lineNet).toBe(270);
+    expect(totals.headerDiscount).toBe(13.5);
+    expect(totals.total).toBe(256.5);
+  });
+
+  it('amount-only persisted discount still totals 256.50', () => {
+    const hydrated = hydrateDraftLineState({
+      id: 'line-1',
+      productId: 'prod-1',
+      description: 'Widget',
+      quantity: 3,
+      unitPrice: 100,
+      discountAmount: 30,
+      sku: 'N14',
+    });
+    expect(hydrated.discountType).toBe('fixed');
+    const totals = invoiceDraftDisplayedTotals(
+      [
+        {
+          quantity: hydrated.quantity,
+          unitPrice: hydrated.unitPrice,
+          discountType: hydrated.discountType,
+          discountValue: hydrated.discountValue,
+        },
+      ],
+      13.5,
+    );
+    expect(totals.total).toBe(256.5);
+  });
+});
+
+describe('persisted return breakdown', () => {
+  it('shows line gross/discount/net, header, VAT and credit without relabelling stored subtotal', () => {
+    const out = persistedDocumentBreakdown(
+      [{ description: 'Widget', quantity: 3, unitPrice: 100, discountAmount: 30, lineTotal: 270 }],
+      256.5,
+      13.5,
+      46.17,
+      302.67,
+    );
+    expect(out.lines[0]?.gross).toBe(300);
+    expect(out.lines[0]?.discount).toBe(30);
+    expect(out.lines[0]?.net).toBe(270);
+    expect(out.lineNet).toBe(270);
+    expect(out.headerDiscount).toBe(13.5);
+    expect(out.supplyNet).toBe(256.5);
+    expect(displayedLineNetSubtotal(out.supplyNet, out.headerDiscount)).toBe(270);
+    expect(out.tax).toBe(46.17);
+    expect(out.credit).toBe(302.67);
+    expect(out.allocationAdjustment).toBe(0);
+  });
+
+  it('exposes last-line allocationAdjustment on a 1.01 residual without changing stored credit', () => {
+    const out = persistedDocumentBreakdown(
+      [{ description: 'Digit', quantity: 1, unitPrice: 1, discountAmount: 0, lineTotal: 1.01 }],
+      1.01,
+      0,
+      0,
+      1.01,
+    );
+    expect(out.lines[0]?.allocationAdjustment).toBe(0.01);
+    expect(out.allocationAdjustment).toBe(0.01);
+    expect(out.credit).toBe(1.01);
+    expect(out.lines[0]?.unitPrice).toBe(1);
+  });
+});
+
+describe('conversion supplier invoice is entered, not inherited', () => {
+  it('bill targets use the typed number and ignore a blank inherited source', () => {
+    expect(conversionTargetNeedsSupplierInvoice('purchase')).toBe(true);
+    expect(conversionBillSupplierInvoiceNumber('purchase', '  VENDOR-88  ')).toBe('VENDOR-88');
+    expect(conversionBillSupplierInvoiceNumber('purchase', '')).toBeUndefined();
+    expect(conversionBillSupplierInvoiceNumber('goods_receipt', 'PO-1')).toBeUndefined();
   });
 });

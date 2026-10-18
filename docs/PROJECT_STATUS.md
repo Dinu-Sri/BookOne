@@ -1,3 +1,7 @@
+## 2026-10-18 — Rejected-attempt idempotency, draft hydration, return breakdown (v2.5.17)
+
+QA PR #46 coding mission on v2.5.16 · b2c5205. Conclusive create refusals release the pending idempotency claim so a corrected retry can post once; in-flight claims stay busy and committed success replays. Draft invoices restore SKU, product class and line discounts. Return View shows persisted gross/discount/net, header, allocationAdjustment, VAT and credit. Invalid return quantity is a distinct preview state. Bill conversion takes an entered supplier invoice number. Branch `fix/v2517-pr46-idempotency-hydration` — do not deploy while Light02 is executing on frozen `b2c5205`. See [CHG-20261018-pr46-idempotency-hydration](changes/CHG-20261018-pr46-idempotency-hydration.md). Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-18 — Preview header cap, residual line representation, retain fields on error (v2.5.16)
 
 QA PR #44 review of v2.5.15: source diagnostics 13 checks, 7 passed / 6 failed. Linked-return preview now shares remaining-header cap and residual math with posting. Legacy 1.01/1.04 credits keep an explicit last-line allocation adjustment. Failed commercial creates keep submitted dates, notes and selects. See [CHG-20261018-preview-cap-residual-form-retain](changes/CHG-20261018-preview-cap-residual-form-retain.md). Portainer Re-pull ON after Docker web image. Quote `v2.5.16 · <sha7>`. Isolated upgrade cases remain blocked. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

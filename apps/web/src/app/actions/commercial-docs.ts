@@ -35,6 +35,7 @@ import {
   PURCHASE_RETURN_VALUE_MESSAGE,
   SALES_RETURN_PARTY_MESSAGE,
   PURCHASE_RETURN_PARTY_MESSAGE,
+  conversionBillSupplierInvoiceNumber,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { postedObligationSql } from '@/lib/posted-obligations';
@@ -112,6 +113,7 @@ const lineSchema = z.object({
   discountAmount: z.number().min(0).optional().default(0),
   discountType: z.enum(['percent', 'fixed']).optional(),
   discountValue: z.number().min(0).optional(),
+  sku: z.string().max(80).optional(),
   accountCode: z.string().max(20).optional(),
 });
 
@@ -767,6 +769,22 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
       .select()
       .from(businessDocumentLines)
       .where(and(eq(businessDocumentLines.documentId, doc.id), isNull(businessDocumentLines.voidedAt)));
+    const returnProductIds = [
+      ...new Set(lines.map((l) => l.productId).filter((id): id is string => Boolean(id))),
+    ];
+    const returnProducts =
+      returnProductIds.length > 0
+        ? await db()
+            .select({ id: inventoryProducts.id, sku: inventoryProducts.sku })
+            .from(inventoryProducts)
+            .where(
+              and(
+                eq(inventoryProducts.tenantId, user.tenantId),
+                inArray(inventoryProducts.id, returnProductIds),
+              ),
+            )
+        : [];
+    const returnSkuById = new Map(returnProducts.map((p) => [p.id, p.sku]));
     const returnType =
       isPurchaseBillType(doc.documentType) || doc.documentType === 'cash_purchase'
         ? 'purchase_return'
@@ -790,7 +808,7 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
         description: l.description,
         quantity: String(l.quantity),
         unitPrice: String(l.unitPrice),
-        sku: l.lineRef ?? undefined,
+        sku: l.lineRef || (l.productId ? returnSkuById.get(l.productId) : undefined) || undefined,
         discountAmount: Number(l.discountAmount ?? 0) > 0 ? String(l.discountAmount) : undefined,
       })),
     };
@@ -1060,16 +1078,32 @@ export async function createCommercialDocument(
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   const started = Date.now();
   let parsedType = 'document';
+  let claimed = false;
+  let committedId: string | undefined;
+  let tenantId: string | undefined;
+  let idempotencyKey: string | null | undefined;
   try {
     const parsed = createSchema.parse(input);
     parsedType = parsed.documentType;
     const user = await requireTenantContext();
+    tenantId = user.tenantId;
+    idempotencyKey = parsed.idempotencyKey;
     const { assertPermission } = await import('@/lib/access');
     const perm = permissionForDocumentType(parsed.documentType);
     if (!perm) return { ok: false, error: 'You do not have permission to do that.' };
     await assertPermission(perm, 'write');
-    const { claimIdempotency, writeIdempotency } = await import('@/lib/idempotency');
+    const { claimIdempotency, writeIdempotency, concludeCommercialCreateClaim } = await import(
+      '@/lib/idempotency'
+    );
     const { logIfSlow, logOps } = await import('@/lib/ops-log');
+    const refuseAfterClaim = async (error: string) => {
+      if (claimed && tenantId && parsed.intent !== 'draft') {
+        await withTenantContext(tenantId, () =>
+          concludeCommercialCreateClaim(tenantId!, idempotencyKey, { outcome: 'conclusive-failure' }),
+        );
+      }
+      return { ok: false as const, error };
+    };
     if (parsed.intent !== 'draft') {
       const claim = await withTenantContext(user.tenantId, () =>
         claimIdempotency(user.tenantId, parsed.idempotencyKey),
@@ -1080,6 +1114,7 @@ export async function createCommercialDocument(
       if (claim.state === 'busy') {
         return { ok: false, error: 'This save is already running. Wait a moment.' };
       }
+      if (claim.state === 'claimed') claimed = true;
     }
     const isSales = (SALES_TYPES as readonly string[]).includes(parsed.documentType);
 
@@ -1098,7 +1133,7 @@ export async function createCommercialDocument(
       });
       await assertDimensionScope(dimensions);
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : 'Invalid brand/location.' };
+      return refuseAfterClaim(e instanceof Error ? e.message : 'Invalid brand/location.');
     }
 
     // Purchase P3 controls (defaults if settings row missing)
@@ -1122,7 +1157,7 @@ export async function createCommercialDocument(
     const supplierInv = parsed.supplierInvoiceNumber?.trim() || '';
 
     if (isApBill && purchaseCfg.requireSupplierInvoiceNo && !supplierInv) {
-      return { ok: false, error: 'Supplier invoice number is required (Purchase settings).' };
+      return refuseAfterClaim('Supplier invoice number is required (Purchase settings).');
     }
 
     const needsApproval = isApBill && purchaseCfg.requireBillApproval;
@@ -1457,6 +1492,9 @@ export async function createCommercialDocument(
         unitPrice: number;
         unitCost: number;
         discountAmount: number;
+        discountType?: 'percent' | 'fixed';
+        discountValue?: number;
+        sku?: string;
         lineTotal: number;
         productType: string;
         taxStatus: string;
@@ -1476,6 +1514,7 @@ export async function createCommercialDocument(
         let cogsAccountCode = '5000';
         let inventoryAccountCode = '5100';
         let taxStatus = 'unknown';
+        let sku = line.sku?.trim() || '';
         if (line.productId) {
           const [product] = await db()
             .select()
@@ -1500,6 +1539,7 @@ export async function createCommercialDocument(
           productType = product.productType === 'stocked' ? 'physical' : product.productType;
           taxStatus = String(product.taxStatus ?? 'unknown');
           if (!description) description = product.name;
+          if (!sku) sku = product.sku || '';
           revenueAccountCode = String(product.revenueAccountCode ?? '4000') || '4000';
           cogsAccountCode = String(product.cogsAccountCode ?? '5000') || '5000';
           inventoryAccountCode = String(product.inventoryAccountCode ?? '5100') || '5100';
@@ -1523,6 +1563,7 @@ export async function createCommercialDocument(
           taxStatus,
           lineTotal,
           discountAmount,
+          sku: sku || undefined,
           revenueAccountCode,
           cogsAccountCode,
           inventoryAccountCode,
@@ -2343,7 +2384,11 @@ export async function createCommercialDocument(
             quantity: line.quantity.toFixed(4),
             unitPrice: line.unitPrice.toFixed(2),
             unitCost: line.unitCost.toFixed(2),
-            discountPercent: '0',
+            lineRef: line.sku?.trim() || null,
+            discountPercent:
+              line.discountType === 'percent' && Number(line.discountValue ?? 0) > 0
+                ? Number(line.discountValue).toFixed(2)
+                : '0',
             discountAmount: line.discountAmount.toFixed(2),
             lineTotal: line.lineTotal.toFixed(2),
           })
@@ -2605,6 +2650,7 @@ export async function createCommercialDocument(
       return document.id;
       });
     });
+    committedId = id;
 
     revalidatePath('/sales/quotations');
     revalidatePath('/sales/orders');
@@ -2641,6 +2687,23 @@ export async function createCommercialDocument(
     const message = error instanceof Error ? error.message : 'Could not create document.';
     const { logOps } = await import('@/lib/ops-log');
     await logOps({ kind: 'error', path: `action:create:${parsedType}`, status: 'error', message });
+    if (tenantId && idempotencyKey) {
+      const { concludeCommercialCreateClaim } = await import('@/lib/idempotency');
+      if (committedId) {
+        await withTenantContext(tenantId, () =>
+          concludeCommercialCreateClaim(tenantId!, idempotencyKey, {
+            outcome: 'uncertain-commit',
+            id: committedId!,
+          }),
+        );
+        return { ok: true, id: committedId };
+      }
+      if (claimed) {
+        await withTenantContext(tenantId, () =>
+          concludeCommercialCreateClaim(tenantId!, idempotencyKey, { outcome: 'conclusive-failure' }),
+        );
+      }
+    }
     return { ok: false, error: message };
   }
 }
@@ -2672,6 +2735,7 @@ export async function createCommercialDocumentFromForm(
       discountAmount,
       discountType,
       discountValue,
+      sku: String(formData.get(`line_${i}_sku`) ?? '').trim() || undefined,
       accountCode: String(formData.get(`line_${i}_accountCode`) ?? '') || undefined,
     });
   }
@@ -3005,6 +3069,8 @@ export async function convertDocument(
       unitCost?: number;
       discountAmount?: number;
     }[];
+    /** Entered vendor bill number. Source PO/GRN references are not inherited. */
+    supplierInvoiceNumber?: string | null;
   },
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
@@ -3133,7 +3199,10 @@ export async function convertDocument(
         notes: source.notes ?? undefined,
         sourceDocumentId: source.id,
         headerDiscount: Number(source.discountTotal),
-        supplierInvoiceNumber: source.supplierInvoiceNumber ?? undefined,
+        supplierInvoiceNumber: conversionBillSupplierInvoiceNumber(
+          targetType,
+          options?.supplierInvoiceNumber,
+        ),
         paymentMode: source.paymentMode ?? undefined,
         deliveryDate: source.deliveryDate ?? undefined,
         brandId: source.brandId ?? null,
@@ -3236,7 +3305,11 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
     }
   }
 
-  const result = await convertDocument(sourceId, targetType, lines ? { lines } : undefined);
+  const supplierInvoiceNumber = String(formData.get('supplierInvoiceNumber') ?? '').trim() || null;
+  const result = await convertDocument(sourceId, targetType, {
+    ...(lines ? { lines } : {}),
+    supplierInvoiceNumber,
+  });
   const { redirect } = await import('next/navigation');
   const listPath: Record<string, string> = {
     sales_order: '/sales/orders',
@@ -3539,7 +3612,10 @@ export interface CommercialDocDetail {
     quantity: number;
     unitPrice: number;
     discountAmount: number;
+    discountPercent: number;
     lineTotal: number;
+    sku: string | null;
+    productClass: string | null;
   }[];
 }
 
@@ -3572,6 +3648,23 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       .where(
         and(eq(businessDocumentLines.documentId, doc.id), isNull(businessDocumentLines.voidedAt)),
       );
+    const productIds = [
+      ...new Set(lines.map((l) => l.productId).filter((id): id is string => Boolean(id))),
+    ];
+    const productRows =
+      productIds.length > 0
+        ? await db()
+            .select({
+              id: inventoryProducts.id,
+              sku: inventoryProducts.sku,
+              productType: inventoryProducts.productType,
+            })
+            .from(inventoryProducts)
+            .where(
+              and(eq(inventoryProducts.tenantId, user.tenantId), inArray(inventoryProducts.id, productIds)),
+            )
+        : [];
+    const productsById = new Map(productRows.map((p) => [p.id, p]));
 
     return {
       id: doc.id,
@@ -3602,15 +3695,21 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       sourceDocumentId: doc.sourceDocumentId ?? null,
       brandId: doc.brandId ?? null,
       locationId: doc.locationId ?? null,
-      lines: lines.map((l) => ({
-        id: l.id,
-        productId: l.productId,
-        description: l.description,
-        quantity: Number(l.quantity),
-        unitPrice: Number(l.unitPrice),
-        discountAmount: Number(l.discountAmount),
-        lineTotal: Number(l.lineTotal),
-      })),
+      lines: lines.map((l) => {
+        const product = l.productId ? productsById.get(l.productId) : undefined;
+        return {
+          id: l.id,
+          productId: l.productId,
+          description: l.description,
+          quantity: Number(l.quantity),
+          unitPrice: Number(l.unitPrice),
+          discountAmount: Number(l.discountAmount),
+          discountPercent: Number(l.discountPercent ?? 0),
+          lineTotal: Number(l.lineTotal),
+          sku: l.lineRef || product?.sku || null,
+          productClass: product?.productType ?? null,
+        };
+      }),
     };
   });
 }

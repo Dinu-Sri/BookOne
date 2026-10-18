@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { X } from 'lucide-react';
+import { persistedDocumentBreakdown } from '@bookone/accounting';
 import type { CommercialDocDetail } from '@/app/actions/commercial-docs';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { Button } from '@/components/ui/bookone-ui';
@@ -43,6 +44,10 @@ export function QuotationSnapshotDialog({
   editHref?: string | null;
 }) {
   const meta = snapshotMeta(doc, listTitle);
+  const isReturn = doc.documentType === 'sales_return' || doc.documentType === 'purchase_return';
+  const breakdown = isReturn
+    ? persistedDocumentBreakdown(doc.lines, doc.subtotal, doc.discountTotal, doc.taxTotal, doc.total)
+    : null;
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -51,7 +56,7 @@ export function QuotationSnapshotDialog({
         aria-modal="true"
         aria-labelledby="quote-snapshot-title"
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 'min(560px, 100%)' }}
+        style={{ width: breakdown ? 'min(720px, 100%)' : 'min(560px, 100%)' }}
       >
         <button className="party-snapshot-close" type="button" onClick={onClose} aria-label="Close">
           <X size={16} />
@@ -81,10 +86,39 @@ export function QuotationSnapshotDialog({
             <strong>{doc.dueDate || '—'}</strong>
           </div>
           <div>
-            <span>Total</span>
+            <span>{isReturn ? 'Credit' : 'Total'}</span>
             <strong>{formatLKR(doc.total)}</strong>
           </div>
         </div>
+
+        {breakdown ? (
+          <div className="party-snapshot-metrics" style={{ marginTop: 8 }}>
+            <div>
+              <span>Line net</span>
+              <strong>{formatLKR(breakdown.lineNet)}</strong>
+            </div>
+            <div>
+              <span>Header allocation</span>
+              <strong>{formatLKR(breakdown.headerDiscount)}</strong>
+            </div>
+            <div>
+              <span>After header</span>
+              <strong>{formatLKR(breakdown.supplyNet)}</strong>
+            </div>
+            {breakdown.tax > 0 ? (
+              <div>
+                <span>VAT</span>
+                <strong>{formatLKR(breakdown.tax)}</strong>
+              </div>
+            ) : null}
+            {breakdown.allocationAdjustment !== 0 ? (
+              <div>
+                <span>Allocation adjustment</span>
+                <strong>{formatLKR(breakdown.allocationAdjustment)}</strong>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="table-wrap" style={{ marginTop: 12, maxHeight: 220, overflow: 'auto' }}>
           <table className="table">
@@ -93,21 +127,42 @@ export function QuotationSnapshotDialog({
                 <th>Description</th>
                 <th>Qty</th>
                 <th>Price</th>
-                <th>Amount</th>
+                {breakdown ? (
+                  <>
+                    <th>Gross</th>
+                    <th>Discount</th>
+                    <th>Net</th>
+                  </>
+                ) : (
+                  <th>Amount</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {doc.lines.map((l) => (
-                <tr key={l.id}>
-                  <td>{l.description}</td>
+              {(breakdown ? breakdown.lines : doc.lines).map((l, i) => (
+                <tr key={'id' in l ? l.id : `${l.description}-${i}`}>
+                  <td>
+                    {l.description}
+                    {'allocationAdjustment' in l && l.allocationAdjustment !== 0
+                      ? ` (adj ${formatLKR(l.allocationAdjustment)})`
+                      : ''}
+                  </td>
                   <td>{l.quantity}</td>
                   <td>{formatLKR(l.unitPrice)}</td>
-                  <td>{formatLKR(l.lineTotal)}</td>
+                  {breakdown && 'gross' in l ? (
+                    <>
+                      <td>{formatLKR(l.gross)}</td>
+                      <td>{formatLKR(l.discount)}</td>
+                      <td>{formatLKR(l.net)}</td>
+                    </>
+                  ) : (
+                    <td>{formatLKR('lineTotal' in l ? l.lineTotal : 0)}</td>
+                  )}
                 </tr>
               ))}
               {doc.lines.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ color: 'var(--ink-soft)' }}>
+                  <td colSpan={breakdown ? 6 : 4} style={{ color: 'var(--ink-soft)' }}>
                     No lines
                   </td>
                 </tr>

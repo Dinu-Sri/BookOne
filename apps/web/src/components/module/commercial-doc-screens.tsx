@@ -9,7 +9,7 @@
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import {
-  linkedReturnDocumentTotals,
+  linkedReturnPreviewDisplay,
   PURCHASE_RETURN_QTY_MESSAGE,
   type ProrateSourceLine,
 } from '@bookone/accounting';
@@ -293,7 +293,7 @@ export function CommercialDocNewForm({
 
   const computed = useMemo(() => {
     if (linkedReturn && sourcePricedLines.length > 0 && (sourceTotalProp ?? 0) > 0) {
-      const preview = linkedReturnDocumentTotals(
+      const preview = linkedReturnPreviewDisplay(
         sourcePricedLines,
         sourceHeaderSnapshot,
         lines.map((l) => ({
@@ -308,7 +308,22 @@ export function CommercialDocNewForm({
         },
         sourceVatRate,
       );
-      return { subtotal: preview.subtotal, discountAmt: preview.headerDiscount, total: preview.total };
+      if (preview.kind === 'invalid-quantity') {
+        return {
+          invalidQuantity: true as const,
+          enteredQty: preview.enteredQty,
+          remainingQty: preview.remainingQty,
+          subtotal: 0,
+          discountAmt: 0,
+          total: 0,
+        };
+      }
+      return {
+        invalidQuantity: false as const,
+        subtotal: preview.subtotal,
+        discountAmt: preview.headerDiscount,
+        total: preview.total,
+      };
     }
     const lineAmounts = computeLineAmounts(lines);
     const subtotal = Math.round(lineAmounts.reduce((s, a) => s + a, 0) * 100) / 100;
@@ -330,7 +345,7 @@ export function CommercialDocNewForm({
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     const total = Math.round((subtotal - discountAmt) * 100) / 100;
-    return { subtotal, discountAmt, total };
+    return { invalidQuantity: false as const, subtotal, discountAmt, total };
   }, [
     lines,
     headerDiscount,
@@ -608,18 +623,29 @@ export function CommercialDocNewForm({
               <input className="input" name="notes" placeholder="Optional notes" />
             </div>
             <div className="doc-totals" aria-live="polite">
-              <div className="doc-totals-row">
-                <span>Subtotal</span>
-                <strong>LKR {money(computed.subtotal)}</strong>
-              </div>
-              <div className="doc-totals-row">
-                <span>Discount</span>
-                <strong>LKR {money(computed.discountAmt)}</strong>
-              </div>
-              <div className="doc-totals-row is-total">
-                <span>Total</span>
-                <strong>LKR {money(computed.total)}</strong>
-              </div>
+              {computed.invalidQuantity ? (
+                <div className="doc-totals-row" style={{ color: 'var(--danger, #b91c1c)' }}>
+                  <span>
+                    Return quantity {computed.enteredQty} exceeds remaining {computed.remainingQty}.
+                    Save is refused. This is not a source discount.
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <div className="doc-totals-row">
+                    <span>Subtotal</span>
+                    <strong>LKR {money(computed.subtotal)}</strong>
+                  </div>
+                  <div className="doc-totals-row">
+                    <span>Discount</span>
+                    <strong>LKR {money(computed.discountAmt)}</strong>
+                  </div>
+                  <div className="doc-totals-row is-total">
+                    <span>Total</span>
+                    <strong>LKR {money(computed.total)}</strong>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

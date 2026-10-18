@@ -32,6 +32,7 @@ export type DocLineState = {
   sourceDiscountAmount?: string;
   sku?: string;
   isManual?: boolean;
+  productClass?: string;
   /** Pending save-as-product type before linking */
   saveAsType?: 'physical' | 'digital' | 'service' | 'rental';
 };
@@ -308,6 +309,7 @@ export function DocumentLinesEditor({
               <tr key={line.key} className={line.isManual ? 'doc-line-manual' : undefined}>
                 <td>
                   <input type="hidden" name={`line_${i}_productId`} value={line.productId} />
+                  <input type="hidden" name={`line_${i}_sku`} value={line.sku ?? ''} />
                   <span className={`doc-line-sku ${line.isManual ? 'is-manual' : ''}`}>
                     {line.isManual ? 'Manual' : line.sku || '—'}
                   </span>

@@ -30,6 +30,7 @@ export default async function ImportPurchasesPage() {
             newLabel: 'New import purchase',
             detailHrefPattern: '/purchase/import/:id',
             payHrefPattern: '/purchase/payments/new?documentId=:id',
+            returnHrefPattern: '/purchase/returns/new?from=:id',
             printHrefPattern: '/purchase/print/:id',
           }}
         />

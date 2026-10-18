@@ -1,4 +1,9 @@
 import { redirect } from 'next/navigation';
+import {
+  hydrateDraftLineState,
+  linkedReturnPrefillQuantities,
+  remainingReturnValue,
+} from '@bookone/accounting';
 import { getCommercialDocument, loadInvoiceForReturn } from '@/app/actions/commercial-docs';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
@@ -27,6 +32,23 @@ export default async function NewPurchaseReturnPage({
     redirect('/login');
   }
 
+  const sourceQtyLines = source
+    ? source.lines.map((l) => ({
+        productId: l.productId,
+        description: l.description,
+        quantity: Number(l.quantity),
+      }))
+    : [];
+  const priorReturnLines = returnSource?.priorReturnLines ?? [];
+  const prefill = source
+    ? linkedReturnPrefillQuantities(sourceQtyLines, priorReturnLines)
+    : [];
+  const remainingQuantity = prefill.reduce((s, p) => s + p.remainingQuantity, 0);
+  const remainingValue = remainingReturnValue(
+    returnSource?.sourceNet ?? source?.subtotal ?? 0,
+    returnSource?.alreadyReturnedNet ?? 0,
+  );
+
   return (
     <BookOneShell active="Purchase Returns" tenant={tenant}>
       <CommercialDocNewForm
@@ -41,38 +63,40 @@ export default async function NewPurchaseReturnPage({
         showPurchaseExtras
         expenseAccounts={form.expenseAccounts}
         brands={form.brands}
-          locations={form.locations}
+        locations={form.locations}
         submitLabel="Save purchase return"
-        sourceDocumentId={sp.from ?? null}
+        sourceDocumentId={source?.id ?? null}
+        sourceDocumentNumber={source?.documentNumber ?? null}
+        remainingQuantity={source ? remainingQuantity : undefined}
+        remainingValue={source ? remainingValue : undefined}
         initialHeaderDiscount={source?.discountTotal ?? 0}
         initialPartyName={source?.partyName ?? returnSource?.partyName ?? null}
         sourceTotal={returnSource?.sourceNet ?? source?.subtotal ?? 0}
         sourceVatRate={returnSource?.vatRate ?? 0}
         alreadyReturnedTotal={returnSource?.alreadyReturnedNet ?? 0}
-        priorReturnLines={returnSource?.priorReturnLines ?? []}
-        sourceQtyLines={
-          source
-            ? source.lines.map((l) => ({
-                productId: l.productId,
-                description: l.description,
-                quantity: Number(l.quantity),
-              }))
-            : []
-        }
+        priorReturnLines={priorReturnLines}
+        sourceQtyLines={sourceQtyLines}
         initialLines={
           source
-            ? source.lines.map((l) => ({
-                key: l.id,
-                productId: l.productId ?? '',
-                description: l.description,
-                quantity: String(l.quantity),
-                unitPrice: String(l.unitPrice),
-                discountType: l.discountAmount > 0 ? ('fixed' as const) : ('percent' as const),
-                discountValue: l.discountAmount > 0 ? String(l.discountAmount) : '',
-                sourceQuantity: String(l.quantity),
-                sourceDiscountAmount: String(l.discountAmount ?? 0),
-                isManual: !l.productId,
-              }))
+            ? source.lines.map((l, i) => {
+                const remaining = prefill[i]?.remainingQuantity ?? 0;
+                const hydrated = hydrateDraftLineState({
+                  id: l.id,
+                  productId: l.productId,
+                  description: l.description,
+                  quantity: remaining,
+                  unitPrice: l.unitPrice,
+                  discountAmount: l.discountAmount,
+                  discountPercent: l.discountPercent,
+                  sku: l.sku,
+                  productClass: l.productClass,
+                });
+                return {
+                  ...hydrated,
+                  sourceQuantity: String(l.quantity),
+                  sourceDiscountAmount: String(l.discountAmount ?? 0),
+                };
+              })
             : undefined
         }
         banner="Reduces AP / stock for physical items"

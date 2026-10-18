@@ -29,6 +29,7 @@ export default async function CashPurchasesPage() {
             newHref: '/purchase/expenses/new',
             newLabel: 'New cash purchase',
             detailHrefPattern: '/purchase/expenses/:id',
+            returnHrefPattern: '/purchase/returns/new?from=:id',
             printHrefPattern: '/purchase/expenses/:id/print',
           }}
         />

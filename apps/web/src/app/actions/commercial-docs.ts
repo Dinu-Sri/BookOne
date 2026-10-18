@@ -630,7 +630,10 @@ export interface CommercialDocRow {
   sourceDocumentId: string | null;
 }
 
-export async function searchInvoicesForReturn(query: string): Promise<
+async function searchPostedDocumentsForReturn(
+  query: string,
+  types: string[],
+): Promise<
   {
     id: string;
     documentNumber: string;
@@ -657,7 +660,7 @@ export async function searchInvoicesForReturn(query: string): Promise<
       .where(
         and(
           eq(businessDocuments.tenantId, user.tenantId),
-          inArray(businessDocuments.documentType, ['sales_invoice', 'customer_invoice', 'pos_sale']),
+          inArray(businessDocuments.documentType, types),
           isNull(businessDocuments.voidedAt),
         ),
       )
@@ -674,6 +677,37 @@ export async function searchInvoicesForReturn(query: string): Promise<
       .slice(0, 12)
       .map((r) => ({ ...r, total: Number(r.total) }));
   });
+}
+
+export async function searchInvoicesForReturn(query: string): Promise<
+  {
+    id: string;
+    documentNumber: string;
+    taxInvoiceNumber: string | null;
+    partyName: string;
+    issueDate: string;
+    total: number;
+  }[]
+> {
+  return searchPostedDocumentsForReturn(query, ['sales_invoice', 'customer_invoice', 'pos_sale']);
+}
+
+export async function searchBillsForReturn(query: string): Promise<
+  {
+    id: string;
+    documentNumber: string;
+    taxInvoiceNumber: string | null;
+    partyName: string;
+    issueDate: string;
+    total: number;
+  }[]
+> {
+  return searchPostedDocumentsForReturn(query, [
+    'purchase',
+    'vendor_bill',
+    'import_purchase',
+    'cash_purchase',
+  ]);
 }
 
 async function loadPriorReturnsForSource(
@@ -3336,7 +3370,11 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
   redirect(listPath[targetType] ?? '/sales/orders');
 }
 
-/** Create purchase return from an open/paid bill (credit against vendor). */
+/**
+ * Immediate full-source purchase return. Supported UI entry is the qty form at
+ * `/purchase/returns/new?from=` (bill detail, list Return, and bill picker).
+ * Keep this action for remaining callers; do not use it as the only entry.
+ */
 export async function createReturnFromBillAction(formData: FormData): Promise<void> {
   const sourceId = String(formData.get('sourceId') ?? '');
   const user = await requireTenantContext();

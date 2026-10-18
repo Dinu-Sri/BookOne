@@ -96,6 +96,45 @@ export function remainingReturnValue(sourceTotal: number, priorReturnTotal: numb
   return Math.round(Math.max(0, Number(sourceTotal) - Number(priorReturnTotal)) * 100) / 100;
 }
 
+/**
+ * Remaining quantity on each source line after prior returns of the same key.
+ * Prior quantity is allocated across source lines in order so duplicate SKUs
+ * do not all show the full leftover pool.
+ */
+export function remainingReturnQuantities(
+  sourceLines: QtyLine[],
+  priorReturnLines: QtyLine[],
+): number[] {
+  const priorLeft = new Map<string, number>();
+  addQtyMaps(priorLeft, priorReturnLines);
+  return sourceLines.map((s) => {
+    const k = documentLineKey(s.productId, s.description);
+    const used = priorLeft.get(k) ?? 0;
+    const srcQty = Number(s.quantity);
+    const take = Math.min(srcQty, used);
+    priorLeft.set(k, remainingQty(used, take));
+    return remainingQty(srcQty, take);
+  });
+}
+
+export function linkedReturnPrefillQuantities(
+  sourceLines: QtyLine[],
+  priorReturnLines: QtyLine[],
+): { sourceQuantity: number; remainingQuantity: number }[] {
+  const remaining = remainingReturnQuantities(sourceLines, priorReturnLines);
+  return sourceLines.map((s, i) => ({
+    sourceQuantity: Number(s.quantity),
+    remainingQuantity: remaining[i] ?? 0,
+  }));
+}
+
+/** Visible purchase-return entry from a posted bill (qty form, not a one-click full post). */
+export function purchaseReturnFromBillPath(sourceId: string): string {
+  const id = String(sourceId ?? '').trim();
+  if (!id) return '/purchase/returns/new';
+  return `/purchase/returns/new?from=${encodeURIComponent(id)}`;
+}
+
 /** True when this return consumes every remaining source line quantity. */
 export function isClosingLinkedReturn(
   sourceLines: QtyLine[],

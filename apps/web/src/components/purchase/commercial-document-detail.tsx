@@ -7,7 +7,6 @@ import {
   approvePurchaseDocumentAction,
   archiveCommercialDocument,
   convertDocumentAction,
-  createReturnFromBillAction,
   deleteCommercialDocument,
   rejectPurchaseDocumentAction,
   type CommercialDocDetail,
@@ -16,6 +15,7 @@ import {
   conversionTargetNeedsSupplierInvoice,
   displayedLineNetSubtotal,
   persistedDocumentBreakdown,
+  purchaseReturnFromBillPath,
 } from '@bookone/accounting';
 import { formatLKR } from '@/components/module/list-page';
 import { StatusBadge } from '@/components/ui/status-help';
@@ -186,12 +186,11 @@ export function CommercialDocumentDetail({
             </Link>
           ) : null}
           {canReturn ? (
-            <form action={createReturnFromBillAction}>
-              <input type="hidden" name="sourceId" value={doc.id} />
-              <Button variant="secondary" type="submit" disabled={pending}>
+            <Link href={purchaseReturnFromBillPath(doc.id)}>
+              <Button variant="secondary" type="button">
                 Create return
               </Button>
-            </form>
+            </Link>
           ) : null}
           {canConvert && convertTo && !convertPanel ? (
             <form action={convertDocumentAction} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

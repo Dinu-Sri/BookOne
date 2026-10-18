@@ -34,6 +34,7 @@ import {
   type LocationOption,
 } from '@/components/module/brand-location-fields';
 import { PartyNameFields } from '@/components/module/party-name-fields';
+import { PurchaseReturnBillPicker } from '@/components/purchase/purchase-return-bill-picker';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { IdempotencyField } from '@/components/ui/form-busy';
 
@@ -193,6 +194,9 @@ export function CommercialDocNewForm({
   alreadyReturnedTotal = 0,
   priorReturnLines = [],
   sourceQtyLines = [],
+  sourceDocumentNumber,
+  remainingQuantity,
+  remainingValue,
   initialLines,
   defaultPaymentTerms,
   defaultExpenseAccount,
@@ -238,6 +242,9 @@ export function CommercialDocNewForm({
   alreadyReturnedTotal?: number;
   priorReturnLines?: { productId: string | null; description: string; quantity: number }[];
   sourceQtyLines?: { productId: string | null; description: string; quantity: number }[];
+  sourceDocumentNumber?: string | null;
+  remainingQuantity?: number;
+  remainingValue?: number;
   initialLines?: DocLineState[];
   defaultPaymentTerms?: string;
   defaultExpenseAccount?: string;
@@ -426,6 +433,13 @@ export function CommercialDocNewForm({
           ) : null}
 
           <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
+            {documentType === 'purchase_return' ? (
+              <PurchaseReturnBillPicker
+                selectedNumber={sourceDocumentNumber ?? null}
+                remainingQuantity={remainingQuantity}
+                remainingValue={remainingValue}
+              />
+            ) : null}
             <PartyNameFields
               label={partyLabel}
               placeholder={partyPlaceholder}

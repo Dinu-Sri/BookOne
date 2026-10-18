@@ -1,3 +1,9 @@
+## 2026-10-18 — Visible partial purchase-return entry (v2.5.18)
+
+- Record: [CHG-20261018-light02-purchase-return-entry](changes/CHG-20261018-light02-purchase-return-entry.md). QA [CODING-MISSION-20261018-light02](https://github.com/Dinu-Sri/bookone-qa/blob/qa/light02-results/handoffs/CODING-MISSION-20261018-light02.md) on frozen v2.5.16 · b2c5205 (12 pass / 2 fail / 4 blocked). Candidate also carries v2.5.17 M17-SUPPLIER and M17-DDISC source fixes. Do not deploy onto remaining frozen Light02 `b2c5205`.
+- Bill detail Create return, purchases/cash/import list Return, and New purchase return bill picker open `/purchase/returns/new?from=` with locked vendor and remaining quantity. Return 1 of 3 @ 60 is Dr AP 60 Cr Inventory 60; source leftover 120 plus sibling 120 is AP 240; stock 4/value 240. Exhausted PO of 5 cannot receive 6. INV0018 draft 10 and INV0030 draft 256.50 are not edited. Isolated v2.5.14 upgrade remains blocked.
+- Next: Medium compares actual diff and creates a NEW pinned QA retest queue on `v2.5.18 · <sha7>`. Do not retarget Light02. Do not replay staging payments. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-18 — Rejected-attempt idempotency, draft hydration, return breakdown, invalid-qty preview, conversion supplier reference (v2.5.17)
 
 - Record: [CHG-20261018-pr46-idempotency-hydration](changes/CHG-20261018-pr46-idempotency-hydration.md). QA [CODING-MISSION-20261018-pr46](https://github.com/Dinu-Sri/bookone-qa/blob/qa/pr46-review-missions/handoffs/CODING-MISSION-20261018-pr46.md) on v2.5.16 · b2c5205. Light01 9 pass / 2 fail / 3 blocked / 4 inconclusive preserved. Do not deploy across Light02 frozen `b2c5205`.

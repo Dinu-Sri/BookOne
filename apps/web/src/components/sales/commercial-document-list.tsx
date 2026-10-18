@@ -62,6 +62,8 @@ export type CommercialListConfig = {
   editLockDays?: number;
   /** Example: `/purchase/payments/new?documentId=:id` */
   payHrefPattern?: string;
+  /** Example: `/purchase/returns/new?from=:id` */
+  returnHrefPattern?: string;
   /** Detail page for eye/view deep link optional */
   detailHrefPattern?: string;
 };
@@ -416,6 +418,29 @@ export function CommercialDocumentList({
           }}
         >
           {config.payHrefPattern?.includes('/sales/') ? 'Receive' : 'Pay'}
+        </Link>,
+      );
+    }
+    const returnTo = hrefFromPattern(config.returnHrefPattern, row.id);
+    if (
+      allowWrite &&
+      returnTo &&
+      row.status !== 'void' &&
+      row.status !== 'pending_approval' &&
+      row.status !== 'rejected'
+    ) {
+      items.push(
+        <Link
+          key="return"
+          href={returnTo}
+          className="doc-action-item"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setMenuPos(null);
+          }}
+        >
+          Return
         </Link>,
       );
     }

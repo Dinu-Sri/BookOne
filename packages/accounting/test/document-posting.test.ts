@@ -314,6 +314,16 @@ describe('vendor bill + purchase return + stock adjustment', () => {
     expect(sumSides(lines)).toEqual({ debit: 200, credit: 200 });
   });
 
+  it('M17-RET1: 1 unit at 60 is Dr AP 60 Cr Inventory 60', () => {
+    const lines = buildPurchaseReturnPosting({
+      total: 60,
+      isInventoryPurchase: true,
+    });
+    expect(lines.find((l) => l.accountCode === '2100' && l.side === 'debit')?.amount).toBe(60);
+    expect(lines.find((l) => l.accountCode === '5100' && l.side === 'credit')?.amount).toBe(60);
+    expect(sumSides(lines)).toEqual({ debit: 60, credit: 60 });
+  });
+
   it('posts cash purchase return to bank not AP', () => {
     const lines = buildPurchaseReturnPosting({
       total: 200,

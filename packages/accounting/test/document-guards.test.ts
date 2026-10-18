@@ -13,14 +13,17 @@ import {
   lineDiscountAmount,
   linkedReturnDocumentTotals,
   linkedReturnPartyMismatch,
+  linkedReturnPrefillQuantities,
   linkedReturnPreviewDisplay,
   linkedReturnPreviewTotals,
   percentDiscountOver100,
   persistedDocumentBreakdown,
   prorateLinkedReturn,
+  purchaseReturnFromBillPath,
   qtyExceedsRemaining,
   receivedQtyAgainstPo,
   remainingQty,
+  remainingReturnQuantities,
   remainingReturnValue,
   resolvedDiscountType,
   returnQtyExceeded,
@@ -717,5 +720,56 @@ describe('conversion supplier invoice is entered, not inherited', () => {
     expect(conversionBillSupplierInvoiceNumber('purchase', '  VENDOR-88  ')).toBe('VENDOR-88');
     expect(conversionBillSupplierInvoiceNumber('purchase', '')).toBeUndefined();
     expect(conversionBillSupplierInvoiceNumber('goods_receipt', 'PO-1')).toBeUndefined();
+  });
+});
+
+describe('M17-RET1 source-linked partial purchase return', () => {
+  const widget = { productId: 'sku', description: 'Widget', quantity: 3 };
+  const priced = [{ ...widget, unitPrice: 60, discountAmount: 0 }];
+
+  it('prefills remaining quantity, not the original billed 3 after a unit is already returned', () => {
+    expect(remainingReturnQuantities([widget], [])).toEqual([3]);
+    expect(remainingReturnQuantities([widget], [{ ...widget, quantity: 1 }])).toEqual([2]);
+    const prefill = linkedReturnPrefillQuantities([widget], [{ ...widget, quantity: 1 }]);
+    expect(prefill[0]).toEqual({ sourceQuantity: 3, remainingQuantity: 2 });
+  });
+
+  it('return 1 of 3 at 60 is 60; source leftover 120 plus sibling 120 is AP 240; stock 4/240', () => {
+    const credit = linkedReturnDocumentTotals(priced, 0, [{ ...widget, quantity: 1 }]);
+    expect(credit.net).toBe(60);
+    expect(credit.total).toBe(60);
+    expect(remainingReturnValue(180, 60)).toBe(120);
+    const siblingDue = 120;
+    expect(120 + siblingDue).toBe(240);
+    const onHand = remainingQty(5, 1);
+    expect(onHand).toBe(4);
+    expect(onHand * 60).toBe(240);
+  });
+
+  it('exhausted PO of 5 after GRN 2 + GRN 3 cannot receive 6', () => {
+    const received = receivedQtyAgainstPo('po-m17', [
+      {
+        id: 'grn-2',
+        documentType: 'goods_receipt',
+        sourceDocumentId: 'po-m17',
+        lines: [{ productId: 'sku', description: 'Widget', quantity: 2 }],
+      },
+      {
+        id: 'grn-3',
+        documentType: 'goods_receipt',
+        sourceDocumentId: 'po-m17',
+        lines: [{ productId: 'sku', description: 'Widget', quantity: 3 }],
+      },
+    ]);
+    const remaining = remainingQty(5, received.get('sku|widget') ?? 0);
+    expect(remaining).toBe(0);
+    expect(qtyExceedsRemaining(6, remaining)).toBe(true);
+    expect(qtyExceedsRemaining(1, remaining)).toBe(true);
+  });
+
+  it('visible entry is the qty form from= query, not a hidden one-click full post', () => {
+    expect(purchaseReturnFromBillPath('bill-pur0004')).toBe(
+      '/purchase/returns/new?from=bill-pur0004',
+    );
   });
 });

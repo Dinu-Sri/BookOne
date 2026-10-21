@@ -363,3 +363,13 @@ On each **Manual** line (quotes, SO, invoices, purchase docs, POS):
 | Date range | `apps/web/src/components/layout/date-range-picker.tsx` |
 | Shared CSS | `apps/web/src/app/globals.css` |
 | This guide | `docs/LIST_TABLE_UX_GUIDE.md` |
+
+
+## M. Acceptance and incremental maintenance —2026-10-21
+
+This remains the existing list/form design reference. [UI_UX_CHANGE_GUIDE](UI_UX_CHANGE_GUIDE.md) extends it with external shared acceptance checks and safe adoption; it does not replace sectionsA–L.
+
+Changed screens MUST preserve established layout/entry patterns and test applicable pending/success/refusal, all-field retention, source switching and historical prices, reconciled row/footer/print amounts, keyboard/focus/labels/help, narrow layout and persisted business effects. Apply WCAG criteria accurately; compact visual headings do not remove the need for meaningful page naming/structure.
+
+Use current shared controls/CSS. Inventory consumers for a shared fix, provide exact/adjacent regressions and update this guide only for reviewed changed conventions. No blanket native-select ban applies outside this guide's specific catalogue-product search contract. Any conflict with financial policy goes to the canonical business rulebook and review.
+

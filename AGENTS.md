@@ -344,3 +344,15 @@ The single maintained intended-behaviour reference is https://github.com/Dinu-Sr
 Before coding, identify applicable stable rule IDs/revisions and rulebook version/Git SHA/JSON hash in the CHG record. Applicable Sri Lankan law and the eligible accounting framework take precedence; current implementation is descriptive evidence, not its own expected result. Initial professional product defaults were delegated by the owner and remain independently expert-pending. Read RF-01–10 in the QA review queue for unresolved applicability and conflicting contracts.
 
 Do not copy a second editable rulebook here, silently change adopted rules/settings or rewrite old assertions/results to match code. Material policy changes use the QA RULE_CHANGE template, responsible rule-owner review, independent worked examples, effective dates and compatibility/migration assessment. New-company defaults do not silently change existing companies or issued facts. Tests and full current-build acceptance remain independent from documentation or code review.
+
+
+## Mandatory incremental UI/UX compatibility — owner2026-10-21
+
+For every UI, UX, shared form/control, feedback, list, print or navigation change, MUST read docs/UI_UX_CHANGE_GUIDE.md and the relevant existing docs/LIST_TABLE_UX_GUIDE.md, Simple Entry/entity guidance and actual CSS/component implementation. Extend existing design references; never introduce a second design system for this adoption.
+
+MUST record applicable external UX/UXW/WB IDs, exact QA commit/hash, direct screens and transitive shared consumers in CHG before implementation. Preserve existing branding/density, props/field identities, source snapshots, saved dates/notes, posting, access and historical output. Use the smallest compatible change; no global reset/palette/framework/screen rewrite or data migration for cosmetic work.
+
+MUST use existing pending helpers, truthful outcome feedback, retained inputs on refusal, accessible labels/help/focus, coherent source hydration and reconciling row/footer values. No blind financial retry or posting an inconsistent preview. Follow formal accessibility criteria and exceptions rather than community aesthetic bans.
+
+MUST run required product checks plus actual exact/adjacent browser/persisted business regressions and representative shared consumers; record missing layers. Preserve independent QA evidence/expectations and leave bug closure to independent QA. Update existing guides, QA companion links, TASK_LOG and PROJECT_STATUS. Every new or changed UI follows this process; legacy gaps are prioritized incrementally with owned time-bound exceptions. No automatic release/merge/deploy authority follows.
+

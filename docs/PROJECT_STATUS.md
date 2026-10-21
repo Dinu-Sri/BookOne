@@ -1,3 +1,8 @@
+## 2026-10-21 — Incremental UI/UX QA contract (documentation only)
+
+Owner-requested existing-design preservation and shared UX workbook adoption. See [UI_UX_CHANGE_GUIDE](UI_UX_CHANGE_GUIDE.md) and [CHG-20261021-ux-incremental-contract](changes/CHG-20261021-ux-incremental-contract.md). Root AGENTS/.claude, existing list guide, QA contract and CHG template now require scoped compatible changes, external UX/UXW/WB refs, shared-consumer impact and actual evidence. External definitions remain draft/unbound/not-run. No UI code/VERSION/deployment change; current Light03 return defects remain for the coding mission and independent retest. Apply on the actual working branch without overwriting concurrent work.
+
+
 ## 2026-10-18 — Visible partial purchase-return entry (v2.5.18)
 
 Light02 coding mission on frozen v2.5.16 · b2c5205: 12 passed / 2 failed / 4 blocked. This candidate keeps the v2.5.17 required-number correction and 256.50 draft hydration and adds a visible remaining-qty purchase-return path (bill picker, list Return, detail Create return → `/purchase/returns/new?from=`). Independent example: return 1@60 is Dr AP 60 Cr Inventory 60; leftover bills 120+120; stock 4/240. Branch `fix/v2517-pr46-idempotency-hydration` — do not deploy onto remaining frozen Light02 `b2c5205`. See [CHG-20261018-light02-purchase-return-entry](changes/CHG-20261018-light02-purchase-return-entry.md). Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
@@ -721,3 +726,4 @@ Tell me which to pick up and I'll plan the work.
 
 *Last reviewed: 2026-06-16 by GitHub Copilot.*
 *If you find anything missing or wrong, edit this file. It is the single source of truth.*
+

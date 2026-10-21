@@ -1,3 +1,8 @@
+## 2026-10-21 — Incremental UI/UX QA contract (documentation only)
+
+Owner-requested existing-design preservation and shared UX workbook adoption. See [UI_UX_CHANGE_GUIDE](UI_UX_CHANGE_GUIDE.md) and [CHG-20261021-ux-incremental-contract](changes/CHG-20261021-ux-incremental-contract.md). Root AGENTS/.claude, existing list guide, QA contract and CHG template now require scoped compatible changes, external UX/UXW/WB refs, shared-consumer impact and actual evidence. External definitions remain draft/unbound/not-run. No UI code/VERSION/deployment change; current Light03 return defects remain for the coding mission and independent retest. Apply on the actual working branch without overwriting concurrent work.
+
+
 ## 2026-10-18 — Visible partial purchase-return entry (v2.5.18)
 
 - Record: [CHG-20261018-light02-purchase-return-entry](changes/CHG-20261018-light02-purchase-return-entry.md). QA [CODING-MISSION-20261018-light02](https://github.com/Dinu-Sri/bookone-qa/blob/qa/light02-results/handoffs/CODING-MISSION-20261018-light02.md) on frozen v2.5.16 · b2c5205 (12 pass / 2 fail / 4 blocked). Candidate also carries v2.5.17 M17-SUPPLIER and M17-DDISC source fixes. Do not deploy onto remaining frozen Light02 `b2c5205`.
@@ -736,3 +741,4 @@ Canonical public QA project: https://github.com/Dinu-Sri/bookone-qa. All develop
 ---
 
 *Last updated: 2026-07-16*
+

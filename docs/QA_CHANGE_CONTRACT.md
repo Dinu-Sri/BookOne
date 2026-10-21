@@ -47,3 +47,11 @@ The single maintained intended-behaviour reference is https://github.com/Dinu-Sr
 Before coding, identify applicable stable rule IDs/revisions and rulebook version/Git SHA/JSON hash in the CHG record. Applicable Sri Lankan law and the eligible accounting framework take precedence; current implementation is descriptive evidence, not its own expected result. Initial professional product defaults were delegated by the owner and remain independently expert-pending. Read RF-01–10 in the QA review queue for unresolved applicability and conflicting contracts.
 
 Do not copy a second editable rulebook here, silently change adopted rules/settings or rewrite old assertions/results to match code. Material policy changes use the QA RULE_CHANGE template, responsible rule-owner review, independent worked examples, effective dates and compatibility/migration assessment. New-company defaults do not silently change existing companies or issued facts. Tests and full current-build acceptance remain independent from documentation or code review.
+
+
+## Shared UI/UX acceptance and preservation —2026-10-21
+
+UI/UX tasks MUST follow [UI_UX_CHANGE_GUIDE](UI_UX_CHANGE_GUIDE.md) and extend existing design references/components. Read the external UX workbook at an exact recorded QA SHA and hash; declare applicable UX/UXW/WB refs, existing source/style choice, direct/dependent shared consumers, before/after behaviour and preserved financial/source/history/access facts.
+
+Use the extended CHG UX section. Require actual rendered exact/adjacent interaction, saved readback and independent business outcomes plus applicable keyboard/narrow/reader evidence; source lint/screenshots/scans alone are limited. Preserve original QA failures and keep unrun layers explicit. Maintain rules/workflows externally; no second product-side scenario catalogue. Incremental batches with scoped rollback replace blanket redesign. Product checks and independent QA acceptance remain separate.
+

@@ -264,6 +264,57 @@ export type ProrateSourceLine = {
   discountAmount: number;
 };
 
+export function matchLinkedReturnSourceLine(
+  productId: string | null | undefined,
+  description: string,
+  sourceLines: ProrateSourceLine[],
+): ProrateSourceLine | null {
+  if (!sourceLines.length) return null;
+  const pid = productId || null;
+  if (pid) {
+    const byId = sourceLines.find((s) => s.productId === pid);
+    if (byId) return byId;
+  }
+  const k = documentLineKey(pid, description);
+  return sourceLines.find((s) => documentLineKey(s.productId, s.description) === k) ?? null;
+}
+
+/**
+ * Extra catalog rows on a linked return take the source unit price and lock,
+ * not the current catalog sell/cost. Unmatched catalog items stay catalog-priced.
+ */
+export function linkedReturnAddedLineFromSource(
+  productId: string | null | undefined,
+  description: string,
+  catalogUnitPrice: number,
+  sourceLines: ProrateSourceLine[],
+): {
+  unitPrice: number;
+  locked: boolean;
+  discountType: 'percent' | 'fixed';
+  discountValue: string;
+  sourceQuantity?: string;
+  sourceDiscountAmount?: string;
+} {
+  const src = matchLinkedReturnSourceLine(productId, description, sourceLines);
+  if (!src) {
+    return {
+      unitPrice: catalogUnitPrice,
+      locked: false,
+      discountType: 'percent',
+      discountValue: '',
+    };
+  }
+  return {
+    unitPrice: src.unitPrice,
+    locked: true,
+    discountType: src.discountAmount > 0 ? 'fixed' : 'percent',
+    discountValue: src.discountAmount > 0 ? String(src.discountAmount) : '',
+    sourceQuantity: String(src.quantity),
+    sourceDiscountAmount: String(src.discountAmount ?? 0),
+  };
+}
+
 export type ProrateReturnLine = {
   productId: string | null;
   description: string;
@@ -736,4 +787,113 @@ export function conversionBillSupplierInvoiceNumber(
   if (!conversionTargetNeedsSupplierInvoice(targetType)) return undefined;
   const v = String(entered ?? '').trim();
   return v || undefined;
+}
+
+export type LinkedReturnPickerSource = {
+  id: string;
+  documentNumber: string;
+  partyName: string;
+  headerDiscount: number;
+  sourceNet: number;
+  alreadyReturnedNet: number;
+  lines: Array<{
+    id?: string;
+    productId: string | null;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    discountAmount: number;
+    discountPercent?: number;
+    sku?: string | null;
+    productClass?: string | null;
+  }>;
+  priorReturnLines: QtyLine[];
+};
+
+export type LinkedReturnPickerFormState = {
+  sourceDocumentId: string | null;
+  sourceDocumentNumber: string | null;
+  partyName: string | null;
+  headerDiscount: number;
+  remainingQuantity: number;
+  remainingValue: number;
+  lines: Array<{
+    productId: string;
+    description: string;
+    quantity: string;
+    unitPrice: string;
+    sourceQuantity: string;
+    sourceDiscountAmount: string;
+    discountType: 'percent' | 'fixed';
+    discountValue: string;
+    sku?: string;
+    productClass?: string;
+  }>;
+};
+
+export function emptyLinkedReturnPickerFormState(): LinkedReturnPickerFormState {
+  return {
+    sourceDocumentId: null,
+    sourceDocumentNumber: null,
+    partyName: null,
+    headerDiscount: 0,
+    remainingQuantity: 0,
+    remainingValue: 0,
+    lines: [],
+  };
+}
+
+/** Client bill-picker navigation must replace all source-backed form state, not keep empty first-mount lines. */
+export function linkedReturnPickerFormStateFromSource(
+  source: LinkedReturnPickerSource | null,
+): LinkedReturnPickerFormState {
+  if (!source) return emptyLinkedReturnPickerFormState();
+  const sourceQtyLines = source.lines.map((l) => ({
+    productId: l.productId,
+    description: l.description,
+    quantity: Number(l.quantity),
+  }));
+  const prefill = linkedReturnPrefillQuantities(sourceQtyLines, source.priorReturnLines);
+  return {
+    sourceDocumentId: source.id,
+    sourceDocumentNumber: source.documentNumber,
+    partyName: source.partyName,
+    headerDiscount: source.headerDiscount,
+    remainingQuantity: prefill.reduce((s, p) => s + p.remainingQuantity, 0),
+    remainingValue: remainingReturnValue(source.sourceNet, source.alreadyReturnedNet),
+    lines: source.lines.map((l, i) => {
+      const remaining = prefill[i]?.remainingQuantity ?? 0;
+      const hydrated = hydrateDraftLineState({
+        id: l.id ?? `src-${i}`,
+        productId: l.productId,
+        description: l.description,
+        quantity: remaining,
+        unitPrice: l.unitPrice,
+        discountAmount: l.discountAmount,
+        discountPercent: l.discountPercent,
+        sku: l.sku,
+        productClass: l.productClass,
+      });
+      return {
+        productId: hydrated.productId,
+        description: hydrated.description,
+        quantity: hydrated.quantity,
+        unitPrice: hydrated.unitPrice,
+        sourceQuantity: String(l.quantity),
+        sourceDiscountAmount: String(l.discountAmount ?? 0),
+        discountType: hydrated.discountType,
+        discountValue: hydrated.discountValue,
+        sku: hydrated.sku,
+        productClass: hydrated.productClass,
+      };
+    }),
+  };
+}
+
+/** Simulate empty→A, A→B, and clear/reselect without keeping the previous bill's lines. */
+export function applyLinkedReturnPickerSelection(
+  _current: LinkedReturnPickerFormState,
+  nextSource: LinkedReturnPickerSource | null,
+): LinkedReturnPickerFormState {
+  return linkedReturnPickerFormStateFromSource(nextSource);
 }

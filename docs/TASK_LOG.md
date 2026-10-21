@@ -1,3 +1,9 @@
+## 2026-10-21 — Bill-picker remount and split-return source prices (v2.5.19)
+
+- Record: [CHG-20261021-light03-picker-split-price](changes/CHG-20261021-light03-picker-split-price.md). QA [CODING-MISSION-20261021-light03-results](https://github.com/Dinu-Sri/bookone-qa/blob/qa/light03-fresh-results/handoffs/CODING-MISSION-20261021-light03-results.md) on v2.5.18 · a4a6d65 (18 pass / 2 fail / 2 blocked). Do not deploy onto an active Light mission.
+- Selecting a bill on New purchase return remounts source-backed lines, prices, discounts, vendor and remaining budgets (empty→A, A→B, clear/reselect). Added split-return catalog rows lock the source unit price so 1+1+1 of a 3×100 invoice shows 100+100+100 / footer 300, not catalog 10. INV0032 open 300 is not credited. Isolated v2.5.14 upgrade remains blocked.
+- Next: Medium compares actual diff and creates a NEW pinned QA retest queue on `v2.5.19 · <sha7>`. Do not retarget Light03. Do not replay INV0032 or staging payments. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-18 — Visible partial purchase-return entry (v2.5.18)
 
 - Record: [CHG-20261018-light02-purchase-return-entry](changes/CHG-20261018-light02-purchase-return-entry.md). QA [CODING-MISSION-20261018-light02](https://github.com/Dinu-Sri/bookone-qa/blob/qa/light02-results/handoffs/CODING-MISSION-20261018-light02.md) on frozen v2.5.16 · b2c5205 (12 pass / 2 fail / 4 blocked). Candidate also carries v2.5.17 M17-SUPPLIER and M17-DDISC source fixes. Do not deploy onto remaining frozen Light02 `b2c5205`.

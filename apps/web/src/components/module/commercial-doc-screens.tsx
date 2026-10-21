@@ -7,7 +7,7 @@
  */
 
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   linkedReturnPreviewDisplay,
   PURCHASE_RETURN_QTY_MESSAGE,
@@ -268,6 +268,17 @@ export function CommercialDocNewForm({
     initialHeaderDiscount && initialHeaderDiscount > 0 ? 'fixed' : 'percent',
   );
   const [discountId, setDiscountId] = useState('');
+  const sourceStateKey = sourceDocumentId ?? '';
+  useEffect(() => {
+    setLines(initialLines ?? []);
+    setHeaderDiscount(
+      initialHeaderDiscount && initialHeaderDiscount > 0 ? String(initialHeaderDiscount) : '0',
+    );
+    setHeaderDiscountType(initialHeaderDiscount && initialHeaderDiscount > 0 ? 'fixed' : 'percent');
+    setDiscountId('');
+    // Replace all source-backed fields when the picker navigates empty→bill or bill A→B.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceStateKey]);
   const linkedReturn = documentType === 'purchase_return' && Boolean(sourceDocumentId);
   const sourceHeaderSnapshot = linkedReturn ? Number(initialHeaderDiscount) || 0 : 0;
   const sourcePricedLines: ProrateSourceLine[] = useMemo(
@@ -603,6 +614,7 @@ export function CommercialDocNewForm({
             products={catalog}
             lines={lines}
             onChange={setLines}
+            sourcePricedLines={sourcePricedLines}
             onSearchActive={handleSearchActive}
             onCatalogProduct={(p) =>
               setCatalog((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))

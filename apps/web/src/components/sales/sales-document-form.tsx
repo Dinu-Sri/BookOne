@@ -494,6 +494,7 @@ export function SalesDocumentForm({
           products={catalog}
           lines={lines}
           onChange={setLines}
+          sourcePricedLines={sourcePricedLines}
           onSearchActive={handleSearchActive}
           onCatalogProduct={(p) =>
             setCatalog((prev) => (prev.some((x) => x.id === p.id) ? prev : [p, ...prev]))

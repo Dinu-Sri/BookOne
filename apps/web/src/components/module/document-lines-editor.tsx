@@ -13,9 +13,11 @@ import { pushStatusToast } from '@/components/layout/status-toast';
 import { withFormPending } from '@/components/ui/form-busy';
 import {
   lineDiscountAmount as computeLineDiscountAmount,
+  linkedReturnAddedLineFromSource,
   percentDiscountOver100,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
   returnQtyExceeded,
+  type ProrateSourceLine,
   type QtyLine,
 } from '@bookone/accounting';
 
@@ -151,6 +153,7 @@ export function DocumentLinesEditor({
   hint = 'Search catalog · or Enter free text if no match',
   /** purchase/GRN: line amount is this lot's buy cost, not sell price */
   linePriceMode = 'sell',
+  sourcePricedLines = [],
 }: {
   products: ProductPick[];
   lines: DocLineState[];
@@ -160,6 +163,8 @@ export function DocumentLinesEditor({
   onSearchActive?: (active: boolean) => void;
   hint?: string;
   linePriceMode?: 'sell' | 'cost';
+  /** Linked return source rows — added catalog matches lock source price/discount. */
+  sourcePricedLines?: ProrateSourceLine[];
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const amounts = computeLineAmounts(lines);
@@ -189,17 +194,28 @@ export function DocumentLinesEditor({
     if (p.kitComponents && p.kitComponents.length > 0) {
       onChange([
         ...lines,
-        ...p.kitComponents.map((c) => ({
-          key: newKey(),
-          productId: c.productId,
-          description: c.name,
-          quantity: String(c.qty),
-          unitPrice: String(linePriceMode === 'cost' ? c.unitCost ?? c.sellPrice : c.sellPrice),
-          discountType: 'percent' as const,
-          discountValue: '',
-          sku: c.sku,
-          isManual: false,
-        })),
+        ...p.kitComponents.map((c) => {
+          const catalogPrice = linePriceMode === 'cost' ? c.unitCost ?? c.sellPrice : c.sellPrice;
+          const fromSource = linkedReturnAddedLineFromSource(
+            c.productId,
+            c.name,
+            catalogPrice,
+            sourcePricedLines,
+          );
+          return {
+            key: newKey(),
+            productId: c.productId,
+            description: c.name,
+            quantity: String(c.qty),
+            unitPrice: String(fromSource.unitPrice),
+            discountType: fromSource.discountType,
+            discountValue: fromSource.discountValue,
+            sourceQuantity: fromSource.sourceQuantity,
+            sourceDiscountAmount: fromSource.sourceDiscountAmount,
+            sku: c.sku,
+            isManual: false,
+          };
+        }),
       ]);
       pushStatusToast({
         kind: 'success',
@@ -207,6 +223,13 @@ export function DocumentLinesEditor({
       });
       return;
     }
+    const catalogPrice = linePriceMode === 'cost' ? p.unitCost : p.sellPrice;
+    const fromSource = linkedReturnAddedLineFromSource(
+      p.id,
+      p.name,
+      catalogPrice,
+      sourcePricedLines,
+    );
     onChange([
       ...lines,
       {
@@ -214,9 +237,11 @@ export function DocumentLinesEditor({
         productId: p.id,
         description: p.name,
         quantity: '1',
-        unitPrice: String(linePriceMode === 'cost' ? p.unitCost : p.sellPrice),
-        discountType: 'percent',
-        discountValue: '',
+        unitPrice: String(fromSource.unitPrice),
+        discountType: fromSource.discountType,
+        discountValue: fromSource.discountValue,
+        sourceQuantity: fromSource.sourceQuantity,
+        sourceDiscountAmount: fromSource.sourceDiscountAmount,
         sku: p.sku,
         isManual: false,
       },

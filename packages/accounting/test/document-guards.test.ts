@@ -10,9 +10,13 @@ import {
   invoiceDraftDisplayedTotals,
   isClosingLinkedReturn,
   issuedOnOrBeforeAsOf,
+  applyLinkedReturnPickerSelection,
+  emptyLinkedReturnPickerFormState,
   lineDiscountAmount,
+  linkedReturnAddedLineFromSource,
   linkedReturnDocumentTotals,
   linkedReturnPartyMismatch,
+  linkedReturnPickerFormStateFromSource,
   linkedReturnPrefillQuantities,
   linkedReturnPreviewDisplay,
   linkedReturnPreviewTotals,
@@ -771,5 +775,229 @@ describe('M17-RET1 source-linked partial purchase return', () => {
     expect(purchaseReturnFromBillPath('bill-pur0004')).toBe(
       '/purchase/returns/new?from=bill-pur0004',
     );
+  });
+});
+
+describe('M18 bill picker replaces source-backed form state', () => {
+  const billA = {
+    id: 'pur-0007',
+    documentNumber: 'PUR-20261021-0007',
+    partyName: 'Vendor A',
+    headerDiscount: 0,
+    sourceNet: 180,
+    alreadyReturnedNet: 0,
+    lines: [
+      {
+        productId: 'sku-a',
+        description: 'Widget',
+        quantity: 3,
+        unitPrice: 60,
+        discountAmount: 0,
+      },
+    ],
+    priorReturnLines: [],
+  };
+  const billB = {
+    id: 'pur-0008',
+    documentNumber: 'PUR-0008',
+    partyName: 'Vendor B',
+    headerDiscount: 5,
+    sourceNet: 95,
+    alreadyReturnedNet: 0,
+    lines: [
+      {
+        productId: 'sku-b',
+        description: 'Bolt',
+        quantity: 1,
+        unitPrice: 100,
+        discountAmount: 5,
+      },
+    ],
+    priorReturnLines: [],
+  };
+
+  it('empty → A loads remaining qty 3 @ 60, vendor, and remaining value 180', () => {
+    const empty = emptyLinkedReturnPickerFormState();
+    expect(empty.lines).toEqual([]);
+    const next = applyLinkedReturnPickerSelection(empty, billA);
+    expect(next.sourceDocumentId).toBe('pur-0007');
+    expect(next.partyName).toBe('Vendor A');
+    expect(next.lines).toHaveLength(1);
+    expect(next.lines[0]?.quantity).toBe('3');
+    expect(next.lines[0]?.unitPrice).toBe('60');
+    expect(next.lines[0]?.sourceQuantity).toBe('3');
+    expect(next.remainingQuantity).toBe(3);
+    expect(next.remainingValue).toBe(180);
+  });
+
+  it('A → B replaces vendor, price, discount and does not keep A lines', () => {
+    const fromA = linkedReturnPickerFormStateFromSource(billA);
+    const fromB = applyLinkedReturnPickerSelection(fromA, billB);
+    expect(fromB.sourceDocumentId).toBe('pur-0008');
+    expect(fromB.partyName).toBe('Vendor B');
+    expect(fromB.lines).toHaveLength(1);
+    expect(fromB.lines[0]?.description).toBe('Bolt');
+    expect(fromB.lines[0]?.unitPrice).toBe('100');
+    expect(fromB.headerDiscount).toBe(5);
+    expect(fromB.lines.some((l) => l.description === 'Widget')).toBe(false);
+  });
+
+  it('clear then reselect restores A; does not keep empty first-mount lines', () => {
+    const cleared = applyLinkedReturnPickerSelection(
+      linkedReturnPickerFormStateFromSource(billA),
+      null,
+    );
+    expect(cleared).toEqual(emptyLinkedReturnPickerFormState());
+    const again = applyLinkedReturnPickerSelection(cleared, billA);
+    expect(again.lines[0]?.quantity).toBe('3');
+    expect(again.remainingValue).toBe(180);
+  });
+
+  it('prior return of 1 leaves remaining qty 2', () => {
+    const next = linkedReturnPickerFormStateFromSource({
+      ...billA,
+      alreadyReturnedNet: 60,
+      priorReturnLines: [{ productId: 'sku-a', description: 'Widget', quantity: 1 }],
+    });
+    expect(next.lines[0]?.quantity).toBe('2');
+    expect(next.remainingQuantity).toBe(2);
+    expect(next.remainingValue).toBe(120);
+  });
+
+  it('zero remaining still binds the source with qty 0', () => {
+    const next = linkedReturnPickerFormStateFromSource({
+      ...billA,
+      alreadyReturnedNet: 180,
+      priorReturnLines: [{ productId: 'sku-a', description: 'Widget', quantity: 3 }],
+    });
+    expect(next.sourceDocumentId).toBe('pur-0007');
+    expect(next.lines[0]?.quantity).toBe('0');
+    expect(next.remainingQuantity).toBe(0);
+    expect(next.remainingValue).toBe(0);
+  });
+});
+
+describe('M18 split return rows keep source price', () => {
+  const digital = {
+    productId: 'digital-1',
+    description: 'Digital Standard',
+    quantity: 3,
+    unitPrice: 100,
+    discountAmount: 0,
+  };
+  const catalogPrice = 10;
+
+  function amount(row: {
+    quantity: string | number;
+    unitPrice: string | number;
+    discountType?: 'percent' | 'fixed';
+    discountValue?: string;
+    sourceQuantity?: string;
+    sourceDiscountAmount?: string;
+  }) {
+    const qty = Number(row.quantity);
+    const price = Number(row.unitPrice);
+    const gross = Math.round(qty * price * 100) / 100;
+    return Math.max(0, Math.round((gross - lineDiscountAmount(row)) * 100) / 100);
+  }
+
+  it('added catalog row at sell 10 locks source 100', () => {
+    const added = linkedReturnAddedLineFromSource(
+      digital.productId,
+      digital.description,
+      catalogPrice,
+      [digital],
+    );
+    expect(added.unitPrice).toBe(100);
+    expect(added.locked).toBe(true);
+    expect(added.sourceQuantity).toBe('3');
+  });
+
+  it('valid 1+1+1 line amounts are 100 each and footer is 300', () => {
+    const added = linkedReturnAddedLineFromSource(
+      digital.productId,
+      digital.description,
+      catalogPrice,
+      [digital],
+    );
+    const rows = [1, 1, 1].map((qty) => ({
+      productId: digital.productId,
+      description: digital.description,
+      quantity: qty,
+      unitPrice: added.unitPrice,
+      discountType: added.discountType,
+      discountValue: added.discountValue,
+      sourceQuantity: added.sourceQuantity,
+      sourceDiscountAmount: added.sourceDiscountAmount,
+    }));
+    expect(rows.map(amount)).toEqual([100, 100, 100]);
+    const credit = linkedReturnDocumentTotals([digital], 0, rows);
+    expect(credit.net).toBe(300);
+    expect(credit.total).toBe(300);
+  });
+
+  it('invalid 2+2 vs 3 is exceeded', () => {
+    expect(
+      returnQtyExceeded(
+        [digital],
+        [],
+        [
+          { productId: digital.productId, description: digital.description, quantity: 2 },
+          { productId: digital.productId, description: digital.description, quantity: 2 },
+        ],
+      ),
+    ).toBe(true);
+  });
+
+  it('partial remaining 1 after a posted unit still prices 100', () => {
+    const added = linkedReturnAddedLineFromSource(
+      digital.productId,
+      digital.description,
+      catalogPrice,
+      [digital],
+    );
+    const remaining = [{ ...digital, quantity: 1 }];
+    const credit = linkedReturnDocumentTotals([digital], 0, remaining, {
+      sourceTotal: 300,
+      priorReturnTotal: 100,
+      priorReturnLines: [{ productId: digital.productId, description: digital.description, quantity: 1 }],
+    });
+    expect(amount({ ...added, quantity: 1 })).toBe(100);
+    expect(credit.net).toBe(100);
+  });
+
+  it('header 13.50 and VAT 18 on split 1+1+1 stay 256.50 / 302.67', () => {
+    const disc = [{ ...digital, discountAmount: 30 }];
+    const added = linkedReturnAddedLineFromSource(digital.productId, digital.description, catalogPrice, disc);
+    const rows = [1, 1, 1].map((qty) => ({
+      productId: digital.productId,
+      description: digital.description,
+      quantity: qty,
+      unitPrice: added.unitPrice,
+      discountType: added.discountType,
+      discountValue: added.discountValue,
+      sourceQuantity: added.sourceQuantity,
+      sourceDiscountAmount: added.sourceDiscountAmount,
+    }));
+    expect(rows.map(amount)).toEqual([90, 90, 90]);
+    const taxed = linkedReturnDocumentTotals(disc, 13.5, rows, undefined, 18);
+    expect(taxed.net).toBe(256.5);
+    expect(taxed.vat).toBe(46.17);
+    expect(taxed.total).toBe(302.67);
+  });
+
+  it('purchase analogue: catalog 10 / bill 60 locks 60', () => {
+    const bill = {
+      productId: 'widget',
+      description: 'Widget',
+      quantity: 3,
+      unitPrice: 60,
+      discountAmount: 0,
+    };
+    const added = linkedReturnAddedLineFromSource(bill.productId, bill.description, 10, [bill]);
+    expect(added.unitPrice).toBe(60);
+    expect(added.locked).toBe(true);
+    const credit = linkedReturnDocumentTotals([bill], 0, [{ ...bill, quantity: 1 }]);
+    expect(credit.total).toBe(60);
   });
 });

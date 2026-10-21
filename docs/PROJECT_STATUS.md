@@ -1,3 +1,7 @@
+## 2026-10-21 — Bill-picker remount and split-return source prices (v2.5.19)
+
+Light03 fresh attempt on v2.5.18 · a4a6d65: 18 passed / 2 failed / 2 blocked. Client bill-picker selection now remounts remaining qty/price/vendor instead of leaving empty lines. Added linked-return catalog rows lock the source unit price (catalog 10 does not replace source 100). Branch `fix/v2519-light03-picker-split-price`. See [CHG-20261021-light03-picker-split-price](changes/CHG-20261021-light03-picker-split-price.md). INV0032 open 300 preserved. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-18 — Visible partial purchase-return entry (v2.5.18)
 
 Light02 coding mission on frozen v2.5.16 · b2c5205: 12 passed / 2 failed / 4 blocked. This candidate keeps the v2.5.17 required-number correction and 256.50 draft hydration and adds a visible remaining-qty purchase-return path (bill picker, list Return, detail Create return → `/purchase/returns/new?from=`). Independent example: return 1@60 is Dr AP 60 Cr Inventory 60; leftover bills 120+120; stock 4/240. Branch `fix/v2517-pr46-idempotency-hydration` — do not deploy onto remaining frozen Light02 `b2c5205`. See [CHG-20261018-light02-purchase-return-entry](changes/CHG-20261018-light02-purchase-return-entry.md). Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

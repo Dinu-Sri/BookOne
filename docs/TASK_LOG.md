@@ -1,8 +1,15 @@
 ## 2026-10-21 — Bill-picker remount and split-return source prices (v2.5.19)
 
-- Record: [CHG-20261021-light03-picker-split-price](changes/CHG-20261021-light03-picker-split-price.md). QA [CODING-MISSION-20261021-light03-results](https://github.com/Dinu-Sri/bookone-qa/blob/qa/light03-fresh-results/handoffs/CODING-MISSION-20261021-light03-results.md) on v2.5.18 · a4a6d65 (18 pass / 2 fail / 2 blocked). Do not deploy onto an active Light mission.
+- Record: [CHG-20261021-light03-picker-split-price](changes/CHG-20261021-light03-picker-split-price.md). QA [CODING-MISSION-20261021-light03-results](https://github.com/Dinu-Sri/bookone-qa/blob/qa/light03-fresh-results/handoffs/CODING-MISSION-20261021-light03-results.md) on v2.5.18 · a4a6d65 (18 pass / 2 fail / 2 blocked). Code is on master as `4c3a304`. Do not deploy onto an active Light mission.
 - Selecting a bill on New purchase return remounts source-backed lines, prices, discounts, vendor and remaining budgets (empty→A, A→B, clear/reselect). Added split-return catalog rows lock the source unit price so 1+1+1 of a 3×100 invoice shows 100+100+100 / footer 300, not catalog 10. INV0032 open 300 is not credited. Isolated v2.5.14 upgrade remains blocked.
-- Next: Medium compares actual diff and creates a NEW pinned QA retest queue on `v2.5.19 · <sha7>`. Do not retarget Light03. Do not replay INV0032 or staging payments. Backup last. BookOne is not customer-ready.
+- UX refs recorded against this candidate: UXW-009 (empty→source; UX-008/009/010/032; WB-HYB.J02, WB-PHY.J06), UXW-010 (A→B/clear; UX-008/027/032; late-response isolated-fault branch blocked), UXW-011 (split source price; UX-008/009/010/032). Adjacent: UXW-002, UXW-004, UXW-006, UXW-012. Shared consumers: `DocumentLinesEditor`, `CommercialDocNewForm`, `SalesDocumentForm`, purchase-return new page / bill picker.
+- Next: Independent QA retests on `v2.5.19 · 4c3a304`. Do not retarget Light03. Do not close OBS-M18 from this code or docs change. Do not replay INV0032 or staging payments. Backup last. BookOne is not customer-ready.
+
+## 2026-10-21 — Incremental UI/UX QA contract (documentation only)
+
+- Record: [CHG-20261021-ux-incremental-contract](changes/CHG-20261021-ux-incremental-contract.md). QA [HANDOFF-20261021-ux-workbook](https://github.com/Dinu-Sri/bookone-qa/blob/c318ac38df72888df673e838793c197df5495563/handoffs/HANDOFF-20261021-ux-workbook.md); spec `024f8c35223a28c0662d469b71cd96579d4ee24d`; UX JSON SHA256 `383d18ad74978af67e9e75d855c77c87b45a92beb00c101a3338dd0abd01e57f`. Draft QA PR #52 and product PR #6.
+- Adopted on master v2.5.19 · `4c3a304` without overwriting Light03 code. Root AGENTS/.claude, existing list guide, QA contract and CHG template now require scoped compatible changes, external UX/UXW/WB refs, shared-consumer impact and actual evidence. Existing design system preserved. External 48 UX workflows remain draft/unbound/not-run. UXQ-001–004 unresolved. No VERSION bump (docs-only).
+- Next: Independent QA verifies the Light03 build. 48 UX workflows stay unrun until a bound mission. Backup last. BookOne is not customer-ready.
 
 ## 2026-10-18 — Visible partial purchase-return entry (v2.5.18)
 
@@ -742,3 +749,4 @@ Canonical public QA project: https://github.com/Dinu-Sri/bookone-qa. All develop
 ---
 
 *Last updated: 2026-07-16*
+

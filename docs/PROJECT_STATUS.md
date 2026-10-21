@@ -1,6 +1,10 @@
 ## 2026-10-21 — Bill-picker remount and split-return source prices (v2.5.19)
 
-Light03 fresh attempt on v2.5.18 · a4a6d65: 18 passed / 2 failed / 2 blocked. Client bill-picker selection now remounts remaining qty/price/vendor instead of leaving empty lines. Added linked-return catalog rows lock the source unit price (catalog 10 does not replace source 100). Branch `fix/v2519-light03-picker-split-price`. See [CHG-20261021-light03-picker-split-price](changes/CHG-20261021-light03-picker-split-price.md). INV0032 open 300 preserved. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+Light03 fresh attempt on v2.5.18 · a4a6d65: 18 passed / 2 failed / 2 blocked. Client bill-picker selection now remounts remaining qty/price/vendor instead of leaving empty lines. Added linked-return catalog rows lock the source unit price (catalog 10 does not replace source 100). Branch `fix/v2519-light03-picker-split-price` is on master as `4c3a304`. See [CHG-20261021-light03-picker-split-price](changes/CHG-20261021-light03-picker-split-price.md). Applicable UX refs: UXW-009/010/011; adjacent UXW-002/004/006/012. INV0032 open 300 preserved. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
+## 2026-10-21 — Incremental UI/UX QA contract (documentation only)
+
+Owner-requested existing-design preservation and shared UX workbook adoption on product v2.5.19 · `4c3a304` without overwriting Light03 code. See [UI_UX_CHANGE_GUIDE](UI_UX_CHANGE_GUIDE.md) and [CHG-20261021-ux-incremental-contract](changes/CHG-20261021-ux-incremental-contract.md). Root AGENTS/.claude, existing list guide, QA contract and CHG template now require scoped compatible changes, external UX/UXW/WB refs, shared-consumer impact and actual evidence. External 48 UX workflows remain draft/unbound/not-run. UXQ-001–004 stay unresolved. No UI code/VERSION/deployment change in this documentation commit. Independent QA retests the existing Light03 build. Backup last. BookOne is not customer-ready.
 
 ## 2026-10-18 — Visible partial purchase-return entry (v2.5.18)
 
@@ -725,3 +729,4 @@ Tell me which to pick up and I'll plan the work.
 
 *Last reviewed: 2026-06-16 by GitHub Copilot.*
 *If you find anything missing or wrong, edit this file. It is the single source of truth.*
+

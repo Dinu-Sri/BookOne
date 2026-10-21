@@ -19,7 +19,26 @@ Status: ready-for-QA.
 - Failed/skipped/flaky/blocked/not-run checks and reasons: no live restricted-DB HTTP. Isolated upgrade environment not prepared. Do not retarget Light03 terminal cases. Backup last.
 - New QA assertions or outstanding work: pin a NEW retest queue to `v2.5.19 · <sha7>` after Medium reviews the diff. Rerun picker empty→PUR0007 lines 3×60 without reload; A→B; clear/reselect; split 1+1+1 prices 100/footer 300 then valid post 300/View/GL/source 0 on a **fresh** invoice (do not credit INV0032). Do not close observations from this code change alone.
 - Created staging records/cleanup, if any: none. Preserve Light03 fixtures and restored settings.
-- Documentation updated: this record, TASK_LOG, PROJECT_STATUS.
-- Next exact action and responsible role: Medium compares actual diff and creates a NEW pinned QA retest manifest. Do not deploy across an active mission.
+- Documentation updated: this record, TASK_LOG, PROJECT_STATUS. Additive UX IDs and shared-consumer inventory recorded 2026-10-21 after adopting [CHG-20261021-ux-incremental-contract](CHG-20261021-ux-incremental-contract.md). Light03 conclusions are unchanged.
+- Next exact action and responsible role: Independent QA retests `v2.5.19 · 4c3a304`. Medium compares actual diff and creates a NEW pinned QA retest manifest. Do not close OBS-M18 from this code or the later docs adoption. Do not deploy across an active mission.
 
 Final product/QA SHAs belong in PR metadata and external run manifests after commit. Do not label the change verified from code review alone.
+
+## UI/UX impact and existing-design compatibility (additive 2026-10-21)
+
+- Existing design guide/component/CSS references; reason for reusing/extending them: existing `DocumentLinesEditor`, `CommercialDocNewForm`, purchase-return new page remount `key`, `ProductAddSearch`, LIST_TABLE_UX_GUIDE, and current CSS tokens. No replacement design system. Light03 code already shipped as v2.5.19 · `4c3a304`; this section records IDs only.
+- Exact external QA commit and ux/workbook.json SHA256; UX/UXW/WB IDs/revisions: QA spec `024f8c35223a28c0662d469b71cd96579d4ee24d`; publication addendum `c318ac38df72888df673e838793c197df5495563`; UX JSON SHA256 `383d18ad74978af67e9e75d855c77c87b45a92beb00c101a3338dd0abd01e57f`.
+  - UXW-009 empty→source (UX-008/009/010/032; WB-HYB.J02, WB-PHY.J06)
+  - UXW-010 A→B / clear / late response (UX-008/027/032; isolated-fault late-response branch blocked)
+  - UXW-011 split source price (UX-008/009/010/032)
+  - Adjacent: UXW-002 refusal-then-correction; UXW-004 busy cleanup; UXW-006 256.50 draft hydration; UXW-012 residual/historical VAT 302.67
+- Before/after behaviour; independent expected/unchanged example: empty picker → PUR0007 remaining 3 / value 180 / locked vendor with lines 3×60; A→B replaces vendor/price; clear then reselect restores A; split 1+1+1 of source 3×100 locks 100 (not catalog 10) / footer 300. Unchanged: required-supplier refusal then same-form correction 10; draft 256.50; 85.50/171; VAT 302.67/46.17; 2+2 vs 3 refused; INV0032 open 300.
+- Direct screens and transitive shared consumers; applicable states/roles/entities/settings:
+  - Direct: `/purchase/returns/new` (`PurchaseReturnBillPicker` + `CommercialDocNewForm` remount `key={sourceDocumentId}`), sales return form (`SalesDocumentForm` `sourcePricedLines`).
+  - Shared: `DocumentLinesEditor` (`pickProduct` / kit via `linkedReturnAddedLineFromSource`) also used by quotation, invoice, purchase, order, receipt, import and expense new forms. `CommercialDocNewForm` source-state effect also used by `/purchase/purchases/new`, `/purchase/orders/new`, `/purchase/receipts/new`, `/purchase/import/new`, `/purchase/expenses/new`.
+- Preserved field/line/source identity, money/stock/history/print and server permissions: source unit price, remaining qty, vendor lock, header 13.50 + VAT 18, INV0018 draft 10, INV0030/0031 256.50, INV0032 open 300, Light03 closing 122 journals 13243.63 / AR 1306.21 / AP 1090 / InvGL 660 / stock 780 / inherited gap 120. No posting-math change for valid linked returns.
+- Desktop/narrow/keyboard/reader evidence; baseline/after sanitized screenshots: live browser stamp blocked in this engineering session. Independent QA owns rendered evidence.
+- Exact and adjacent regressions; actual engineering checks and missing layers: accounting 147 (picker empty→A, A→B, clear/reselect, remaining 2, zero remaining, catalog 10→source 100 lock, 1+1+1 amounts 100/footer 300, 2+2 refusal, header/VAT 256.50/302.67, purchase 60); auth 81. Missing: live restricted-DB HTTP, isolated v2.5.14 upgrade, UXW-010 late-response isolated-fault branch, 48 unbound UX workflows, assistive-technology and narrow-viewport stamps.
+- Conflict/exception owner, rationale, mitigation, expiry and acceptance impact: UXQ-001–004 unresolved; no silent language/heading/redesign-guide choice. Isolated-fault UXW-010 late-response branch blocked until isolated infrastructure exists.
+- Small rollout batch/revert plan; any schema/data implications explicitly reviewed: Light03 code already on master; this docs addition is revertible with no schema/data change. Do not credit INV0032. Encrypted backup last.
+- QA companion change/run and independent review link (or pending): Light03 results [HANDOFF-20261021-light03-results](https://github.com/Dinu-Sri/bookone-qa/blob/qa/light03-fresh-results/handoffs/HANDOFF-20261021-light03-results.md); UX workbook [HANDOFF-20261021-ux-workbook](https://github.com/Dinu-Sri/bookone-qa/blob/c318ac38df72888df673e838793c197df5495563/handoffs/HANDOFF-20261021-ux-workbook.md). Independent QA retest pending. Do not close OBS-M18 from code or docs.

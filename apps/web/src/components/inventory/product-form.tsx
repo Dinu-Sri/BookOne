@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ImagePlus, Plus, Trash2 } from 'lucide-react';
 import { useRef, useState, type DragEvent } from 'react';
 import { createProductFromForm, updateProductFromForm, type ProductRow } from '@/app/actions/inventory';
+import { submitRetainingFields } from '@/components/module/document-lines-editor';
 import { createProductCategory, type ProductCategoryRow } from '@/app/actions/product-categories';
 import { Button } from '@/components/ui/bookone-ui';
 import { RichTextEditor, RichTextPopup } from '@/components/ui/rich-text-editor';
@@ -28,6 +29,7 @@ export function ProductForm({
   categories = [],
   brands = [],
   locations = [],
+  canWrite = true,
 }: {
   mode: 'create' | 'edit';
   product?: ProductRow | null;
@@ -35,6 +37,7 @@ export function ProductForm({
   categories?: ProductCategoryRow[];
   brands?: { id: string; name: string }[];
   locations?: { id: string; name: string; brandId?: string | null }[];
+  canWrite?: boolean;
 }) {
   const action = mode === 'edit' ? updateProductFromForm : createProductFromForm;
   const [tab, setTab] = useState<TabId>('identity');
@@ -166,7 +169,22 @@ export function ProductForm({
         </div>
       </div>
 
-      <form action={action} className="party-form-body">
+      <form
+        className="party-form-body"
+        onSubmit={async (e) => {
+          if (!canWrite) {
+            e.preventDefault();
+            return;
+          }
+          await submitRetainingFields(e, action);
+        }}
+      >
+        {canWrite ? null : (
+          <div className="form-error form-refusal-banner" role="alert">
+            This product is view-only. You do not have permission to create or edit inventory.
+          </div>
+        )}
+        <fieldset disabled={!canWrite} className="product-form-fields">
         {mode === 'edit' && product ? <input type="hidden" name="id" value={product.id} /> : null}
 
         <div className="party-tab-panel" hidden={tab !== 'identity'}>
@@ -650,15 +668,18 @@ export function ProductForm({
           </div>
         </div>
 
+        </fieldset>
         <div className="party-form-footer">
           <Link href="/inventory/products">
             <Button variant="secondary" type="button">
               Cancel
             </Button>
           </Link>
-          <Button variant="primary" type="submit">
-            {mode === 'edit' ? 'Save changes' : 'Save product'}
-          </Button>
+          {canWrite ? (
+            <Button variant="primary" type="submit">
+              {mode === 'edit' ? 'Save changes' : 'Save product'}
+            </Button>
+          ) : null}
         </div>
       </form>
 

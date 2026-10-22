@@ -24,6 +24,8 @@ export default async function SalesReturnsPage() {
             searchPlaceholder: 'Search by customer name or number…',
             newHref: '/sales/returns/new',
             newLabel: 'New return',
+            printHrefPattern: '/sales/returns/:id/print',
+            detailHrefPattern: '/sales/returns/:id',
           }}
         />
       </Suspense>

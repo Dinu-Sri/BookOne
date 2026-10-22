@@ -21,6 +21,7 @@ import {
 import {
   DocumentLinesEditor,
   computeLineAmounts,
+  preventExcessiveHeaderDiscountSubmit,
   preventOver100DiscountSubmit,
   preventReturnQtyExceededSubmit,
   submitRetainingFields,
@@ -386,6 +387,21 @@ export function CommercialDocNewForm({
         onSubmit={async (e) => {
           if (preventOver100DiscountSubmit(e, lines)) return;
           if (
+            preventExcessiveHeaderDiscountSubmit(e, {
+              lines,
+              headerDiscountType,
+              headerDiscountValue: headerDiscount,
+              discountId,
+              savedDiscount: (() => {
+                const d = discounts?.find((x) => x.id === discountId);
+                return d ? { discountType: d.discountType, value: Number(d.value) } : null;
+              })(),
+              skipManual: linkedReturn,
+            })
+          ) {
+            return;
+          }
+          if (
             linkedReturn &&
             preventReturnQtyExceededSubmit(
               e,
@@ -404,6 +420,8 @@ export function CommercialDocNewForm({
         <input type="hidden" name="documentType" value={documentType} />
         <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
         <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
+        <input type="hidden" name="headerDiscountType" value={headerDiscountType} />
+        <input type="hidden" name="headerDiscountValue" value={String(headerDiscount)} />
         {sourceDocumentId ? (
           <input type="hidden" name="sourceDocumentId" value={sourceDocumentId} />
         ) : null}

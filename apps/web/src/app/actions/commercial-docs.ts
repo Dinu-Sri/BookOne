@@ -23,9 +23,12 @@ import {
   asOfOpenBalance,
   prorateLinkedReturn,
   percentDiscountOver100,
+  resolveManualHeaderDiscount,
   documentLineKey,
   linkedReturnPartyMismatch,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
+  PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE,
+  HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE,
   GRN_REMAINING_MESSAGE,
   BILL_REMAINING_MESSAGE,
   GRN_BILL_REMAINING_MESSAGE,
@@ -140,6 +143,8 @@ const createSchema = z.object({
   additionalInfo: z.string().max(2000).optional(),
   discountId: z.string().uuid().optional().nullable(),
   headerDiscount: z.number().min(0).optional().default(0),
+  headerDiscountType: z.enum(['percent', 'fixed']).optional().nullable(),
+  headerDiscountValue: z.number().optional().nullable(),
   sourceDocumentId: z.string().uuid().optional().nullable(),
   sourceOrderIds: z.array(z.string().uuid()).optional(),
   paymentAccountCode: z.string().max(20).optional(), // POS / cash invoice / cash purchase
@@ -1771,31 +1776,6 @@ export async function createCommercialDocument(
       let lineDiscountSum = enriched.reduce((s, l) => s + l.discountAmount, 0);
       let headerDiscount = parsed.headerDiscount ?? 0;
 
-      if (parsed.discountId) {
-        const [disc] = await db()
-          .select()
-          .from(salesDiscounts)
-          .where(
-            and(
-              eq(salesDiscounts.tenantId, user.tenantId),
-              eq(salesDiscounts.id, parsed.discountId),
-              isNull(salesDiscounts.voidedAt),
-            ),
-          )
-          .limit(1);
-        if (disc && disc.isActive === '1') {
-          const base = subtotal - lineDiscountSum;
-          headerDiscount =
-            disc.discountType === 'percent'
-              ? Math.round(((base * Number(disc.value)) / 100) * 100) / 100
-              : Number(disc.value);
-        }
-      }
-
-      if (linkedSource && linkedProrated) {
-        headerDiscount = linkedProrated.headerDiscount;
-      }
-
       for (const line of enriched) {
         const lineGross = Math.round(line.quantity * line.unitPrice * 100) / 100;
         if (line.discountAmount > lineGross + 0.005) {
@@ -1803,8 +1783,40 @@ export async function createCommercialDocument(
         }
       }
       const afterLines = Math.round((subtotal - lineDiscountSum) * 100) / 100;
+
+      if (linkedSource && linkedProrated) {
+        headerDiscount = linkedProrated.headerDiscount;
+      } else {
+        let savedDiscount: { discountType: string; value: number } | null = null;
+        if (parsed.discountId) {
+          const [disc] = await db()
+            .select()
+            .from(salesDiscounts)
+            .where(
+              and(
+                eq(salesDiscounts.tenantId, user.tenantId),
+                eq(salesDiscounts.id, parsed.discountId),
+                isNull(salesDiscounts.voidedAt),
+              ),
+            )
+            .limit(1);
+          if (disc && disc.isActive === '1') {
+            savedDiscount = { discountType: disc.discountType, value: Number(disc.value) };
+          }
+        }
+        const resolved = resolveManualHeaderDiscount({
+          lineNet: afterLines,
+          headerDiscountAmount: parsed.headerDiscount,
+          headerDiscountType: parsed.headerDiscountType,
+          headerDiscountValue: parsed.headerDiscountValue,
+          savedDiscount,
+        });
+        if (!resolved.ok) throw new Error(resolved.error);
+        headerDiscount = resolved.amount;
+      }
+
       if (headerDiscount > afterLines + 0.005) {
-        throw new Error('Header discount cannot exceed the document total after line discounts.');
+        throw new Error(HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE);
       }
 
       let supplyExVat = Math.max(0, Math.round((subtotal - lineDiscountSum - headerDiscount) * 100) / 100);
@@ -2810,6 +2822,16 @@ export async function createCommercialDocumentFromForm(
   if (percentOver100) {
     return { ok: false, error: PERCENT_DISCOUNT_OVER_100_MESSAGE };
   }
+
+  const headerTypeRaw = String(formData.get('headerDiscountType') ?? '');
+  const headerDiscountType =
+    headerTypeRaw === 'percent' || headerTypeRaw === 'fixed' ? headerTypeRaw : null;
+  const headerValueRaw = String(formData.get('headerDiscountValue') ?? '').trim();
+  const headerDiscountValue =
+    headerValueRaw === '' ? null : Number(headerValueRaw.replace(/[^0-9.-]/g, '')) || 0;
+  if (headerDiscountType === 'percent' && headerDiscountValue != null && headerDiscountValue > 100 + 0.0001) {
+    return { ok: false, error: PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE };
+  }
   const purchasePartyTypes = new Set([
     'purchase_order',
     'purchase',
@@ -2841,6 +2863,8 @@ export async function createCommercialDocumentFromForm(
     additionalInfo: String(formData.get('additionalInfo') ?? ''),
     discountId: String(formData.get('discountId') ?? '') || null,
     headerDiscount: Number(String(formData.get('headerDiscount') ?? '0').replace(/[^0-9.-]/g, '')) || 0,
+    headerDiscountType,
+    headerDiscountValue,
     sourceDocumentId: String(formData.get('sourceDocumentId') ?? '') || null,
     sourceOrderIds,
     paymentAccountCode: String(formData.get('paymentAccountCode') ?? '') || undefined,

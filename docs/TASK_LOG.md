@@ -1,3 +1,10 @@
+## 2026-10-22 — Raw header discount, dialog focus, tooltip placement, credit print (v2.5.20)
+
+- Record: [CHG-20261022-pr54-header-dialog-credit](changes/CHG-20261022-pr54-header-dialog-credit.md). QA [CODING-MISSION-20261022-pr54](https://github.com/Dinu-Sri/bookone-qa/blob/qa/pr54-review-light05/handoffs/CODING-MISSION-20261022-pr54.md) on inspected master `3e9ffee` / Light03 `4c3a304`. QA PR #55 revision `37408fc48c5a3699a2033966594d8474652ab751`.
+- HEADER 150% is refused from raw type/value before create; LINE 150% stays a distinct message. ConfirmDialog traps focus/Escape and restores the trigger. StatusHelp uses measured size and layout viewport. Sales returns print as CREDIT NOTE. Remaining return qty prefills without replacing `sourceQuantity`. Product pages are view-only without inventory write; quick-product asserts the same ceiling. Required-supplier refusal keeps a durable in-form alert plus the existing toast. INV0032 open 300 and QT0004 draft 0 are not edited.
+- UX refs: UXW-002/005/018/021; BR-SAL-03. Shared consumers: commercial create forms, ConfirmDialog lists/details, StatusHelp, DocumentPrintSheet, ProductForm, `createQuickProduct`.
+- Next: Medium compares the actual diff and publishes a NEW Light05 queue on `v2.5.20 · <sha7>`. Do not close OBS-M19 from this code. Do not deploy across an active mission. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-21 — Bill-picker remount and split-return source prices (v2.5.19)
 
 - Record: [CHG-20261021-light03-picker-split-price](changes/CHG-20261021-light03-picker-split-price.md). QA [CODING-MISSION-20261021-light03-results](https://github.com/Dinu-Sri/bookone-qa/blob/qa/light03-fresh-results/handoffs/CODING-MISSION-20261021-light03-results.md) on v2.5.18 · a4a6d65 (18 pass / 2 fail / 2 blocked). Code is on master as `4c3a304`. Do not deploy onto an active Light mission.

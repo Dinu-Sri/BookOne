@@ -7,6 +7,7 @@ import { todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
+  preventExcessiveHeaderDiscountSubmit,
   preventOver100DiscountSubmit,
   submitRetainingFields,
   type DocLineState,
@@ -115,6 +116,20 @@ export function QuotationForm({
       className="doc-form-shell"
       onSubmit={async (e) => {
         if (preventOver100DiscountSubmit(e, lines)) return;
+        if (
+          preventExcessiveHeaderDiscountSubmit(e, {
+            lines,
+            headerDiscountType,
+            headerDiscountValue: headerDiscount,
+            discountId,
+            savedDiscount: (() => {
+              const d = discounts.find((x) => x.id === discountId);
+              return d ? { discountType: d.discountType, value: Number(d.value) } : null;
+            })(),
+          })
+        ) {
+          return;
+        }
         await submitRetainingFields(e, createCommercialDocumentFromForm);
       }}
     >
@@ -124,6 +139,8 @@ export function QuotationForm({
       <input type="hidden" name="invoiceKind" value="commercial" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
+      <input type="hidden" name="headerDiscountType" value={headerDiscountType} />
+      <input type="hidden" name="headerDiscountValue" value={String(headerDiscount)} />
 
       <div className="party-form-top">
         <Link href={backHref} className="party-back-btn">

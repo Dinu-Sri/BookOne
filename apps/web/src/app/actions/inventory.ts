@@ -970,6 +970,7 @@ export async function createQuickProduct(input: {
     const type = normalizeType(input.productType ?? 'service');
     const sellPrice = Math.max(0, Number(input.sellPrice) || 0);
     const unitCost = Math.max(0, Number(input.unitCost) || 0);
+    await assertModuleWrite('inventory');
     const user = await requireTenantContext();
 
     const product = await withTenantContext(user.tenantId, async () => {
@@ -1084,7 +1085,27 @@ export async function createQuickProduct(input: {
   }
 }
 
-export async function createProductFromForm(formData: FormData): Promise<void> {
+function isNextRedirect(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'digest' in error &&
+      String((error as { digest: unknown }).digest).startsWith('NEXT_REDIRECT'),
+  );
+}
+
+export async function createProductFromForm(
+  formData: FormData,
+): Promise<{ ok: false; error: string } | void> {
+  try {
+    await createProductFromFormInner(formData);
+  } catch (error) {
+    if (isNextRedirect(error)) throw error;
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not save product.' };
+  }
+}
+
+async function createProductFromFormInner(formData: FormData): Promise<void> {
   await assertModuleWrite('inventory');
   const parsed = productInputSchema.parse(formToProductInput(formData));
   const type = normalizeType(parsed.productType);
@@ -1275,7 +1296,18 @@ export async function createProductFromForm(formData: FormData): Promise<void> {
   redirect('/inventory/products?flash=created');
 }
 
-export async function updateProductFromForm(formData: FormData): Promise<void> {
+export async function updateProductFromForm(
+  formData: FormData,
+): Promise<{ ok: false; error: string } | void> {
+  try {
+    await updateProductFromFormInner(formData);
+  } catch (error) {
+    if (isNextRedirect(error)) throw error;
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not save product.' };
+  }
+}
+
+async function updateProductFromFormInner(formData: FormData): Promise<void> {
   await assertModuleWrite('inventory');
   const id = String(formData.get('id') ?? '');
   if (!id) throw new Error('Missing product id.');

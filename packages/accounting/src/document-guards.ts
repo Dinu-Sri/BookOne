@@ -564,6 +564,81 @@ export function percentDiscountOver100(
 }
 
 export const PERCENT_DISCOUNT_OVER_100_MESSAGE = 'Percentage line discount cannot exceed 100%.';
+export const PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE =
+  'Percentage header discount cannot exceed 100%.';
+export const HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE =
+  'Header discount cannot exceed the document total after line discounts.';
+export const SAVED_DISCOUNT_EXCEEDS_NET_MESSAGE =
+  'Saved discount cannot exceed the document total after line discounts.';
+
+export type ManualHeaderDiscountInput = {
+  lineNet: number;
+  /** Legacy amount-only callers. Used when raw type/value are absent. */
+  headerDiscountAmount?: number;
+  headerDiscountType?: 'percent' | 'fixed' | null;
+  headerDiscountValue?: number | null;
+  savedDiscount?: { discountType: string; value: number } | null;
+  /** Linked source-derived header; when set, manual/saved raw fields are ignored. */
+  linkedSourceHeader?: number | null;
+};
+
+export type ManualHeaderDiscountResult =
+  | { ok: true; amount: number; source: 'linked' | 'saved' | 'raw' | 'amount' }
+  | { ok: false; error: string };
+
+/**
+ * Validate raw header type/value when provided, then independently check the
+ * resulting money amount. Amount-only callers cannot submit more than line-net.
+ * Linked source headers are never replaced by client hidden fields.
+ */
+export function resolveManualHeaderDiscount(input: ManualHeaderDiscountInput): ManualHeaderDiscountResult {
+  const lineNet = Math.max(0, Math.round(Number(input.lineNet) * 100) / 100);
+  if (input.linkedSourceHeader != null && Number.isFinite(Number(input.linkedSourceHeader))) {
+    const amount = Math.max(0, Math.round(Number(input.linkedSourceHeader) * 100) / 100);
+    if (amount > lineNet + 0.005) return { ok: false, error: HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE };
+    return { ok: true, amount, source: 'linked' };
+  }
+  if (input.savedDiscount) {
+    const t = String(input.savedDiscount.discountType);
+    const v = Number(input.savedDiscount.value);
+    if (t === 'percent' && v > 100 + 0.0001) {
+      return { ok: false, error: PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE };
+    }
+    const amount =
+      t === 'percent' ? Math.round(((lineNet * v) / 100) * 100) / 100 : Math.round(v * 100) / 100;
+    if (amount > lineNet + 0.005) return { ok: false, error: SAVED_DISCOUNT_EXCEEDS_NET_MESSAGE };
+    return { ok: true, amount: Math.max(0, amount), source: 'saved' };
+  }
+  const rawType = input.headerDiscountType;
+  const rawValue = input.headerDiscountValue;
+  const hasRaw =
+    (rawType === 'percent' || rawType === 'fixed') &&
+    rawValue != null &&
+    Number.isFinite(Number(rawValue));
+  if (hasRaw) {
+    const v = Number(rawValue);
+    if (rawType === 'percent' && v > 100 + 0.0001) {
+      return { ok: false, error: PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE };
+    }
+    const amount =
+      rawType === 'percent' ? Math.round(((lineNet * v) / 100) * 100) / 100 : Math.round(v * 100) / 100;
+    if (amount > lineNet + 0.005) return { ok: false, error: HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE };
+    return { ok: true, amount: Math.max(0, amount), source: 'raw' };
+  }
+  const amount = Math.max(0, Math.round(Number(input.headerDiscountAmount ?? 0) * 100) / 100);
+  if (amount > lineNet + 0.005) return { ok: false, error: HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE };
+  return { ok: true, amount, source: 'amount' };
+}
+
+export function creditPrintTitle(documentType: string): string | null {
+  if (documentType === 'sales_return') return 'CREDIT NOTE';
+  if (documentType === 'purchase_return') return 'PURCHASE CREDIT NOTE';
+  return null;
+}
+
+export function isCreditPrintDocument(documentType: string): boolean {
+  return creditPrintTitle(documentType) != null;
+}
 export const GRN_REMAINING_MESSAGE =
   'This receipt exceeds the remaining quantity on the purchase order.';
 export const BILL_REMAINING_MESSAGE =

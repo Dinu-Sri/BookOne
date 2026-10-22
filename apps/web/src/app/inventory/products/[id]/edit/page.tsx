@@ -4,6 +4,7 @@ import { listProductCategories } from '@/app/actions/product-categories';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { ProductForm } from '@/components/inventory/product-form';
+import { probeModuleWrite } from '@/lib/module-access';
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,8 +13,9 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   let rentalCatalog: { id: string; sku: string; name: string }[] = [];
   let categories: Awaited<ReturnType<typeof listProductCategories>> = [];
   let dims: Awaited<ReturnType<typeof listProductDimensionOptions>> = { brands: [], locations: [] };
+  let canWrite = false;
   try {
-    [tenant, product, rentalCatalog, categories, dims] = await Promise.all([
+    [tenant, product, rentalCatalog, categories, dims, canWrite] = await Promise.all([
       getTenantInfo(),
       getProduct(id),
       listProducts({ productType: 'rental', status: 'active' }).then((rows) =>
@@ -21,6 +23,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       ),
       listProductCategories(),
       listProductDimensionOptions(),
+      probeModuleWrite('inventory'),
     ]);
   } catch {
     redirect('/login');
@@ -37,6 +40,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           categories={categories}
           brands={dims.brands}
           locations={dims.locations}
+          canWrite={canWrite}
         />
       </div>
     </BookOneShell>

@@ -27,3 +27,13 @@ export async function assertModuleWrite(module: ModuleWriteKey): Promise<void> {
   const hit = SCREEN_DEFS.some((s) => s.module === module && access.allows(`${s.keyPrefix}.write`, 'write'));
   if (!hit) throw new Error('You do not have permission to change this.');
 }
+
+/** Non-throwing page gate. Unexpected auth failures still throw so login redirects stay intact. */
+export async function probeModuleWrite(module: ModuleWriteKey): Promise<boolean> {
+  const tenant = await getTenantInfo();
+  const kind = parseEntityKind(tenant.entityKind);
+  if (!canWriteModule(kind, tenant.capabilityTier, tenant.modules, module)) return false;
+  const access = await getMyAccess();
+  if (!access?.rbacEnforced) return true;
+  return SCREEN_DEFS.some((s) => s.module === module && access.allows(`${s.keyPrefix}.write`, 'write'));
+}

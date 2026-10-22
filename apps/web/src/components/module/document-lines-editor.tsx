@@ -16,6 +16,7 @@ import {
   linkedReturnAddedLineFromSource,
   percentDiscountOver100,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
+  resolveManualHeaderDiscount,
   returnQtyExceeded,
   type ProrateSourceLine,
   type QtyLine,
@@ -87,6 +88,34 @@ export function preventOver100DiscountSubmit(e: FormEvent, lines: DocLineState[]
   return true;
 }
 
+export function preventExcessiveHeaderDiscountSubmit(
+  e: FormEvent,
+  opts: {
+    lines: DocLineState[];
+    headerDiscountType: 'percent' | 'fixed';
+    headerDiscountValue: string;
+    discountId?: string;
+    savedDiscount?: { discountType: string; value: number } | null;
+    /** Linked source-derived header: do not validate client raw fields as authority. */
+    skipManual?: boolean;
+  },
+): boolean {
+  if (opts.skipManual) return false;
+  const lineNet =
+    Math.round(computeLineAmounts(opts.lines).reduce((s, a) => s + a, 0) * 100) / 100;
+  const rawValue = Number(String(opts.headerDiscountValue ?? '').replace(/[^0-9.-]/g, '')) || 0;
+  const resolved = resolveManualHeaderDiscount({
+    lineNet,
+    headerDiscountType: opts.discountId ? null : opts.headerDiscountType,
+    headerDiscountValue: opts.discountId ? null : rawValue,
+    savedDiscount: opts.discountId ? opts.savedDiscount ?? null : null,
+  });
+  if (resolved.ok) return false;
+  e.preventDefault();
+  pushStatusToast({ kind: 'error', message: resolved.error });
+  return true;
+}
+
 export function qtyLinesFromDocState(lines: DocLineState[]): QtyLine[] {
   return lines.map((line) => ({
     productId: line.productId || null,
@@ -117,6 +146,24 @@ export async function toastIfFormError(
   }
 }
 
+const FORM_REFUSAL_ATTR = 'data-form-refusal';
+
+function clearFormRefusal(form: HTMLFormElement) {
+  form.querySelector(`[${FORM_REFUSAL_ATTR}]`)?.remove();
+}
+
+function showFormRefusal(form: HTMLFormElement, message: string) {
+  let el = form.querySelector<HTMLElement>(`[${FORM_REFUSAL_ATTR}]`);
+  if (!el) {
+    el = document.createElement('div');
+    el.setAttribute(FORM_REFUSAL_ATTR, '');
+    el.setAttribute('role', 'alert');
+    el.className = 'form-error form-refusal-banner';
+    form.insertBefore(el, form.firstChild);
+  }
+  el.textContent = message;
+}
+
 function appendSubmitter(fd: FormData, event: FormEvent<HTMLFormElement>): void {
   const submitter = (event.nativeEvent as SubmitEvent).submitter;
   if (submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement) {
@@ -126,17 +173,23 @@ function appendSubmitter(fd: FormData, event: FormEvent<HTMLFormElement>): void 
 
 /**
  * Submit a commercial create form without letting React reset uncontrolled fields.
- * Business errors toast and leave dates/notes/selects as entered. Redirects still throw through.
+ * Business errors toast (transient) and keep a durable in-form alert. Redirects still throw through.
  */
 export async function submitRetainingFields(
   event: FormEvent<HTMLFormElement>,
   action: (formData: FormData) => Promise<{ ok: false; error: string } | void>,
 ): Promise<void> {
   event.preventDefault();
-  const fd = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  clearFormRefusal(form);
+  const fd = new FormData(form);
   appendSubmitter(fd, event);
   await withFormPending(async () => {
-    await toastIfFormError(await action(fd));
+    const result = await action(fd);
+    if (result && result.ok === false) {
+      showFormRefusal(form, result.error);
+    }
+    await toastIfFormError(result);
   });
 }
 

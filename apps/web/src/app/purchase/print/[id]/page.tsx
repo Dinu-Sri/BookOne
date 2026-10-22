@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getPurchasePrintData } from '@/app/actions/commercial-docs';
-import { displayedLineNetSubtotal } from '@bookone/accounting';
+import { creditPrintTitle, displayedLineNetSubtotal } from '@bookone/accounting';
 import { formatLKR } from '@/components/module/list-page';
 
 const TITLE: Record<string, string> = {
@@ -10,7 +10,6 @@ const TITLE: Record<string, string> = {
   import_purchase: 'IMPORT PURCHASE',
   cash_purchase: 'CASH PURCHASE',
   goods_receipt: 'GOODS RECEIVED NOTE',
-  purchase_return: 'PURCHASE RETURN / CREDIT',
   vendor_bill: 'VENDOR BILL',
 };
 
@@ -25,7 +24,7 @@ export default async function PurchasePrintPage({ params }: { params: Promise<{ 
   if (!data) redirect('/purchase/purchases');
 
   const { doc, company } = data;
-  const title = TITLE[doc.documentType] ?? 'PURCHASE DOCUMENT';
+  const title = creditPrintTitle(doc.documentType) ?? TITLE[doc.documentType] ?? 'PURCHASE DOCUMENT';
   const companyName = company?.legalName ?? company?.tradingName ?? 'Company';
   const companyAddress = [company?.addressLine1, company?.addressLine2, company?.city, company?.postalCode]
     .filter(Boolean)
@@ -125,6 +124,7 @@ export default async function PurchasePrintPage({ params }: { params: Promise<{ 
         <div style={{ marginTop: 16, textAlign: 'right' }}>
           <div>Subtotal: {formatLKR(displayedLineNetSubtotal(doc.subtotal, doc.discountTotal))}</div>
           {doc.discountTotal > 0 ? <div>Discount: {formatLKR(doc.discountTotal)}</div> : null}
+          {doc.taxTotal > 0.004 ? <div>VAT: {formatLKR(doc.taxTotal)}</div> : null}
           <div style={{ fontWeight: 800, fontSize: 16, marginTop: 6 }}>Total: {formatLKR(doc.total)}</div>
           {doc.balanceDue > 0.005 ? (
             <div style={{ marginTop: 4 }}>Balance due: {formatLKR(doc.balanceDue)}</div>

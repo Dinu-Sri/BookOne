@@ -8,6 +8,7 @@ import { pushStatusToast } from '@/components/layout/status-toast';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
+  preventExcessiveHeaderDiscountSubmit,
   preventOver100DiscountSubmit,
   submitRetainingFields,
   type DocLineState,
@@ -211,12 +212,28 @@ export function InvoiceDocumentForm({
       className="doc-form-shell"
       onSubmit={async (e) => {
         if (preventOver100DiscountSubmit(e, lines)) return;
+        if (
+          preventExcessiveHeaderDiscountSubmit(e, {
+            lines,
+            headerDiscountType,
+            headerDiscountValue: headerDiscount,
+            discountId,
+            savedDiscount: (() => {
+              const d = discounts.find((x) => x.id === discountId);
+              return d ? { discountType: d.discountType, value: Number(d.value) } : null;
+            })(),
+          })
+        ) {
+          return;
+        }
         await submitRetainingFields(e, createCommercialDocumentFromForm);
       }}
     >
       <input type="hidden" name="documentType" value="sales_invoice" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
+      <input type="hidden" name="headerDiscountType" value={headerDiscountType} />
+      <input type="hidden" name="headerDiscountValue" value={String(headerDiscount)} />
       <IdempotencyField />
       {draft ? <input type="hidden" name="existingDraftId" value={draft.id} /> : null}
       {selectedOrderIds.map((id) => (

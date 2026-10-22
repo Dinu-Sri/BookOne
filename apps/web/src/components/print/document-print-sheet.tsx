@@ -100,6 +100,12 @@ export function DocumentPrintSheet({
               <strong>{formatDateMmDdYyyy(meta.deliveryDate)}</strong>
             </div>
           ) : null}
+          {model.sourceNumber ? (
+            <div>
+              <span className="doc-print-label">Source</span>
+              <strong>{model.sourceNumber}</strong>
+            </div>
+          ) : null}
           {taxLocked ? (
             <div>
               <span className="doc-print-label">Place of supply</span>
@@ -123,7 +129,9 @@ export function DocumentPrintSheet({
               {showTin ? <p>TIN {company.tin || '—'}</p> : null}
             </section>
             <section>
-              <h2 style={{ color: accent, fontSize: `${small}px` }}>{taxLocked ? 'Bill to (purchaser)' : 'Bill to'}</h2>
+              <h2 style={{ color: accent, fontSize: `${small}px` }}>
+                {model.credit ? party.label : taxLocked ? 'Bill to (purchaser)' : 'Bill to'}
+              </h2>
               <p>
                 <strong>{party.name || '—'}</strong>
               </p>

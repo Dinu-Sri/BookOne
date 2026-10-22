@@ -12,6 +12,7 @@ import {
   searchInvoicesForReturn,
 } from '@/app/actions/commercial-docs';
 import {
+  linkedReturnPrefillQuantities,
   linkedReturnPreviewDisplay,
   SALES_RETURN_QTY_MESSAGE,
   type ProrateSourceLine,
@@ -20,6 +21,7 @@ import { todayString } from '@/components/module/list-page';
 import {
   DocumentLinesEditor,
   computeLineAmounts,
+  preventExcessiveHeaderDiscountSubmit,
   preventOver100DiscountSubmit,
   preventReturnQtyExceededSubmit,
   submitRetainingFields,
@@ -209,18 +211,26 @@ export function SalesDocumentForm({
         discountAmount: Number(l.discountAmount) || 0,
       })),
     );
-    setLines(
+    const prefill = linkedReturnPrefillQuantities(
       loaded.lines.map((l) => ({
+        productId: l.productId || null,
+        description: l.description,
+        quantity: Number(l.quantity) || 0,
+      })),
+      loaded.priorReturnLines || [],
+    );
+    setLines(
+      loaded.lines.map((l, i) => ({
         key: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         productId: l.productId,
         description: l.description,
-        quantity: l.quantity,
-        unitPrice: l.unitPrice,
+        quantity: String(prefill[i]?.remainingQuantity ?? 0),
+        unitPrice: String(l.unitPrice),
         sku: l.sku,
         isManual: !l.productId,
         discountType: l.discountAmount ? 'fixed' : 'percent',
         discountValue: l.discountAmount ?? '',
-        sourceQuantity: l.quantity,
+        sourceQuantity: String(l.quantity),
         sourceDiscountAmount: l.discountAmount ?? '0',
       })),
     );
@@ -318,6 +328,21 @@ export function SalesDocumentForm({
       onSubmit={async (e) => {
         if (preventOver100DiscountSubmit(e, lines)) return;
         if (
+          preventExcessiveHeaderDiscountSubmit(e, {
+            lines,
+            headerDiscountType,
+            headerDiscountValue: headerDiscount,
+            discountId,
+            savedDiscount: (() => {
+              const d = discounts.find((x) => x.id === discountId);
+              return d ? { discountType: d.discountType, value: Number(d.value) } : null;
+            })(),
+            skipManual: Boolean(sourceInvoiceId),
+          })
+        ) {
+          return;
+        }
+        if (
           isReturn &&
           preventReturnQtyExceededSubmit(
             e,
@@ -338,6 +363,8 @@ export function SalesDocumentForm({
       <input type="hidden" name="invoiceKind" value="commercial" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
+      <input type="hidden" name="headerDiscountType" value={headerDiscountType} />
+      <input type="hidden" name="headerDiscountValue" value={String(headerDiscount)} />
       {sourceInvoiceId ? <input type="hidden" name="sourceDocumentId" value={sourceInvoiceId} /> : null}
 
       <div className="party-form-top">

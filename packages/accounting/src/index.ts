@@ -89,8 +89,14 @@ export {
   lineDiscountAmount,
   resolvedDiscountType,
   percentDiscountOver100,
+  resolveManualHeaderDiscount,
+  creditPrintTitle,
+  isCreditPrintDocument,
   PURCHASE_BILL_TYPES,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
+  PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE,
+  HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE,
+  SAVED_DISCOUNT_EXCEEDS_NET_MESSAGE,
   GRN_REMAINING_MESSAGE,
   BILL_REMAINING_MESSAGE,
   GRN_BILL_REMAINING_MESSAGE,
@@ -116,4 +122,9 @@ export type {
   PersistedDocumentBreakdown,
   HydrateDraftLineInput,
   HydratedDraftLineState,
+  ManualHeaderDiscountInput,
+  ManualHeaderDiscountResult,
 } from './document-guards';
+export { placeFloatingOverlay, layoutViewportSize } from './overlay-geometry';
+export type { OverlayRect, OverlaySize, OverlayViewport } from './overlay-geometry';
+export { nextFocusIndex, FOCUSABLE_SELECTOR } from './focus-trap';

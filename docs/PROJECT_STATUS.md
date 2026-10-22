@@ -1,3 +1,7 @@
+## 2026-10-22 — Raw header discount, dialog focus, tooltip placement, credit print (v2.5.20)
+
+PR54/PR55 coding mission on inspected master v2.5.19 · `3e9ffee`. Quote header 150% is refused from preserved raw type/value instead of saving a clamped 10 draft. ConfirmDialog and StatusHelp use the existing primitives with focus trap and measured placement. Sales credit print is CREDIT NOTE. Product create/edit is view-only without inventory write. Required-supplier refusal keeps a durable alert. See [CHG-20261022-pr54-header-dialog-credit](changes/CHG-20261022-pr54-header-dialog-credit.md). Do not deploy across an active Light mission. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-21 — Bill-picker remount and split-return source prices (v2.5.19)
 
 Light03 fresh attempt on v2.5.18 · a4a6d65: 18 passed / 2 failed / 2 blocked. Client bill-picker selection now remounts remaining qty/price/vendor instead of leaving empty lines. Added linked-return catalog rows lock the source unit price (catalog 10 does not replace source 100). Branch `fix/v2519-light03-picker-split-price` is on master as `4c3a304`. See [CHG-20261021-light03-picker-split-price](changes/CHG-20261021-light03-picker-split-price.md). Applicable UX refs: UXW-009/010/011; adjacent UXW-002/004/006/012. INV0032 open 300 preserved. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

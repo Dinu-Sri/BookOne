@@ -1,7 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { displayedLineNetSubtotal } from '@bookone/accounting';
+import { creditPrintTitle, displayedLineNetSubtotal, isCreditPrintDocument } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   and,
@@ -27,6 +27,8 @@ import {
 export type DocumentPrintModel = {
   kind: DocumentStyleKind;
   title: string;
+  credit: boolean;
+  sourceNumber: string | null;
   style: DocumentStyleSnapshot;
   company: {
     name: string;
@@ -102,6 +104,23 @@ export async function getDocumentPrintModel(
     if (!doc) return null;
 
     const kind = kindFromDocument(doc.documentType, doc.invoiceKind);
+    const creditTitle = creditPrintTitle(doc.documentType);
+    const credit = isCreditPrintDocument(doc.documentType);
+    let sourceNumber: string | null = null;
+    if (doc.sourceDocumentId) {
+      const [src] = await db()
+        .select({ documentNumber: businessDocuments.documentNumber })
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, tenantId),
+            eq(businessDocuments.id, doc.sourceDocumentId),
+            isNull(businessDocuments.voidedAt),
+          ),
+        )
+        .limit(1);
+      sourceNumber = src?.documentNumber ?? null;
+    }
     const [party] = await db().select().from(parties).where(eq(parties.id, doc.partyId)).limit(1);
     const lines = await db()
       .select()
@@ -175,7 +194,9 @@ export async function getDocumentPrintModel(
 
     return {
       kind,
-      title: titleFor(kind),
+      title: creditTitle ?? titleFor(kind),
+      credit,
+      sourceNumber,
       style,
       company: {
         name: companyName,
@@ -191,12 +212,24 @@ export async function getDocumentPrintModel(
         address: doc.purchaserAddress || party?.addressLine1 || party?.address || '',
         phone: doc.purchaserPhone || party?.phoneMobile || party?.phone || '',
         tin: doc.purchaserTin || party?.tin || '',
-        label: kind === 'quotation' || kind === 'invoice' || kind === 'tax_invoice' ? 'Customer' : 'Party',
+        label: credit
+          ? doc.documentType === 'purchase_return'
+            ? 'Vendor'
+            : 'Customer'
+          : kind === 'quotation' || kind === 'invoice' || kind === 'tax_invoice'
+            ? 'Customer'
+            : 'Party',
       },
       meta: {
-        dateLabel: kind === 'quotation' ? 'Quote date' : 'Date of invoice',
+        dateLabel: credit ? 'Credit date' : kind === 'quotation' ? 'Quote date' : 'Date of invoice',
         date: doc.issueDate,
-        numberLabel: kind === 'tax_invoice' ? 'Tax invoice no.' : kind === 'quotation' ? 'Quote no.' : 'Invoice no.',
+        numberLabel: credit
+          ? 'Credit no.'
+          : kind === 'tax_invoice'
+            ? 'Tax invoice no.'
+            : kind === 'quotation'
+              ? 'Quote no.'
+              : 'Invoice no.',
         number: (kind === 'tax_invoice' ? doc.taxInvoiceNumber : null) || doc.documentNumber,
         dueDate: doc.dueDate,
         deliveryDate: doc.deliveryDate,
@@ -260,6 +293,8 @@ export async function getReceiptPrintModel(opts: {
     return {
       kind: 'receipt',
       title: 'PAYMENT RECEIPT',
+      credit: false,
+      sourceNumber: null,
       style,
       company: {
         name: company?.legalName || company?.tradingName || 'Company',

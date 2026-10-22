@@ -22,6 +22,12 @@ import {
   linkedReturnPreviewTotals,
   percentDiscountOver100,
   persistedDocumentBreakdown,
+  creditPrintTitle,
+  HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE,
+  PERCENT_DISCOUNT_OVER_100_MESSAGE,
+  PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE,
+  resolveManualHeaderDiscount,
+  SAVED_DISCOUNT_EXCEEDS_NET_MESSAGE,
   prorateLinkedReturn,
   purchaseReturnFromBillPath,
   qtyExceedsRemaining,
@@ -999,5 +1005,106 @@ describe('M18 split return rows keep source price', () => {
     expect(added.locked).toBe(true);
     const credit = linkedReturnDocumentTotals([bill], 0, [{ ...bill, quantity: 1 }]);
     expect(credit.total).toBe(60);
+  });
+});
+
+describe('BR-SAL-03 raw header discount vs line discount', () => {
+  it('HEADER 150% on a 10 quote is refused and is distinct from LINE 150%', () => {
+    expect(percentDiscountOver100('percent', 150)).toBe(true);
+    expect(PERCENT_DISCOUNT_OVER_100_MESSAGE).toMatch(/line/i);
+    const header = resolveManualHeaderDiscount({
+      lineNet: 10,
+      headerDiscountType: 'percent',
+      headerDiscountValue: 150,
+      headerDiscountAmount: 10,
+    });
+    expect(header).toEqual({ ok: false, error: PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE });
+  });
+
+  it('does not silently cap HEADER 150% of 10 to a zero-total draft', () => {
+    const clampedDisplay = Math.min(15, 10);
+    expect(clampedDisplay).toBe(10);
+    const header = resolveManualHeaderDiscount({
+      lineNet: 10,
+      headerDiscountType: 'percent',
+      headerDiscountValue: 150,
+      headerDiscountAmount: clampedDisplay,
+    });
+    expect(header.ok).toBe(false);
+  });
+
+  it('rejects fixed header above line-net and saved 150% discounts', () => {
+    expect(
+      resolveManualHeaderDiscount({
+        lineNet: 10,
+        headerDiscountType: 'fixed',
+        headerDiscountValue: 20,
+      }),
+    ).toEqual({ ok: false, error: HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE });
+    expect(
+      resolveManualHeaderDiscount({
+        lineNet: 10,
+        savedDiscount: { discountType: 'percent', value: 150 },
+      }),
+    ).toEqual({ ok: false, error: PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE });
+    expect(
+      resolveManualHeaderDiscount({
+        lineNet: 10,
+        savedDiscount: { discountType: 'fixed', value: 20 },
+      }),
+    ).toEqual({ ok: false, error: SAVED_DISCOUNT_EXCEEDS_NET_MESSAGE });
+  });
+
+  it('accepts 100%, fixed at line-net, zero, and line 10% / header 5% = 256.50', () => {
+    expect(
+      resolveManualHeaderDiscount({ lineNet: 10, headerDiscountType: 'percent', headerDiscountValue: 100 }),
+    ).toEqual({ ok: true, amount: 10, source: 'raw' });
+    expect(
+      resolveManualHeaderDiscount({ lineNet: 10, headerDiscountType: 'fixed', headerDiscountValue: 10 }),
+    ).toEqual({ ok: true, amount: 10, source: 'raw' });
+    expect(
+      resolveManualHeaderDiscount({ lineNet: 10, headerDiscountType: 'percent', headerDiscountValue: 0 }),
+    ).toEqual({ ok: true, amount: 0, source: 'raw' });
+    const afterLines = 270;
+    const header = resolveManualHeaderDiscount({
+      lineNet: afterLines,
+      headerDiscountType: 'percent',
+      headerDiscountValue: 5,
+    });
+    expect(header).toEqual({ ok: true, amount: 13.5, source: 'raw' });
+    expect(afterLines - 13.5).toBe(256.5);
+  });
+
+  it('amount-only callers still cannot submit more than line-net', () => {
+    expect(
+      resolveManualHeaderDiscount({ lineNet: 10, headerDiscountAmount: 15 }),
+    ).toEqual({ ok: false, error: HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE });
+    expect(
+      resolveManualHeaderDiscount({ lineNet: 10, headerDiscountAmount: 0 }),
+    ).toEqual({ ok: true, amount: 0, source: 'amount' });
+  });
+
+  it('linked source header is used and raw client fields cannot override it', () => {
+    const header = resolveManualHeaderDiscount({
+      lineNet: 300,
+      headerDiscountType: 'percent',
+      headerDiscountValue: 150,
+      headerDiscountAmount: 999,
+      linkedSourceHeader: 13.5,
+    });
+    expect(header).toEqual({ ok: true, amount: 13.5, source: 'linked' });
+  });
+
+  it('credit print titles are not invoice', () => {
+    expect(creditPrintTitle('sales_return')).toBe('CREDIT NOTE');
+    expect(creditPrintTitle('purchase_return')).toBe('PURCHASE CREDIT NOTE');
+    expect(creditPrintTitle('sales_invoice')).toBeNull();
+  });
+
+  it('remaining prefill keeps original sourceQuantity for proration', () => {
+    const src = [{ productId: 'w', description: 'Widget', quantity: 3 }];
+    const prior = [{ productId: 'w', description: 'Widget', quantity: 1 }];
+    const prefill = linkedReturnPrefillQuantities(src, prior);
+    expect(prefill[0]).toEqual({ sourceQuantity: 3, remainingQuantity: 2 });
   });
 });

@@ -582,6 +582,7 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
         onCancel={() => setConfirm(null)}
         onConfirm={runAction}
         busy={busy}
+        returnFocus={confirm ? triggerRefs.current.get(confirm.product.id) ?? null : null}
       />
 
       <ConfirmDialog
@@ -592,6 +593,7 @@ export function ProductListScreen({ rows: initialRows }: { rows: ProductRow[] })
         tone="primary"
         onCancel={() => setBlock(null)}
         onConfirm={() => setBlock(null)}
+        returnFocus={block ? triggerRefs.current.get(block.product.id) ?? null : null}
       >
         <p className="modal-message">
           <strong>{block?.product.name}</strong> is connected:

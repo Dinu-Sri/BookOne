@@ -1,3 +1,10 @@
+## 2026-10-23 — List return focus and layout-width status help (v2.5.21)
+
+- Record: [CHG-20261023-light05-list-focus-help](changes/CHG-20261023-light05-list-focus-help.md). QA [HANDOFF-20261023-light05-recovery-review](https://github.com/Dinu-Sri/bookone-qa/blob/d6e9f779e27540ff31fe98b81f64e06a5fcbd353/handoffs/HANDOFF-20261023-light05-recovery-review.md) at `d6e9f779e27540ff31fe98b81f64e06a5fcbd353` on inspected master `de45536`. Recovered Light05: 9 passed / 2 failed / 16 blocked / 3 inconclusive.
+- ConfirmDialog restores a connected trigger or the surviving row Actions button when the portal menu unmounts. After a legitimate archive/delete the missing row skips restore. StatusHelp constrains bubble border-box width to layout minus two 8px gutters (305 → 289, left 8 / right 297) before measure/place. 390 x42+340, desktop 260/340, Cancel-first trap, and unique labels stay. INV0032 open 300 and recovered Light05 balances are not edited.
+- UX refs: UXW-005/018. Shared consumers: ConfirmDialog lists/details and StatusHelp. Wired `returnFocus` on commercial-document-list and product-list; other ConfirmDialog consumers keep mounted triggers.
+- Next: Medium compares the actual diff and publishes a NEW pinned Light queue on `v2.5.21 · <sha7>`. Do not close OBS-M20-01/02 from this code. Do not rerun consumed Light05 financial sources. Do not deploy across an active mission. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-22 — Raw header discount, dialog focus, tooltip placement, credit print (v2.5.20)
 
 - Record: [CHG-20261022-pr54-header-dialog-credit](changes/CHG-20261022-pr54-header-dialog-credit.md). QA [CODING-MISSION-20261022-pr54](https://github.com/Dinu-Sri/bookone-qa/blob/qa/pr54-review-light05/handoffs/CODING-MISSION-20261022-pr54.md) on inspected master `3e9ffee` / Light03 `4c3a304`. QA PR #55 revision `37408fc48c5a3699a2033966594d8474652ab751`.

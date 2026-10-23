@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, type ReactNode } from 'react';
-import { FOCUSABLE_SELECTOR, nextFocusIndex } from '@bookone/accounting';
+import { FOCUSABLE_SELECTOR, nextFocusIndex, resolveReturnFocus } from '@bookone/accounting';
 import { Button } from '@/components/ui/bookone-ui';
 
 export function ConfirmDialog({
@@ -15,6 +15,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   busy,
+  returnFocus,
 }: {
   open: boolean;
   title: string;
@@ -26,13 +27,18 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
   busy?: boolean;
+  /** Surviving control when the captured opener unmounts (list Actions). */
+  returnFocus?: HTMLElement | null;
 }) {
   const titleId = useId();
   const messageId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const fallbackRef = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
+
+  if (returnFocus) fallbackRef.current = returnFocus;
 
   useEffect(() => {
     if (open && !wasOpen.current) {
@@ -44,9 +50,13 @@ export function ConfirmDialog({
     }
     if (!open && wasOpen.current) {
       const trigger = triggerRef.current;
+      const fallback = fallbackRef.current;
       wasOpen.current = false;
       triggerRef.current = null;
-      queueMicrotask(() => trigger?.focus());
+      fallbackRef.current = null;
+      queueMicrotask(() => {
+        resolveReturnFocus(trigger, fallback)?.focus();
+      });
     }
   }, [open]);
 

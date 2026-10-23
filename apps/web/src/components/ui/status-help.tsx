@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { CircleHelp } from 'lucide-react';
-import { layoutViewportSize, placeFloatingOverlay } from '@bookone/accounting';
+import { layoutViewportSize, overlayMaxWidth, placeFloatingOverlay } from '@bookone/accounting';
 import { Badge, type Tone } from '@/components/ui/bookone-ui';
 import {
   getStatusGuide,
@@ -36,6 +36,16 @@ function toneFor(status: string): Tone {
   return 'neutral';
 }
 
+function currentLayoutViewport() {
+  return layoutViewportSize(
+    { width: window.innerWidth, height: window.innerHeight },
+    {
+      width: document.documentElement.clientWidth,
+      height: document.documentElement.clientHeight,
+    },
+  );
+}
+
 function TipBubble({
   anchorEl,
   children,
@@ -50,30 +60,29 @@ function TipBubble({
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(() => {
     const r = anchorEl.getBoundingClientRect();
-    return { left: Math.max(8, r.left), top: r.bottom + 8 };
+    return {
+      left: Math.max(8, r.left),
+      top: r.bottom + 8,
+      maxWidth: overlayMaxWidth(currentLayoutViewport().width),
+    };
   });
 
   useEffect(() => {
     function place() {
       const el = ref.current;
       const rect = anchorEl.getBoundingClientRect();
+      const viewport = currentLayoutViewport();
+      const maxWidth = overlayMaxWidth(viewport.width);
+      if (el) el.style.maxWidth = `${maxWidth}px`;
       const measured = el
         ? { width: el.offsetWidth, height: el.offsetHeight }
-        : { width: wide ? 340 : 260, height: 80 };
-      const viewport = layoutViewportSize(
-        { width: window.innerWidth, height: window.innerHeight },
-        {
-          width: document.documentElement.clientWidth,
-          height: document.documentElement.clientHeight,
-        },
-      );
-      setPos(
-        placeFloatingOverlay({
-          anchor: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
-          size: measured,
-          viewport,
-        }),
-      );
+        : { width: Math.min(wide ? 340 : 260, maxWidth), height: 80 };
+      const next = placeFloatingOverlay({
+        anchor: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        size: measured,
+        viewport,
+      });
+      setPos({ ...next, maxWidth });
     }
     place();
     const id = window.requestAnimationFrame(place);
@@ -96,7 +105,7 @@ function TipBubble({
       ref={ref}
       className={`status-tip-bubble${wide ? ' is-wide' : ''}`}
       role="tooltip"
-      style={{ left: pos.left, top: pos.top, position: 'fixed', zIndex: 90 }}
+      style={{ left: pos.left, top: pos.top, position: 'fixed', zIndex: 90, maxWidth: pos.maxWidth }}
     >
       {children}
     </div>,

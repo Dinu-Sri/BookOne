@@ -7,3 +7,13 @@ export function nextFocusIndex(count: number, current: number, shift: boolean): 
 
 export const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Prefer a still-connected captured trigger; otherwise a surviving fallback (row Actions). */
+export function resolveReturnFocus<T extends { isConnected: boolean }>(
+  captured: T | null | undefined,
+  fallback?: T | null,
+): T | null {
+  if (captured?.isConnected) return captured;
+  if (fallback?.isConnected) return fallback;
+  return null;
+}

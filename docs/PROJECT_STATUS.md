@@ -1,3 +1,7 @@
+## 2026-10-23 — List return focus and layout-width status help (v2.5.21)
+
+Light05 recovery review of v2.5.20 · `de45536`: 9 passed / 2 failed / 16 blocked / 3 inconclusive. List Archive cancel now returns focus to the surviving row Actions button instead of BODY. Status help at 320/305 layout is capped to 289px so both 8px gutters fit. See [CHG-20261023-light05-list-focus-help](changes/CHG-20261023-light05-list-focus-help.md). Applicable UX refs: UXW-005/018. Do not deploy across an active Light mission. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-22 — Raw header discount, dialog focus, tooltip placement, credit print (v2.5.20)
 
 PR54/PR55 coding mission on inspected master v2.5.19 · `3e9ffee`. Quote header 150% is refused from preserved raw type/value instead of saving a clamped 10 draft. ConfirmDialog and StatusHelp use the existing primitives with focus trap and measured placement. Sales credit print is CREDIT NOTE. Product create/edit is view-only without inventory write. Required-supplier refusal keeps a durable alert. See [CHG-20261022-pr54-header-dialog-credit](changes/CHG-20261022-pr54-header-dialog-credit.md). Do not deploy across an active Light mission. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

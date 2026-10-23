@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { layoutViewportSize, placeFloatingOverlay } from '../src/overlay-geometry';
-import { nextFocusIndex } from '../src/focus-trap';
+import { layoutViewportSize, overlayMaxWidth, placeFloatingOverlay } from '../src/overlay-geometry';
+import { nextFocusIndex, resolveReturnFocus } from '../src/focus-trap';
 
 describe('StatusHelp overlay placement', () => {
   it('at 320px uses measured 304 width so left is not -28', () => {
@@ -78,5 +78,60 @@ describe('ConfirmDialog focus cycle', () => {
 
   it('empty set stays at 0', () => {
     expect(nextFocusIndex(0, 0, false)).toBe(0);
+  });
+});
+
+describe('overlayMaxWidth layout gutters', () => {
+  it('caps width to layout minus two 8px gutters (305 layout → 289)', () => {
+    expect(overlayMaxWidth(305)).toBe(289);
+    expect(overlayMaxWidth(320)).toBe(304);
+    expect(overlayMaxWidth(390)).toBe(374);
+    expect(overlayMaxWidth(7)).toBe(0);
+  });
+
+  it('at 320 inner / 305 layout a constrained 289 bubble keeps both 8px gutters', () => {
+    const layout = layoutViewportSize({ width: 320, height: 844 }, { width: 305, height: 844 });
+    expect(layout.width).toBe(305);
+    const width = Math.min(340, overlayMaxWidth(layout.width));
+    expect(width).toBe(289);
+    const placed = placeFloatingOverlay({
+      anchor: { left: 8, top: 40, right: 40, bottom: 58 },
+      size: { width, height: 120 },
+      viewport: layout,
+    });
+    expect(placed.left).toBe(8);
+    expect(placed.left + width).toBe(297);
+    expect(placed.left + width).toBeLessThanOrEqual(layout.width - 8);
+  });
+
+  it('390 layout still allows the 340 wide bubble (unclipped x42+340)', () => {
+    expect(overlayMaxWidth(390)).toBeGreaterThanOrEqual(340);
+    const placed = placeFloatingOverlay({
+      anchor: { left: 42, top: 40, right: 74, bottom: 58 },
+      size: { width: 340, height: 160 },
+      viewport: { width: 390, height: 844 },
+    });
+    expect(placed.left).toBe(42);
+    expect(placed.left + 340).toBe(382);
+  });
+});
+
+describe('ConfirmDialog return focus', () => {
+  it('keeps a connected captured trigger', () => {
+    const captured = { isConnected: true, id: 'menu' };
+    const fallback = { isConnected: true, id: 'actions' };
+    expect(resolveReturnFocus(captured, fallback)).toBe(captured);
+  });
+
+  it('falls back to a connected row Actions control when the menu item is gone', () => {
+    const captured = { isConnected: false, id: 'menu' };
+    const fallback = { isConnected: true, id: 'actions' };
+    expect(resolveReturnFocus(captured, fallback)).toBe(fallback);
+  });
+
+  it('skips restore when the row control is gone after a legitimate archive or delete', () => {
+    expect(resolveReturnFocus({ isConnected: false }, { isConnected: false })).toBeNull();
+    expect(resolveReturnFocus(null, null)).toBeNull();
+    expect(resolveReturnFocus(undefined, undefined)).toBeNull();
   });
 });

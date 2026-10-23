@@ -2713,6 +2713,7 @@ textarea.input {
 }
 .status-tip-bubble {
   width: 260px;
+  /* 100vw includes the scrollbar; TipBubble also sets layout-width maxWidth inline. */
   max-width: calc(100vw - 16px);
   padding: 10px 12px;
   border-radius: 10px;

@@ -16,6 +16,11 @@ export function layoutViewportSize(inner: OverlayViewport, client?: Partial<Over
   return { width, height };
 }
 
+/** Border-box cap so both `pad` gutters fit inside layout width (`100vw` includes the scrollbar). */
+export function overlayMaxWidth(layoutWidth: number, pad = 8): number {
+  return Math.max(0, layoutWidth - pad * 2);
+}
+
 export function placeFloatingOverlay(opts: {
   anchor: OverlayRect;
   size: OverlaySize;

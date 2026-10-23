@@ -125,6 +125,7 @@ export type {
   ManualHeaderDiscountInput,
   ManualHeaderDiscountResult,
 } from './document-guards';
-export { placeFloatingOverlay, layoutViewportSize } from './overlay-geometry';
+export { placeFloatingOverlay, layoutViewportSize, overlayMaxWidth } from './overlay-geometry';
 export type { OverlayRect, OverlaySize, OverlayViewport } from './overlay-geometry';
-export { nextFocusIndex, FOCUSABLE_SELECTOR } from './focus-trap';
+export { nextFocusIndex, FOCUSABLE_SELECTOR, resolveReturnFocus } from './focus-trap';
+

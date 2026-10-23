@@ -775,6 +775,7 @@ export function CommercialDocumentList({
         onCancel={() => setConfirm(null)}
         onConfirm={runConfirm}
         busy={busy}
+        returnFocus={confirm ? triggerRefs.current.get(confirm.row.id) ?? null : null}
       />
     </div>
   );

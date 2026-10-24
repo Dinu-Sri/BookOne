@@ -6,6 +6,7 @@ import { persistedDocumentBreakdown } from '@bookone/accounting';
 import type { CommercialDocDetail } from '@/app/actions/commercial-docs';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
 import { Button } from '@/components/ui/bookone-ui';
+import { sourceDocumentHref, sourceDocumentLabel } from '@/lib/source-document';
 
 const SNAPSHOT_BY_TYPE: Record<string, { kicker: string; dateLabel: string; avatar: string }> = {
   quotation: { kicker: 'Quotation', dateLabel: 'Good thru', avatar: 'Q' },
@@ -44,6 +45,8 @@ export function QuotationSnapshotDialog({
   editHref?: string | null;
 }) {
   const meta = snapshotMeta(doc, listTitle);
+  const sourceHref = sourceDocumentHref(doc.sourceDocumentType, doc.sourceDocumentId);
+  const sourceLabel = sourceDocumentLabel(doc.sourceDocumentType);
   const isReturn = doc.documentType === 'sales_return' || doc.documentType === 'purchase_return';
   const breakdown = isReturn
     ? persistedDocumentBreakdown(doc.lines, doc.subtotal, doc.discountTotal, doc.taxTotal, doc.total)
@@ -72,6 +75,18 @@ export function QuotationSnapshotDialog({
             <div className="party-snapshot-meta">
               <StatusBadge status={doc.status} />
               <span className="party-snapshot-chip">{doc.partyName}</span>
+              {doc.sourceDocumentId ? (
+                sourceHref ? (
+                  <Link href={sourceHref} className="party-snapshot-chip">
+                    {sourceLabel}: {doc.sourceDocumentNumber || 'Open'}
+                  </Link>
+                ) : (
+                  <span className="party-snapshot-chip">
+                    {sourceLabel}
+                    {doc.sourceDocumentNumber ? `: ${doc.sourceDocumentNumber}` : ''}
+                  </span>
+                )
+              ) : null}
             </div>
           </div>
         </div>

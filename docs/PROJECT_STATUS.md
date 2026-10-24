@@ -1,3 +1,7 @@
+## 2026-10-24 — List BODY return-focus, return paid help, order source link (v2.5.22)
+
+Light07 attempt2 of v2.5.21 · `7458a9c`: 13 passed / 1 operator checkpoint failure / 22 blocked. List Archive cancel now ignores a captured BODY and restores the surviving row Actions button. Sales-return paid/partial badges expose help. Sales orders show a visible source-quotation link on View and `/sales/orders/[id]`. Order print, list/trial export, and actor/audit UI remain unsupported. See [CHG-20261024-light06-focus-order-source](changes/CHG-20261024-light06-focus-order-source.md). Review branch only — do not merge or deploy in this request. Preserve Light07 S600/P200 and converted Q/order 600. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-23 — List return focus and layout-width status help (v2.5.21)
 
 Light05 recovery review of v2.5.20 · `de45536`: 9 passed / 2 failed / 16 blocked / 3 inconclusive. List Archive cancel now returns focus to the surviving row Actions button instead of BODY. Status help at 320/305 layout is capped to 289px so both 8px gutters fit. See [CHG-20261023-light05-list-focus-help](changes/CHG-20261023-light05-list-focus-help.md). Applicable UX refs: UXW-005/018. Do not deploy across an active Light mission. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

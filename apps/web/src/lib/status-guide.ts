@@ -149,6 +149,18 @@ const SALES_RETURN: StatusGuide = {
       next: 'Refund cash if needed, or leave it as credit.',
     },
     {
+      key: 'partial',
+      label: 'Partial',
+      meaning: 'Return posted and partly applied. The original invoice still has a remaining balance.',
+      next: 'Apply remaining credit, or collect the rest of the invoice.',
+    },
+    {
+      key: 'paid',
+      label: 'Paid',
+      meaning: 'Return posted and fully applied against the original invoice. Nothing left to credit.',
+      next: 'Done. Refund cash only if a cash refund is still required.',
+    },
+    {
       key: 'refunded',
       label: 'Refunded',
       meaning: 'Money was paid back (cash/bank return).',

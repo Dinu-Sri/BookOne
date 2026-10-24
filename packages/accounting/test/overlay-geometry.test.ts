@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layoutViewportSize, overlayMaxWidth, placeFloatingOverlay } from '../src/overlay-geometry';
-import { nextFocusIndex, resolveReturnFocus } from '../src/focus-trap';
+import { isReturnableFocusTarget, nextFocusIndex, resolveReturnFocus } from '../src/focus-trap';
 
 describe('StatusHelp overlay placement', () => {
   it('at 320px uses measured 304 width so left is not -28', () => {
@@ -133,5 +133,18 @@ describe('ConfirmDialog return focus', () => {
     expect(resolveReturnFocus({ isConnected: false }, { isConnected: false })).toBeNull();
     expect(resolveReturnFocus(null, null)).toBeNull();
     expect(resolveReturnFocus(undefined, undefined)).toBeNull();
+  });
+
+  it('treats a connected BODY as gone so the surviving Actions fallback is used', () => {
+    const captured = { isConnected: true, tagName: 'BODY', id: 'body' };
+    const fallback = { isConnected: true, tagName: 'BUTTON', id: 'actions' };
+    expect(isReturnableFocusTarget(captured)).toBe(false);
+    expect(resolveReturnFocus(captured, fallback)).toBe(fallback);
+  });
+
+  it('treats a connected HTML documentElement as gone', () => {
+    const captured = { isConnected: true, tagName: 'HTML' };
+    const fallback = { isConnected: true, tagName: 'BUTTON', id: 'actions' };
+    expect(resolveReturnFocus(captured, fallback)).toBe(fallback);
   });
 });

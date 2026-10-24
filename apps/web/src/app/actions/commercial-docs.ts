@@ -3665,6 +3665,8 @@ export interface CommercialDocDetail {
   exportRef: string | null;
   transactionId: string | null;
   sourceDocumentId: string | null;
+  sourceDocumentNumber: string | null;
+  sourceDocumentType: string | null;
   brandId: string | null;
   locationId: string | null;
   lines: {
@@ -3728,6 +3730,26 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
         : [];
     const productsById = new Map(productRows.map((p) => [p.id, p]));
 
+    let sourceDocumentNumber: string | null = null;
+    let sourceDocumentType: string | null = null;
+    if (doc.sourceDocumentId) {
+      const [source] = await db()
+        .select({
+          documentNumber: businessDocuments.documentNumber,
+          documentType: businessDocuments.documentType,
+        })
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, user.tenantId),
+            eq(businessDocuments.id, doc.sourceDocumentId),
+          ),
+        )
+        .limit(1);
+      sourceDocumentNumber = source?.documentNumber ?? null;
+      sourceDocumentType = source?.documentType ?? null;
+    }
+
     return {
       id: doc.id,
       documentType: doc.documentType,
@@ -3755,6 +3777,8 @@ export async function getCommercialDocument(id: string): Promise<CommercialDocDe
       exportRef: doc.exportRef ?? null,
       transactionId: doc.transactionId ?? null,
       sourceDocumentId: doc.sourceDocumentId ?? null,
+      sourceDocumentNumber,
+      sourceDocumentType,
       brandId: doc.brandId ?? null,
       locationId: doc.locationId ?? null,
       lines: lines.map((l) => {

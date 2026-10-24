@@ -26,6 +26,7 @@ export default async function SalesOrdersPage() {
             newLabel: 'New sales order',
             convertTo: 'sales_invoice',
             convertLabel: 'To invoice',
+            detailHrefPattern: '/sales/orders/:id',
           }}
         />
       </Suspense>

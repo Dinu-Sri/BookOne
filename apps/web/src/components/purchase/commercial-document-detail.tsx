@@ -24,6 +24,7 @@ import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { PrintPreviewButton } from '@/components/print/print-preview-button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { sourceDocumentHref, sourceDocumentLabel } from '@/lib/source-document';
 
 const TYPE_LABEL: Record<string, string> = {
   purchase_order: 'Purchase order',
@@ -116,6 +117,8 @@ export function CommercialDocumentDetail({
   const canApprove =
     doc.status === 'pending_approval' &&
     ['purchase', 'import_purchase', 'vendor_bill'].includes(doc.documentType);
+  const sourceHref = sourceDocumentHref(doc.sourceDocumentType, doc.sourceDocumentId);
+  const sourceLabel = sourceDocumentLabel(doc.sourceDocumentType);
 
   async function runConfirm() {
     if (!confirm) return;
@@ -235,6 +238,19 @@ export function CommercialDocumentDetail({
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <StatusBadge status={doc.status} family={statusFamilyFromDocType(doc.documentType)} />
                 <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{doc.partyName}</span>
+                {doc.sourceDocumentId ? (
+                  sourceHref ? (
+                    <Link href={sourceHref} style={{ fontSize: 13, fontWeight: 700 }}>
+                      {sourceLabel}
+                      {doc.sourceDocumentNumber ? `: ${doc.sourceDocumentNumber}` : ''}
+                    </Link>
+                  ) : (
+                    <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                      {sourceLabel}
+                      {doc.sourceDocumentNumber ? `: ${doc.sourceDocumentNumber}` : ''}
+                    </span>
+                  )
+                ) : null}
               </div>
               {doc.status === 'pending_approval' ? (
                 <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--warning, #b45309)' }}>

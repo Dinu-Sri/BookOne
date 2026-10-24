@@ -1,3 +1,10 @@
+## 2026-10-24 — List BODY return-focus, return paid help, order source link (v2.5.22)
+
+- Record: [CHG-20261024-light06-focus-order-source](changes/CHG-20261024-light06-focus-order-source.md). QA Light07 attempt2 [CODING-MISSION-20261024-light07-attempt2](https://github.com/Dinu-Sri/bookone-qa/blob/5f7b8d5ee3158e0a085ff708cd24374c33859fcd/handoffs/CODING-MISSION-20261024-light07-attempt2.md) at `5f7b8d5ee3158e0a085ff708cd24374c33859fcd` on inspected master `7458a9c`. Light07: 13 passed / 1 operator checkpoint failure / 22 blocked. L07-SALE stays failed.
+- ConfirmDialog treats BODY/HTML as non-returnable so list Archive cancel restores the surviving Actions button. Sales-return status help covers paid and partial. Converted sales orders expose a visible source-quotation link on snapshot and `/sales/orders/[id]`. Order print, list/trial export, and actor/audit UI remain unsupported. INV0032 open 300 and Light07 S600/P200 are not edited.
+- UX refs: UXW-005/018/021. Shared consumers: ConfirmDialog lists/details, StatusHelp, CommercialDocumentDetail, order list View/Open.
+- Next: Medium compares the actual diff and the QA operator-guard PR, then publishes a NEW pinned Light queue. Do not close OBS-M21-01/U1 or L07-SALE from this code. Do not merge or deploy in this request. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-23 — List return focus and layout-width status help (v2.5.21)
 
 - Record: [CHG-20261023-light05-list-focus-help](changes/CHG-20261023-light05-list-focus-help.md). QA [HANDOFF-20261023-light05-recovery-review](https://github.com/Dinu-Sri/bookone-qa/blob/d6e9f779e27540ff31fe98b81f64e06a5fcbd353/handoffs/HANDOFF-20261023-light05-recovery-review.md) at `d6e9f779e27540ff31fe98b81f64e06a5fcbd353` on inspected master `de45536`. Recovered Light05: 9 passed / 2 failed / 16 blocked / 3 inconclusive.

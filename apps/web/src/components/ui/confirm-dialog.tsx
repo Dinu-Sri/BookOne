@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useId, useRef, type ReactNode } from 'react';
-import { FOCUSABLE_SELECTOR, nextFocusIndex, resolveReturnFocus } from '@bookone/accounting';
+import {
+  FOCUSABLE_SELECTOR,
+  isReturnableFocusTarget,
+  nextFocusIndex,
+  resolveReturnFocus,
+} from '@bookone/accounting';
 import { Button } from '@/components/ui/bookone-ui';
 
 export function ConfirmDialog({
@@ -42,8 +47,8 @@ export function ConfirmDialog({
 
   useEffect(() => {
     if (open && !wasOpen.current) {
-      triggerRef.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      triggerRef.current = isReturnableFocusTarget(active) ? active : null;
       wasOpen.current = true;
       const id = window.requestAnimationFrame(() => cancelRef.current?.focus());
       return () => window.cancelAnimationFrame(id);

@@ -1,0 +1,52 @@
+# CHG-20261024-light06-focus-order-source — list BODY return-focus, return paid help, order source link (v2.5.22)
+
+Status: ready-for-QA.
+
+- Author/agent and date: Grok coding agent, 2026-10-24.
+- Product version (`VERSION` file) and base SHA / branch/PR: 2.5.22 on review branch `fix/v2522-light06-focus-order-source` after v2.5.21 `7458a9c458402f9dfaf64587dd5ef7ebe1b5d448`. This is a reviewable source candidate. Do not merge or deploy as part of this request.
+- QA repository revision and companion PR/change ID: Light07 attempt2 results `5f7b8d5ee3158e0a085ff708cd24374c33859fcd` ([CODING-MISSION-20261024-light07-attempt2](https://github.com/Dinu-Sri/bookone-qa/blob/5f7b8d5ee3158e0a085ff708cd24374c33859fcd/handoffs/CODING-MISSION-20261024-light07-attempt2.md)). Companion QA operator-guard change is a separate review PR from that parent. Light07 L07-SALE stays failed. Preserve converted quotation/order 600, unposted draft 100, open invoice 600 and open bill 200. Do not replay, delete, reverse or settle them.
+- Intended before/after behaviour with a concrete example:
+  - OBS-M21-01: List Archive opened from the row Actions menu still captured BODY after the portal menuitem unmounted, and `resolveReturnFocus` preferred that connected BODY over the Actions fallback. Cancel by Escape or explicit Cancel now treats BODY/HTML as non-returnable and restores the surviving row Actions button. Detail-page Archive/Delete buttons stay mounted, so a captured button still restores. After a legitimate archive/delete the row control is gone; restore is skipped. This regression never confirms Archive/Delete.
+  - OBS-M21-U1: Applied sales returns persist `paid` or `partial` when credit settles the source, but `statusHelp('sales_return', 'paid')` returned null so the list badge had no tabindex/tooltip. The sales-return guide now includes paid and partial. `refunded` remains the cash-refund path. Document and accounting statuses are unchanged.
+  - Order source quotation: stored `sourceDocumentId` is now a visible link (number + type) on order View snapshot and `/sales/orders/[id]`. Sales-order list View/Open uses `detailHrefPattern`. Order **print remains unsupported**: `kindFromDocument('sales_order')` titles the sheet INVOICE. Do not wire `printHref`.
+  - Exports: cashbook CSV (`CashbookExportButton` / `exportCashbookCsv`), company backup (`/company/backup`), and bank-reconciliation JSON (`exportReconciliationSummary`) are the supported entrypoints. List and trial-balance Export controls are unsupported.
+  - Actor/audit history: business documents have no created-by/history UI. The document Journal “Posted” link is financial only. Actor/audit remains unsupported.
+- Existing behaviour that must remain correct: INV0018 draft 10, INV0030/0031 256.50, INV0032 open 300, QT-20261017-0002, Light03 closing 122 journals 13243.63 / AR 1306.21 / AP 1090 / InvGL 660 / stock 780 / inherited gap 120. Light05 recovered close: 153 journals, AR 1306.21, AP 1290, InvGL 660, output VAT 46.71, earnings 629.50, assets 1966.21. Light07 accepted sale 600 and service bill 200 (Dr=Cr 800, AR+600, AP+200, net income +400, liquid 0) stay open. Settings unchanged: Purchase approval false, supplier number required false, duplicate blocking true, GRN required false, GRNI false; Inventory last cost, negative stock allow; all 25 sales controls match the opening map. Do not implement D12-008/D12-035/N13-068. U1/U2 stay unknowns. Do not change grants/modules/jobs or bypass the funding gate.
+- Actual changed paths/symbols/routes:
+  - `isReturnableFocusTarget` and BODY-safe `resolveReturnFocus` in `packages/accounting/src/focus-trap.ts`.
+  - ConfirmDialog capture ignores BODY/HTML in `apps/web/src/components/ui/confirm-dialog.tsx`.
+  - `SALES_RETURN` paid/partial items in `apps/web/src/lib/status-guide.ts`.
+  - `getCommercialDocument` returns `sourceDocumentNumber` / `sourceDocumentType`.
+  - Visible source link: `apps/web/src/lib/source-document.ts`, snapshot, `CommercialDocumentDetail`.
+  - New `/sales/orders/[id]` using `CommercialDocumentDetail` without print. Orders list `detailHrefPattern`.
+- Business rule/profile/scenario IDs: UXW-005 ConfirmDialog return focus; UXW-018/021 status help. Companion 1.1.0 and canonical business definitions unchanged. Rulebook 1.0.0 / hash `abcdd8970b1c36e62a97c6a111d6088ca97067ad3d6e954f64250b67989b39fc`. BR-SAL-01/BR-ACC-04/08 related-partial only.
+- Accounting, stock/rental, tenant/access and customer-data effects: none. No posting, print kind, permission, tenant GUC, RLS, BYPASSRLS, grant expansion, or module-flag change. Source lookup is read-only.
+- Migrations, schema/history compatibility and recovery implications: none. Do not fabricate upgrade fixtures.
+- Dependencies, settings/flags, deployment and external-service changes: quote `v2.5.22 · <sha7>` after a later authorized deploy. No env vars, migrations, or new dependencies. Do not merge or deploy in this request.
+- Independent diff/impact review and uncertainties: live browser 320/390, busy/outside-click, assistive-reader, and order-detail keyboard stamps blocked here. A helper test does not certify computed CSS or actual focus timing. Order print stays an explicit coverage gap. Encrypted backup last. BookOne is not customer-ready.
+- Checks executed: `Set-Location packages/accounting; node node_modules/vitest/vitest.mjs run` — 11 files, 171 passed (was 169 on v2.5.21; added connected BODY falls back to Actions, connected HTML falls back to Actions). Independent examples retained: 256.50, 85.50/171, 302.67, 118, 2+2 vs 3, 7/10/3 ladders, 1.01/1.04. Live browser stamp blocked. Do not replay staging payments, INV0032, or Light07 S600/P200. Web `tsc --noEmit` reports pre-existing missing `qrcode`/`react` types unrelated to this diff.
+- Failed/skipped/flaky/blocked/not-run checks and reasons: no live restricted-DB HTTP. Isolated upgrade environment not prepared. Assistive-technology, 320/390 actual viewport, purchase/sales list+detail keyboard, busy/outside, and hover/Escape rendered evidence not run here. Order print, list/trial export, and actor/audit UI remain unsupported. UX 1.1.0 `workbook.json` last known 1.0.0 JSON SHA256 `383d18ad74978af67e9e75d855c77c87b45a92beb00c101a3338dd0abd01e57f`. 48 UX workflows remain unrun. Inventory writer unavailable. Backup last.
+- New QA assertions or outstanding work: Medium compares this exact diff and binds a NEW Light queue only after verifying a new live candidate and legitimate fixtures. Required fresh regressions: purchase and sales list Archive cancel by Escape and explicit Cancel, activeElement is the surviving Actions control (not BODY); sales-return paid/partial badge help; order View/Open shows source quotation number as a working link; order print remains absent. Do not close OBS-M21-01/U1 from this code change alone. Do not retarget Light07 L07-SALE. Do not rerun consumed Light05/Light07 financial sources.
+- Created staging records/cleanup, if any: none. Preserve Light03/Light05/Light07 fixtures and restored settings.
+- Documentation updated: this record, TASK_LOG, PROJECT_STATUS.
+- Next exact action and responsible role: Independent QA / Medium reviews the operator-guard PR and this product diff, then prepares a NEW Light mission for receipts, part-paid credit, overpayment refusal/correction and vendor payments on a fresh fixture/clock. Owner may later authorize merge/deploy. Do not close Light06/Light07 findings from this code.
+
+Final product/QA SHAs belong in PR metadata and external run manifests after commit. Do not label the change verified from code review alone.
+
+## UI/UX impact and existing-design compatibility
+
+- Existing design guide/component/CSS references; reason for reusing/extending them: existing ConfirmDialog, StatusHelp, CommercialDocumentDetail, list View/Open, snapshot chips. No replacement design system, palette, typography, or framework. No invented sales-order print kind.
+- Exact external QA commit and ux/workbook.json SHA256; UX/UXW/WB IDs/revisions: Light07 attempt2 `5f7b8d5ee3158e0a085ff708cd24374c33859fcd`. Last known UX JSON SHA256 `383d18ad74978af67e9e75d855c77c87b45a92beb00c101a3338dd0abd01e57f`.
+  - UXW-005 ConfirmDialog focus/Escape/busy/return
+  - UXW-018/021 StatusHelp
+- Before/after behaviour; independent expected/unchanged example: list Archive cancel returns to the row Actions button when the captured target is BODY. Sales-return paid badge exposes help. Converted order 600 shows its source quotation as a link. Unchanged: INV0032 open 300, Light07 S600/P200, no order print sheet.
+- Direct screens and transitive shared consumers; applicable states/roles/entities/settings:
+  - Direct: purchase/sales list Archive cancel; sales-return StatusBadge; sales order list View/Open and `/sales/orders/[id]`; snapshot source chip.
+  - Shared ConfirmDialog consumers unchanged from v2.5.21 wiring. Shared StatusHelp: all family badges; only sales_return gained paid/partial keys.
+  - Shared CommercialDocumentDetail: every sales/purchase detail now shows a source link when `sourceDocumentId` resolves.
+- Preserved field/line/source identity, money/stock/history/print and server permissions: no financial, print-kind, or permission change. Archive/Delete still require explicit Confirm; this work never confirms them. Order print is still omitted.
+- Desktop/narrow/keyboard/reader evidence; baseline/after sanitized screenshots: live browser stamp blocked in this engineering session. Geometry/focus helpers cover BODY fallback. Independent QA owns rendered keyboard and AT evidence.
+- Exact and adjacent regressions; actual engineering checks and missing layers: accounting vitest. Missing: live 320/390 browser, purchase+sales list/detail Escape and Cancel, busy/outside, assistive-reader, restricted-DB HTTP, isolated v2.5.14 upgrade, 48 unbound UX workflows, order print, list/trial export, actor/audit UI.
+- Conflict/exception owner, rationale, mitigation, expiry and acceptance impact: UXQ-001–004 unresolved. U1/U2 remain unknowns. Order print/export/audit stay explicit unsupported coverage. Do not close OBS-M21 or Light07 L07-SALE from this code.
+- Small rollout batch/revert plan; any schema/data implications explicitly reviewed: revert this commit; no schema/data change. Do not credit INV0032 or settle S600/P200. Encrypted backup last.
+- QA companion change/run and independent review link (or pending): operator-guard companion PR from Light07 attempt2 parent. Independent NEW Light queue pending. Do not close OBS-M21-01/U1 from code.

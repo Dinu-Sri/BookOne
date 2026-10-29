@@ -23,6 +23,11 @@ import {
   percentDiscountOver100,
   persistedDocumentBreakdown,
   creditPrintTitle,
+  PAYMENT_OVER_BALANCE_MESSAGE,
+  parsePaymentAmount,
+  paymentAmountExceedsBalance,
+  paymentAllocationFieldError,
+  paymentAllocationsHaveOverBalance,
   HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
   PERCENT_HEADER_DISCOUNT_OVER_100_MESSAGE,
@@ -1106,5 +1111,43 @@ describe('BR-SAL-03 raw header discount vs line discount', () => {
     const prior = [{ productId: 'w', description: 'Widget', quantity: 1 }];
     const prefill = linkedReturnPrefillQuantities(src, prior);
     expect(prefill[0]).toEqual({ sourceQuantity: 3, remainingQuantity: 2 });
+  });
+});
+
+describe('payment allocation over-balance feedback', () => {
+  it('flags a selected source over its own balance without clamping', () => {
+    expect(paymentAllocationFieldError('81', 80, true)).toBe(PAYMENT_OVER_BALANCE_MESSAGE);
+    expect(paymentAllocationFieldError('80', 80, true)).toBeNull();
+    expect(paymentAllocationFieldError('30', 80, true)).toBeNull();
+    expect(paymentAllocationFieldError('81', 80, false)).toBeNull();
+    expect(paymentAmountExceedsBalance(251, 250)).toBe(true);
+    expect(paymentAmountExceedsBalance(541, 540)).toBe(true);
+  });
+
+  it('keeps two-source partial then final allocations valid', () => {
+    const first = [
+      { selected: true, amountRaw: '30', balanceDue: 80 },
+      { selected: true, amountRaw: '20', balanceDue: 80 },
+    ];
+    const final = [
+      { selected: true, amountRaw: '50', balanceDue: 50 },
+      { selected: true, amountRaw: '60', balanceDue: 60 },
+    ];
+    const invalid = [
+      { selected: true, amountRaw: '81', balanceDue: 80 },
+      { selected: true, amountRaw: '80', balanceDue: 80 },
+    ];
+    expect(paymentAllocationsHaveOverBalance(first)).toBe(false);
+    expect(paymentAllocationsHaveOverBalance(final)).toBe(false);
+    expect(paymentAllocationsHaveOverBalance(invalid)).toBe(true);
+  });
+
+  it('ignores deselected rows and accepts exact cents within epsilon', () => {
+    expect(paymentAllocationsHaveOverBalance([{ selected: false, amountRaw: '999', balanceDue: 80 }])).toBe(
+      false,
+    );
+    expect(paymentAmountExceedsBalance(80.005, 80)).toBe(false);
+    expect(paymentAmountExceedsBalance(80.01, 80)).toBe(true);
+    expect(parsePaymentAmount('80.00')).toBe(80);
   });
 });

@@ -107,6 +107,11 @@ export {
   SALES_RETURN_PARTY_MESSAGE,
   PURCHASE_RETURN_PARTY_MESSAGE,
   PAYMENT_OVER_BALANCE_MESSAGE,
+  PAYMENT_OVER_BALANCE_EPSILON,
+  parsePaymentAmount,
+  paymentAmountExceedsBalance,
+  paymentAllocationFieldError,
+  paymentAllocationsHaveOverBalance,
 } from './document-guards';
 export type {
   QtyLine,
@@ -125,6 +130,18 @@ export type {
   ManualHeaderDiscountInput,
   ManualHeaderDiscountResult,
 } from './document-guards';
+export {
+  isCashSettledReturn,
+  purchaseReturnRefundCashAccount,
+  cashSettledReturnStatus,
+} from './cash-return-settlement';
+export {
+  FINANCIAL_AUDIT_TABLES,
+  isFinancialAuditTable,
+  financialAuditSourceLabel,
+  financialAuditEventSummary,
+} from './financial-audit';
+export type { FinancialAuditTable } from './financial-audit';
 export { placeFloatingOverlay, layoutViewportSize, overlayMaxWidth } from './overlay-geometry';
 export type { OverlayRect, OverlaySize, OverlayViewport } from './overlay-geometry';
 export {

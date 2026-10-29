@@ -64,6 +64,7 @@ export function SalesDocumentForm({
   showPaymentAccount,
   paymentAccounts,
   defaultPaymentCode,
+  allowEmptyPaymentAccount,
   banner,
   brands,
   locations,
@@ -78,6 +79,7 @@ export function SalesDocumentForm({
   showPaymentAccount?: boolean;
   paymentAccounts?: { code: string; name: string }[];
   defaultPaymentCode?: string;
+  allowEmptyPaymentAccount?: boolean;
   banner?: string;
   brands?: BrandOption[];
   locations?: LocationOption[];
@@ -495,14 +497,29 @@ export function SalesDocumentForm({
           />
           {showPaymentAccount && paymentAccounts ? (
             <div className="field">
-              <label>Payment account</label>
-              <select className="input" name="paymentAccountCode" defaultValue={defaultPaymentCode ?? '1000'}>
+              <label>{isReturn ? 'Refund from account' : 'Payment account'}</label>
+              <select
+                className="input"
+                name="paymentAccountCode"
+                defaultValue={
+                  allowEmptyPaymentAccount ? (defaultPaymentCode ?? '') : (defaultPaymentCode ?? '1000')
+                }
+              >
+                {allowEmptyPaymentAccount ? (
+                  <option value="">Credit only — reduce customer balance</option>
+                ) : null}
                 {paymentAccounts.map((a) => (
                   <option key={a.code} value={a.code}>
                     {a.code} — {a.name}
                   </option>
                 ))}
               </select>
+              {isReturn ? (
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-soft)' }}>
+                  Choose an active cash, bank, or card account to refund now. Credit-only keeps the original
+                  receipt and applies the return against AR.
+                </p>
+              ) : null}
             </div>
           ) : null}
           <BrandLocationFields

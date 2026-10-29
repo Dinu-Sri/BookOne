@@ -172,6 +172,7 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     accessByLabel['On rent'] = accessByLabel['Stock Levels'] ?? 'none';
     accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
     accessByLabel.Groups = accessByLabel.Team ?? 'none';
+    accessByLabel.Activity = accessByLabel.Journal ?? 'none';
     const { landingHrefForAccess } = await import('@/lib/access');
     const { CONTROL_ROOM_NAV_LABELS } = await import('@/lib/nav-visibility');
     if (user.platformRole === 'super_admin') {

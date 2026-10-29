@@ -30,6 +30,7 @@ export function ProductForm({
   brands = [],
   locations = [],
   canWrite = true,
+  writeDeniedMessage,
 }: {
   mode: 'create' | 'edit';
   product?: ProductRow | null;
@@ -38,6 +39,7 @@ export function ProductForm({
   brands?: { id: string; name: string }[];
   locations?: { id: string; name: string; brandId?: string | null }[];
   canWrite?: boolean;
+  writeDeniedMessage?: string;
 }) {
   const action = mode === 'edit' ? updateProductFromForm : createProductFromForm;
   const [tab, setTab] = useState<TabId>('identity');
@@ -181,7 +183,8 @@ export function ProductForm({
       >
         {canWrite ? null : (
           <div className="form-error form-refusal-banner" role="alert">
-            This product is view-only. You do not have permission to create or edit inventory.
+            {writeDeniedMessage ||
+              'This product is view-only. You do not have permission to create or edit inventory.'}
           </div>
         )}
         <fieldset disabled={!canWrite} className="product-form-fields">

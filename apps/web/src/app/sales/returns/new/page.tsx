@@ -25,7 +25,10 @@ export default async function NewSalesReturnPage() {
           partyOptions={form.partyOptions}
           brands={form.brands}
           locations={form.locations}
-          banner="Restocks physical products · posts sales returns"
+          showPaymentAccount
+          paymentAccounts={form.paymentAccounts}
+          allowEmptyPaymentAccount
+          banner="Restocks physical products · posts sales returns. Refund from cash/bank/card to settle the credit, or leave credit-only to reduce AR."
         />
       </div>
     </BookOneShell>

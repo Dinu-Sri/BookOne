@@ -39,6 +39,9 @@ import {
   SALES_RETURN_PARTY_MESSAGE,
   PURCHASE_RETURN_PARTY_MESSAGE,
   conversionBillSupplierInvoiceNumber,
+  isCashSettledReturn,
+  purchaseReturnRefundCashAccount,
+  cashSettledReturnStatus,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { postedObligationSql } from '@/lib/posted-obligations';
@@ -1678,6 +1681,7 @@ export async function createCommercialDocument(
       };
       let linkedSource: {
         id: string;
+        documentType: string;
         total: string | number;
         subtotal: string | number;
         taxTotal: string | number;
@@ -1701,6 +1705,7 @@ export async function createCommercialDocument(
         const [src] = await db()
           .select({
             id: businessDocuments.id,
+            documentType: businessDocuments.documentType,
             total: businessDocuments.total,
             subtotal: businessDocuments.subtotal,
             taxTotal: businessDocuments.taxTotal,
@@ -1950,8 +1955,12 @@ export async function createCommercialDocument(
         assertEligibleDocumentTender(tender);
       }
 
-      const cashRefund =
-        parsed.documentType === 'sales_return' && Boolean(parsed.paymentAccountCode);
+      const cashRefund = isCashSettledReturn({
+        documentType: parsed.documentType,
+        paymentAccountCode: parsed.paymentAccountCode,
+        sourceDocumentType: linkedSource?.documentType ?? null,
+        hasSource: Boolean(parsed.sourceDocumentId),
+      });
       const settled =
         parsed.documentType === 'pos_sale' ||
         parsed.documentType === 'cash_purchase' ||
@@ -1963,8 +1972,9 @@ export async function createCommercialDocument(
             parsed.documentType !== 'purchase_return' &&
             parsed.documentType !== 'sales_return',
         );
-      if (parsed.documentType === 'sales_return' && settled) {
-        status = 'refunded';
+      const refundedStatus = cashRefund ? cashSettledReturnStatus(parsed.documentType) : null;
+      if (refundedStatus) {
+        status = refundedStatus;
       }
       if (parsed.documentType === 'cash_purchase') {
         status = 'paid';
@@ -2139,20 +2149,11 @@ export async function createCommercialDocument(
         } else if (parsed.documentType === 'purchase_return') {
           const expenseCode = enriched[0]?.accountCode || '6800';
           // Cash purchase returns refund cash; credit bills reduce AP
-          let refundCash: string | null = null;
-          if (parsed.sourceDocumentId) {
-            const [src] = await db()
-              .select({ documentType: businessDocuments.documentType })
-              .from(businessDocuments)
-              .where(eq(businessDocuments.id, parsed.sourceDocumentId))
-              .limit(1);
-            if (src?.documentType === 'cash_purchase') {
-              refundCash = parsed.paymentAccountCode || '1000';
-            }
-          } else if (parsed.paymentAccountCode) {
-            // Explicit refund account on free-standing return
-            refundCash = parsed.paymentAccountCode;
-          }
+          const refundCash = purchaseReturnRefundCashAccount({
+            sourceDocumentType: linkedSource?.documentType ?? null,
+            paymentAccountCode: parsed.paymentAccountCode,
+            hasSource: Boolean(parsed.sourceDocumentId),
+          });
           postingLines = buildPurchaseReturnPosting({
             total: supplyExVat,
             expenseAccountCode: expenseCode,

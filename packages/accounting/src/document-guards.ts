@@ -658,6 +658,39 @@ export const SALES_RETURN_PARTY_MESSAGE =
 export const PURCHASE_RETURN_PARTY_MESSAGE =
   'This return must use the same supplier as the original bill.';
 export const PAYMENT_OVER_BALANCE_MESSAGE = 'Payment cannot exceed balance due.';
+export const PAYMENT_OVER_BALANCE_EPSILON = 0.005;
+
+export function parsePaymentAmount(raw: string | number | null | undefined): number {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+  return Number(String(raw ?? '').replace(/[^0-9.-]/g, '')) || 0;
+}
+
+export function paymentAmountExceedsBalance(
+  amount: number,
+  balanceDue: number,
+  epsilon = PAYMENT_OVER_BALANCE_EPSILON,
+): boolean {
+  return amount > balanceDue + epsilon;
+}
+
+/** Field-level over-balance copy. Empty/zero selected rows are not over-allocation. */
+export function paymentAllocationFieldError(
+  amountRaw: string,
+  balanceDue: number,
+  selected: boolean,
+): string | null {
+  if (!selected) return null;
+  const amount = parsePaymentAmount(amountRaw);
+  if (amount <= 0) return null;
+  if (paymentAmountExceedsBalance(amount, balanceDue)) return PAYMENT_OVER_BALANCE_MESSAGE;
+  return null;
+}
+
+export function paymentAllocationsHaveOverBalance(
+  rows: { selected: boolean; amountRaw: string; balanceDue: number }[],
+): boolean {
+  return rows.some((row) => paymentAllocationFieldError(row.amountRaw, row.balanceDue, row.selected) != null);
+}
 
 function sumLineQty(lines: { quantity: number }[]): number {
   return lines.reduce((s, l) => s + Number(l.quantity || 0), 0);

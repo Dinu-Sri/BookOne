@@ -1,3 +1,10 @@
+## 2026-10-29 — Rapid02 cash-refund settlement, allocation feedback, activity, return tender (v2.5.23)
+
+- Record: [CHG-20261029-rapid02-consolidated](changes/CHG-20261029-rapid02-consolidated.md). QA Rapid02 continuation [CODING-MISSION-20261029-rapid02-consolidated](https://github.com/Dinu-Sri/bookone-qa/blob/c8b86bd61a88c2170d85f333addb610bbb31c07a/handoffs/CODING-MISSION-20261029-rapid02-consolidated.md) at `c8b86bd61a88c2170d85f333addb610bbb31c07a` on inspected master `211771e`. Rapid02: 18 passed / 3 failed / 2 inconclusive. Do not replay consumed Rapid02 money.
+- Cash_purchase-linked purchase returns now persist `refunded` / paid=total / balance 0 without another cash posting or changing the original purchase payment. Ordinary AP credits stay on the apply-to-source path. Receive Payments and Pay Vendors show accessible per-source over-balance errors and disable Record payment. `/journal/audit` reads tenant financial `audit_log` rows under `accounting.journal.read`. Ordinary sales-return UI exposes credit-only vs liquid tender. Product create view-only names the Inventory module ceiling. Historical Rapid02 refund rows are not repaired.
+- UX refs: UXW-002/018/021. Shared consumers: both payment forms, commercial create, Journal, product form, logout cookies.
+- Next: Medium reviews this exact diff and binds a NEW Rapid regression queue on a fresh fixture. Do not close Rapid02 failures from this code. Do not merge or deploy in this request. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-24 — List BODY return-focus, return paid help, order source link (v2.5.22)
 
 - Record: [CHG-20261024-light06-focus-order-source](changes/CHG-20261024-light06-focus-order-source.md). QA Light07 attempt2 [CODING-MISSION-20261024-light07-attempt2](https://github.com/Dinu-Sri/bookone-qa/blob/5f7b8d5ee3158e0a085ff708cd24374c33859fcd/handoffs/CODING-MISSION-20261024-light07-attempt2.md) at `5f7b8d5ee3158e0a085ff708cd24374c33859fcd` on inspected master `7458a9c`. Light07: 13 passed / 1 operator checkpoint failure / 22 blocked. L07-SALE stays failed.

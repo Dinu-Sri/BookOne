@@ -5,8 +5,14 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { receiveCustomerPayments } from '@/app/actions/documents';
 import type { OpenArInvoice } from '@/app/actions/commercial-docs';
-import { PAYMENT_OVER_BALANCE_MESSAGE } from '@bookone/accounting';
+import {
+  PAYMENT_OVER_BALANCE_MESSAGE,
+  parsePaymentAmount,
+  paymentAllocationsHaveOverBalance,
+  paymentAmountExceedsBalance,
+} from '@bookone/accounting';
 import { formatLKR, todayString } from '@/components/module/list-page';
+import { AllocationAmountField } from '@/components/payments/allocation-amount-field';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { withFormPending } from '@/components/ui/form-busy';
@@ -46,10 +52,22 @@ export function ReceivePaymentsForm({
     let t = 0;
     for (const inv of invoices) {
       if (!selected[inv.id]) continue;
-      t += Number(String(amounts[inv.id] ?? '').replace(/[^0-9.-]/g, '')) || 0;
+      t += parsePaymentAmount(amounts[inv.id]);
     }
     return Math.round(t * 100) / 100;
   }, [invoices, selected, amounts]);
+
+  const overBalance = useMemo(
+    () =>
+      paymentAllocationsHaveOverBalance(
+        invoices.map((inv) => ({
+          selected: Boolean(selected[inv.id]),
+          amountRaw: amounts[inv.id] ?? '',
+          balanceDue: inv.balanceDue,
+        })),
+      ),
+    [invoices, selected, amounts],
+  );
 
   function toggle(id: string, balance: number) {
     setSelected((prev) => {
@@ -64,7 +82,7 @@ export function ReceivePaymentsForm({
       .filter((inv) => selected[inv.id])
       .map((inv) => ({
         documentId: inv.id,
-        amount: Number(String(amounts[inv.id] ?? '').replace(/[^0-9.-]/g, '')) || 0,
+        amount: parsePaymentAmount(amounts[inv.id]),
       }))
       .filter((a) => a.amount > 0);
 
@@ -74,7 +92,7 @@ export function ReceivePaymentsForm({
     }
     const over = allocations.find((a) => {
       const inv = invoices.find((row) => row.id === a.documentId);
-      return inv != null && a.amount > inv.balanceDue + 0.005;
+      return inv != null && paymentAmountExceedsBalance(a.amount, inv.balanceDue);
     });
     if (over) {
       pushStatusToast({ kind: 'error', message: PAYMENT_OVER_BALANCE_MESSAGE });
@@ -196,16 +214,13 @@ export function ReceivePaymentsForm({
                       <td>{inv.dueDate || '—'}</td>
                       <td>{formatLKR(inv.balanceDue)}</td>
                       <td>
-                        <input
-                          className="input"
-                          inputMode="decimal"
-                          disabled={!selected[inv.id]}
+                        <AllocationAmountField
+                          id={`receive-${inv.id}`}
+                          label={`Amount received for ${inv.documentNumber}`}
                           value={amounts[inv.id] ?? ''}
-                          onChange={(e) =>
-                            setAmounts((prev) => ({ ...prev, [inv.id]: e.target.value }))
-                          }
-                          placeholder={String(inv.balanceDue)}
-                          style={{ maxWidth: 120 }}
+                          balanceDue={inv.balanceDue}
+                          selected={Boolean(selected[inv.id])}
+                          onChange={(next) => setAmounts((prev) => ({ ...prev, [inv.id]: next }))}
                         />
                       </td>
                     </tr>
@@ -224,7 +239,15 @@ export function ReceivePaymentsForm({
               gap: 12,
             }}
           >
-            <strong>Total received: {formatLKR(totalReceive)}</strong>
+            <div>
+              <strong>Total received: {formatLKR(totalReceive)}</strong>
+              {overBalance ? (
+                <p className="form-error" role="alert" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                  {PAYMENT_OVER_BALANCE_MESSAGE} Correct the highlighted amount. Values are not reduced
+                  automatically.
+                </p>
+              ) : null}
+            </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Link href="/sales/payments">
                 <Button variant="secondary" type="button">
@@ -234,7 +257,7 @@ export function ReceivePaymentsForm({
               <Button
                 variant="primary"
                 type="button"
-                disabled={pending || totalReceive <= 0}
+                disabled={pending || totalReceive <= 0 || overBalance}
                 onClick={submit}
               >
                 {pending ? 'Posting…' : 'Record payment'}

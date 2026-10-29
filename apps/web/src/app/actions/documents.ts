@@ -2,7 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { isLiquidTenderCode } from '@bookone/accounting';
+import {
+  isLiquidTenderCode,
+  PAYMENT_OVER_BALANCE_MESSAGE,
+  paymentAmountExceedsBalance,
+} from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -434,7 +438,9 @@ async function allocateDocumentPaymentBody(
   await assertPermission(isInvoice ? 'sales.payments.write' : 'purchase.payments.write', 'write');
   await assertDimensionScope({ locationId: document.locationId, brandId: document.brandId });
   const balanceDue = Number(document.balanceDue);
-  if (parsed.amount > balanceDue + 0.005) throw new Error('Payment cannot exceed balance due.');
+  if (paymentAmountExceedsBalance(parsed.amount, balanceDue)) {
+    throw new Error(PAYMENT_OVER_BALANCE_MESSAGE);
+  }
 
   const paymentAccount = await resolveAccount(user.tenantId, parsed.paymentAccountCode);
   assertEligiblePaymentTender(paymentAccount);
@@ -800,7 +806,12 @@ export async function getDocumentFormOptions(): Promise<{
   const user = await requireTenantContext();
   return withTenantContext(user.tenantId, async () => {
     const rows = await db()
-      .select({ code: accounts.code, name: accounts.name, type: accounts.type })
+      .select({
+        code: accounts.code,
+        name: accounts.name,
+        type: accounts.type,
+        isActive: accounts.isActive,
+      })
       .from(accounts)
       .where(and(eq(accounts.tenantId, user.tenantId), isNull(accounts.voidedAt)))
       .orderBy(asc(accounts.code));
@@ -808,7 +819,9 @@ export async function getDocumentFormOptions(): Promise<{
       revenueAccounts: rows.filter((row) => row.type === 'revenue').map(({ code, name }) => ({ code, name })),
       expenseAccounts: rows.filter((row) => row.type === 'expense').map(({ code, name }) => ({ code, name })),
       paymentAccounts: rows
-        .filter((row) => row.type === 'asset' && ['1000', '1100', '1200'].includes(row.code))
+        .filter(
+          (row) => row.type === 'asset' && row.isActive === '1' && isLiquidTenderCode(row.code),
+        )
         .map(({ code, name }) => ({ code, name })),
     };
   });

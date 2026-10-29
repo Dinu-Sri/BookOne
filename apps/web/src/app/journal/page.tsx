@@ -72,7 +72,10 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
             <div className="empty-state">
               <h3>No journal entries {periodOptions.selected ? `in ${monthLabel}` : 'yet'}</h3>
               <p>Record your first entry to see a balanced journal audit here.</p>
-              <Link href="/"><Button variant="primary" style={{ marginTop: 14 }}>Go to Simple Entry</Button></Link>
+              <div className="cluster" style={{ marginTop: 14, gap: 8 }}>
+                <Link href="/"><Button variant="primary">Go to Simple Entry</Button></Link>
+                <Link href="/journal/audit"><Button variant="secondary">Activity</Button></Link>
+              </div>
             </div>
           </Card>
         ) : (
@@ -82,7 +85,12 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
                 <p className="eyebrow">Ledger audit table</p>
                 <h2 className="card-title" style={{ marginTop: 4 }}>Entries</h2>
               </div>
-              <Badge tone="info"><ListChecks size={12} /> Expand rows</Badge>
+              <div className="cluster" style={{ gap: 8 }}>
+                <Link href="/journal/audit">
+                  <Button variant="secondary" type="button">Activity</Button>
+                </Link>
+                <Badge tone="info"><ListChecks size={12} /> Expand rows</Badge>
+              </div>
             </div>
             <div className="card-body">
               <div className="journal-audit-list">

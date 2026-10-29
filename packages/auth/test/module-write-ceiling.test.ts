@@ -55,3 +55,43 @@ describe('inventory product-write ceiling', () => {
     expect(allows(input({ primaryTemplateKey: 'owner' }), 'inventory.products.write', 'write')).toBe(true);
   });
 });
+
+describe('rental module contract', () => {
+  it('starter company owner cannot write inventory products or rental dispatch', () => {
+    const owner = input({
+      primaryTemplateKey: 'owner',
+      modules: { sales: true, purchase: true, inventory: false, pos: false, rental: false },
+    });
+    expect(allows(owner, 'inventory.products.write', 'write')).toBe(false);
+    expect(allows(owner, 'rental.dispatch.write', 'write')).toBe(false);
+    expect(allows(owner, 'rental.calendar.write', 'write')).toBe(false);
+    expect(allows(owner, 'inventory.products.read', 'read')).toBe(true);
+    expect(allows(owner, 'rental.dispatch.read', 'read')).toBe(true);
+  });
+
+  it('company with inventory and rental on lets owner write catalogue and dispatch', () => {
+    const owner = input({ primaryTemplateKey: 'owner' });
+    expect(allows(owner, 'inventory.products.write', 'write')).toBe(true);
+    expect(allows(owner, 'rental.dispatch.write', 'write')).toBe(true);
+    expect(allows(owner, 'rental.calendar.write', 'write')).toBe(true);
+  });
+
+  it('rental catalogue create is inventory.products.write; dispatch is rental.dispatch.write', () => {
+    const warehouse = input({ primaryTemplateKey: 'warehouse' });
+    expect(allows(warehouse, 'inventory.products.write', 'write')).toBe(true);
+    expect(allows(warehouse, 'rental.dispatch.write', 'write')).toBe(true);
+    expect(allows(warehouse, 'rental.calendar.write', 'write')).toBe(false);
+  });
+});
+
+describe('financial audit journal-read gate', () => {
+  it('owner accountant and viewer can read journal; cashier cannot', () => {
+    expect(allows(input({ primaryTemplateKey: 'owner' }), 'accounting.journal.read', 'read')).toBe(true);
+    expect(allows(input({ primaryTemplateKey: 'accountant' }), 'accounting.journal.read', 'read')).toBe(
+      true,
+    );
+    expect(allows(input({ primaryTemplateKey: 'viewer' }), 'accounting.journal.read', 'read')).toBe(true);
+    expect(allows(input({ primaryTemplateKey: 'cashier' }), 'accounting.journal.read', 'read')).toBe(false);
+    expect(allows(input({ primaryTemplateKey: 'viewer' }), 'team.people.read', 'read')).toBe(false);
+  });
+});

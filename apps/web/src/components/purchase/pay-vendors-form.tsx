@@ -5,8 +5,14 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { payVendorBills } from '@/app/actions/documents';
 import type { OpenApBill } from '@/app/actions/commercial-docs';
-import { PAYMENT_OVER_BALANCE_MESSAGE } from '@bookone/accounting';
+import {
+  PAYMENT_OVER_BALANCE_MESSAGE,
+  parsePaymentAmount,
+  paymentAllocationsHaveOverBalance,
+  paymentAmountExceedsBalance,
+} from '@bookone/accounting';
 import { formatLKR, todayString } from '@/components/module/list-page';
+import { AllocationAmountField } from '@/components/payments/allocation-amount-field';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { withFormPending } from '@/components/ui/form-busy';
@@ -49,11 +55,22 @@ export function PayVendorsForm({
     let t = 0;
     for (const b of bills) {
       if (!selected[b.id]) continue;
-      const n = Number(String(amounts[b.id] ?? '').replace(/[^0-9.-]/g, '')) || 0;
-      t += n;
+      t += parsePaymentAmount(amounts[b.id]);
     }
     return Math.round(t * 100) / 100;
   }, [bills, selected, amounts]);
+
+  const overBalance = useMemo(
+    () =>
+      paymentAllocationsHaveOverBalance(
+        bills.map((b) => ({
+          selected: Boolean(selected[b.id]),
+          amountRaw: amounts[b.id] ?? '',
+          balanceDue: b.balanceDue,
+        })),
+      ),
+    [bills, selected, amounts],
+  );
 
   function toggle(id: string, balance: number) {
     setSelected((prev) => {
@@ -70,7 +87,7 @@ export function PayVendorsForm({
       .filter((b) => selected[b.id])
       .map((b) => ({
         documentId: b.id,
-        amount: Number(String(amounts[b.id] ?? '').replace(/[^0-9.-]/g, '')) || 0,
+        amount: parsePaymentAmount(amounts[b.id]),
       }))
       .filter((a) => a.amount > 0);
 
@@ -80,7 +97,7 @@ export function PayVendorsForm({
     }
     const over = allocations.find((a) => {
       const bill = bills.find((b) => b.id === a.documentId);
-      return bill != null && a.amount > bill.balanceDue + 0.005;
+      return bill != null && paymentAmountExceedsBalance(a.amount, bill.balanceDue);
     });
     if (over) {
       pushStatusToast({ kind: 'error', message: PAYMENT_OVER_BALANCE_MESSAGE });
@@ -201,14 +218,13 @@ export function PayVendorsForm({
                       <td>{b.dueDate || '—'}</td>
                       <td>{formatLKR(b.balanceDue)}</td>
                       <td>
-                        <input
-                          className="input"
-                          inputMode="decimal"
-                          disabled={!selected[b.id]}
+                        <AllocationAmountField
+                          id={`pay-${b.id}`}
+                          label={`Pay amount for ${b.documentNumber}`}
                           value={amounts[b.id] ?? ''}
-                          onChange={(e) => setAmounts((prev) => ({ ...prev, [b.id]: e.target.value }))}
-                          placeholder={String(b.balanceDue)}
-                          style={{ maxWidth: 120 }}
+                          balanceDue={b.balanceDue}
+                          selected={Boolean(selected[b.id])}
+                          onChange={(next) => setAmounts((prev) => ({ ...prev, [b.id]: next }))}
                         />
                       </td>
                     </tr>
@@ -227,7 +243,15 @@ export function PayVendorsForm({
               gap: 12,
             }}
           >
-            <strong>Total payment: {formatLKR(totalPay)}</strong>
+            <div>
+              <strong>Total payment: {formatLKR(totalPay)}</strong>
+              {overBalance ? (
+                <p className="form-error" role="alert" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                  {PAYMENT_OVER_BALANCE_MESSAGE} Correct the highlighted amount. Values are not reduced
+                  automatically.
+                </p>
+              ) : null}
+            </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Link href="/purchase/payments">
                 <Button variant="secondary" type="button">
@@ -237,7 +261,7 @@ export function PayVendorsForm({
               <Button
                 variant="primary"
                 type="button"
-                disabled={pending || totalPay <= 0}
+                disabled={pending || totalPay <= 0 || overBalance}
                 onClick={submit}
               >
                 {pending ? 'Posting…' : 'Record payment'}

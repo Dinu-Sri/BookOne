@@ -66,6 +66,9 @@ export default async function NewPurchaseReturnPage({
         expenseAccounts={form.expenseAccounts}
         brands={form.brands}
         locations={form.locations}
+        showPaymentAccount={source?.documentType === 'cash_purchase'}
+        paymentAccounts={form.paymentAccounts}
+        defaultPaymentCode={source?.documentType === 'cash_purchase' ? '1000' : undefined}
         submitLabel="Save purchase return"
         sourceDocumentId={picker.sourceDocumentId}
         sourceDocumentNumber={picker.sourceDocumentNumber}
@@ -96,7 +99,11 @@ export default async function NewPurchaseReturnPage({
               }))
             : undefined
         }
-        banner="Reduces AP / stock for physical items"
+        banner={
+          source?.documentType === 'cash_purchase'
+            ? 'Refunds cash for a cash purchase · reverses stock or expense · original payment stays on the purchase'
+            : 'Reduces AP / stock for physical items'
+        }
       />
     </BookOneShell>
   );

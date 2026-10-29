@@ -256,13 +256,31 @@ const GRN: StatusGuide = {
 const PURCHASE_RETURN: StatusGuide = {
   family: 'purchase_return',
   title: 'Purchase return statuses',
-  intro: 'Returns credit AP and can take stock back out.',
+  intro: 'Returns credit AP and can take stock back out. A cash purchase refund settles the credit when cash is returned.',
   items: [
     {
       key: 'open',
       label: 'Open',
-      meaning: 'Return posted against the supplier.',
+      meaning: 'Return posted against the supplier. Credit is still outstanding.',
       next: 'Collect a refund or wait for a credit note.',
+    },
+    {
+      key: 'partial',
+      label: 'Partial',
+      meaning: 'Return posted and partly applied against the original bill.',
+      next: 'Apply remaining credit, or pay the rest of the bill.',
+    },
+    {
+      key: 'paid',
+      label: 'Paid',
+      meaning: 'Return posted and fully applied against the original bill. Ordinary AP credits use this.',
+      next: 'Done.',
+    },
+    {
+      key: 'refunded',
+      label: 'Refunded',
+      meaning: 'Cash was paid back for a cash purchase return. Outstanding on this credit is zero.',
+      next: 'Done. The original purchase payment is unchanged.',
     },
     {
       key: 'void',

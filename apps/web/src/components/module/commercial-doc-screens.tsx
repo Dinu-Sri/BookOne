@@ -590,7 +590,7 @@ export function CommercialDocNewForm({
             </div>
             {showPaymentAccount && paymentAccounts ? (
               <div className="field">
-                <label>Payment account</label>
+                <label>{documentType === 'purchase_return' ? 'Refund from account' : 'Payment account'}</label>
                 <select
                   className="input"
                   name="paymentAccountCode"
@@ -602,6 +602,12 @@ export function CommercialDocNewForm({
                     </option>
                   ))}
                 </select>
+                {documentType === 'purchase_return' ? (
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-soft)' }}>
+                    Cash purchase returns refund an active cash, bank, or card account. The original
+                    purchase payment is kept.
+                  </p>
+                ) : null}
               </div>
             ) : null}
             {showExpenseAccount && expenseAccounts && expenseAccounts.length > 0 ? (

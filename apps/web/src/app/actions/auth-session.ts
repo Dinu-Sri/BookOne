@@ -10,13 +10,28 @@ const SESSION_COOKIE_NAMES = [
   '__Secure-better-auth.session_token.sig',
 ];
 
+function expireSessionCookie(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  name: string,
+  extras: { secure?: boolean; httpOnly?: boolean },
+) {
+  cookieStore.set(name, '', {
+    path: '/',
+    maxAge: 0,
+    expires: new Date(0),
+    sameSite: 'lax',
+    ...extras,
+  });
+}
+
 export async function signOutCurrentUser() {
   const cookieStore = await cookies();
-  // Delete with path so Secure / host-only variants are cleared for middleware.
+  // Expire both Secure and host-only session cookies with HttpOnly so a leftover
+  // session_token is not kept beside an empty non-HttpOnly twin.
   for (const name of SESSION_COOKIE_NAMES) {
     cookieStore.delete(name);
-    cookieStore.set(name, '', { path: '/', maxAge: 0 });
-    cookieStore.set(name, '', { path: '/', maxAge: 0, secure: true, sameSite: 'lax' });
+    expireSessionCookie(cookieStore, name, { httpOnly: true });
+    expireSessionCookie(cookieStore, name, { httpOnly: true, secure: true });
   }
   await signOut({ redirectTo: '/login' });
 }

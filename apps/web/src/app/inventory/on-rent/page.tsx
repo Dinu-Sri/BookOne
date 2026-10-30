@@ -26,7 +26,7 @@ export default async function OnRentPage() {
           lead={
             overdue
               ? `${rows.length} open hire lines · ${overdue} overdue.`
-              : 'Dispatch reserved kit to On rent, then record good / damaged / missing on return.'
+              : 'Dispatch reserved kit to On rent, then record good / dirty / damaged / missing. Agreed charges are invoiced separately.'
           }
         />
         <RentalOpsPanel rows={rows} />

@@ -52,6 +52,7 @@ export function RentalOpsPanel({
   const [applyDeposit, setApplyDeposit] = useState(true);
   const [depositAmt, setDepositAmt] = useState('');
   const [refundAmt, setRefundAmt] = useState('');
+  const [paymentAccountCode, setPaymentAccountCode] = useState('1000');
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [extendTo, setExtendTo] = useState('');
   const [extraHire, setExtraHire] = useState('');
@@ -68,23 +69,16 @@ export function RentalOpsPanel({
 
   function openReturn(row: RentalJobLine) {
     const left = Math.max(0, outstanding(row));
-    const suggestedDamage = money(row.replacementPrice * 0);
     setOpenId(row.id);
     setGoodQty(String(left));
     setDirtyQty('0');
     setGoodDestination(row.defaultTurnaroundHours > 0 ? 'wash' : 'warehouse');
     setDamagedQty('0');
     setMissingQty('0');
-    setDamageCharge(String(suggestedDamage));
-    setLateFee(String(money(row.daysOverdue * row.defaultLateFeePerDay)));
-    setApplyDeposit(row.depositOpen > 0);
+    setDamageCharge('0');
+    setLateFee('0');
+    setApplyDeposit(false);
     setPhotoFiles([]);
-  }
-
-  function updateDamageCharge(nextDamaged: string, nextMissing: string, row: RentalJobLine) {
-    const dmg = Number(nextDamaged) || 0;
-    const miss = Number(nextMissing) || 0;
-    setDamageCharge(String(money((dmg + miss) * row.replacementPrice)));
   }
 
   function runDispatch(id: string) {
@@ -114,26 +108,7 @@ export function RentalOpsPanel({
         pushStatusToast({ kind: 'error', message: res.error ?? 'Return failed' });
         return;
       }
-      const charge = money(Number(damageCharge) || 0);
-      const fee = money(Number(lateFee) || 0);
-      if (charge + fee > 0) {
-        const inv = await invoiceHireCharges({
-          documentId: row.documentId,
-          damageCharge: charge,
-          lateFee: fee,
-          applyDeposit,
-        });
-        if (!inv.ok) {
-          pushStatusToast({
-            kind: 'error',
-            message: `Returned, but charges invoice failed: ${inv.error ?? 'unknown'}`,
-          });
-        } else {
-          pushStatusToast({ kind: 'success', message: 'Return recorded and hire charges invoiced' });
-        }
-      } else {
-        pushStatusToast({ kind: 'success', message: 'Return recorded' });
-      }
+      pushStatusToast({ kind: 'success', message: 'Return recorded' });
       setOpenId(null);
       setPhotoFiles([]);
       router.refresh();
@@ -156,26 +131,11 @@ export function RentalOpsPanel({
         pushStatusToast({ kind: 'error', message: res.error ?? 'Could not extend hire' });
         return;
       }
-      const extra = money(Number(extraHire) || 0);
-      if (extra > 0) {
-        const inv = await invoiceHireCharges({
-          documentId: job.documentId,
-          extraHire: extra,
-          applyDeposit: job.depositOpen > 0,
-        });
-        if (!inv.ok) {
-          pushStatusToast({
-            kind: 'error',
-            message: `Extended, but extra hire invoice failed: ${inv.error ?? 'unknown'}`,
-          });
-        } else {
-          pushStatusToast({ kind: 'success', message: `Hire extended to ${res.hireTo} and extra days invoiced` });
-        }
-      } else {
-        pushStatusToast({ kind: 'success', message: `Hire extended to ${res.hireTo}` });
-      }
+      pushStatusToast({
+        kind: 'success',
+        message: `Hire extended to ${res.hireTo}. Invoice extra hire separately if agreed.`,
+      });
       setExtendTo('');
-      setExtraHire('');
       setExtendOverlap(false);
       setExtendReason('');
       router.refresh();
@@ -189,7 +149,11 @@ export function RentalOpsPanel({
       return;
     }
     startTransition(async () => {
-      const res = await collectRentalDeposit({ documentId, amount });
+      const res = await collectRentalDeposit({
+        documentId,
+        amount,
+        paymentAccountCode,
+      });
       if (!res.ok) {
         pushStatusToast({ kind: 'error', message: res.error ?? 'Deposit failed' });
         return;
@@ -203,13 +167,49 @@ export function RentalOpsPanel({
   function runRefund(documentId: string, open: number) {
     const amount = money(Number(refundAmt) || open);
     startTransition(async () => {
-      const res = await refundRentalDeposit({ documentId, amount });
+      const res = await refundRentalDeposit({
+        documentId,
+        amount,
+        paymentAccountCode,
+      });
       if (!res.ok) {
         pushStatusToast({ kind: 'error', message: res.error ?? 'Refund failed' });
         return;
       }
       pushStatusToast({ kind: 'success', message: 'Deposit refunded' });
       setRefundAmt('');
+      router.refresh();
+    });
+  }
+
+  function runInvoiceCharges(documentId: string) {
+    const charge = money(Number(damageCharge) || 0);
+    const fee = money(Number(lateFee) || 0);
+    const extra = money(Number(extraHire) || 0);
+    if (charge + fee + extra <= 0) {
+      pushStatusToast({
+        kind: 'error',
+        message: 'Enter an agreed damage, late-fee, or extra hire amount. Dirty returns do not create a charge.',
+      });
+      return;
+    }
+    startTransition(async () => {
+      const inv = await invoiceHireCharges({
+        documentId,
+        damageCharge: charge,
+        lateFee: fee,
+        extraHire: extra,
+        applyDeposit,
+      });
+      if (!inv.ok) {
+        pushStatusToast({ kind: 'error', message: inv.error ?? 'Could not invoice hire charges' });
+        return;
+      }
+      pushStatusToast({ kind: 'success', message: 'Hire charges invoiced' });
+      setDamageCharge('0');
+      setLateFee('0');
+      setExtraHire('');
+      setApplyDeposit(false);
       router.refresh();
     });
   }
@@ -233,9 +233,9 @@ export function RentalOpsPanel({
             {title}
           </h2>
           <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '6px 0 12px' }}>
-            Dispatch moves fleet to On rent. Return splits good / damaged / missing and can attach inspection
-            photos. Extend the hire window if the event runs long. Deposits sit on 2400 until refunded or
-            applied to damage/late/extension charges.
+            Dispatch moves fleet to On rent. Return splits good / dirty / damaged / missing. Dirty kit goes
+            to wash with no charge. Agreed damage, late-fee, or extra-hire amounts are invoiced separately.
+            Deposits sit on 2400 until refunded or applied to those invoices.
           </p>
         </div>
 
@@ -270,6 +270,19 @@ export function RentalOpsPanel({
               </div>
             </div>
             <div className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <label style={{ fontSize: 11 }}>
+                Tender
+                <select
+                  className="input"
+                  value={paymentAccountCode}
+                  onChange={(e) => setPaymentAccountCode(e.target.value)}
+                  aria-label="Deposit payment account"
+                >
+                  <option value="1000">Cash 1000</option>
+                  <option value="1100">Bank 1100</option>
+                  <option value="1200">Card 1200</option>
+                </select>
+              </label>
               <input
                 className="input"
                 style={{ width: 120 }}
@@ -324,17 +337,6 @@ export function RentalOpsPanel({
                     onChange={(e) => setExtendTo(e.target.value)}
                   />
                 </label>
-                <label style={{ fontSize: 11 }}>
-                  Extra hire (4400)
-                  <input
-                    className="input"
-                    style={{ width: 120 }}
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={extraHire}
-                    onChange={(e) => setExtraHire(e.target.value)}
-                  />
-                </label>
                 <label className="party-check" style={{ fontSize: 12 }}>
                   <input
                     type="checkbox"
@@ -355,6 +357,60 @@ export function RentalOpsPanel({
                 </Button>
               </div>
             ) : null}
+            <div className="cluster" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'end' }}>
+              <label style={{ fontSize: 11 }}>
+                Agreed damage (4450)
+                <input
+                  className="input"
+                  style={{ width: 120 }}
+                  inputMode="decimal"
+                  value={damageCharge}
+                  onChange={(e) => setDamageCharge(e.target.value)}
+                  aria-label="Agreed damage charge"
+                />
+              </label>
+              <label style={{ fontSize: 11 }}>
+                Agreed late fee (4450)
+                <input
+                  className="input"
+                  style={{ width: 120 }}
+                  inputMode="decimal"
+                  value={lateFee}
+                  onChange={(e) => setLateFee(e.target.value)}
+                  aria-label="Agreed late fee"
+                />
+              </label>
+              <label style={{ fontSize: 11 }}>
+                Extra hire (4400)
+                <input
+                  className="input"
+                  style={{ width: 120 }}
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={extraHire}
+                  onChange={(e) => setExtraHire(e.target.value)}
+                  aria-label="Agreed extra hire"
+                />
+              </label>
+              {job.depositOpen > 0 ? (
+                <label className="party-check" style={{ fontSize: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={applyDeposit}
+                    onChange={(e) => setApplyDeposit(e.target.checked)}
+                  />
+                  Apply deposit (open {job.depositOpen.toFixed(2)})
+                </label>
+              ) : null}
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={pending}
+                onClick={() => runInvoiceCharges(job.documentId)}
+              >
+                Invoice hire charges
+              </Button>
+            </div>
           </div>
         ))}
 
@@ -475,10 +531,7 @@ export function RentalOpsPanel({
                               className="input"
                               inputMode="decimal"
                               value={damagedQty}
-                              onChange={(e) => {
-                                setDamagedQty(e.target.value);
-                                updateDamageCharge(e.target.value, missingQty, row);
-                              }}
+                              onChange={(e) => setDamagedQty(e.target.value)}
                             />
                           </label>
                           <label style={{ fontSize: 11 }}>
@@ -487,40 +540,13 @@ export function RentalOpsPanel({
                               className="input"
                               inputMode="decimal"
                               value={missingQty}
-                              onChange={(e) => {
-                                setMissingQty(e.target.value);
-                                updateDamageCharge(damagedQty, e.target.value, row);
-                              }}
+                              onChange={(e) => setMissingQty(e.target.value)}
                             />
                           </label>
-                          <label style={{ fontSize: 11 }}>
-                            Damage / missing charge
-                            <input
-                              className="input"
-                              inputMode="decimal"
-                              value={damageCharge}
-                              onChange={(e) => setDamageCharge(e.target.value)}
-                            />
-                          </label>
-                          <label style={{ fontSize: 11 }}>
-                            Late fee{row.daysOverdue ? ` (${row.daysOverdue}d)` : ''}
-                            <input
-                              className="input"
-                              inputMode="decimal"
-                              value={lateFee}
-                              onChange={(e) => setLateFee(e.target.value)}
-                            />
-                          </label>
-                          {row.depositOpen > 0 ? (
-                            <label className="party-check" style={{ fontSize: 12 }}>
-                              <input
-                                type="checkbox"
-                                checked={applyDeposit}
-                                onChange={(e) => setApplyDeposit(e.target.checked)}
-                              />
-                              Apply deposit (open {row.depositOpen.toFixed(2)})
-                            </label>
-                          ) : null}
+                          <p style={{ fontSize: 11, color: 'var(--ink-soft)', margin: 0 }}>
+                            Dirty/damaged qty only moves stock. Invoice an agreed amount with Invoice hire
+                            charges. Default charge is 0.
+                          </p>
                           <label style={{ fontSize: 11 }}>
                             Return photos (max {MAX_RETURN_PHOTOS})
                             <input

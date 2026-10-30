@@ -184,6 +184,8 @@ const createSchema = z.object({
   overlapOverrideReason: z.string().max(500).optional(),
   invoiceTiming: z.enum(INVOICE_TIMINGS).optional(),
   confirmTimingOverride: z.boolean().optional(),
+  /** Link sourceDocumentId without converting the source (hire charge invoices). */
+  linkSourceWithoutConversion: z.boolean().optional().default(false),
   intent: z.enum(['draft', 'post', 'post_print']).optional().default('post'),
   idempotencyKey: z.string().max(80).optional().nullable(),
   existingDraftId: z.string().uuid().optional().nullable(),
@@ -2603,10 +2605,15 @@ export async function createCommercialDocument(
         });
       }
 
-      // Mark source converted only for true conversions (not returns / credits)
+      // Mark source converted only for true conversions (not returns / credits /
+      // hire-charge invoices that only link the live booking). Honor the skip
+      // flag solely on sales invoices so quote→order conversion cannot opt out.
+      const skipSourceConversion =
+        parsed.linkSourceWithoutConversion === true && parsed.documentType === 'sales_invoice';
       if (
         !asDraft &&
         parsed.sourceDocumentId &&
+        !skipSourceConversion &&
         !['sales_return', 'purchase_return'].includes(parsed.documentType)
       ) {
         await db()

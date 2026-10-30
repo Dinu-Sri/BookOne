@@ -1,3 +1,10 @@
+## 2026-10-30 — Rapid04 rental dispatch permission, agreed charges, cash tender (v2.5.24)
+
+- Record: [CHG-20261030-rapid04-rental-security](changes/CHG-20261030-rapid04-rental-security.md). QA Rapid04 starts from [PR 91](https://github.com/Dinu-Sri/bookone-qa/pull/91) `f256d23` after Rapid03 `eed69cf`. Do not replay Rapid03 money. Do not change original QA company modules.
+- Dispatch/return/extend/wash-release now require `rental.dispatch.write` and rental module on, and write `audit_log`. Return no longer auto-invoices overdue/late or dirty qty. **Invoice hire charges** is the agreed-amount control. Deposit Collect/Refund expose Cash 1000 / Bank 1100 / Card 1200 (default Cash). Charge invoices link the hire source without converting it.
+- Checks: workspace vitest auth+accounting+statement-import 27 files / 307 passed (includes Viewer `rental.dispatch.write` denial). Isolated runtime and live browser not-run. No Rapid03 replay.
+- Next: Medium reviews this exact diff plus the QA companion (`qa/rapid04-coding-qualification`). Staging Pro+rental fixture needs a separate Control Room AUTH. Do not merge or deploy in this request. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-29 — Rapid02 cash-refund settlement, allocation feedback, activity, return tender (v2.5.23)
 
 - Record: [CHG-20261029-rapid02-consolidated](changes/CHG-20261029-rapid02-consolidated.md). QA Rapid02 continuation [CODING-MISSION-20261029-rapid02-consolidated](https://github.com/Dinu-Sri/bookone-qa/blob/c8b86bd61a88c2170d85f333addb610bbb31c07a/handoffs/CODING-MISSION-20261029-rapid02-consolidated.md) at `c8b86bd61a88c2170d85f333addb610bbb31c07a` on inspected master `211771e`. Rapid02: 18 passed / 3 failed / 2 inconclusive. Do not replay consumed Rapid02 money.

@@ -527,6 +527,8 @@ export async function invoiceHireCharges(input: {
       notes: `Hire charges for ${ctx.doc.documentNumber}`,
       saleChannel: 'local',
       invoiceKind: 'commercial',
+      sourceDocumentId: input.documentId,
+      linkSourceWithoutConversion: true,
       lines,
     });
     if (!created.ok || !created.id) {

@@ -82,6 +82,13 @@ describe('rental module contract', () => {
     expect(allows(warehouse, 'rental.dispatch.write', 'write')).toBe(true);
     expect(allows(warehouse, 'rental.calendar.write', 'write')).toBe(false);
   });
+
+  it('viewer cannot dispatch, return, collect, refund, or invoice hire charges', () => {
+    const viewer = input({ primaryTemplateKey: 'viewer' });
+    expect(allows(viewer, 'rental.dispatch.write', 'write')).toBe(false);
+    expect(allows(viewer, 'rental.calendar.write', 'write')).toBe(false);
+    expect(allows(viewer, 'rental.dispatch.read', 'read')).toBe(true);
+  });
 });
 
 describe('financial audit journal-read gate', () => {

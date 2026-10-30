@@ -14,6 +14,7 @@ import {
 import { requireTenantContext } from '@bookone/auth';
 import {
   and,
+  auditLog,
   businessDocuments,
   db,
   desc,
@@ -33,6 +34,8 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { getRentalSettings } from '@/app/actions/rental-settings';
+import { assertPermission } from '@/lib/access';
+import { assertModuleWrite } from '@/lib/module-access';
 import {
   enabledInvoiceTimings,
   MAX_RETURN_PHOTOS,
@@ -41,6 +44,29 @@ import {
   type OverlapPolicy,
   type RentalEventInput,
 } from '@/lib/rental-core';
+
+async function assertRentalDispatchWrite(): Promise<void> {
+  await assertPermission('rental.dispatch.write', 'write');
+  await assertModuleWrite('rental');
+}
+
+async function writeRentalAudit(params: {
+  tenantId: string;
+  userId: string;
+  action: string;
+  tableName: string;
+  recordId: string;
+  notes: string;
+}): Promise<void> {
+  await db().insert(auditLog).values({
+    tenantId: params.tenantId,
+    userId: params.userId,
+    action: params.action,
+    tableName: params.tableName,
+    recordId: params.recordId,
+    notes: params.notes,
+  });
+}
 
 const ACTIVE_STATUSES = ['hold', 'reserved', 'dispatched'] as const;
 
@@ -933,6 +959,7 @@ export async function dispatchRentalLine(
   bookingLineId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    await assertRentalDispatchWrite();
     const user = await requireTenantContext();
     await withTenantContext(user.tenantId, async () => {
       const [line] = await db()
@@ -1005,6 +1032,14 @@ export async function dispatchRentalLine(
             .where(eq(rentalSerials.id, serial.id));
         }
       }
+      await writeRentalAudit({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'UPDATE',
+        tableName: 'rental_booking_lines',
+        recordId: line.id,
+        notes: `Dispatch ${qty} of booking line ${line.id} to on-rent`,
+      });
       revalidateRentalPaths(line.documentId);
     });
     return { ok: true };
@@ -1030,6 +1065,7 @@ export async function returnRentalLine(input: {
     const total = goodQty + dirtyQty + damagedQty + missingQty;
     if (total <= 0) return { ok: false, error: 'Enter good, dirty, damaged, or missing qty.' };
 
+    await assertRentalDispatchWrite();
     const user = await requireTenantContext();
     const settings = await getRentalSettings();
     await withTenantContext(user.tenantId, async () => {
@@ -1170,6 +1206,14 @@ export async function returnRentalLine(input: {
       await assign(goodQty + dirtyQty, 'available');
       await assign(damagedQty, 'repair');
       await assign(missingQty, 'retired');
+      await writeRentalAudit({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'UPDATE',
+        tableName: 'rental_booking_lines',
+        recordId: line.id,
+        notes: `Return good ${goodQty} dirty ${dirtyQty} damaged ${damagedQty} missing ${missingQty} on ${line.id}`,
+      });
       revalidateRentalPaths(line.documentId);
     });
     return { ok: true };
@@ -1189,6 +1233,7 @@ export async function extendRentalHire(input: {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(newTo)) {
       return { ok: false, error: 'Pick a new hire-to date.' };
     }
+    await assertRentalDispatchWrite();
     const user = await requireTenantContext();
     const settings = await getRentalSettings();
     let nextTo = newTo;
@@ -1262,6 +1307,14 @@ export async function extendRentalHire(input: {
           .where(eq(rentalBookingLines.id, line.id));
       }
       nextTo = newTo;
+      await writeRentalAudit({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'UPDATE',
+        tableName: 'rental_events',
+        recordId: event.id,
+        notes: `Extend hire to ${newTo}`,
+      });
       revalidateRentalPaths(input.documentId);
     });
     return { ok: true, hireTo: nextTo };
@@ -1325,6 +1378,7 @@ export async function releaseFleetBay(input: {
   try {
     const qty = Math.max(0, Number(input.qty) || 0);
     if (qty <= 0) return { ok: false, error: 'Enter a qty to mark ready.' };
+    await assertRentalDispatchWrite();
     const user = await requireTenantContext();
     await withTenantContext(user.tenantId, async () => {
       const warehouseId = await pickWarehouseLocation(user.tenantId, input.productId, null, 0);
@@ -1337,6 +1391,14 @@ export async function releaseFleetBay(input: {
         lines: [{ productId: input.productId, quantity: qty }],
       });
       if (!moved.ok) throw new Error(moved.error || 'Could not move kit to warehouse.');
+      await writeRentalAudit({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'UPDATE',
+        tableName: 'inventory_stock_levels',
+        recordId: input.productId,
+        notes: `Release ${qty} from bay ${input.locationId} to warehouse`,
+      });
       revalidateRentalPaths();
       revalidatePath('/inventory/levels');
     });

@@ -8,11 +8,14 @@ export const FINANCIAL_AUDIT_TABLES = [
   'transactions',
   'inventory_products',
   'inventory_stock_docs',
+  'inventory_stock_levels',
   'inventory_product_categories',
   'sales_discounts',
   'parties',
   'bank_statement_imports',
   'period_locks',
+  'rental_booking_lines',
+  'rental_events',
 ] as const;
 
 export type FinancialAuditTable = (typeof FINANCIAL_AUDIT_TABLES)[number];
@@ -35,6 +38,8 @@ export function financialAuditSourceLabel(tableName: string): string {
       return 'Product';
     case 'inventory_stock_docs':
       return 'Stock document';
+    case 'inventory_stock_levels':
+      return 'Stock level';
     case 'inventory_product_categories':
       return 'Product category';
     case 'sales_discounts':
@@ -45,6 +50,10 @@ export function financialAuditSourceLabel(tableName: string): string {
       return 'Bank import';
     case 'period_locks':
       return 'Period lock';
+    case 'rental_booking_lines':
+      return 'Rental booking';
+    case 'rental_events':
+      return 'Rental event';
     default:
       return tableName;
   }
@@ -61,6 +70,11 @@ export function financialAuditEventSummary(newValues: unknown, notes: string | n
     const total = row.total ?? row.amount;
     if (typeof number === 'string' && number.trim()) parts.push(number.trim());
     if (typeof type === 'string' && type.trim()) parts.push(type.trim());
+    const status = row.status;
+    if (typeof status === 'string' && status.trim()) parts.push(status.trim());
+    const qty = row.qty ?? row.quantity;
+    if (typeof qty === 'number' && Number.isFinite(qty)) parts.push(String(qty));
+    else if (typeof qty === 'string' && qty.trim()) parts.push(qty.trim());
     if (typeof total === 'number' && Number.isFinite(total)) {
       parts.push(total.toFixed(2));
     } else if (typeof total === 'string' && total.trim()) {

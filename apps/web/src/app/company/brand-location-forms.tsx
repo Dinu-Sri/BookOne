@@ -14,6 +14,12 @@ import {
 } from '@/app/actions/company-settings';
 import { Badge, Button } from '@/components/ui/bookone-ui';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  FLEET_LOCATION_TYPES,
+  LOCATION_TYPE_LABELS,
+  OPERATIONAL_LOCATION_TYPES,
+  isFleetLocationType,
+} from '@/lib/rental-locations';
 
 const initialState: CompanyActionState = { ok: false };
 
@@ -34,7 +40,15 @@ export function BrandForms({ brands }: { brands: Brand[] }) {
   );
 }
 
-export function LocationForms({ brands, locations }: { brands: Brand[]; locations: Location[] }) {
+export function LocationForms({
+  brands,
+  locations,
+  rentalModuleOn = false,
+}: {
+  brands: Brand[];
+  locations: Location[];
+  rentalModuleOn?: boolean;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<Location | null>(null);
@@ -79,7 +93,7 @@ export function LocationForms({ brands, locations }: { brands: Brand[]; location
 
   return (
     <>
-      <LocationForm brands={brands} />
+      <LocationForm brands={brands} rentalModuleOn={rentalModuleOn} />
       <div className="inline-edit-list">
         {locations.length === 0 ? <p className="muted-line">No locations yet.</p> : null}
         {locations.map((location) => (
@@ -88,6 +102,7 @@ export function LocationForms({ brands, locations }: { brands: Brand[]; location
             location={location}
             key={location.id}
             busy={busy}
+            rentalModuleOn={rentalModuleOn}
             onDelete={() => requestDelete(location)}
           />
         ))}
@@ -194,15 +209,30 @@ function BrandForm({ brand }: { brand?: Brand }) {
   );
 }
 
+function locationTypeOptions(rentalModuleOn: boolean, currentType?: string | null) {
+  const values: string[] = [...OPERATIONAL_LOCATION_TYPES];
+  if (rentalModuleOn) {
+    values.push(...FLEET_LOCATION_TYPES);
+  } else if (currentType && isFleetLocationType(currentType) && !values.includes(currentType)) {
+    values.push(currentType);
+  }
+  return values.map((value) => ({
+    value,
+    label: LOCATION_TYPE_LABELS[value] ?? value,
+  }));
+}
+
 function LocationForm({
   brands,
   location,
   busy,
+  rentalModuleOn = false,
   onDelete,
 }: {
   brands: Brand[];
   location?: Location;
   busy?: boolean;
+  rentalModuleOn?: boolean;
   onDelete?: () => void;
 }) {
   const [state, action] = useActionState(saveLocationForm, initialState);
@@ -232,10 +262,11 @@ function LocationForm({
       <div className="field">
         <label>Type</label>
         <select name="locationType" className="input" defaultValue={location?.locationType ?? 'branch'}>
-          <option value="branch">Branch</option>
-          <option value="warehouse">Warehouse</option>
-          <option value="counter">POS counter</option>
-          <option value="office">Office</option>
+          {locationTypeOptions(rentalModuleOn, location?.locationType).map((option) => (
+            <option value={option.value} key={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
       <div className="field field-full">

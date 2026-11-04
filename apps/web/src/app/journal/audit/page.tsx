@@ -61,7 +61,7 @@ export default async function FinancialAuditPage({
             {events.length === 0 ? (
               <div className="empty-state">
                 <h3>No financial audit events in this company</h3>
-                <p>Posted documents, payments and stock writes appear here after they are saved.</p>
+                <p>Posted documents, payments, stock and hire writes appear here after they are saved.</p>
                 <Link href="/journal">
                   <Button variant="secondary" style={{ marginTop: 14 }}>
                     Open journal

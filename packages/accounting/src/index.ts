@@ -9,6 +9,11 @@ export { generateJournal } from './engine/journal-generator';
 export { inferTransaction } from './engine/posting';
 export type { EngineResult } from './engine/posting';
 export {
+  shouldSkipHireSourceConversion,
+  rentalInvoiceIsBillingOnly,
+  rentalBookingIsConfirmed,
+} from './rental-guards';
+export {
   isPhysicalProduct,
   isRentalProduct,
   tracksStockQty,

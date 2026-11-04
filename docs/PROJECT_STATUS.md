@@ -1,3 +1,7 @@
+## 2026-11-04 — Rapid04 follow-up hire continuity, bays, Activity (v2.5.25)
+
+Rapid04 follow-up on live v2.5.24 · `e5bb589` after fixture PR93. Charge invoices keep the hire order status. After-return hire invoices do not re-reserve or void the deposit event. Owner can create On rent / Wash / Repair through Locations Type or Create missing hire bays. Activity lists rental booking/event/stock-level rows. Review branch `fix/v2525-rapid04-followup` — do not merge or deploy in this request. See [CHG-20261104-rapid04-followup](changes/CHG-20261104-rapid04-followup.md). A/B accounts already exist; do not recreate them. Fleet 20@50 and after-return settings on A remain unprepared until qualified on this candidate. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-10-30 — Rapid04 rental permission, agreed charges, cash tender (v2.5.24)
 
 Rapid04 qualification on baseline v2.5.23 · `b89dd78`. Dispatch/return/extend/release now fail closed without `rental.dispatch.write` and rental module. Dirty return is stock-only. Agreed 4450/4400 uses **Invoice hire charges**. Deposit tender defaults to Cash 1000. Charge invoices link the hire document without converting it. Original QA Inventory-off ceiling is unchanged. Review branch `fix/v2524-rapid04-qualification` — do not merge or deploy in this request. See [CHG-20261030-rapid04-rental-security](changes/CHG-20261030-rapid04-rental-security.md). Staging Pro+rental fixture AUTH is separate. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

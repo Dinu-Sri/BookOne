@@ -1,3 +1,10 @@
+## 2026-11-04 — Rapid04 follow-up: charge source status, after-return continuity, hire bays, Activity (v2.5.25)
+
+- Record: [CHG-20261104-rapid04-followup](changes/CHG-20261104-rapid04-followup.md). QA fixtures [PR 93](https://github.com/Dinu-Sri/bookone-qa/pull/93) `1781dba`. Live baseline v2.5.24 · `e5bb589`. Do not recreate A/B accounts or replay Rapid03 money.
+- Hire-charge invoices no longer mark the hire order `fully_invoiced`/`converted`. After-return hire invoices bill only (no second reservation, deposit event kept). Locations Type and Rental Settings can create On rent / Wash / Repair with `company.locations.write` + rental module. Activity reads rental booking/event/stock-level audit rows; wash-release `recordId` is the stock-level id.
+- Checks: recorded in the product PR after vitest. Isolated runtime and live browser not-run here. First D-112 CI failure (41000512103) preserved in QA.
+- Next: Medium reviews this exact diff plus QA `qa/rapid04-followup`. Operator Rapid04 stays `executionReady=false`. Do not merge or deploy in this request. Backup last. BookOne is not customer-ready.
+
 ## 2026-10-30 — Rapid04 rental dispatch permission, agreed charges, cash tender (v2.5.24)
 
 - Record: [CHG-20261030-rapid04-rental-security](changes/CHG-20261030-rapid04-rental-security.md). QA Rapid04 starts from [PR 91](https://github.com/Dinu-Sri/bookone-qa/pull/91) `f256d23` after Rapid03 `eed69cf`. Do not replay Rapid03 money. Do not change original QA company modules.

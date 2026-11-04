@@ -10,6 +10,8 @@ import {
   isHireInvoiceTiming,
   isRentalProduct,
   padHireTo,
+  rentalBookingIsConfirmed,
+  rentalInvoiceIsBillingOnly,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -57,6 +59,7 @@ async function writeRentalAudit(params: {
   tableName: string;
   recordId: string;
   notes: string;
+  newValues?: Record<string, unknown>;
 }): Promise<void> {
   await db().insert(auditLog).values({
     tenantId: params.tenantId,
@@ -65,6 +68,7 @@ async function writeRentalAudit(params: {
     tableName: params.tableName,
     recordId: params.recordId,
     notes: params.notes,
+    newValues: params.newValues ?? null,
   });
 }
 
@@ -106,6 +110,53 @@ export async function checkRentalAvailability(params: {
   });
 }
 
+async function loadSourceLifecycle(tenantId: string, sourceId: string) {
+  const bookings = await db()
+    .select({
+      status: rentalBookingLines.status,
+      dispatchedQty: rentalBookingLines.dispatchedQty,
+      returnedQty: rentalBookingLines.returnedQty,
+    })
+    .from(rentalBookingLines)
+    .where(
+      and(
+        eq(rentalBookingLines.tenantId, tenantId),
+        eq(rentalBookingLines.documentId, sourceId),
+        isNull(rentalBookingLines.voidedAt),
+      ),
+    );
+  const [event] = await db()
+    .select({ id: rentalEvents.id, depositHeld: rentalEvents.depositHeld })
+    .from(rentalEvents)
+    .where(
+      and(
+        eq(rentalEvents.tenantId, tenantId),
+        eq(rentalEvents.documentId, sourceId),
+        isNull(rentalEvents.voidedAt),
+      ),
+    )
+    .limit(1);
+  const sourceHasConfirmedBookings = bookings.some((b) =>
+    rentalBookingIsConfirmed(b.status, Number(b.dispatchedQty), Number(b.returnedQty)),
+  );
+  const sourceDepositHeld = Number(event?.depositHeld ?? 0);
+  return { bookings, event, sourceHasConfirmedBookings, sourceDepositHeld };
+}
+
+async function cancelSourceHolds(tenantId: string, documentId: string): Promise<void> {
+  await db()
+    .update(rentalBookingLines)
+    .set({ status: 'cancelled', voidedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(rentalBookingLines.tenantId, tenantId),
+        eq(rentalBookingLines.documentId, documentId),
+        isNull(rentalBookingLines.voidedAt),
+        inArray(rentalBookingLines.status, ['hold', 'reserved']),
+      ),
+    );
+}
+
 export async function persistRentalBookings(params: {
   tenantId: string;
   userId: string;
@@ -122,15 +173,30 @@ export async function persistRentalBookings(params: {
     quantity: number;
   }[];
   skipAvailabilityCheck?: boolean;
-}): Promise<void> {
+}): Promise<{ billingOnly: boolean }> {
   const rentalLines = params.lines.filter((l) => l.productId && isRentalProduct(l.productType));
   const window = resolveHireWindow(params.event);
+  const sourceId =
+    params.sourceDocumentId && params.sourceDocumentId !== params.documentId
+      ? params.sourceDocumentId
+      : null;
+  const sourceLife = sourceId ? await loadSourceLifecycle(params.tenantId, sourceId) : null;
+  const billingOnly = sourceLife
+    ? rentalInvoiceIsBillingOnly({
+        documentType: params.documentType,
+        sourceHasConfirmedBookings: sourceLife.sourceHasConfirmedBookings,
+        sourceDepositHeld: sourceLife.sourceDepositHeld,
+      })
+    : false;
 
   if (rentalLines.length === 0) {
-    if (params.sourceDocumentId) {
-      await cancelBookingsForDocument(params.tenantId, params.sourceDocumentId);
+    if (sourceId && !billingOnly && sourceLife && sourceLife.sourceDepositHeld <= 0.0001) {
+      await cancelBookingsForDocument(params.tenantId, sourceId);
     }
-    return;
+    return { billingOnly };
+  }
+  if (billingOnly) {
+    return { billingOnly: true };
   }
   if (!window) {
     throw new Error(
@@ -227,9 +293,14 @@ export async function persistRentalBookings(params: {
     });
   }
 
-  if (params.sourceDocumentId && params.sourceDocumentId !== params.documentId) {
-    await cancelBookingsForDocument(params.tenantId, params.sourceDocumentId);
+  if (sourceId) {
+    if (sourceLife && sourceLife.sourceDepositHeld > 0.0001) {
+      await cancelSourceHolds(params.tenantId, sourceId);
+    } else {
+      await cancelBookingsForDocument(params.tenantId, sourceId);
+    }
   }
+  return { billingOnly: false };
 }
 
 export async function cancelBookingsForDocument(tenantId: string, documentId: string): Promise<void> {
@@ -1381,6 +1452,17 @@ export async function releaseFleetBay(input: {
     await assertRentalDispatchWrite();
     const user = await requireTenantContext();
     await withTenantContext(user.tenantId, async () => {
+      const [level] = await db()
+        .select({ id: inventoryStockLevels.id })
+        .from(inventoryStockLevels)
+        .where(
+          and(
+            eq(inventoryStockLevels.tenantId, user.tenantId),
+            eq(inventoryStockLevels.productId, input.productId),
+            eq(inventoryStockLevels.locationId, input.locationId),
+          ),
+        )
+        .limit(1);
       const warehouseId = await pickWarehouseLocation(user.tenantId, input.productId, null, 0);
       const { createStockTransfer } = await import('@/app/actions/inventory');
       const moved = await createStockTransfer({
@@ -1396,8 +1478,9 @@ export async function releaseFleetBay(input: {
         userId: user.id,
         action: 'UPDATE',
         tableName: 'inventory_stock_levels',
-        recordId: input.productId,
+        recordId: level?.id ?? input.locationId,
         notes: `Release ${qty} from bay ${input.locationId} to warehouse`,
+        newValues: { productId: input.productId, locationId: input.locationId, qty },
       });
       revalidateRentalPaths();
       revalidatePath('/inventory/levels');

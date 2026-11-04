@@ -36,7 +36,15 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { assertPermission } from '@/lib/access';
+import { assertModuleWrite } from '@/lib/module-access';
 import { modulesForPlan } from '@/lib/platform-modules';
+import {
+  FLEET_BAY_DEFAULTS,
+  FLEET_LOCATION_TYPES,
+  LOCATION_TYPE_LABELS,
+  isAllowedLocationType,
+  isFleetLocationType,
+} from '@/lib/rental-locations';
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -175,6 +183,24 @@ function formString(formData: FormData, key: string): string {
 
 function duplicateText(label: string): CompanyActionState {
   return { ok: false, error: `${label} already exists for this company.` };
+}
+
+async function tenantRentalModuleOn(tenantId: string): Promise<boolean> {
+  const [row] = await db()
+    .select({ modules: tenants.modules })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  return Boolean(row?.modules?.rental);
+}
+
+async function currentLocationType(tenantId: string, id: string): Promise<string | null> {
+  const [row] = await db()
+    .select({ locationType: locations.locationType })
+    .from(locations)
+    .where(and(eq(locations.tenantId, tenantId), eq(locations.id, id), isNull(locations.voidedAt)))
+    .limit(1);
+  return row?.locationType ?? null;
 }
 
 function slugify(value: string): string {
@@ -517,12 +543,21 @@ export async function createLocation(formData: FormData): Promise<void> {
   });
 
   await withTenantContext(user.tenantId, async () => {
+    const rentalOn = await tenantRentalModuleOn(user.tenantId);
+    const locationType = parsed.locationType.trim() || 'branch';
+    if (!isAllowedLocationType(locationType, rentalOn)) {
+      throw new Error(
+        isFleetLocationType(locationType)
+          ? 'On rent, Wash and Repair locations need the Rental module. Enable it in Control Room, then add the bay under Company → Locations.'
+          : 'Choose Branch, Warehouse, POS counter or Office.',
+      );
+    }
     await db().insert(locations).values({
       tenantId: user.tenantId,
       brandId: parsed.brandId || null,
       name: parsed.name.trim(),
       code: nullable(parsed.code),
-      locationType: parsed.locationType.trim() || 'branch',
+      locationType,
       address: nullable(parsed.address),
     });
   });
@@ -557,6 +592,15 @@ export async function saveLocationForm(_state: CompanyActionState = emptyActionS
 
   try {
     await withTenantContext(user.tenantId, async () => {
+      const rentalOn = await tenantRentalModuleOn(user.tenantId);
+      const existingType = id ? await currentLocationType(user.tenantId, id) : null;
+      if (!isAllowedLocationType(locationType, rentalOn, existingType)) {
+        throw new Error(
+          isFleetLocationType(locationType)
+            ? 'On rent, Wash and Repair locations need the Rental module. Enable it in Control Room, then add the bay under Company → Locations.'
+            : 'Choose Branch, Warehouse, POS counter, Office, or a hire bay when Rental is on.',
+        );
+      }
       const [brand] = brandId
         ? await db()
             .select({ id: brands.id })
@@ -600,6 +644,79 @@ export async function saveLocationForm(_state: CompanyActionState = emptyActionS
   revalidatePath('/company/locations');
   revalidatePath('/');
   return { ok: true, message: id ? 'Location updated.' : 'Location added.' };
+}
+
+export type HireBayPresence = {
+  type: (typeof FLEET_LOCATION_TYPES)[number];
+  label: string;
+  present: boolean;
+};
+
+export async function listHireBayPresence(): Promise<HireBayPresence[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const rows = await db()
+      .select({ locationType: locations.locationType })
+      .from(locations)
+      .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)));
+    return FLEET_LOCATION_TYPES.map((type) => ({
+      type,
+      label: LOCATION_TYPE_LABELS[type] ?? type,
+      present: rows.some((r) => r.locationType === type),
+    }));
+  });
+}
+
+export async function ensureFleetBays(): Promise<CompanyActionState> {
+  const user = await requireTenantContext();
+  try {
+    await assertPermission('company.locations.write', 'write');
+    await assertModuleWrite('rental');
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'You do not have permission to do that.' };
+  }
+
+  try {
+    const created = await withTenantContext(user.tenantId, async () => {
+      const existing = await db()
+        .select({ locationType: locations.locationType, code: locations.code })
+        .from(locations)
+        .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)));
+      const names: string[] = [];
+      for (const type of FLEET_LOCATION_TYPES) {
+        if (existing.some((row) => row.locationType === type)) continue;
+        const def = FLEET_BAY_DEFAULTS[type];
+        const codeTaken = existing.some(
+          (row) => row.code?.trim().toLowerCase() === def.code.toLowerCase(),
+        );
+        await db().insert(locations).values({
+          tenantId: user.tenantId,
+          name: def.name,
+          code: codeTaken ? `${def.code}-${type}` : def.code,
+          locationType: type,
+        });
+        names.push(def.name);
+      }
+      return names;
+    });
+    revalidatePath('/company/locations');
+    revalidatePath('/company/rental');
+    revalidatePath('/inventory/on-rent');
+    revalidatePath('/');
+    if (created.length === 0) {
+      return { ok: true, message: 'On rent, Wash and Repair locations already exist.' };
+    }
+    return { ok: true, message: `Added ${created.join(', ')}.` };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not create hire bays.' };
+  }
+}
+
+export async function ensureFleetBaysFromForm(
+  _state: CompanyActionState = emptyActionState,
+  _formData: FormData,
+): Promise<CompanyActionState> {
+  return ensureFleetBays();
 }
 
 function usageReason(label: string, total: number, sample?: string | null): string | null {

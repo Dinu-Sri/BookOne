@@ -42,6 +42,7 @@ import {
   isCashSettledReturn,
   purchaseReturnRefundCashAccount,
   cashSettledReturnStatus,
+  shouldSkipHireSourceConversion,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { postedObligationSql } from '@/lib/posted-obligations';
@@ -1834,6 +1835,10 @@ export async function createCommercialDocument(
       const invoiceKind = parsed.invoiceKind ?? 'commercial';
       const isSalesInvoiceType = parsed.documentType === 'sales_invoice';
       const isPosSale = parsed.documentType === 'pos_sale';
+      const skipSourceConversion = shouldSkipHireSourceConversion({
+        linkSourceWithoutConversion: parsed.linkSourceWithoutConversion,
+        documentType: parsed.documentType,
+      });
       const isPurchaseSide =
         isPurchaseBillType(parsed.documentType) ||
         parsed.documentType === 'cash_purchase' ||
@@ -2385,26 +2390,6 @@ export async function createCommercialDocument(
         ...(parsed.sourceDocumentId ? [parsed.sourceDocumentId] : []),
       ].filter((v, i, a) => a.indexOf(v) === i);
 
-      if (isSalesInvoiceType && orderIds.length > 0 && !asDraft) {
-        for (const orderId of orderIds) {
-          await db().insert(salesInvoiceSources).values({
-            tenantId: user.tenantId,
-            invoiceId: document.id,
-            salesOrderId: orderId,
-          });
-          await db()
-            .update(businessDocuments)
-            .set({ status: 'fully_invoiced', updatedAt: new Date() })
-            .where(
-              and(
-                eq(businessDocuments.tenantId, user.tenantId),
-                eq(businessDocuments.id, orderId),
-                eq(businessDocuments.documentType, 'sales_order'),
-              ),
-            );
-        }
-      }
-
       const insertedRentalLines: {
         documentLineId: string;
         productId: string | null;
@@ -2590,8 +2575,9 @@ export async function createCommercialDocument(
         }
       }
 
+      let rentalBillingOnly = false;
       if (insertedRentalLines.some((l) => l.productId && isRentalProduct(l.productType))) {
-        await persistRentalBookings({
+        const persisted = await persistRentalBookings({
           tenantId: user.tenantId,
           userId: user.id,
           userRole: user.role,
@@ -2603,17 +2589,37 @@ export async function createCommercialDocument(
           lines: insertedRentalLines,
           skipAvailabilityCheck: true,
         });
+        rentalBillingOnly = persisted.billingOnly;
       }
 
       // Mark source converted only for true conversions (not returns / credits /
-      // hire-charge invoices that only link the live booking). Honor the skip
-      // flag solely on sales invoices so quote→order conversion cannot opt out.
-      const skipSourceConversion =
-        parsed.linkSourceWithoutConversion === true && parsed.documentType === 'sales_invoice';
+      // hire-charge invoices that only link the live booking, and not after-return
+      // hire invoices that bill a reserved/dispatched/returned/deposited order).
+      // Honor the skip flag solely on sales invoices so quote→order cannot opt out.
+      const skipHireSourceRewrite = skipSourceConversion || rentalBillingOnly;
+      if (isSalesInvoiceType && orderIds.length > 0 && !asDraft && !skipHireSourceRewrite) {
+        for (const orderId of orderIds) {
+          await db().insert(salesInvoiceSources).values({
+            tenantId: user.tenantId,
+            invoiceId: document.id,
+            salesOrderId: orderId,
+          });
+          await db()
+            .update(businessDocuments)
+            .set({ status: 'fully_invoiced', updatedAt: new Date() })
+            .where(
+              and(
+                eq(businessDocuments.tenantId, user.tenantId),
+                eq(businessDocuments.id, orderId),
+                eq(businessDocuments.documentType, 'sales_order'),
+              ),
+            );
+        }
+      }
       if (
         !asDraft &&
         parsed.sourceDocumentId &&
-        !skipSourceConversion &&
+        !skipHireSourceRewrite &&
         !['sales_return', 'purchase_return'].includes(parsed.documentType)
       ) {
         await db()

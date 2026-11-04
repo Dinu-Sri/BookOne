@@ -1,15 +1,22 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { listHireBayPresence, type HireBayPresence } from '@/app/actions/company-settings';
 import { getRentalSettings, saveRentalSettingsFromForm } from '@/app/actions/rental-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Button } from '@/components/ui/bookone-ui';
+import { HireBaySetupForm } from '../rental-bay-form';
 
 export default async function CompanyRentalSettingsPage() {
   let tenant;
   let settings;
+  let hireBays: HireBayPresence[] = [];
   try {
-    [tenant, settings] = await Promise.all([getTenantInfo(), getRentalSettings()]);
+    [tenant, settings, hireBays] = await Promise.all([
+      getTenantInfo(),
+      getRentalSettings(),
+      listHireBayPresence(),
+    ]);
   } catch {
     redirect('/login');
   }
@@ -17,6 +24,19 @@ export default async function CompanyRentalSettingsPage() {
   return (
     <BookOneShell active="Rental Settings" tenant={tenant}>
       <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
+        <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
+          <div className="party-form-top">
+            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
+              Hire bays
+            </span>
+          </div>
+          <div className="party-form-body">
+            <div className="party-tab-panel">
+              <HireBaySetupForm bays={hireBays} />
+            </div>
+          </div>
+        </div>
+
         <form action={saveRentalSettingsFromForm} style={{ display: 'grid', gap: 14 }}>
           <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
             <div className="party-form-top">

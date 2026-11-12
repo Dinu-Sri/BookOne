@@ -56,6 +56,8 @@ export function CommercialDocumentDetail({
   convertPanel,
   extraPanel,
   requireSupplierInvoiceNo = false,
+  vatRegistered = false,
+  vatRatePercent = 18,
 }: {
   doc: CommercialDocDetail;
   listHref: string;
@@ -72,6 +74,8 @@ export function CommercialDocumentDetail({
   convertPanel?: ReactNode;
   extraPanel?: ReactNode;
   requireSupplierInvoiceNo?: boolean;
+  vatRegistered?: boolean;
+  vatRatePercent?: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -196,7 +200,7 @@ export function CommercialDocumentDetail({
             </Link>
           ) : null}
           {canConvert && convertTo && !convertPanel ? (
-            <form action={convertDocumentAction} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <form action={convertDocumentAction} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <input type="hidden" name="sourceId" value={doc.id} />
               <input type="hidden" name="targetType" value={convertTo} />
               {convertNeedsSupplierNo ? (
@@ -210,6 +214,30 @@ export function CommercialDocumentDetail({
                   required={requireSupplierInvoiceNo}
                   style={{ minWidth: 180 }}
                 />
+              ) : null}
+              {convertTo === 'sales_invoice' && vatRegistered ? (
+                <>
+                  <select
+                    className="input"
+                    name="saleChannel"
+                    defaultValue={doc.saleChannel || 'local'}
+                    aria-label="Sale channel"
+                    style={{ minWidth: 140 }}
+                  >
+                    <option value="local">Local sales</option>
+                    <option value="export">Export sales</option>
+                  </select>
+                  <select
+                    className="input"
+                    name="invoiceKind"
+                    defaultValue={doc.invoiceKind || 'commercial'}
+                    aria-label="Invoice kind"
+                    style={{ minWidth: 180 }}
+                  >
+                    <option value="commercial">Commercial invoice</option>
+                    <option value="tax_invoice">TAX INVOICE (VAT {vatRatePercent}% posted)</option>
+                  </select>
+                </>
               ) : null}
               <Button variant="secondary" type="submit" disabled={pending}>
                 {convertLabel ?? 'Convert'}

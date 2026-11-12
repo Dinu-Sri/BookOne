@@ -139,6 +139,8 @@ export function CommercialDocList({
                             <form action={convertDocumentAction}>
                               <input type="hidden" name="sourceId" value={row.id} />
                               <input type="hidden" name="targetType" value={convertTo} />
+                              <input type="hidden" name="saleChannel" value={row.saleChannel || 'local'} />
+                              <input type="hidden" name="invoiceKind" value={row.invoiceKind || 'commercial'} />
                               <Button variant="secondary" type="submit">
                                 {convertLabel ?? 'Convert'}
                               </Button>

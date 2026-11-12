@@ -34,8 +34,8 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
         vatRatePercent: 18,
         exportVatRatePercent: 0,
         taxInvoiceDeptCode: '01',
-        defaultSaleChannel: 'local',
-        defaultInvoiceKind: 'commercial',
+        defaultSaleChannel: 'local' as const,
+        defaultInvoiceKind: 'commercial' as const,
       })),
       getPurchaseSettings().catch(() => ({
         requireBillApproval: false,
@@ -67,6 +67,8 @@ export async function loadSalesFormData(partyRole: 'customer' | 'vendor' = 'cust
     partyOptions,
     vatRegistered: salesSettings.vatRegistered,
     vatRatePercent: salesSettings.vatRatePercent,
+    defaultSaleChannel: salesSettings.defaultSaleChannel,
+    defaultInvoiceKind: salesSettings.defaultInvoiceKind,
     purchaseSettings,
     brands: (company?.brands ?? [])
       .filter((b) => inDimensionScope(scope, { brandId: b.id }))

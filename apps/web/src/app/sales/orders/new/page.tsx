@@ -26,6 +26,12 @@ export default async function NewSalesOrderPage() {
           discounts={form.discounts}
           brands={form.brands}
           locations={form.locations}
+          settings={{
+            vatRegistered: form.vatRegistered,
+            vatRatePercent: form.vatRatePercent,
+            defaultSaleChannel: form.defaultSaleChannel,
+            defaultInvoiceKind: form.defaultInvoiceKind,
+          }}
           banner="Dispatch note · no GL until invoice"
         />
       </div>

@@ -33,7 +33,26 @@ export type {
   BuiltSalePosting,
   PurchaseLineBucket,
 } from './engine/document-posting';
-export { lineIsOutputTaxable, salesOutputVatRatePercent } from './engine/sales-vat';
+export {
+  lineIsOutputTaxable,
+  salesOutputVatRatePercent,
+  isSalesTaxPostingDocument,
+  salesDocumentPostsOutputVat,
+  resolveSalesTaxProfile,
+  ineligibleTaxInvoice,
+  postedSalesVatRatePercent,
+  expectedInvoiceVat,
+  INELIGIBLE_TAX_INVOICE_MESSAGE,
+} from './engine/sales-vat';
+export type { SalesTaxProfile } from './engine/sales-vat';
+export {
+  POS_PRINT_MODES,
+  isPosPrintMode,
+  normalizePosPrintMode,
+  posPrintEffects,
+  posPrintModeLabel,
+} from './pos-print';
+export type { PosPrintMode, PosPrintEffects } from './pos-print';
 export { CASH_ACCOUNT_CODES, signedCashFlow } from './cash-flow';
 export {
   signedAccountBalance,

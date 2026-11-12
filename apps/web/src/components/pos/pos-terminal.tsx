@@ -30,6 +30,7 @@ import {
   publishPosDisplay,
 } from '@/lib/pos/customer-display-channel';
 import { createQuickProduct } from '@/app/actions/inventory';
+import { posPrintEffects, posPrintModeLabel } from '@bookone/accounting';
 
 type CartLine = {
   key: string;
@@ -100,6 +101,7 @@ export function PosTerminal({
   const [mixedCash, setMixedCash] = useState('');
   const [mixedCard, setMixedCard] = useState('');
   const [lastDocId, setLastDocId] = useState<string | null>(null);
+  const [lastShiftId, setLastShiftId] = useState<string | null>(null);
 
   // Shift close / Z
   const [closeOpen, setCloseOpen] = useState(false);
@@ -533,11 +535,13 @@ export function PosTerminal({
       setCloseOpen(false);
       setZPreview(null);
       setShiftId(null);
+      setLastShiftId(closedId);
       setStatus('Shift closed');
-      window.open(`/pos/z-report/${closedId}?autoprint=1`, '_blank', 'noopener,width=480,height=800');
-      // Thermal Z if register uses thermal
-      const printMode = register?.printMode ?? 'browser';
-      if ((printMode === 'thermal' || printMode === 'both') && res.report) {
+      const effects = posPrintEffects(register?.printMode);
+      if (effects.autoprintZ) {
+        window.open(`/pos/z-report/${closedId}?autoprint=1`, '_blank', 'noopener,width=480,height=800');
+      }
+      if (effects.thermalZ && res.report) {
         const r = res.report;
         const lines = [
           `${r.registerCode} ${r.registerName}`,
@@ -605,6 +609,7 @@ export function PosTerminal({
     opts?: { kickDrawer?: boolean; mode?: 'sale' | 'return'; printedTotal?: number },
   ) {
     const printMode = register?.printMode ?? 'browser';
+    const effects = posPrintEffects(printMode);
     const saleMode = opts?.mode ?? mode;
     const displayTotal = opts?.printedTotal ?? total;
 
@@ -625,11 +630,11 @@ export function PosTerminal({
       });
     }, 6000);
 
-    if (printMode === 'browser' || printMode === 'both') {
+    if (effects.autoprintReceipt) {
       window.open(`/pos/receipt/${id}?autoprint=1`, '_blank', 'noopener,width=420,height=720');
     }
 
-    if (printMode === 'thermal' || printMode === 'both') {
+    if (effects.thermalReceipt) {
       try {
         const data = await getPosReceiptData(id);
         if (data) {
@@ -679,7 +684,7 @@ export function PosTerminal({
       }
     }
 
-    if (opts?.kickDrawer && openDrawerOnCash) {
+    if (effects.kickDrawerOnCash && opts?.kickDrawer && openDrawerOnCash) {
       const drawer = await openCashDrawer();
       refreshThermalStatus();
       if (!drawer.ok) console.warn('[POS] Drawer:', drawer.error);
@@ -861,6 +866,11 @@ export function PosTerminal({
               Last receipt
             </Link>
           ) : null}
+          {lastShiftId ? (
+            <Link className="pos-link-btn" href={`/pos/z-report/${lastShiftId}`} target="_blank">
+              Last Z-report
+            </Link>
+          ) : null}
           <Link className="pos-link-btn" href="/sales/pos">
             History
           </Link>
@@ -913,11 +923,7 @@ export function PosTerminal({
         {register?.printMode ? (
           <span className="pos-hw-status">
             Mode:{' '}
-            {register.printMode === 'both'
-              ? 'Browser+Thermal'
-              : register.printMode === 'thermal'
-                ? 'Thermal'
-                : 'Browser'}
+            {posPrintModeLabel(register.printMode)}
           </span>
         ) : null}
       </div>

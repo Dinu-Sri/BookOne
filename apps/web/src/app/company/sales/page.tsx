@@ -252,11 +252,25 @@ export default async function CompanySalesSettingsPage() {
                           : '—'}
                       </td>
                       <td>
-                        {r.printMode === 'both'
-                          ? 'Browser + thermal'
-                          : r.printMode === 'thermal'
-                            ? 'Thermal'
-                            : 'Browser'}
+                        <form action={savePosRegisterFromForm} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <input type="hidden" name="id" value={r.id} />
+                          <input type="hidden" name="code" value={r.code} />
+                          <input type="hidden" name="name" value={r.name} />
+                          <input type="hidden" name="locationId" value={r.locationId ?? ''} />
+                          <input type="hidden" name="thermalDeviceHint" value={r.thermalDeviceHint ?? ''} />
+                          <input type="hidden" name="receiptFooter" value={r.receiptFooter ?? ''} />
+                          <input type="hidden" name="defaultPaymentAccountCode" value={r.defaultPaymentAccountCode} />
+                          {r.isActive ? <input type="hidden" name="isActive" value="on" /> : null}
+                          <select className="input" name="printMode" defaultValue={r.printMode} aria-label={`Print mode for ${r.code}`}>
+                            <option value="browser">Browser print</option>
+                            <option value="thermal">Thermal only</option>
+                            <option value="both">Both (thermal + browser)</option>
+                            <option value="manual">Manual / preview only</option>
+                          </select>
+                          <Button variant="ghost" type="submit">
+                            Save
+                          </Button>
+                        </form>
                         {r.thermalDeviceHint ? (
                           <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{r.thermalDeviceHint}</div>
                         ) : null}
@@ -295,7 +309,11 @@ export default async function CompanySalesSettingsPage() {
                     <option value="browser">Browser print</option>
                     <option value="thermal">Thermal only</option>
                     <option value="both">Both (thermal + browser)</option>
+                    <option value="manual">Manual / preview only</option>
                   </select>
+                  <small className="muted-line">
+                    Manual skips autoprint, thermal write, and drawer kick on sale, refund, and Z-close. Use Last receipt / Last Z-report to preview and print.
+                  </small>
                 </div>
                 <div className="field">
                   <label>Thermal device note</label>

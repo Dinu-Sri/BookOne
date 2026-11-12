@@ -12,6 +12,7 @@ import {
   searchInvoicesForReturn,
 } from '@/app/actions/commercial-docs';
 import {
+  expectedInvoiceVat,
   linkedReturnPrefillQuantities,
   linkedReturnPreviewDisplay,
   SALES_RETURN_QTY_MESSAGE,
@@ -38,6 +39,7 @@ import { documentHasRentalLines, EventHireFields } from '@/components/sales/even
 import { Button } from '@/components/ui/bookone-ui';
 import { IdempotencyField } from '@/components/ui/form-busy';
 import { DiscountPicker } from '@/components/sales/discount-picker';
+import { SalesTaxProfileFields, type SalesTaxSettings } from '@/components/sales/sales-tax-profile-fields';
 
 type PartyOpt = {
   id: string;
@@ -68,6 +70,7 @@ export function SalesDocumentForm({
   banner,
   brands,
   locations,
+  settings,
 }: {
   documentType: 'sales_order' | 'sales_invoice' | 'pos_sale' | 'sales_return';
   backHref: string;
@@ -83,6 +86,7 @@ export function SalesDocumentForm({
   banner?: string;
   brands?: BrandOption[];
   locations?: LocationOption[];
+  settings?: SalesTaxSettings;
 }) {
   const [invoiceQuery, setInvoiceQuery] = useState('');
   const [invoiceHits, setInvoiceHits] = useState<
@@ -125,6 +129,10 @@ export function SalesDocumentForm({
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
+  const [saleChannel, setSaleChannel] = useState(settings?.defaultSaleChannel || 'local');
+  const [invoiceKind, setInvoiceKind] = useState(
+    settings?.vatRegistered ? settings.defaultInvoiceKind || 'commercial' : 'commercial',
+  );
 
   useEffect(() => {
     if (!isReturn) return;
@@ -169,6 +177,8 @@ export function SalesDocumentForm({
     setSourceTotal(0);
     setSourceNet(0);
     setSourceVatRate(0);
+    setSaleChannel(settings?.defaultSaleChannel || 'local');
+    setInvoiceKind(settings?.vatRegistered ? settings.defaultInvoiceKind || 'commercial' : 'commercial');
     setAlreadyReturnedTotal(0);
     setAlreadyReturnedNet(0);
     setPriorReturnLines([]);
@@ -194,6 +204,8 @@ export function SalesDocumentForm({
     setSourceTotal(loaded.sourceTotal || 0);
     setSourceNet(loaded.sourceNet || loaded.sourceTotal || 0);
     setSourceVatRate(loaded.vatRate || 0);
+    setInvoiceKind(loaded.invoiceKind === 'tax_invoice' ? 'tax_invoice' : 'commercial');
+    setSaleChannel(loaded.saleChannel === 'export' ? 'export' : 'local');
     setAlreadyReturnedTotal(loaded.alreadyReturnedTotal || 0);
     setAlreadyReturnedNet(loaded.alreadyReturnedNet || loaded.alreadyReturnedTotal || 0);
     setPriorReturnLines(loaded.priorReturnLines || []);
@@ -361,8 +373,12 @@ export function SalesDocumentForm({
     >
       <IdempotencyField />
       <input type="hidden" name="documentType" value={documentType} />
-      <input type="hidden" name="saleChannel" value="local" />
-      <input type="hidden" name="invoiceKind" value="commercial" />
+      {isReturn ? (
+        <>
+          <input type="hidden" name="saleChannel" value={saleChannel} />
+          <input type="hidden" name="invoiceKind" value={invoiceKind} />
+        </>
+      ) : null}
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
       <input type="hidden" name="headerDiscountType" value={headerDiscountType} />
@@ -468,6 +484,16 @@ export function SalesDocumentForm({
               ) : null}
             </div>
           ) : null}
+          {!isReturn ? (
+            <SalesTaxProfileFields
+              settings={settings}
+              saleChannel={saleChannel}
+              invoiceKind={invoiceKind}
+              onSaleChannel={setSaleChannel}
+              onInvoiceKind={setInvoiceKind}
+              informational={documentType === 'sales_order'}
+            />
+          ) : null}
           <PartyNameFields
             label="Customer"
             placeholder="Customer name"
@@ -572,6 +598,31 @@ export function SalesDocumentForm({
                   <span>Total</span>
                   <strong>LKR {money(computed.total)}</strong>
                 </div>
+                {documentType === 'sales_order' && invoiceKind === 'tax_invoice'
+                  ? (() => {
+                      const preview = expectedInvoiceVat({
+                        net: computed.total,
+                        invoiceKind,
+                        vatRegistered: Boolean(settings?.vatRegistered),
+                        saleChannel,
+                        domesticRatePercent: settings?.vatRatePercent ?? 18,
+                        exportRatePercent: 0,
+                      });
+                      if (preview.vatAmount <= 0) return null;
+                      return (
+                        <>
+                          <div className="doc-totals-row">
+                            <span>VAT on tax invoice ({preview.vatRate}%)</span>
+                            <strong>LKR {money(preview.vatAmount)}</strong>
+                          </div>
+                          <div className="doc-totals-row">
+                            <span>Invoice total after convert</span>
+                            <strong>LKR {money(preview.invoiceTotal)}</strong>
+                          </div>
+                        </>
+                      );
+                    })()
+                  : null}
               </>
             )}
           </div>

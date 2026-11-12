@@ -1,3 +1,11 @@
+## 2026-11-12 — VAT conversion profile and manual POS print (v2.5.26)
+
+- Record: [CHG-20261112-vat-pos-print](changes/CHG-20261112-vat-pos-print.md). Combined qualification execution `42d9671`, closure `be43029`, baseline product `a6eda60` / v2.5.25. Owner authorized push to master for the Docker web image Action. Do not grant fixtures or replay 11 Nov money.
+- Quote/order persist intended `invoiceKind`/`saleChannel`. `convertDocument` copies the source profile (invoice conversion can override). Output VAT posts only on tax_invoice sales_invoice/pos_sale/sales_return when VAT-registered. Explicit tax invoice without registration is refused. POS `manual` print mode has zero automatic device effects; `browser`/`thermal`/`both` unchanged. Default remains `browser`.
+- Payment receipt supported route: `/sales/payments/receipt?payment=<paymentTransactionId>`. Audit allocation UUID is not a payment id. No receipt-route change.
+- Checks: `@bookone/accounting` vitest 15 files / 196 passed (includes sales-vat conversion profile and pos-print manual mode). `@bookone/accounting` tsc --noEmit passed. Isolated runtime and live browser not-run. Mixed-TENDER split not claimed.
+- Next: Owner waits for Docker web image green, then Portainer Update with Re-pull ON. QA binds a NEW dated successor on a separate VAT+Inventory+POS fixture. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-04 — Rapid04 follow-up: charge source status, after-return continuity, hire bays, Activity (v2.5.25)
 
 - Record: [CHG-20261104-rapid04-followup](changes/CHG-20261104-rapid04-followup.md). QA fixtures [PR 93](https://github.com/Dinu-Sri/bookone-qa/pull/93) `1781dba`. Live baseline v2.5.24 · `e5bb589`. Do not recreate A/B accounts or replay Rapid03 money.

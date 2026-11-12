@@ -25,7 +25,7 @@ const registerSchema = z.object({
   code: z.string().min(1).max(40),
   name: z.string().min(1).max(120),
   locationId: z.string().uuid().optional().nullable(),
-  printMode: z.enum(['browser', 'thermal', 'both']),
+  printMode: z.enum(['browser', 'thermal', 'both', 'manual']),
   thermalDeviceHint: z.string().max(255).optional(),
   receiptFooter: z.string().max(2000).optional(),
   defaultPaymentAccountCode: z.string().max(20).default('1000'),

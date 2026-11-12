@@ -4,6 +4,7 @@ import {
   getCommercialDocument,
   updateCommercialDocumentHeaderFromForm,
 } from '@/app/actions/commercial-docs';
+import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { formatLKR, StatusBadge } from '@/components/module/list-page';
@@ -14,8 +15,13 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
   const { id } = await params;
   let tenant;
   let doc;
+  let settings;
   try {
-    [tenant, doc] = await Promise.all([getTenantInfo(), getCommercialDocument(id)]);
+    [tenant, doc, settings] = await Promise.all([
+      getTenantInfo(),
+      getCommercialDocument(id),
+      getSalesSettings(),
+    ]);
   } catch {
     redirect('/login');
   }
@@ -67,6 +73,29 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
                   <option value="archived">Archived</option>
                 </select>
               </div>
+              {settings.vatRegistered ? (
+                <>
+                  <div className="field">
+                    <label>Sale channel</label>
+                    <select className="input" name="saleChannel" defaultValue={doc.saleChannel || 'local'}>
+                      <option value="local">Local sales</option>
+                      <option value="export">Export sales</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Intended invoice kind</label>
+                    <select className="input" name="invoiceKind" defaultValue={doc.invoiceKind || 'commercial'}>
+                      <option value="commercial">Commercial invoice</option>
+                      <option value="tax_invoice">TAX INVOICE (VAT {settings.vatRatePercent}% on invoice)</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <input type="hidden" name="saleChannel" value="local" />
+                  <input type="hidden" name="invoiceKind" value="commercial" />
+                </>
+              )}
               <div className="field field-span-2">
                 <label>Notes</label>
                 <input className="input" name="notes" defaultValue={doc.notes ?? ''} />

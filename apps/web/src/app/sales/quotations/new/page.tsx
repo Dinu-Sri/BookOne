@@ -22,6 +22,12 @@ export default async function NewQuotationPage() {
           discounts={form.discounts}
           brands={form.brands}
           locations={form.locations}
+          settings={{
+            vatRegistered: form.vatRegistered,
+            vatRatePercent: form.vatRatePercent,
+            defaultSaleChannel: form.defaultSaleChannel,
+            defaultInvoiceKind: form.defaultInvoiceKind,
+          }}
         />
       </div>
     </BookOneShell>

@@ -77,7 +77,7 @@ Right: Cart / return cart + totals + [Hold] [PAY/REFUND]
 | code | REG-01, COUNTER-A |
 | name | Front counter |
 | location_id | optional branch |
-| print_mode | `browser` \| `thermal` \| `both` |
+| print_mode | `browser` \| `thermal` \| `both` \| `manual` (preview only; no autoprint/thermal/drawer on sale, refund, or Z-close). Default remains `browser`. Existing registers are not rewritten. |
 | thermal_device_hint | optional printer name / USB path note |
 | receipt_footer | per-register footer |
 | is_active | soft disable |

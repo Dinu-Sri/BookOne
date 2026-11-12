@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCommercialDocument } from '@/app/actions/commercial-docs';
+import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
@@ -8,8 +9,13 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
   const { id } = await params;
   let tenant;
   let doc;
+  let settings;
   try {
-    [tenant, doc] = await Promise.all([getTenantInfo(), getCommercialDocument(id)]);
+    [tenant, doc, settings] = await Promise.all([
+      getTenantInfo(),
+      getCommercialDocument(id),
+      getSalesSettings(),
+    ]);
   } catch {
     redirect('/login');
   }
@@ -25,6 +31,8 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
         editHref={doc.status !== 'converted' && doc.status !== 'void' ? `/sales/quotations/${doc.id}/edit` : null}
         convertTo="sales_order"
         convertLabel="Convert to order"
+        vatRegistered={settings.vatRegistered}
+        vatRatePercent={settings.vatRatePercent}
       />
     </BookOneShell>
   );

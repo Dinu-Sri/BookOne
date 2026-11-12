@@ -39,6 +39,34 @@ describe('sales invoice posting', () => {
     expect(sumSides(result.lines)).toEqual({ debit: 1180, credit: 1180 });
   });
 
+  it('posts mixed-product tax invoice VAT on net and COGS on physical only', () => {
+    const result = buildSalesInvoicePosting({
+      lines: [
+        { description: 'Service', quantity: 1, unitPrice: 100, unitCost: 0, productType: 'service' },
+        { description: 'Widget', quantity: 1, unitPrice: 200, unitCost: 80, productType: 'physical' },
+      ],
+      vatRatePercent: 18,
+    });
+    expect(result.netTotal).toBe(300);
+    expect(result.vatTotal).toBe(54);
+    expect(result.grandTotal).toBe(354);
+    expect(result.cogsTotal).toBe(80);
+    expect(result.lines.some((l) => l.accountCode === '1300' && l.amount === 354)).toBe(true);
+    expect(result.lines.some((l) => l.accountCode === '2200' && l.side === 'credit' && l.amount === 54)).toBe(true);
+    expect(sumSides(result.lines)).toEqual({ debit: 434, credit: 434 });
+  });
+
+  it('commercial invoice at 0% VAT stays net with no 2200', () => {
+    const result = buildSalesInvoicePosting({
+      lines: [{ description: 'Goods', quantity: 1, unitPrice: 1000, unitCost: 0, productType: 'service' }],
+      vatRatePercent: 0,
+    });
+    expect(result.vatTotal).toBe(0);
+    expect(result.grandTotal).toBe(1000);
+    expect(result.lines.some((l) => l.accountCode === '2200')).toBe(false);
+    expect(sumSides(result.lines)).toEqual({ debit: 1000, credit: 1000 });
+  });
+
   it('posts COGS and inventory for physical (and legacy stocked) lines', () => {
     const result = buildSalesInvoicePosting({
       lines: [{ description: 'Widget', quantity: 2, unitPrice: 150, unitCost: 100, productType: 'physical' }],

@@ -25,6 +25,12 @@ export default async function NewSalesReturnPage() {
           partyOptions={form.partyOptions}
           brands={form.brands}
           locations={form.locations}
+          settings={{
+            vatRegistered: form.vatRegistered,
+            vatRatePercent: form.vatRatePercent,
+            defaultSaleChannel: form.defaultSaleChannel,
+            defaultInvoiceKind: form.defaultInvoiceKind,
+          }}
           showPaymentAccount
           paymentAccounts={form.paymentAccounts}
           allowEmptyPaymentAccount

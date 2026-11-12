@@ -14,6 +14,10 @@ import {
   isLiquidTenderCode,
   lineIsOutputTaxable,
   salesOutputVatRatePercent,
+  resolveSalesTaxProfile,
+  ineligibleTaxInvoice,
+  salesDocumentPostsOutputVat,
+  INELIGIBLE_TAX_INVOICE_MESSAGE,
   amountInWordsLkr,
   billedQtyAgainstPo,
   remainingQty,
@@ -783,6 +787,8 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
   sourceNet: number;
   sourceTax: number;
   vatRate: number;
+  invoiceKind: string;
+  saleChannel: string;
   alreadyReturnedTotal: number;
   alreadyReturnedNet: number;
   priorReturnLines: { productId: string | null; description: string; quantity: number }[];
@@ -845,6 +851,8 @@ export async function loadInvoiceForReturn(invoiceId: string): Promise<{
       sourceNet: Number(doc.subtotal) || 0,
       sourceTax: Number(doc.taxTotal) || 0,
       vatRate: Number(doc.vatRate) || 0,
+      invoiceKind: doc.invoiceKind ?? 'commercial',
+      saleChannel: doc.saleChannel ?? 'local',
       alreadyReturnedTotal: prior.alreadyReturnedTotal,
       alreadyReturnedNet: prior.alreadyReturnedNet,
       priorReturnLines: prior.priorReturnLines,
@@ -1691,6 +1699,7 @@ export async function createCommercialDocument(
         discountTotal: string | number;
         vatRate: string | number | null;
         invoiceKind: string | null;
+        saleChannel: string | null;
       } | null = null;
       let linkedSourceLines: LinkedSourceLine[] = [];
       let linkedPrior = {
@@ -1715,6 +1724,7 @@ export async function createCommercialDocument(
             discountTotal: businessDocuments.discountTotal,
             vatRate: businessDocuments.vatRate,
             invoiceKind: businessDocuments.invoiceKind,
+            saleChannel: businessDocuments.saleChannel,
           })
           .from(businessDocuments)
           .where(
@@ -1831,8 +1841,6 @@ export async function createCommercialDocument(
       if (linkedProrated) {
         supplyExVat = linkedProrated.total;
       }
-      const saleChannel = parsed.saleChannel ?? 'local';
-      const invoiceKind = parsed.invoiceKind ?? 'commercial';
       const isSalesInvoiceType = parsed.documentType === 'sales_invoice';
       const isPosSale = parsed.documentType === 'pos_sale';
       const skipSourceConversion = shouldSkipHireSourceConversion({
@@ -1843,6 +1851,29 @@ export async function createCommercialDocument(
         isPurchaseBillType(parsed.documentType) ||
         parsed.documentType === 'cash_purchase' ||
         parsed.documentType === 'purchase_return';
+      const channelHint =
+        parsed.saleChannel ?? linkedSource?.saleChannel ?? 'local';
+      const vatCfgPreview = await loadSalesVatConfig(
+        user.tenantId,
+        channelHint === 'export' ? 'export' : 'local',
+      );
+      if (parsed.invoiceKind === 'tax_invoice' && !vatCfgPreview.vatRegistered) {
+        const ineligible = ineligibleTaxInvoice({
+          invoiceKind: 'tax_invoice',
+          vatRegistered: false,
+        });
+        if (ineligible) throw new Error(ineligible);
+      }
+      const taxProfile = resolveSalesTaxProfile({
+        vatRegistered: vatCfgPreview.vatRegistered,
+        requestedKind: parsed.invoiceKind,
+        requestedChannel: parsed.saleChannel,
+        sourceKind: linkedSource?.invoiceKind,
+        sourceChannel: linkedSource?.saleChannel,
+        preferSource: parsed.documentType === 'sales_return' && Boolean(linkedSource),
+      });
+      const saleChannel = taxProfile.saleChannel;
+      const invoiceKind = taxProfile.invoiceKind;
       const appliesSalesVat =
         isSalesInvoiceType || isPosSale || parsed.documentType === 'sales_return';
       const appliesPurchaseVat =
@@ -1851,7 +1882,7 @@ export async function createCommercialDocument(
       const vatCfg =
         appliesSalesVat || appliesPurchaseVat
           ? await loadSalesVatConfig(user.tenantId, saleChannel)
-          : { vatRate: 0, dept: '01', vatRegistered: false };
+          : vatCfgPreview;
 
       let purchaseVatRate = 0;
       if (appliesPurchaseVat) {
@@ -1877,7 +1908,12 @@ export async function createCommercialDocument(
       if (linkedSource) {
         effectiveVatRate = Number(linkedSource.vatRate) || 0;
       } else if (appliesSalesVat) {
-        effectiveVatRate = vatCfg.vatRate;
+        effectiveVatRate = salesDocumentPostsOutputVat({
+          documentType: parsed.documentType,
+          invoiceKind,
+        })
+          ? vatCfg.vatRate
+          : 0;
       } else if (appliesPurchaseVat) {
         effectiveVatRate = purchaseVatRate;
       }
@@ -1925,6 +1961,7 @@ export async function createCommercialDocument(
       if (
         (isSalesInvoiceType || isPosSale) &&
         invoiceKind === 'tax_invoice' &&
+        vatCfg.vatRegistered &&
         parsed.intent !== 'draft'
       ) {
         taxInvoiceNumber = await nextTaxInvoiceNumber(user.tenantId, parsed.issueDate, vatCfg.dept);
@@ -2315,7 +2352,7 @@ export async function createCommercialDocument(
         currency: 'LKR',
         notes: parsed.notes ?? null,
         saleChannel,
-        invoiceKind: appliesSalesVat || appliesPurchaseVat ? invoiceKind : 'commercial',
+        invoiceKind,
         deliveryDate: parsed.deliveryDate || null,
         placeOfSupply: parsed.placeOfSupply || null,
         paymentMode: parsed.paymentMode || null,
@@ -3143,6 +3180,9 @@ export async function convertDocument(
     }[];
     /** Entered vendor bill number. Source PO/GRN references are not inherited. */
     supplierInvoiceNumber?: string | null;
+    /** Override source tax profile when converting to a sales invoice. */
+    invoiceKind?: 'commercial' | 'tax_invoice';
+    saleChannel?: 'local' | 'export';
   },
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
@@ -3261,6 +3301,18 @@ export async function convertDocument(
 
       const rentalFrom = await loadRentalEventForDocument(user.tenantId, sourceId);
 
+      const vatCfg = await loadSalesVatConfig(user.tenantId, source.saleChannel ?? 'local');
+      if (options?.invoiceKind === 'tax_invoice' && !vatCfg.vatRegistered) {
+        throw new Error(INELIGIBLE_TAX_INVOICE_MESSAGE);
+      }
+      const taxProfile = resolveSalesTaxProfile({
+        vatRegistered: vatCfg.vatRegistered,
+        requestedKind: options?.invoiceKind,
+        requestedChannel: options?.saleChannel,
+        sourceKind: source.invoiceKind,
+        sourceChannel: source.saleChannel,
+      });
+
       // Create without auto-marking full converted when partial — createCommercialDocument always marks converted.
       // We'll recompute PO status after.
       const result = await createCommercialDocument({
@@ -3279,8 +3331,8 @@ export async function convertDocument(
         deliveryDate: source.deliveryDate ?? undefined,
         brandId: source.brandId ?? null,
         locationId: source.locationId ?? null,
-        saleChannel: 'local',
-        invoiceKind: 'commercial',
+        saleChannel: taxProfile.saleChannel,
+        invoiceKind: taxProfile.invoiceKind,
         eventDate: rentalFrom?.eventDate || undefined,
         hireFrom: rentalFrom?.hireFrom || undefined,
         hireTo: rentalFrom?.hireTo || undefined,
@@ -3378,9 +3430,17 @@ export async function convertDocumentAction(formData: FormData): Promise<void> {
   }
 
   const supplierInvoiceNumber = String(formData.get('supplierInvoiceNumber') ?? '').trim() || null;
+  const kindRaw = String(formData.get('invoiceKind') ?? '').trim();
+  const channelRaw = String(formData.get('saleChannel') ?? '').trim();
   const result = await convertDocument(sourceId, targetType, {
     ...(lines ? { lines } : {}),
     supplierInvoiceNumber,
+    ...(kindRaw === 'tax_invoice' || kindRaw === 'commercial'
+      ? { invoiceKind: kindRaw as 'commercial' | 'tax_invoice' }
+      : {}),
+    ...(channelRaw === 'export' || channelRaw === 'local'
+      ? { saleChannel: channelRaw as 'local' | 'export' }
+      : {}),
   });
   const { redirect } = await import('next/navigation');
   const listPath: Record<string, string> = {
@@ -3566,8 +3626,8 @@ export async function convertMultipleOrdersToInvoice(formData: FormData): Promis
       issueDate: new Date().toISOString().slice(0, 10),
       sourceOrderIds: orders.map((o) => o.id),
       sourceDocumentId: orders[0].id,
-      saleChannel: 'local',
-      invoiceKind: 'commercial',
+      saleChannel: orders[0].saleChannel === 'export' ? 'export' : 'local',
+      invoiceKind: orders[0].invoiceKind === 'tax_invoice' ? 'tax_invoice' : 'commercial',
       purchaserTin: party?.tin ?? undefined,
       purchaserPhone: party?.phoneMobile ?? party?.phone ?? undefined,
       purchaserAddress: party?.addressLine1 ?? party?.address ?? undefined,
@@ -4807,6 +4867,17 @@ export async function updateCommercialDocumentHeaderFromForm(formData: FormData)
       throw new Error('Converted documents cannot be edited.');
     }
     const posted = Boolean(doc.transactionId);
+    const kindRaw = String(formData.get('invoiceKind') ?? '').trim();
+    const channelRaw = String(formData.get('saleChannel') ?? '').trim();
+    const vatCfg = await loadSalesVatConfig(user.tenantId, channelRaw || doc.saleChannel || 'local');
+    const taxProfile = resolveSalesTaxProfile({
+      vatRegistered: vatCfg.vatRegistered,
+      requestedKind: kindRaw || doc.invoiceKind,
+      requestedChannel: channelRaw || doc.saleChannel,
+    });
+    if (kindRaw === 'tax_invoice' && !vatCfg.vatRegistered) {
+      throw new Error(INELIGIBLE_TAX_INVOICE_MESSAGE);
+    }
     await db()
       .update(businessDocuments)
       .set({
@@ -4814,6 +4885,8 @@ export async function updateCommercialDocumentHeaderFromForm(formData: FormData)
         issueDate: posted ? doc.issueDate : /^\d{4}-\d{2}-\d{2}$/.test(issueDate) ? issueDate : doc.issueDate,
         dueDate: dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate) ? dueDate : dueDate === '' ? null : doc.dueDate,
         notes: notes || null,
+        invoiceKind: posted ? doc.invoiceKind : taxProfile.invoiceKind,
+        saleChannel: posted ? doc.saleChannel : taxProfile.saleChannel,
         updatedAt: new Date(),
       })
       .where(eq(businessDocuments.id, id));

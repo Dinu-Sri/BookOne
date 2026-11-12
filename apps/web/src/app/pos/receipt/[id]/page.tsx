@@ -107,6 +107,10 @@ export default async function PosReceiptPage({
           <p className="center muted no-print" style={{ fontSize: 11 }}>
             Thermal mode: use browser print to a thermal driver for now (ESC/POS agent in Phase 4).
           </p>
+        ) : register?.printMode === 'manual' ? (
+          <p className="center muted no-print" style={{ fontSize: 11 }}>
+            Manual print: this page does not auto-print. Use Print when you want a copy.
+          </p>
         ) : null}
       </article>
 

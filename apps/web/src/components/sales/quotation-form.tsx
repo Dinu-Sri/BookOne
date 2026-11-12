@@ -23,6 +23,8 @@ import { documentHasRentalLines, EventHireFields } from '@/components/sales/even
 import { Button } from '@/components/ui/bookone-ui';
 import { IdempotencyField } from '@/components/ui/form-busy';
 import { DiscountPicker } from '@/components/sales/discount-picker';
+import { SalesTaxProfileFields, type SalesTaxSettings } from '@/components/sales/sales-tax-profile-fields';
+import { expectedInvoiceVat } from '@bookone/accounting';
 
 type PartyOpt = {
   id: string;
@@ -50,6 +52,7 @@ export function QuotationForm({
   discounts,
   brands,
   locations,
+  settings,
   backHref = '/sales/quotations',
 }: {
   products: ProductPick[];
@@ -57,6 +60,7 @@ export function QuotationForm({
   discounts: DiscountOpt[];
   brands?: BrandOption[];
   locations?: LocationOption[];
+  settings?: SalesTaxSettings;
   backHref?: string;
 }) {
   const today = todayString();
@@ -69,6 +73,10 @@ export function QuotationForm({
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
+  const [saleChannel, setSaleChannel] = useState(settings?.defaultSaleChannel || 'local');
+  const [invoiceKind, setInvoiceKind] = useState(
+    settings?.vatRegistered ? settings.defaultInvoiceKind || 'commercial' : 'commercial',
+  );
 
   const handleSearchActive = useCallback(
     (active: boolean) => {
@@ -108,8 +116,16 @@ export function QuotationForm({
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
     const total = Math.round((subtotal - discountAmt) * 100) / 100;
-    return { subtotal, discountAmt, total };
-  }, [lines, headerDiscount, headerDiscountType, discountId, discounts]);
+    const vatPreview = expectedInvoiceVat({
+      net: total,
+      invoiceKind,
+      vatRegistered: Boolean(settings?.vatRegistered),
+      saleChannel,
+      domesticRatePercent: settings?.vatRatePercent ?? 18,
+      exportRatePercent: 0,
+    });
+    return { subtotal, discountAmt, total, vatPreview };
+  }, [lines, headerDiscount, headerDiscountType, discountId, discounts, invoiceKind, saleChannel, settings]);
 
   return (
     <form
@@ -135,8 +151,6 @@ export function QuotationForm({
     >
       <IdempotencyField />
       <input type="hidden" name="documentType" value="quotation" />
-      <input type="hidden" name="saleChannel" value="local" />
-      <input type="hidden" name="invoiceKind" value="commercial" />
       <input type="hidden" name="lineCount" value={String(Math.max(lines.length, 1))} />
       <input type="hidden" name="headerDiscount" value={String(computed.discountAmt)} />
       <input type="hidden" name="headerDiscountType" value={headerDiscountType} />
@@ -169,6 +183,14 @@ export function QuotationForm({
         ) : null}
 
         <div className={`doc-form-header ${detailsCollapsed ? 'is-collapsed' : ''}`}>
+          <SalesTaxProfileFields
+            settings={settings}
+            saleChannel={saleChannel}
+            invoiceKind={invoiceKind}
+            onSaleChannel={setSaleChannel}
+            onInvoiceKind={setInvoiceKind}
+            informational
+          />
           <PartyNameFields
             label="Customer"
             placeholder="Customer name"
@@ -264,6 +286,18 @@ export function QuotationForm({
               <span>Quote total</span>
               <strong>LKR {money(computed.total)}</strong>
             </div>
+            {invoiceKind === 'tax_invoice' && computed.vatPreview.vatAmount > 0 ? (
+              <div className="doc-totals-row">
+                <span>VAT on tax invoice ({computed.vatPreview.vatRate}%)</span>
+                <strong>LKR {money(computed.vatPreview.vatAmount)}</strong>
+              </div>
+            ) : null}
+            {invoiceKind === 'tax_invoice' && computed.vatPreview.vatAmount > 0 ? (
+              <div className="doc-totals-row">
+                <span>Invoice total after convert</span>
+                <strong>LKR {money(computed.vatPreview.invoiceTotal)}</strong>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

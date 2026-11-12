@@ -91,8 +91,12 @@ export function InvoiceDocumentForm({
   const [catalog, setCatalog] = useState(initialProducts);
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [pinDetailsExpanded, setPinDetailsExpanded] = useState(false);
-  const [saleChannel, setSaleChannel] = useState(draft?.saleChannel || 'local');
-  const [invoiceKind, setInvoiceKind] = useState(draft?.invoiceKind || 'commercial');
+  const [saleChannel, setSaleChannel] = useState(
+    draft?.saleChannel || settings.defaultSaleChannel || 'local',
+  );
+  const [invoiceKind, setInvoiceKind] = useState(
+    draft?.invoiceKind || settings.defaultInvoiceKind || 'commercial',
+  );
   const [headerDiscount, setHeaderDiscount] = useState(
     draft && draft.headerDiscount > 0 ? String(draft.headerDiscount) : '0',
   );
@@ -434,6 +438,32 @@ export function InvoiceDocumentForm({
               <span>Total (ex-VAT)</span>
               <strong>LKR {money(computed.total)}</strong>
             </div>
+            {showTaxFields && settings.vatRegistered ? (
+              <>
+                <div className="doc-totals-row">
+                  <span>VAT ({settings.vatRatePercent}%)</span>
+                  <strong>
+                    LKR{' '}
+                    {money(
+                      Math.round(((computed.total * settings.vatRatePercent) / 100) * 100) / 100,
+                    )}
+                  </strong>
+                </div>
+                <div className="doc-totals-row is-total">
+                  <span>Total</span>
+                  <strong>
+                    LKR{' '}
+                    {money(
+                      Math.round(
+                        (computed.total +
+                          Math.round(((computed.total * settings.vatRatePercent) / 100) * 100) / 100) *
+                          100,
+                      ) / 100,
+                    )}
+                  </strong>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       </div>

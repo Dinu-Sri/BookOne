@@ -18,6 +18,7 @@ export function QuotationList({ rows, editLockDays = 0 }: { rows: CommercialDocR
         editLockDays,
         convertTo: 'sales_order',
         convertLabel: 'Convert to order',
+        showTaxCols: true,
       }}
     />
   );

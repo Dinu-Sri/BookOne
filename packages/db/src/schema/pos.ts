@@ -9,7 +9,7 @@ export const posRegisters = pgTable('pos_registers', {
   code: varchar('code', { length: 40 }).notNull(),
   name: varchar('name', { length: 120 }).notNull(),
   locationId: uuid('location_id').references(() => locations.id),
-  /** browser | thermal | both */
+  /** browser | thermal | both | manual */
   printMode: varchar('print_mode', { length: 20 }).notNull().default('browser'),
   thermalDeviceHint: varchar('thermal_device_hint', { length: 255 }),
   receiptFooter: text('receipt_footer'),

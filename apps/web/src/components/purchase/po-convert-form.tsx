@@ -5,17 +5,24 @@ import { convertDocumentAction, type PoRemainingLine } from '@/app/actions/comme
 import { formatLKR } from '@/components/module/list-page';
 import { Button, Card } from '@/components/ui/bookone-ui';
 import { QtyStepper } from '@/components/module/qty-stepper';
+import { PurchaseVatFields } from '@/components/purchase/purchase-vat-fields';
 
 export function PoConvertForm({
   poId,
   lines: initial,
   documentNumber,
   requireSupplierInvoiceNo = false,
+  vatRegistered = false,
+  vatRatePercent = 18,
+  sourceInvoiceKind = 'commercial',
 }: {
   poId: string;
   lines: PoRemainingLine[];
   documentNumber: string;
   requireSupplierInvoiceNo?: boolean;
+  vatRegistered?: boolean;
+  vatRatePercent?: number;
+  sourceInvoiceKind?: string;
 }) {
   const [qtys, setQtys] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
@@ -123,6 +130,16 @@ export function PoConvertForm({
               and duplicate-block still apply on save.
             </p>
           </div>
+          {vatRegistered ? (
+            <div style={{ marginTop: 12, maxWidth: 320 }}>
+              <PurchaseVatFields
+                vatRegistered={vatRegistered}
+                vatRatePercent={vatRatePercent}
+                defaultInvoiceKind={sourceInvoiceKind}
+                hint="Receive goods stores the intent only. Create purchase bill posts input VAT when claimed."
+              />
+            </div>
+          ) : null}
           <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <Button
               variant="secondary"

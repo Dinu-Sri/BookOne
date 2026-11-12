@@ -25,11 +25,18 @@ export default async function NewPurchaseOrderPage() {
         partyOptions={form.partyOptions}
         showExpenseAccount
         showPurchaseExtras
+        showPurchaseVat
+        vatRegistered={form.vatRegistered}
+        vatRatePercent={form.vatRatePercent}
         expenseAccounts={form.expenseAccounts}
         brands={form.brands}
           locations={form.locations}
         submitLabel="Save purchase order"
-        banner="No GL until converted to purchase"
+        banner={
+          form.vatRegistered
+            ? 'No GL until converted to purchase. Claim input VAT is stored as intent and posts on the bill.'
+            : 'No GL until converted to purchase'
+        }
       />
     </BookOneShell>
   );

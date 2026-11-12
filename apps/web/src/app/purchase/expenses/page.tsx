@@ -31,6 +31,7 @@ export default async function CashPurchasesPage() {
             detailHrefPattern: '/purchase/expenses/:id',
             returnHrefPattern: '/purchase/returns/new?from=:id',
             printHrefPattern: '/purchase/expenses/:id/print',
+            showPurchaseVatCols: true,
           }}
         />
       </Suspense>

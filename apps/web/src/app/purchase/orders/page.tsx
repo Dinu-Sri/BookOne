@@ -27,6 +27,7 @@ export default async function PurchaseOrdersPage() {
             newLabel: 'New purchase order',
             convertTo: 'purchase',
             convertLabel: 'To purchase',
+            showPurchaseVatCols: true,
             detailHrefPattern: '/purchase/orders/:id',
             printHrefPattern: '/purchase/print/:id',
           }}

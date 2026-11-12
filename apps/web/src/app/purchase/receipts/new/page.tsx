@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getCommercialDocument } from '@/app/actions/commercial-docs';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocNewForm } from '@/components/module/commercial-doc-screens';
@@ -12,8 +13,10 @@ export default async function NewGoodsReceiptPage({
   const sp = await searchParams;
   let tenant;
   let form;
+  let source = null as Awaited<ReturnType<typeof getCommercialDocument>>;
   try {
     [tenant, form] = await Promise.all([getTenantInfo(), loadSalesFormData('vendor')]);
+    if (sp.from) source = await getCommercialDocument(sp.from);
   } catch {
     redirect('/login');
   }
@@ -29,14 +32,18 @@ export default async function NewGoodsReceiptPage({
         products={form.products}
         partyOptions={form.partyOptions}
         showPurchaseExtras
+        showPurchaseVat
+        vatRegistered={form.vatRegistered}
+        vatRatePercent={form.vatRatePercent}
+        defaultInvoiceKind={source?.invoiceKind || 'commercial'}
         sourceDocumentId={sp.from ?? null}
         brands={form.brands}
           locations={form.locations}
         submitLabel="Save GRN"
         banner={
           form.purchaseSettings.postGrniOnReceipt
-            ? 'Stocks items · posts Dr Inventory / Cr GRNI 2150 when enabled'
-            : 'Stocks physical items · no GL until billed (enable GRNI in Purchase Settings)'
+            ? 'Stocks items · posts Dr Inventory / Cr GRNI 2150 when enabled. Input VAT posts on the bill.'
+            : 'Stocks physical items · no GL until billed (enable GRNI in Purchase Settings). Input VAT posts on the bill.'
         }
       />
     </BookOneShell>

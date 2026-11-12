@@ -46,6 +46,16 @@ export {
 } from './engine/sales-vat';
 export type { SalesTaxProfile } from './engine/sales-vat';
 export {
+  isPurchaseInputVatPostingDocument,
+  isPurchaseCommercialDocument,
+  purchaseDocumentPostsInputVat,
+  ineligibleInputVat,
+  purchaseInputVatRatePercent,
+  postedPurchaseVatRatePercent,
+  expectedPurchaseVat,
+  INELIGIBLE_INPUT_VAT_MESSAGE,
+} from './engine/purchase-vat';
+export {
   POS_PRINT_MODES,
   isPosPrintMode,
   normalizePosPrintMode,

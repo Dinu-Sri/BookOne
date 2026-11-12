@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCommercialDocument } from '@/app/actions/commercial-docs';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
+import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
@@ -14,11 +15,13 @@ export default async function GoodsReceiptDetailPage({
   let tenant;
   let doc;
   let purchaseSettings;
+  let salesSettings;
   try {
-    [tenant, doc, purchaseSettings] = await Promise.all([
+    [tenant, doc, purchaseSettings, salesSettings] = await Promise.all([
       getTenantInfo(),
       getCommercialDocument(id),
       getPurchaseSettings().catch(() => ({ requireSupplierInvoiceNo: false })),
+      getSalesSettings().catch(() => ({ vatRegistered: false, vatRatePercent: 18 })),
     ]);
   } catch {
     redirect('/login');
@@ -35,6 +38,8 @@ export default async function GoodsReceiptDetailPage({
         convertTo={doc.status !== 'converted' ? 'purchase' : undefined}
         convertLabel="To purchase bill"
         requireSupplierInvoiceNo={purchaseSettings.requireSupplierInvoiceNo}
+        vatRegistered={salesSettings.vatRegistered}
+        vatRatePercent={salesSettings.vatRatePercent}
       />
     </BookOneShell>
   );

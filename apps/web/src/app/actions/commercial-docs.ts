@@ -16,8 +16,12 @@ import {
   salesOutputVatRatePercent,
   resolveSalesTaxProfile,
   ineligibleTaxInvoice,
+  ineligibleInputVat,
   salesDocumentPostsOutputVat,
+  purchaseDocumentPostsInputVat,
+  isPurchaseCommercialDocument,
   INELIGIBLE_TAX_INVOICE_MESSAGE,
+  INELIGIBLE_INPUT_VAT_MESSAGE,
   amountInWordsLkr,
   billedQtyAgainstPo,
   remainingQty,
@@ -1847,10 +1851,6 @@ export async function createCommercialDocument(
         linkSourceWithoutConversion: parsed.linkSourceWithoutConversion,
         documentType: parsed.documentType,
       });
-      const isPurchaseSide =
-        isPurchaseBillType(parsed.documentType) ||
-        parsed.documentType === 'cash_purchase' ||
-        parsed.documentType === 'purchase_return';
       const channelHint =
         parsed.saleChannel ?? linkedSource?.saleChannel ?? 'local';
       const vatCfgPreview = await loadSalesVatConfig(
@@ -1858,10 +1858,15 @@ export async function createCommercialDocument(
         channelHint === 'export' ? 'export' : 'local',
       );
       if (parsed.invoiceKind === 'tax_invoice' && !vatCfgPreview.vatRegistered) {
-        const ineligible = ineligibleTaxInvoice({
-          invoiceKind: 'tax_invoice',
-          vatRegistered: false,
-        });
+        const ineligible = isPurchaseCommercialDocument(parsed.documentType)
+          ? ineligibleInputVat({
+              invoiceKind: 'tax_invoice',
+              vatRegistered: false,
+            })
+          : ineligibleTaxInvoice({
+              invoiceKind: 'tax_invoice',
+              vatRegistered: false,
+            });
         if (ineligible) throw new Error(ineligible);
       }
       const taxProfile = resolveSalesTaxProfile({
@@ -1870,14 +1875,18 @@ export async function createCommercialDocument(
         requestedChannel: parsed.saleChannel,
         sourceKind: linkedSource?.invoiceKind,
         sourceChannel: linkedSource?.saleChannel,
-        preferSource: parsed.documentType === 'sales_return' && Boolean(linkedSource),
+        preferSource:
+          (parsed.documentType === 'sales_return' || parsed.documentType === 'purchase_return') &&
+          Boolean(linkedSource),
       });
       const saleChannel = taxProfile.saleChannel;
       const invoiceKind = taxProfile.invoiceKind;
       const appliesSalesVat =
         isSalesInvoiceType || isPosSale || parsed.documentType === 'sales_return';
-      const appliesPurchaseVat =
-        isPurchaseSide && invoiceKind === 'tax_invoice' && parsed.documentType !== 'goods_receipt';
+      const appliesPurchaseVat = purchaseDocumentPostsInputVat({
+        documentType: parsed.documentType,
+        invoiceKind,
+      });
 
       const vatCfg =
         appliesSalesVat || appliesPurchaseVat
@@ -3303,7 +3312,11 @@ export async function convertDocument(
 
       const vatCfg = await loadSalesVatConfig(user.tenantId, source.saleChannel ?? 'local');
       if (options?.invoiceKind === 'tax_invoice' && !vatCfg.vatRegistered) {
-        throw new Error(INELIGIBLE_TAX_INVOICE_MESSAGE);
+        throw new Error(
+          isPurchaseCommercialDocument(targetType)
+            ? INELIGIBLE_INPUT_VAT_MESSAGE
+            : INELIGIBLE_TAX_INVOICE_MESSAGE,
+        );
       }
       const taxProfile = resolveSalesTaxProfile({
         vatRegistered: vatCfg.vatRegistered,
@@ -4876,7 +4889,11 @@ export async function updateCommercialDocumentHeaderFromForm(formData: FormData)
       requestedChannel: channelRaw || doc.saleChannel,
     });
     if (kindRaw === 'tax_invoice' && !vatCfg.vatRegistered) {
-      throw new Error(INELIGIBLE_TAX_INVOICE_MESSAGE);
+      throw new Error(
+        isPurchaseCommercialDocument(doc.documentType)
+          ? INELIGIBLE_INPUT_VAT_MESSAGE
+          : INELIGIBLE_TAX_INVOICE_MESSAGE,
+      );
     }
     await db()
       .update(businessDocuments)

@@ -25,6 +25,7 @@ import { Button, Card } from '@/components/ui/bookone-ui';
 import { PrintPreviewButton } from '@/components/print/print-preview-button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { sourceDocumentHref, sourceDocumentLabel } from '@/lib/source-document';
+import { PurchaseVatFields } from '@/components/purchase/purchase-vat-fields';
 
 const TYPE_LABEL: Record<string, string> = {
   purchase_order: 'Purchase order',
@@ -239,6 +240,14 @@ export function CommercialDocumentDetail({
                   </select>
                 </>
               ) : null}
+              {(convertTo === 'purchase' || convertTo === 'vendor_bill') && vatRegistered ? (
+                <PurchaseVatFields
+                  vatRegistered={vatRegistered}
+                  vatRatePercent={vatRatePercent}
+                  defaultInvoiceKind={doc.invoiceKind || 'commercial'}
+                  compact
+                />
+              ) : null}
               <Button variant="secondary" type="submit" disabled={pending}>
                 {convertLabel ?? 'Convert'}
               </Button>
@@ -303,7 +312,7 @@ export function CommercialDocumentDetail({
               ) : null}
               {doc.taxTotal > 0 ? (
                 <div className="doc-totals-row">
-                  <span>VAT</span>
+                  <span>{isPurchaseDoc ? 'Input VAT' : 'VAT'}</span>
                   <strong>{formatLKR(doc.taxTotal)}</strong>
                 </div>
               ) : null}
@@ -365,6 +374,14 @@ export function CommercialDocumentDetail({
                 <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Tax invoice</span>
                 <div>
                   <strong>{doc.taxInvoiceNumber || doc.documentNumber}</strong>
+                </div>
+              </div>
+            ) : null}
+            {isPurchaseDoc && (vatRegistered || doc.invoiceKind === 'tax_invoice') ? (
+              <div>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Input VAT</span>
+                <div>
+                  <strong>{doc.invoiceKind === 'tax_invoice' ? 'Claim input VAT' : 'No input VAT'}</strong>
                 </div>
               </div>
             ) : null}

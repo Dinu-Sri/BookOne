@@ -32,6 +32,7 @@ export default async function PurchasesPage() {
             payHrefPattern: '/purchase/payments/new?documentId=:id',
             returnHrefPattern: '/purchase/returns/new?from=:id',
             printHrefPattern: '/purchase/print/:id',
+            showPurchaseVatCols: true,
           }}
         />
       </Suspense>

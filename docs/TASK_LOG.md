@@ -1,3 +1,10 @@
+## 2026-11-12 — Purchase input VAT at PO/GRN-to-bill conversion (v2.5.27)
+
+- Record: [CHG-20261112-purchase-vat-conversion](changes/CHG-20261112-purchase-vat-conversion.md). Baseline product `e741a6a` / v2.5.26. Review branch `fix/v2527-purchase-vat-conversion`. Do not merge or deploy in this request. Preserve existing financial records; do not recreate V/N fixtures or alter A/B/original.
+- VAT-registered PO/GRN store intended Claim input VAT without posting. Convert copies the profile; bill conversion can override. Posted bills/cash/returns with the claim post input VAT 2300. Explicit claim without registration is refused with `INELIGIBLE_INPUT_VAT_MESSAGE`. Commercial/no-input purchase stays net 600 / AP 600. Linked returns reverse stored source `vatRate`.
+- Checks: `@bookone/accounting` vitest 16 files / 210 passed (includes purchase-vat conversion profile and sales-vat/POS regressions). `@bookone/accounting` tsc --noEmit passed. Isolated runtime, live browser, QA 136, 30 HTTPS, and fullcheck are not-run here. Mixed-TENDER split not claimed.
+- Next: Medium reviews this exact diff. Owner deploys personally. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-12 — VAT conversion profile and manual POS print (v2.5.26)
 
 - Record: [CHG-20261112-vat-pos-print](changes/CHG-20261112-vat-pos-print.md). Combined qualification execution `42d9671`, closure `be43029`, baseline product `a6eda60` / v2.5.25. Owner authorized push to master for the Docker web image Action. Do not grant fixtures or replay 11 Nov money.

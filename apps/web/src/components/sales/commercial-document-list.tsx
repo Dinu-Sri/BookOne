@@ -54,6 +54,8 @@ export type CommercialListConfig = {
   convertTo?: 'sales_order' | 'sales_invoice' | 'purchase_order' | 'purchase' | 'vendor_bill';
   convertLabel?: string;
   showTaxCols?: boolean;
+  /** Purchase lists: Claim input VAT / No input VAT (not tax-invoice numbering). */
+  showPurchaseVatCols?: boolean;
   /** Example: `/sales/invoices/:id/print` */
   printHrefPattern?: string;
   /** Hide New when the job has read-only access. */
@@ -598,7 +600,7 @@ export function CommercialDocumentList({
                         <SortIcon active={sortKey === 'documentNumber'} dir={sortDir} />
                       </button>
                     </th>
-                    {config.showTaxCols ? <th>Kind</th> : null}
+                    {config.showTaxCols || config.showPurchaseVatCols ? <th>Kind</th> : null}
                     <th>
                       <button type="button" className="th-sort-btn" onClick={() => toggleSort('partyName')}>
                         {config.partyLabel ?? 'Customer'}
@@ -645,6 +647,8 @@ export function CommercialDocumentList({
                             {row.saleChannel === 'export' ? 'Export' : 'Local'}
                           </div>
                         </td>
+                      ) : config.showPurchaseVatCols ? (
+                        <td>{row.invoiceKind === 'tax_invoice' ? 'Input VAT' : 'No input VAT'}</td>
                       ) : null}
                       <td>{row.partyName}</td>
                       <td>{row.issueDate}</td>

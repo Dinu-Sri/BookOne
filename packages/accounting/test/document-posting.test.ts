@@ -259,6 +259,48 @@ describe('vendor bill + purchase return + stock adjustment', () => {
     expect(sumSides(lines)).toEqual({ debit: 1180, credit: 1180 });
   });
 
+  it('PO→GRN→bill 10×60 claimed input VAT: inventory 600, input 108, AP 708 (GRNI off)', () => {
+    const lines = buildVendorBillPosting({
+      total: 600,
+      expenseAccountCode: '6800',
+      isInventoryPurchase: true,
+      vatRatePercent: 18,
+    });
+    expect(lines.find((l) => l.accountCode === '5100' && l.side === 'debit')?.amount).toBe(600);
+    expect(lines.find((l) => l.accountCode === '2300' && l.side === 'debit')?.amount).toBe(108);
+    expect(lines.find((l) => l.accountCode === '2100' && l.side === 'credit')?.amount).toBe(708);
+    expect(lines.some((l) => l.accountCode === '2150')).toBe(false);
+    expect(sumSides(lines)).toEqual({ debit: 708, credit: 708 });
+  });
+
+  it('explicit no-input bill of 10×60 stays AP 600 with no 2300', () => {
+    const lines = buildVendorBillPosting({
+      total: 600,
+      expenseAccountCode: '6800',
+      isInventoryPurchase: true,
+      vatRatePercent: 0,
+    });
+    expect(lines.find((l) => l.accountCode === '5100')?.amount).toBe(600);
+    expect(lines.find((l) => l.accountCode === '2100')?.amount).toBe(600);
+    expect(lines.some((l) => l.accountCode === '2300')).toBe(false);
+    expect(sumSides(lines)).toEqual({ debit: 600, credit: 600 });
+  });
+
+  it('GRNI-on claimed bill clears 2150 once and still posts input VAT 108', () => {
+    const lines = buildVendorBillPosting({
+      total: 600,
+      expenseAccountCode: '6800',
+      isInventoryPurchase: true,
+      vatRatePercent: 18,
+      grniClearAmount: 600,
+    });
+    expect(lines.find((l) => l.accountCode === '2150' && l.side === 'debit')?.amount).toBe(600);
+    expect(lines.some((l) => l.accountCode === '5100')).toBe(false);
+    expect(lines.find((l) => l.accountCode === '2300')?.amount).toBe(108);
+    expect(lines.find((l) => l.accountCode === '2100')?.amount).toBe(708);
+    expect(sumSides(lines)).toEqual({ debit: 708, credit: 708 });
+  });
+
   it('posts cash purchase to inventory/bank without AP', () => {
     const lines = buildCashPurchasePosting({
       total: 300,
@@ -373,6 +415,28 @@ describe('vendor bill + purchase return + stock adjustment', () => {
     expect(lines.find((l) => l.accountCode === '2100')?.amount).toBe(118);
     expect(lines.find((l) => l.accountCode === '2300')?.side).toBe('credit');
     expect(sumSides(lines)).toEqual({ debit: 118, credit: 118 });
+  });
+
+  it('linked return of 2×60 at stored 18% reverses inventory 120 / input 21.60 / AP 141.60', () => {
+    const lines = buildPurchaseReturnPosting({
+      total: 120,
+      isInventoryPurchase: true,
+      vatRatePercent: 18,
+    });
+    expect(lines.find((l) => l.accountCode === '5100' && l.side === 'credit')?.amount).toBe(120);
+    expect(lines.find((l) => l.accountCode === '2300' && l.side === 'credit')?.amount).toBe(21.6);
+    expect(lines.find((l) => l.accountCode === '2100' && l.side === 'debit')?.amount).toBe(141.6);
+    expect(sumSides(lines)).toEqual({ debit: 141.6, credit: 141.6 });
+  });
+
+  it('return after settings 15% still uses stored 18%', () => {
+    const lines = buildPurchaseReturnPosting({
+      total: 120,
+      isInventoryPurchase: true,
+      vatRatePercent: 18,
+    });
+    expect(lines.find((l) => l.accountCode === '2300')?.amount).toBe(21.6);
+    expect(lines.find((l) => l.accountCode === '2100')?.amount).toBe(141.6);
   });
 
   it('posts inventory decrease adjustment', () => {

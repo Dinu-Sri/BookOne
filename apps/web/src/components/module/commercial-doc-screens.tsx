@@ -28,6 +28,7 @@ import {
   type DocLineState,
 } from '@/components/module/document-lines-editor';
 import type { ProductPick } from '@/components/module/product-add-search';
+import { PurchaseVatFields } from '@/components/purchase/purchase-vat-fields';
 import { formatLKR, StatusBadge, todayString } from '@/components/module/list-page';
 import {
   BrandLocationFields,
@@ -186,6 +187,7 @@ export function CommercialDocNewForm({
   showPurchaseVat,
   vatRegistered,
   vatRatePercent,
+  defaultInvoiceKind,
   creditWarning,
   banner,
   submitLabel = 'Save',
@@ -234,6 +236,7 @@ export function CommercialDocNewForm({
   showPurchaseVat?: boolean;
   vatRegistered?: boolean;
   vatRatePercent?: number;
+  defaultInvoiceKind?: string;
   creditWarning?: boolean;
   banner?: string;
   submitLabel?: string;
@@ -521,16 +524,13 @@ export function CommercialDocNewForm({
                 </div>
               </>
             ) : null}
-            {showPurchaseVat && vatRegistered ? (
-              <div className="field">
-                <label>VAT</label>
-                <select className="input" name="invoiceKind" defaultValue="commercial">
-                  <option value="commercial">No input VAT</option>
-                  <option value="tax_invoice">
-                    Claim input VAT ({vatRatePercent ?? 18}%)
-                  </option>
-                </select>
-              </div>
+            {showPurchaseVat ? (
+              <PurchaseVatFields
+                vatRegistered={vatRegistered}
+                vatRatePercent={vatRatePercent ?? 18}
+                defaultInvoiceKind={defaultInvoiceKind}
+                informational={documentType === 'purchase_order' || documentType === 'goods_receipt'}
+              />
             ) : null}
             {showLandedCost ? (
               <>

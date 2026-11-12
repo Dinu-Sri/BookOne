@@ -32,6 +32,7 @@ export default async function GoodsReceiptsPage() {
             printHrefPattern: '/purchase/print/:id',
             convertTo: 'purchase',
             convertLabel: 'To purchase bill',
+            showPurchaseVatCols: true,
           }}
         />
       </Suspense>

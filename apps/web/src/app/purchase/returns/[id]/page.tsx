@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCommercialDocument } from '@/app/actions/commercial-docs';
+import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
@@ -12,8 +13,13 @@ export default async function PurchaseReturnDetailPage({
   const { id } = await params;
   let tenant;
   let doc;
+  let salesSettings;
   try {
-    [tenant, doc] = await Promise.all([getTenantInfo(), getCommercialDocument(id)]);
+    [tenant, doc, salesSettings] = await Promise.all([
+      getTenantInfo(),
+      getCommercialDocument(id),
+      getSalesSettings().catch(() => ({ vatRegistered: false, vatRatePercent: 18 })),
+    ]);
   } catch {
     redirect('/login');
   }
@@ -26,6 +32,8 @@ export default async function PurchaseReturnDetailPage({
         listHref="/purchase/returns"
         listLabel="Purchase returns"
         printHref={`/purchase/print/${doc.id}`}
+        vatRegistered={salesSettings.vatRegistered}
+        vatRatePercent={salesSettings.vatRatePercent}
       />
     </BookOneShell>
   );

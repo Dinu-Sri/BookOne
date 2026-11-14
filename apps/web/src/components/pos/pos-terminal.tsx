@@ -30,7 +30,7 @@ import {
   publishPosDisplay,
 } from '@/lib/pos/customer-display-channel';
 import { createQuickProduct } from '@/app/actions/inventory';
-import { posPrintEffects, posPrintModeLabel } from '@bookone/accounting';
+import { posLinkedReturnPreview, posPrintEffects, posPrintModeLabel } from '@bookone/accounting';
 
 type CartLine = {
   key: string;
@@ -198,31 +198,77 @@ export function PosTerminal({
       .slice(0, 48);
   }, [products, category, query]);
 
-  const subtotal = useMemo(
+  const cartSubtotal = useMemo(
     () => Math.round(cart.reduce((s, l) => s + lineTotal(l), 0) * 100) / 100,
     [cart],
   );
 
-  const discountAmt = useMemo(() => {
+  const saleDiscountAmt = useMemo(() => {
     if (mode === 'return') return 0;
     if (discountId) {
       const d = bootstrap.discounts.find((x) => x.id === discountId);
       if (d) {
         return d.discountType === 'percent'
-          ? Math.round(((subtotal * d.value) / 100) * 100) / 100
-          : Math.min(subtotal, d.value);
+          ? Math.round(((cartSubtotal * d.value) / 100) * 100) / 100
+          : Math.min(cartSubtotal, d.value);
       }
     }
-    return Math.min(subtotal, Math.max(0, headerDiscount));
-  }, [mode, discountId, bootstrap.discounts, subtotal, headerDiscount]);
+    return Math.min(cartSubtotal, Math.max(0, headerDiscount));
+  }, [mode, discountId, bootstrap.discounts, cartSubtotal, headerDiscount]);
 
-  const net = Math.round((subtotal - discountAmt) * 100) / 100;
+  const linkedReturnPreview = useMemo(() => {
+    if (mode !== 'return') return null;
+    return posLinkedReturnPreview({
+      source:
+        sourceTicket && !freeReturn
+          ? {
+              vatRate: sourceTicket.vatRate,
+              discountTotal: sourceTicket.discountTotal,
+              subtotal: sourceTicket.subtotal,
+              lines: sourceTicket.lines.map((l) => ({
+                productId: l.productId,
+                description: l.description,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                discountAmount: l.discountAmount,
+              })),
+              priorReturnLines: sourceTicket.priorReturnLines,
+              alreadyReturnedNet: sourceTicket.alreadyReturnedNet,
+            }
+          : null,
+      cart: cart.map((l) => ({
+        productId: l.productId,
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+      })),
+      freeReturn,
+    });
+  }, [mode, sourceTicket, freeReturn, cart]);
+
+  const returnBlocked = linkedReturnPreview?.kind === 'invalid-quantity';
+  const subtotal =
+    linkedReturnPreview?.kind === 'ok' ? linkedReturnPreview.subtotal : cartSubtotal;
+  const discountAmt =
+    linkedReturnPreview?.kind === 'ok' ? linkedReturnPreview.headerDiscount : saleDiscountAmt;
+  const net =
+    linkedReturnPreview?.kind === 'ok'
+      ? linkedReturnPreview.net
+      : Math.round((cartSubtotal - saleDiscountAmt) * 100) / 100;
   const vatRate =
-    mode === 'sale' && invoiceKind === 'tax_invoice' && bootstrap.vatRegistered
-      ? bootstrap.vatRatePercent
-      : 0;
-  const vat = Math.round(((net * vatRate) / 100) * 100) / 100;
-  const total = Math.round((net + vat) * 100) / 100;
+    linkedReturnPreview?.kind === 'ok'
+      ? linkedReturnPreview.vatRate
+      : mode === 'sale' && invoiceKind === 'tax_invoice' && bootstrap.vatRegistered
+        ? bootstrap.vatRatePercent
+        : 0;
+  const vat =
+    linkedReturnPreview?.kind === 'ok'
+      ? linkedReturnPreview.vat
+      : Math.round(((net * vatRate) / 100) * 100) / 100;
+  const total =
+    linkedReturnPreview?.kind === 'ok'
+      ? linkedReturnPreview.total
+      : Math.round((net + vat) * 100) / 100;
 
   const cashNum = Number(String(cashTendered).replace(/[^0-9.]/g, '')) || 0;
   const change = tender === 'cash' ? Math.max(0, Math.round((cashNum - total) * 100) / 100) : 0;
@@ -596,6 +642,12 @@ export function PosTerminal({
       setError('Lookup a ticket or enable free return');
       return;
     }
+    if (returnBlocked && linkedReturnPreview?.kind === 'invalid-quantity') {
+      setError(
+        `Return qty ${linkedReturnPreview.enteredQty} exceeds remaining ${linkedReturnPreview.remainingQty}`,
+      );
+      return;
+    }
     setError(null);
     setTender('cash');
     setCashTendered(String(total));
@@ -748,6 +800,7 @@ export function PosTerminal({
 
   function completeReturn() {
     if (!shiftId || !registerId) return;
+    if (returnBlocked) return;
     const refundTender = tender === 'mixed' ? 'cash' : tender;
     setError(null);
     startTransition(async () => {
@@ -994,6 +1047,9 @@ export function PosTerminal({
                         <span>
                           {sourceTicket.issueDate} · {sourceTicket.partyName} · LKR{' '}
                           {money(sourceTicket.total)}
+                          {sourceTicket.invoiceKind === 'tax_invoice' && sourceTicket.vatRate > 0
+                            ? ` · TAX ${sourceTicket.vatRate}%`
+                            : ''}
                         </span>
                       </div>
                       <button
@@ -1181,9 +1237,12 @@ export function PosTerminal({
               ) : null}
             </div>
 
-            {mode === 'return' && sourceTicket ? (
+            {mode === 'return' && sourceTicket && !freeReturn ? (
               <p className="pos-cart-banner">
                 Returning from <strong>{sourceTicket.documentNumber}</strong>
+                {sourceTicket.invoiceKind === 'tax_invoice' && sourceTicket.vatRate > 0
+                  ? ` · original TAX ${sourceTicket.vatRate}%`
+                  : ' · original commercial'}
               </p>
             ) : null}
             {mode === 'return' && freeReturn ? (
@@ -1317,7 +1376,7 @@ export function PosTerminal({
                   <span>Subtotal</span>
                   <strong>LKR {money(subtotal)}</strong>
                 </div>
-                {mode === 'sale' ? (
+                {mode === 'sale' || discountAmt > 0 ? (
                   <div>
                     <span>Discount</span>
                     <strong>LKR {money(discountAmt)}</strong>
@@ -1328,6 +1387,12 @@ export function PosTerminal({
                     <span>VAT {vatRate}%</span>
                     <strong>LKR {money(vat)}</strong>
                   </div>
+                ) : null}
+                {returnBlocked && linkedReturnPreview?.kind === 'invalid-quantity' ? (
+                  <p className="pos-muted" style={{ margin: '4px 0 0' }}>
+                    Qty {linkedReturnPreview.enteredQty} exceeds remaining{' '}
+                    {linkedReturnPreview.remainingQty} on this ticket.
+                  </p>
                 ) : null}
                 <div className="grand">
                   <span>{mode === 'return' ? 'Refund total' : 'Total'}</span>
@@ -1342,7 +1407,7 @@ export function PosTerminal({
                   type="button"
                   className={`pos-btn primary pay ${mode === 'return' ? 'refund' : ''}`}
                   onClick={openPay}
-                  disabled={cart.length === 0 || pending}
+                  disabled={cart.length === 0 || pending || returnBlocked}
                 >
                   {mode === 'return' ? `REFUND · LKR ${money(total)}` : `PAY · LKR ${money(total)}`}
                 </button>
@@ -1555,7 +1620,7 @@ export function PosTerminal({
             <button
               type="button"
               className={`pos-btn primary pay wide ${mode === 'return' ? 'refund' : ''}`}
-              disabled={pending}
+              disabled={pending || returnBlocked}
               onClick={mode === 'return' ? completeReturn : completeSale}
             >
               {pending

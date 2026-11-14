@@ -55,6 +55,12 @@ export {
   expectedPurchaseVat,
   INELIGIBLE_INPUT_VAT_MESSAGE,
 } from './engine/purchase-vat';
+export { posLinkedReturnPreview } from './pos-linked-return';
+export type {
+  PosLinkedReturnSource,
+  PosReturnCartLine,
+  PosLinkedReturnPreview,
+} from './pos-linked-return';
 export {
   POS_PRINT_MODES,
   isPosPrintMode,

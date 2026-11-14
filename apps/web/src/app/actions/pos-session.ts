@@ -323,6 +323,7 @@ export interface PosTicketLine {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  discountAmount: number;
   /** Remaining qty available to return */
   remainingQty: number;
 }
@@ -333,8 +334,15 @@ export interface PosTicket {
   issueDate: string;
   partyName: string;
   total: number;
+  subtotal: number;
+  discountTotal: number;
+  taxTotal: number;
+  vatRate: number;
+  invoiceKind: string;
   paymentMode: string | null;
   status: string;
+  alreadyReturnedNet: number;
+  priorReturnLines: { productId: string | null; description: string; quantity: number }[];
   lines: PosTicketLine[];
 }
 
@@ -396,7 +404,7 @@ export async function lookupPosSale(query: string): Promise<{
 
     const user = await requireTenantContext();
     return withTenantContext(user.tenantId, async () => {
-      const { businessDocuments, businessDocumentLines, parties, sql } = await import('@bookone/db');
+      const { businessDocuments, businessDocumentLines, parties, sql, or } = await import('@bookone/db');
 
       const conditions = [
         eq(businessDocuments.tenantId, user.tenantId),
@@ -452,18 +460,26 @@ export async function lookupPosSale(query: string): Promise<{
 
       // Sum already returned qty per product/description from linked returns
       const priorReturns = await db()
-        .select({ id: businessDocuments.id })
+        .select({
+          id: businessDocuments.id,
+          subtotal: businessDocuments.subtotal,
+        })
         .from(businessDocuments)
         .where(
           and(
             eq(businessDocuments.tenantId, user.tenantId),
             eq(businessDocuments.documentType, 'sales_return'),
-            eq(businessDocuments.sourcePosSaleId, doc.id),
             isNull(businessDocuments.voidedAt),
+            or(
+              eq(businessDocuments.sourcePosSaleId, doc.id),
+              eq(businessDocuments.sourceDocumentId, doc.id),
+            ),
           ),
         );
 
       const returnedByKey = new Map<string, number>();
+      const priorReturnLines: { productId: string | null; description: string; quantity: number }[] =
+        [];
       for (const ret of priorReturns) {
         const retLines = await db()
           .select()
@@ -476,7 +492,13 @@ export async function lookupPosSale(query: string): Promise<{
           );
         for (const rl of retLines) {
           const key = `${rl.productId ?? ''}|${rl.description}`;
-          returnedByKey.set(key, (returnedByKey.get(key) ?? 0) + Number(rl.quantity));
+          const qty = Number(rl.quantity);
+          returnedByKey.set(key, (returnedByKey.get(key) ?? 0) + qty);
+          priorReturnLines.push({
+            productId: rl.productId,
+            description: rl.description,
+            quantity: qty,
+          });
         }
       }
 
@@ -492,6 +514,7 @@ export async function lookupPosSale(query: string): Promise<{
           quantity: sold,
           unitPrice: Number(l.unitPrice),
           lineTotal: Number(l.lineTotal),
+          discountAmount: Number(l.discountAmount) || 0,
           remainingQty: remaining,
         };
       });
@@ -509,8 +532,15 @@ export async function lookupPosSale(query: string): Promise<{
           issueDate: doc.issueDate,
           partyName: party?.name ?? 'Walk-in',
           total: Number(doc.total),
+          subtotal: Number(doc.subtotal) || 0,
+          discountTotal: Number(doc.discountTotal) || 0,
+          taxTotal: Number(doc.taxTotal) || 0,
+          vatRate: Number(doc.vatRate) || 0,
+          invoiceKind: doc.invoiceKind ?? 'commercial',
           paymentMode: doc.paymentMode,
           status: doc.status,
+          alreadyReturnedNet: priorReturns.reduce((s, row) => s + Number(row.subtotal), 0),
+          priorReturnLines,
           lines: ticketLines,
         },
       };

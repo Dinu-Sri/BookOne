@@ -1,3 +1,10 @@
+## 2026-11-14 — POS linked-return preview uses original VAT (v2.5.28)
+
+- Record: [CHG-20261114-pos-linked-return-vat](changes/CHG-20261114-pos-linked-return-vat.md). Baseline product `dae17ab` / v2.5.27. CONT10 frozen QA `d100734`. Owner asked this candidate to be pushed to master for the Docker web image Action. Do not repair QA history or replay S01/E28/E29.
+- Linked POS return cart, payment modal and Complete refund use the original ticket stored `vatRate` / remaining caps. TAX 2×100 selecting 1 unit shows **118** (VAT 18). Commercial/zero-VAT stays 100. Free returns stay net-only. New-sale invoice kind and live company rate are not used to reprice historical returns. Server linked `sales_return` already reversed stored source VAT; that path is unchanged.
+- Checks: `@bookone/accounting` vitest 17 files / 223 passed (includes pos-linked-return preview 118/47.20/94.40/165.20 and sales-vat/POS print regressions). `@bookone/accounting` tsc --noEmit passed. Isolated runtime and live browser not-run. Mixed-TENDER split not claimed.
+- Next: Owner waits for Docker web image green, then Portainer Update with Re-pull ON. QA binds newly dated E30–E37 on the current persisted originals/shift. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-12 — Purchase input VAT at PO/GRN-to-bill conversion (v2.5.27)
 
 - Record: [CHG-20261112-purchase-vat-conversion](changes/CHG-20261112-purchase-vat-conversion.md). Baseline product `e741a6a` / v2.5.26. Review branch `fix/v2527-purchase-vat-conversion`. Do not merge or deploy in this request. Preserve existing financial records; do not recreate V/N fixtures or alter A/B/original.

@@ -11,6 +11,7 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Button } from '@/components/ui/bookone-ui';
 import { formatDocumentNumber } from '@/lib/document-number';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function CompanySalesSettingsPage() {
   let tenant;
@@ -33,6 +34,8 @@ export default async function CompanySalesSettingsPage() {
     redirect('/login');
   }
 
+  const canWrite = jobCanWrite(tenant, 'Sales Settings');
+
   return (
     <BookOneShell active="Sales Settings" tenant={tenant}>
       <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
@@ -50,7 +53,8 @@ export default async function CompanySalesSettingsPage() {
               VAT &amp; invoice defaults
             </span>
           </div>
-          <form action={saveSalesSettingsFromForm} className="party-form-body">
+          <form action={canWrite ? saveSalesSettingsFromForm : undefined} className="party-form-body">
+            <fieldset disabled={!canWrite} style={{ border: 0, margin: 0, padding: 0, minInlineSize: 0 }}>
             <div className="party-tab-panel">
               <div className="party-tab-grid">
                 <div className="field">
@@ -208,11 +212,18 @@ export default async function CompanySalesSettingsPage() {
                 </div>
               </div>
             </div>
-            <div className="party-form-footer">
-              <Button variant="primary" type="submit">
-                Save VAT settings
-              </Button>
-            </div>
+            </fieldset>
+            {canWrite ? (
+              <div className="party-form-footer">
+                <Button variant="primary" type="submit">
+                  Save VAT settings
+                </Button>
+              </div>
+            ) : (
+              <div className="party-form-footer">
+                <p className="party-hint">Read-only — this job cannot change VAT settings.</p>
+              </div>
+            )}
           </form>
         </div>
 
@@ -252,25 +263,29 @@ export default async function CompanySalesSettingsPage() {
                           : '—'}
                       </td>
                       <td>
-                        <form action={savePosRegisterFromForm} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <input type="hidden" name="id" value={r.id} />
-                          <input type="hidden" name="code" value={r.code} />
-                          <input type="hidden" name="name" value={r.name} />
-                          <input type="hidden" name="locationId" value={r.locationId ?? ''} />
-                          <input type="hidden" name="thermalDeviceHint" value={r.thermalDeviceHint ?? ''} />
-                          <input type="hidden" name="receiptFooter" value={r.receiptFooter ?? ''} />
-                          <input type="hidden" name="defaultPaymentAccountCode" value={r.defaultPaymentAccountCode} />
-                          {r.isActive ? <input type="hidden" name="isActive" value="on" /> : null}
-                          <select className="input" name="printMode" defaultValue={r.printMode} aria-label={`Print mode for ${r.code}`}>
-                            <option value="browser">Browser print</option>
-                            <option value="thermal">Thermal only</option>
-                            <option value="both">Both (thermal + browser)</option>
-                            <option value="manual">Manual / preview only</option>
-                          </select>
-                          <Button variant="ghost" type="submit">
-                            Save
-                          </Button>
-                        </form>
+                        {canWrite ? (
+                          <form action={savePosRegisterFromForm} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input type="hidden" name="id" value={r.id} />
+                            <input type="hidden" name="code" value={r.code} />
+                            <input type="hidden" name="name" value={r.name} />
+                            <input type="hidden" name="locationId" value={r.locationId ?? ''} />
+                            <input type="hidden" name="thermalDeviceHint" value={r.thermalDeviceHint ?? ''} />
+                            <input type="hidden" name="receiptFooter" value={r.receiptFooter ?? ''} />
+                            <input type="hidden" name="defaultPaymentAccountCode" value={r.defaultPaymentAccountCode} />
+                            {r.isActive ? <input type="hidden" name="isActive" value="on" /> : null}
+                            <select className="input" name="printMode" defaultValue={r.printMode} aria-label={`Print mode for ${r.code}`}>
+                              <option value="browser">Browser print</option>
+                              <option value="thermal">Thermal only</option>
+                              <option value="both">Both (thermal + browser)</option>
+                              <option value="manual">Manual / preview only</option>
+                            </select>
+                            <Button variant="ghost" type="submit">
+                              Save
+                            </Button>
+                          </form>
+                        ) : (
+                          <span>{r.printMode}</span>
+                        )}
                         {r.thermalDeviceHint ? (
                           <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{r.thermalDeviceHint}</div>
                         ) : null}
@@ -278,14 +293,16 @@ export default async function CompanySalesSettingsPage() {
                       <td>{r.defaultPaymentAccountCode}</td>
                       <td>{r.isActive ? 'Yes' : 'No'}</td>
                       <td>
-                        <div className="party-row-actions">
-                          <form action={archivePosRegisterFromForm}>
-                            <input type="hidden" name="id" value={r.id} />
-                            <Button variant="ghost" type="submit">
-                              Archive
-                            </Button>
-                          </form>
-                        </div>
+                        {canWrite ? (
+                          <div className="party-row-actions">
+                            <form action={archivePosRegisterFromForm}>
+                              <input type="hidden" name="id" value={r.id} />
+                              <Button variant="ghost" type="submit">
+                                Archive
+                              </Button>
+                            </form>
+                          </div>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -293,6 +310,7 @@ export default async function CompanySalesSettingsPage() {
               </table>
             </div>
 
+            {canWrite ? (
             <form action={savePosRegisterFromForm}>
               <div className="doc-form-header">
                 <div className="field">
@@ -352,6 +370,7 @@ export default async function CompanySalesSettingsPage() {
                 </Button>
               </div>
             </form>
+            ) : null}
           </div>
         </div>
       </div>

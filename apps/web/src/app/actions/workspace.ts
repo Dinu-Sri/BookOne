@@ -22,11 +22,13 @@ import {
 import {
   CASH_ACCOUNT_CODES,
   composeFinancialStatements,
+  composeVatSummary,
   journalDateWindow,
   signedAccountBalance,
   signedCashFlow,
   type BalanceMode,
   type StatementRow,
+  type VatReportSummary,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
@@ -828,6 +830,7 @@ export interface ReportsData {
   generalLedger: JournalEntryRow[];
   asOfPeriod: string;
   trialBalanceBasis: 'closing';
+  vat: VatReportSummary;
 }
 
 function toStatementRow(b: AccountBalance): StatementRow {
@@ -859,6 +862,18 @@ export async function getReports(period?: string): Promise<ReportsData> {
   });
   const moneyIn = cashMovement.moneyIn;
   const moneyOut = cashMovement.moneyOut;
+  const generalLedger = await listJournalEntries(period);
+  const vatCorrespondence = generalLedger.flatMap((entry) =>
+    entry.lines.map((line) => ({
+      date: entry.entryDate,
+      party: entry.party,
+      memo: line.memo || entry.memo || '',
+      accountCode: line.accountCode,
+      accountName: line.accountName,
+      side: line.side,
+      amount: line.amount,
+    })),
+  );
 
   return {
     trialBalance: statements.trialBalance,
@@ -871,8 +886,18 @@ export async function getReports(period?: string): Promise<ReportsData> {
       netCashFlow: moneyIn - moneyOut,
       transactionCount: cashMovement.lineCount,
     },
-    generalLedger: await listJournalEntries(period),
+    generalLedger,
     asOfPeriod: selectedPeriod ?? 'all',
+    vat: composeVatSummary({
+      periodBalances: periodBalances.map((row) => ({
+        accountCode: row.code,
+        accountName: row.name,
+        debit: row.debit,
+        credit: row.credit,
+        balance: row.balance,
+      })),
+      correspondence: vatCorrespondence,
+    }),
   };
 }
 

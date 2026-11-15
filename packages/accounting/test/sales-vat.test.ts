@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   INELIGIBLE_TAX_INVOICE_MESSAGE,
   expectedInvoiceVat,
+  salesDocumentPresentation,
   ineligibleTaxInvoice,
   lineIsOutputTaxable,
   postedSalesVatRatePercent,
@@ -172,5 +173,41 @@ describe('VAT profile through quote → order → invoice', () => {
         exportRatePercent: 0,
       }),
     ).toEqual({ vatRate: 0, vatAmount: 0, invoiceTotal: 1000 });
+  });
+
+  it('keeps quote and order type separate from tax-invoice numbering', () => {
+    const quote = salesDocumentPresentation({
+      documentType: 'quotation',
+      invoiceKind: 'tax_invoice',
+      documentNumber: 'QT-0001',
+      taxInvoiceNumber: null,
+      posted: false,
+    });
+    expect(quote.typeLabel).toBe('Quotation');
+    expect(quote.postsOutputVat).toBe(false);
+    expect(quote.taxNumberLabel).toBeNull();
+    expect(quote.taxNumberValue).toBeNull();
+    expect(quote.taxTreatmentLabel).toContain('Intended tax invoice');
+
+    const order = salesDocumentPresentation({
+      documentType: 'sales_order',
+      invoiceKind: 'tax_invoice',
+      documentNumber: 'SO-0001',
+      posted: false,
+    });
+    expect(order.typeLabel).toBe('Sales order');
+    expect(order.taxNumberValue).toBeNull();
+
+    const invoice = salesDocumentPresentation({
+      documentType: 'sales_invoice',
+      invoiceKind: 'tax_invoice',
+      documentNumber: 'INV-0001',
+      taxInvoiceNumber: '26NOV_01/1',
+      posted: true,
+    });
+    expect(invoice.typeLabel).toBe('Invoice');
+    expect(invoice.taxTreatmentLabel).toBe('Tax invoice');
+    expect(invoice.taxNumberLabel).toBe('Tax invoice no.');
+    expect(invoice.taxNumberValue).toBe('26NOV_01/1');
   });
 });

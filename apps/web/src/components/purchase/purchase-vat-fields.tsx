@@ -7,6 +7,8 @@ export function PurchaseVatFields({
   informational = false,
   compact = false,
   hint,
+  value,
+  onChange,
 }: {
   vatRegistered?: boolean;
   vatRatePercent?: number;
@@ -14,11 +16,24 @@ export function PurchaseVatFields({
   informational?: boolean;
   compact?: boolean;
   hint?: string;
+  value?: string;
+  onChange?: (kind: 'commercial' | 'tax_invoice') => void;
 }) {
   if (!vatRegistered) return null;
-  const kind = defaultInvoiceKind === 'tax_invoice' ? 'tax_invoice' : 'commercial';
+  const kind = (value ?? defaultInvoiceKind) === 'tax_invoice' ? 'tax_invoice' : 'commercial';
   const select = (
-    <select className="input" name="invoiceKind" defaultValue={kind} aria-label="Input VAT" style={compact ? { minWidth: 180 } : undefined}>
+    <select
+      className="input"
+      name="invoiceKind"
+      {...(onChange ? { value: kind } : { defaultValue: kind })}
+      aria-label="Input VAT"
+      style={compact ? { minWidth: 180 } : undefined}
+      onChange={
+        onChange
+          ? (e) => onChange(e.target.value === 'tax_invoice' ? 'tax_invoice' : 'commercial')
+          : undefined
+      }
+    >
       <option value="commercial">No input VAT</option>
       <option value="tax_invoice">Claim input VAT ({vatRatePercent}%)</option>
     </select>

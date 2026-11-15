@@ -5,12 +5,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { payVendorBills } from '@/app/actions/documents';
 import type { OpenApBill } from '@/app/actions/commercial-docs';
-import {
-  PAYMENT_OVER_BALANCE_MESSAGE,
-  parsePaymentAmount,
-  paymentAllocationsHaveOverBalance,
-  paymentAmountExceedsBalance,
-} from '@bookone/accounting';
+import { validatePaymentAllocationBatch } from '@bookone/accounting';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import { AllocationAmountField } from '@/components/payments/allocation-amount-field';
 import { pushStatusToast } from '@/components/layout/status-toast';
@@ -51,19 +46,11 @@ export function PayVendorsForm({
     return init;
   });
 
-  const totalPay = useMemo(() => {
-    let t = 0;
-    for (const b of bills) {
-      if (!selected[b.id]) continue;
-      t += parsePaymentAmount(amounts[b.id]);
-    }
-    return Math.round(t * 100) / 100;
-  }, [bills, selected, amounts]);
-
-  const overBalance = useMemo(
+  const batch = useMemo(
     () =>
-      paymentAllocationsHaveOverBalance(
+      validatePaymentAllocationBatch(
         bills.map((b) => ({
+          documentId: b.id,
           selected: Boolean(selected[b.id]),
           amountRaw: amounts[b.id] ?? '',
           balanceDue: b.balanceDue,
@@ -71,6 +58,8 @@ export function PayVendorsForm({
       ),
     [bills, selected, amounts],
   );
+  const totalPay = batch.total;
+  const fieldError = batch.hasFieldError;
 
   function toggle(id: string, balance: number) {
     setSelected((prev) => {
@@ -83,26 +72,16 @@ export function PayVendorsForm({
   }
 
   function submit() {
-    const allocations = bills
-      .filter((b) => selected[b.id])
-      .map((b) => ({
-        documentId: b.id,
-        amount: parsePaymentAmount(amounts[b.id]),
-      }))
-      .filter((a) => a.amount > 0);
-
-    if (allocations.length === 0) {
-      pushStatusToast({ kind: 'error', message: 'Select at least one bill and enter an amount.' });
+    if (!batch.canSubmit) {
+      pushStatusToast({
+        kind: 'error',
+        message: batch.hasFieldError
+          ? 'Correct the highlighted amounts before recording the payment.'
+          : 'Select at least one bill and enter an amount.',
+      });
       return;
     }
-    const over = allocations.find((a) => {
-      const bill = bills.find((b) => b.id === a.documentId);
-      return bill != null && paymentAmountExceedsBalance(a.amount, bill.balanceDue);
-    });
-    if (over) {
-      pushStatusToast({ kind: 'error', message: PAYMENT_OVER_BALANCE_MESSAGE });
-      return;
-    }
+    const allocations = batch.validAllocations;
 
     startTransition(() => {
       void withFormPending(async () => {
@@ -245,10 +224,9 @@ export function PayVendorsForm({
           >
             <div>
               <strong>Total payment: {formatLKR(totalPay)}</strong>
-              {overBalance ? (
+              {fieldError ? (
                 <p className="form-error" role="alert" style={{ margin: '4px 0 0', fontSize: 12 }}>
-                  {PAYMENT_OVER_BALANCE_MESSAGE} Correct the highlighted amount. Values are not reduced
-                  automatically.
+                  Correct the highlighted amounts. Preview and submit use the same valid rows.
                 </p>
               ) : null}
             </div>
@@ -261,7 +239,7 @@ export function PayVendorsForm({
               <Button
                 variant="primary"
                 type="button"
-                disabled={pending || totalPay <= 0 || overBalance}
+                disabled={pending || !batch.canSubmit}
                 onClick={submit}
               >
                 {pending ? 'Posting…' : 'Record payment'}

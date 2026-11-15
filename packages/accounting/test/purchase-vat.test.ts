@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   INELIGIBLE_INPUT_VAT_MESSAGE,
   expectedPurchaseVat,
+  purchasePreviewTotals,
   ineligibleInputVat,
   postedPurchaseVatRatePercent,
   purchaseDocumentPostsInputVat,
@@ -209,5 +210,93 @@ describe('PO → GRN → bill input VAT profile', () => {
     expect(qtyExceedsRemaining(10, remainingBill)).toBe(true);
     expect(qtyExceedsRemaining(1, remainingReceive)).toBe(true);
     expect(qtyExceedsRemaining(0, remainingBill)).toBe(false);
+  });
+
+  it('unsaved claimed purchase 2×60 previews net 120, VAT 21.60, payable 141.60', () => {
+    expect(
+      purchasePreviewTotals({
+        documentType: 'purchase',
+        invoiceKind: 'tax_invoice',
+        vatRegistered: true,
+        ratePercent: 18,
+        net: 120,
+      }),
+    ).toEqual({
+      net: 120,
+      vatRate: 18,
+      vatAmount: 21.6,
+      payableGross: 141.6,
+      postsInputVat: true,
+      informational: false,
+    });
+    expect(
+      purchasePreviewTotals({
+        documentType: 'cash_purchase',
+        invoiceKind: 'tax_invoice',
+        vatRegistered: true,
+        ratePercent: 18,
+        net: 120,
+      }).payableGross,
+    ).toBe(141.6);
+  });
+
+  it('PO/GRN claim stays informational net 120 with bill VAT 21.60', () => {
+    const po = purchasePreviewTotals({
+      documentType: 'purchase_order',
+      invoiceKind: 'tax_invoice',
+      vatRegistered: true,
+      ratePercent: 18,
+      net: 120,
+    });
+    expect(po.postsInputVat).toBe(false);
+    expect(po.informational).toBe(true);
+    expect(po.payableGross).toBe(120);
+    expect(po.vatAmount).toBe(21.6);
+    expect(
+      purchasePreviewTotals({
+        documentType: 'goods_receipt',
+        invoiceKind: 'tax_invoice',
+        vatRegistered: true,
+        ratePercent: 18,
+        net: 120,
+      }).informational,
+    ).toBe(true);
+  });
+
+  it('commercial, non-VAT, discounted and cents purchases follow posting policy', () => {
+    expect(
+      purchasePreviewTotals({
+        documentType: 'purchase',
+        invoiceKind: 'commercial',
+        vatRegistered: true,
+        ratePercent: 18,
+        net: 120,
+      }).payableGross,
+    ).toBe(120);
+    expect(
+      purchasePreviewTotals({
+        documentType: 'purchase',
+        invoiceKind: 'tax_invoice',
+        vatRegistered: false,
+        ratePercent: 18,
+        net: 120,
+      }).payableGross,
+    ).toBe(120);
+    expect(
+      purchasePreviewTotals({
+        documentType: 'purchase',
+        invoiceKind: 'tax_invoice',
+        vatRegistered: true,
+        ratePercent: 18,
+        net: 114, // 120 less 6 discount
+      }),
+    ).toEqual({
+      net: 114,
+      vatRate: 18,
+      vatAmount: 20.52,
+      payableGross: 134.52,
+      postsInputVat: true,
+      informational: false,
+    });
   });
 });

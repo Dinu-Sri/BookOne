@@ -4,8 +4,11 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
   isLiquidTenderCode,
+  isTwoDecimalCurrencyAmount,
+  PAYMENT_INVALID_AMOUNT_MESSAGE,
   PAYMENT_OVER_BALANCE_MESSAGE,
   paymentAmountExceedsBalance,
+  parsePaymentAmountStrict,
 } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -50,11 +53,21 @@ const documentInputSchema = z.object({
   notes: z.string().max(1000).optional(),
 });
 
+const allocationAmountSchema = z
+  .number()
+  .positive()
+  .refine((n) => isTwoDecimalCurrencyAmount(n), PAYMENT_INVALID_AMOUNT_MESSAGE);
+
 const allocationInputSchema = z.object({
   documentId: z.string().uuid(),
   paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   paymentAccountCode: z.string().min(1).max(20),
-  amount: z.number().positive(),
+  amount: allocationAmountSchema,
+});
+
+const batchAllocationSchema = z.object({
+  documentId: z.string().uuid(),
+  amount: allocationAmountSchema,
 });
 
 export interface DocumentRow {
@@ -80,9 +93,8 @@ export interface DocumentSummary {
 }
 
 function parseMoney(value: FormDataEntryValue | null): number {
-  const cleaned = String(value ?? '').replace(/[^0-9.-]/g, '');
-  const amount = Number.parseFloat(cleaned);
-  return Number.isFinite(amount) ? amount : 0;
+  const parsed = parsePaymentAmountStrict(String(value ?? ''));
+  return parsed.ok ? parsed.amount : 0;
 }
 
 function documentPrefix(type: z.infer<typeof documentTypeSchema>) {
@@ -438,6 +450,9 @@ async function allocateDocumentPaymentBody(
   await assertPermission(isInvoice ? 'sales.payments.write' : 'purchase.payments.write', 'write');
   await assertDimensionScope({ locationId: document.locationId, brandId: document.brandId });
   const balanceDue = Number(document.balanceDue);
+  if (!isTwoDecimalCurrencyAmount(parsed.amount)) {
+    throw new Error(PAYMENT_INVALID_AMOUNT_MESSAGE);
+  }
   if (paymentAmountExceedsBalance(parsed.amount, balanceDue)) {
     throw new Error(PAYMENT_OVER_BALANCE_MESSAGE);
   }
@@ -613,7 +628,7 @@ export async function payVendorBills(input: {
     await assertPermission('purchase.payments.write', 'write');
     const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(input.paymentDate);
     const account = z.string().min(1).max(20).parse(input.paymentAccountCode);
-    const allocations = input.allocations.filter((a) => a.amount > 0);
+    const allocations = z.array(batchAllocationSchema).parse(input.allocations);
     if (allocations.length === 0) return { ok: false, error: 'Select at least one bill with an amount.', paidCount: 0 };
 
     const user = await requireTenantContext();
@@ -660,7 +675,7 @@ export async function receiveCustomerPayments(input: {
     tenantId = user.tenantId;
     const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(input.paymentDate);
     const account = z.string().min(1).max(20).parse(input.paymentAccountCode);
-    const allocations = input.allocations.filter((a) => a.amount > 0);
+    const allocations = z.array(batchAllocationSchema).parse(input.allocations);
     const { paymentFingerprintConflicts, paymentOperationFingerprint } = await import(
       '@/lib/payment-idempotency'
     );

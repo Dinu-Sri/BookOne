@@ -5,6 +5,7 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { RentalOpsPanel } from '@/components/inventory/rental-ops-panel';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,8 +30,9 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         listHref="/sales/invoices"
         listLabel="Invoices"
         printHref={`/sales/invoices/${doc.id}/print`}
+        canWrite={jobCanWrite(tenant, 'Sales Invoices')}
         payHref={
-          doc.balanceDue > 0.005 && doc.transactionId
+          jobCanWrite(tenant, 'Receive Payments') && doc.balanceDue > 0.005 && doc.transactionId
             ? `/sales/payments/new?documentId=${doc.id}`
             : null
         }

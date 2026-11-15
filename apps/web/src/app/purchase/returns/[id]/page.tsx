@@ -4,6 +4,7 @@ import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function PurchaseReturnDetailPage({
   params,
@@ -34,6 +35,7 @@ export default async function PurchaseReturnDetailPage({
         printHref={`/purchase/print/${doc.id}`}
         vatRegistered={salesSettings.vatRegistered}
         vatRatePercent={salesSettings.vatRatePercent}
+        canWrite={jobCanWrite(tenant, 'Purchase Returns')}
       />
     </BookOneShell>
   );

@@ -23,10 +23,13 @@ import {
   percentDiscountOver100,
   persistedDocumentBreakdown,
   creditPrintTitle,
+  PAYMENT_INVALID_AMOUNT_MESSAGE,
   PAYMENT_OVER_BALANCE_MESSAGE,
   parsePaymentAmount,
+  parsePaymentAmountStrict,
   paymentAmountExceedsBalance,
   paymentAllocationFieldError,
+  validatePaymentAllocationBatch,
   paymentAllocationsHaveOverBalance,
   HEADER_DISCOUNT_EXCEEDS_NET_MESSAGE,
   PERCENT_DISCOUNT_OVER_100_MESSAGE,
@@ -1142,12 +1145,104 @@ describe('payment allocation over-balance feedback', () => {
     expect(paymentAllocationsHaveOverBalance(invalid)).toBe(true);
   });
 
-  it('ignores deselected rows and accepts exact cents within epsilon', () => {
+  it('ignores deselected rows and accepts exact cents', () => {
     expect(paymentAllocationsHaveOverBalance([{ selected: false, amountRaw: '999', balanceDue: 80 }])).toBe(
       false,
     );
-    expect(paymentAmountExceedsBalance(80.005, 80)).toBe(false);
     expect(paymentAmountExceedsBalance(80.01, 80)).toBe(true);
     expect(parsePaymentAmount('80.00')).toBe(80);
+  });
+});
+
+describe('strict payment row validation and identical preview/submit batch', () => {
+  const invalid = [
+    '',
+    '0',
+    '-1',
+    'abc',
+    '1abc',
+    'Infinity',
+    'NaN',
+    '1.001',
+  ];
+
+  it('rejects blank, zero, negative, nonnumeric, nonfinite, and excess precision', () => {
+    for (const raw of invalid) {
+      expect(parsePaymentAmountStrict(raw).ok).toBe(false);
+      expect(paymentAllocationFieldError(raw, 141.6, true)).toBe(PAYMENT_INVALID_AMOUNT_MESSAGE);
+    }
+    expect(parsePaymentAmount('1abc')).toBe(0);
+    expect(parsePaymentAmountStrict(Number.POSITIVE_INFINITY).ok).toBe(false);
+    expect(parsePaymentAmountStrict(Number.NaN).ok).toBe(false);
+  });
+
+  it('accepts valid cents, equal cap, and thousands separators', () => {
+    expect(parsePaymentAmountStrict('141.60')).toEqual({ ok: true, amount: 141.6, cents: 14160 });
+    expect(parsePaymentAmountStrict('708')).toEqual({ ok: true, amount: 708, cents: 70800 });
+    expect(parsePaymentAmountStrict('1,234.56')).toEqual({ ok: true, amount: 1234.56, cents: 123456 });
+    expect(paymentAllocationFieldError('141.60', 141.6, true)).toBeNull();
+    expect(paymentAllocationFieldError('141.61', 141.6, true)).toBe(PAYMENT_OVER_BALANCE_MESSAGE);
+  });
+
+  it('ignores a deselected invalid row and keeps the valid selected sibling', () => {
+    const batch = validatePaymentAllocationBatch([
+      { documentId: 'a', selected: false, amountRaw: '-1', balanceDue: 708 },
+      { documentId: 'b', selected: true, amountRaw: '141.60', balanceDue: 141.6 },
+    ]);
+    expect(batch.hasFieldError).toBe(false);
+    expect(batch.canSubmit).toBe(true);
+    expect(batch.total).toBe(141.6);
+    expect(batch.validAllocations).toEqual([{ documentId: 'b', amount: 141.6 }]);
+  });
+
+  it('AR mixed valid/invalid uses one collection: total 0, submit blocked, payload empty', () => {
+    const batch = validatePaymentAllocationBatch([
+      { documentId: 'ar-708', selected: true, amountRaw: '-1', balanceDue: 708 },
+      { documentId: 'ar-141', selected: true, amountRaw: '141.60', balanceDue: 141.6 },
+    ]);
+    expect(batch.hasFieldError).toBe(true);
+    expect(batch.canSubmit).toBe(false);
+    expect(batch.total).toBe(0);
+    expect(batch.rows[0]?.error).toBe(PAYMENT_INVALID_AMOUNT_MESSAGE);
+    expect(batch.rows[1]?.error).toBeNull();
+  });
+
+  it('AP mixed valid/invalid matches the same preview and payload', () => {
+    const batch = validatePaymentAllocationBatch([
+      { documentId: 'ap-708', selected: true, amountRaw: '-1', balanceDue: 708 },
+      { documentId: 'ap-94', selected: true, amountRaw: '94.40', balanceDue: 94.4 },
+    ]);
+    expect(batch.canSubmit).toBe(false);
+    expect(batch.total).toBe(0);
+    expect(batch.validAllocations.filter((row) => row.documentId === 'ap-94')).toHaveLength(1);
+  });
+
+  it('all-invalid selected rows cannot submit', () => {
+    const batch = validatePaymentAllocationBatch([
+      { documentId: 'a', selected: true, amountRaw: '', balanceDue: 80 },
+      { documentId: 'b', selected: true, amountRaw: 'abc', balanceDue: 80 },
+    ]);
+    expect(batch.canSubmit).toBe(false);
+    expect(batch.validAllocations).toEqual([]);
+    expect(batch.total).toBe(0);
+  });
+
+  it('AR and AP multirow equal-cap batches share one payload', () => {
+    const ar = validatePaymentAllocationBatch([
+      { documentId: 'ar-1', selected: true, amountRaw: '708.00', balanceDue: 708 },
+      { documentId: 'ar-2', selected: true, amountRaw: '141.60', balanceDue: 141.6 },
+    ]);
+    const ap = validatePaymentAllocationBatch([
+      { documentId: 'ap-1', selected: true, amountRaw: '708.00', balanceDue: 708 },
+      { documentId: 'ap-2', selected: true, amountRaw: '94.40', balanceDue: 94.4 },
+    ]);
+    expect(ar.canSubmit).toBe(true);
+    expect(ar.total).toBe(849.6);
+    expect(ar.validAllocations).toEqual([
+      { documentId: 'ar-1', amount: 708 },
+      { documentId: 'ar-2', amount: 141.6 },
+    ]);
+    expect(ap.canSubmit).toBe(true);
+    expect(ap.total).toBe(802.4);
   });
 });

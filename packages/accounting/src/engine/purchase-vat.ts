@@ -77,3 +77,43 @@ export function expectedPurchaseVat(args: {
     invoiceTotal: Math.round((Math.max(0, args.net) + vatAmount) * 100) / 100,
   };
 }
+
+export type PurchasePreviewTotals = {
+  net: number;
+  vatRate: number;
+  vatAmount: number;
+  payableGross: number;
+  postsInputVat: boolean;
+  informational: boolean;
+};
+
+/** Unsaved purchase footer: net, input VAT, payable gross from the posting policy. */
+export function purchasePreviewTotals(args: {
+  documentType: string;
+  invoiceKind: string;
+  vatRegistered: boolean;
+  ratePercent: number;
+  net: number;
+}): PurchasePreviewTotals {
+  const net = Math.max(0, Math.round(args.net * 100) / 100);
+  const vat = expectedPurchaseVat({
+    net,
+    invoiceKind: args.invoiceKind,
+    vatRegistered: args.vatRegistered,
+    ratePercent: args.ratePercent,
+  });
+  const postsInputVat = purchaseDocumentPostsInputVat({
+    documentType: args.documentType,
+    invoiceKind: args.invoiceKind,
+  });
+  const informational =
+    isPurchaseCommercialDocument(args.documentType) && !isPurchaseInputVatPostingDocument(args.documentType);
+  return {
+    net,
+    vatRate: vat.vatRate,
+    vatAmount: vat.vatAmount,
+    payableGross: postsInputVat ? vat.invoiceTotal : net,
+    postsInputVat,
+    informational: informational && vat.vatAmount > 0,
+  };
+}

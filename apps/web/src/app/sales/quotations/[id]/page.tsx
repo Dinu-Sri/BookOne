@@ -4,6 +4,7 @@ import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function QuotationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,6 +34,7 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
         convertLabel="Convert to order"
         vatRegistered={settings.vatRegistered}
         vatRatePercent={settings.vatRatePercent}
+        canWrite={jobCanWrite(tenant, 'Quotations')}
       />
     </BookOneShell>
   );

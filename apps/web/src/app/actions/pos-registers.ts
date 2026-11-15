@@ -6,6 +6,10 @@ import { requireTenantContext } from '@bookone/auth';
 import { and, asc, db, eq, isNull, locations, posRegisters, withTenantContext } from '@bookone/db';
 import { currentDimensionScope } from '@/lib/dimension-scope';
 import { inDimensionScope } from '@bookone/auth';
+import { assertPermission } from '@/lib/access';
+
+/** Register master lives on /company/sales with VAT settings. */
+const POS_REGISTER_WRITE = 'company.sales_settings.write';
 
 export interface PosRegisterRow {
   id: string;
@@ -41,34 +45,7 @@ export async function listPosRegisters(): Promise<PosRegisterRow[]> {
       .where(and(eq(posRegisters.tenantId, user.tenantId), isNull(posRegisters.voidedAt)))
       .orderBy(asc(posRegisters.sortOrder), asc(posRegisters.code));
 
-    // Ensure at least one default register (migration seeds; this is a safety net)
-    if (rows.length === 0) {
-      const [created] = await db()
-        .insert(posRegisters)
-        .values({
-          tenantId: user.tenantId,
-          code: 'REG-01',
-          name: 'Main counter',
-          printMode: 'browser',
-          isActive: '1',
-          sortOrder: 0,
-        })
-        .returning();
-      return [
-        {
-          id: created.id,
-          code: created.code,
-          name: created.name,
-          locationId: created.locationId ?? null,
-          printMode: created.printMode,
-          thermalDeviceHint: created.thermalDeviceHint,
-          receiptFooter: created.receiptFooter,
-          defaultPaymentAccountCode: created.defaultPaymentAccountCode,
-          isActive: true,
-          sortOrder: created.sortOrder,
-        },
-      ];
-    }
+    // Migration seeds REG-01. Do not insert on this read path.
 
     const scope = await currentDimensionScope();
     const locRows = await db()
@@ -112,6 +89,7 @@ export async function savePosRegisterFromForm(formData: FormData): Promise<void>
   });
 
   const user = await requireTenantContext();
+  await assertPermission(POS_REGISTER_WRITE, 'write');
   await withTenantContext(user.tenantId, async () => {
     if (parsed.locationId) {
       const [loc] = await db()
@@ -176,6 +154,7 @@ export async function archivePosRegisterFromForm(formData: FormData): Promise<vo
   if (!id) throw new Error('Register id required.');
 
   const user = await requireTenantContext();
+  await assertPermission(POS_REGISTER_WRITE, 'write');
   await withTenantContext(user.tenantId, async () => {
     const active = await db()
       .select({ id: posRegisters.id })

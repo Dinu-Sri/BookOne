@@ -8,6 +8,7 @@ import {
   buildCashPurchasePosting,
   buildPurchaseReturnPosting,
   buildGrnPosting,
+  formatVatPercent,
   sumSides,
 } from '../src/engine/document-posting';
 
@@ -36,7 +37,27 @@ describe('sales invoice posting', () => {
     expect(result.lines.some((l) => l.accountCode === '1300' && l.amount === 1180)).toBe(true);
     expect(result.lines.some((l) => l.accountCode === '4000' && l.amount === 1000)).toBe(true);
     expect(result.lines.some((l) => l.accountCode === '2200' && l.side === 'credit' && l.amount === 180)).toBe(true);
+    expect(result.lines.find((l) => l.accountCode === '2200')?.memo).toBe('Output VAT 18%');
     expect(sumSides(result.lines)).toEqual({ debit: 1180, credit: 1180 });
+  });
+
+  it('formats float VAT percentages in memos without changing money', () => {
+    expect(formatVatPercent(18.000000000000004)).toBe('18');
+    expect(formatVatPercent(12.5)).toBe('12.5');
+    expect(formatVatPercent(0)).toBe('0');
+    const noisy = buildSalesInvoicePosting({
+      lines: [{ description: 'Service', quantity: 1, unitPrice: 120, unitCost: 0, productType: 'service' }],
+      vatRatePercent: 18.000000000000004,
+    });
+    expect(noisy.vatTotal).toBe(21.6);
+    expect(noisy.grandTotal).toBe(141.6);
+    expect(noisy.lines.find((l) => l.accountCode === '2200')?.memo).toBe('Output VAT 18%');
+    const ret = buildSalesReturnPosting({
+      lines: [{ description: 'Service', quantity: 1, unitPrice: 120, unitCost: 0, productType: 'service' }],
+      vatRatePercent: 18.000000000000004,
+    });
+    expect(ret.vatTotal).toBe(21.6);
+    expect(ret.lines.find((l) => l.accountCode === '2200')?.memo).toBe('Output VAT reverse 18%');
   });
 
   it('posts mixed-product tax invoice VAT on net and COGS on physical only', () => {

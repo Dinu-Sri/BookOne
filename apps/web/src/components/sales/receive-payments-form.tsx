@@ -5,12 +5,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { receiveCustomerPayments } from '@/app/actions/documents';
 import type { OpenArInvoice } from '@/app/actions/commercial-docs';
-import {
-  PAYMENT_OVER_BALANCE_MESSAGE,
-  parsePaymentAmount,
-  paymentAllocationsHaveOverBalance,
-  paymentAmountExceedsBalance,
-} from '@bookone/accounting';
+import { validatePaymentAllocationBatch } from '@bookone/accounting';
 import { formatLKR, todayString } from '@/components/module/list-page';
 import { AllocationAmountField } from '@/components/payments/allocation-amount-field';
 import { pushStatusToast } from '@/components/layout/status-toast';
@@ -48,19 +43,11 @@ export function ReceivePaymentsForm({
     return init;
   });
 
-  const totalReceive = useMemo(() => {
-    let t = 0;
-    for (const inv of invoices) {
-      if (!selected[inv.id]) continue;
-      t += parsePaymentAmount(amounts[inv.id]);
-    }
-    return Math.round(t * 100) / 100;
-  }, [invoices, selected, amounts]);
-
-  const overBalance = useMemo(
+  const batch = useMemo(
     () =>
-      paymentAllocationsHaveOverBalance(
+      validatePaymentAllocationBatch(
         invoices.map((inv) => ({
+          documentId: inv.id,
           selected: Boolean(selected[inv.id]),
           amountRaw: amounts[inv.id] ?? '',
           balanceDue: inv.balanceDue,
@@ -68,6 +55,8 @@ export function ReceivePaymentsForm({
       ),
     [invoices, selected, amounts],
   );
+  const totalReceive = batch.total;
+  const fieldError = batch.hasFieldError;
 
   function toggle(id: string, balance: number) {
     setSelected((prev) => {
@@ -78,26 +67,16 @@ export function ReceivePaymentsForm({
   }
 
   function submit() {
-    const allocations = invoices
-      .filter((inv) => selected[inv.id])
-      .map((inv) => ({
-        documentId: inv.id,
-        amount: parsePaymentAmount(amounts[inv.id]),
-      }))
-      .filter((a) => a.amount > 0);
-
-    if (allocations.length === 0) {
-      pushStatusToast({ kind: 'error', message: 'Select at least one invoice and enter an amount.' });
+    if (!batch.canSubmit) {
+      pushStatusToast({
+        kind: 'error',
+        message: batch.hasFieldError
+          ? 'Correct the highlighted amounts before recording the payment.'
+          : 'Select at least one invoice and enter an amount.',
+      });
       return;
     }
-    const over = allocations.find((a) => {
-      const inv = invoices.find((row) => row.id === a.documentId);
-      return inv != null && paymentAmountExceedsBalance(a.amount, inv.balanceDue);
-    });
-    if (over) {
-      pushStatusToast({ kind: 'error', message: PAYMENT_OVER_BALANCE_MESSAGE });
-      return;
-    }
+    const allocations = batch.validAllocations;
 
     const idempotencyKey = crypto.randomUUID();
     startTransition(() => {
@@ -241,10 +220,9 @@ export function ReceivePaymentsForm({
           >
             <div>
               <strong>Total received: {formatLKR(totalReceive)}</strong>
-              {overBalance ? (
+              {fieldError ? (
                 <p className="form-error" role="alert" style={{ margin: '4px 0 0', fontSize: 12 }}>
-                  {PAYMENT_OVER_BALANCE_MESSAGE} Correct the highlighted amount. Values are not reduced
-                  automatically.
+                  Correct the highlighted amounts. Preview and submit use the same valid rows.
                 </p>
               ) : null}
             </div>
@@ -257,7 +235,7 @@ export function ReceivePaymentsForm({
               <Button
                 variant="primary"
                 type="button"
-                disabled={pending || totalReceive <= 0 || overBalance}
+                disabled={pending || !batch.canSubmit}
                 onClick={submit}
               >
                 {pending ? 'Posting…' : 'Record payment'}

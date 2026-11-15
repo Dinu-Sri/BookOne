@@ -16,6 +16,7 @@ import {
   displayedLineNetSubtotal,
   persistedDocumentBreakdown,
   purchaseReturnFromBillPath,
+  salesDocumentPresentation,
 } from '@bookone/accounting';
 import { formatLKR } from '@/components/module/list-page';
 import { StatusBadge } from '@/components/ui/status-help';
@@ -59,6 +60,7 @@ export function CommercialDocumentDetail({
   requireSupplierInvoiceNo = false,
   vatRegistered = false,
   vatRatePercent = 18,
+  canWrite = false,
 }: {
   doc: CommercialDocDetail;
   listHref: string;
@@ -77,6 +79,7 @@ export function CommercialDocumentDetail({
   requireSupplierInvoiceNo?: boolean;
   vatRegistered?: boolean;
   vatRatePercent?: number;
+  canWrite?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -124,6 +127,15 @@ export function CommercialDocumentDetail({
     ['purchase', 'import_purchase', 'vendor_bill'].includes(doc.documentType);
   const sourceHref = sourceDocumentHref(doc.sourceDocumentType, doc.sourceDocumentId);
   const sourceLabel = sourceDocumentLabel(doc.sourceDocumentType);
+  const salesPresentation = isSalesDoc
+    ? salesDocumentPresentation({
+        documentType: doc.documentType,
+        invoiceKind: doc.invoiceKind || 'commercial',
+        documentNumber: doc.documentNumber,
+        taxInvoiceNumber: doc.taxInvoiceNumber,
+        posted: Boolean(doc.transactionId),
+      })
+    : null;
 
   async function runConfirm() {
     if (!confirm) return;
@@ -162,7 +174,7 @@ export function CommercialDocumentDetail({
           </span>
         </Link>
         <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {canApprove ? (
+          {canWrite && canApprove ? (
             <>
               <form action={approvePurchaseDocumentAction}>
                 <input type="hidden" name="documentId" value={doc.id} />
@@ -178,7 +190,7 @@ export function CommercialDocumentDetail({
               </form>
             </>
           ) : null}
-          {canPay && payHref && doc.status !== 'pending_approval' ? (
+          {canWrite && canPay && payHref && doc.status !== 'pending_approval' ? (
             <Link href={payHref}>
               <Button variant="primary" type="button">
                 {payLabel}
@@ -186,21 +198,21 @@ export function CommercialDocumentDetail({
             </Link>
           ) : null}
           {printHref ? <PrintPreviewButton documentId={doc.id} /> : null}
-          {editHref ? (
+          {canWrite && editHref ? (
             <Link href={editHref}>
               <Button variant="secondary" type="button">
                 Edit
               </Button>
             </Link>
           ) : null}
-          {canReturn ? (
+          {canWrite && canReturn ? (
             <Link href={purchaseReturnFromBillPath(doc.id)}>
               <Button variant="secondary" type="button">
                 Create return
               </Button>
             </Link>
           ) : null}
-          {canConvert && convertTo && !convertPanel ? (
+          {canWrite && canConvert && convertTo && !convertPanel ? (
             <form action={convertDocumentAction} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <input type="hidden" name="sourceId" value={doc.id} />
               <input type="hidden" name="targetType" value={convertTo} />
@@ -253,12 +265,12 @@ export function CommercialDocumentDetail({
               </Button>
             </form>
           ) : null}
-          {doc.status !== 'converted' && doc.status !== 'void' ? (
+          {canWrite && doc.status !== 'converted' && doc.status !== 'void' ? (
             <Button variant="ghost" type="button" onClick={() => setConfirm('archive')} disabled={busy}>
               Archive
             </Button>
           ) : null}
-          {!doc.transactionId ? (
+          {canWrite && !doc.transactionId ? (
             <Button variant="ghost" type="button" onClick={() => setConfirm('delete')} disabled={busy}>
               Delete
             </Button>
@@ -369,11 +381,19 @@ export function CommercialDocumentDetail({
                 </div>
               </div>
             ) : null}
-            {isSalesDoc && doc.invoiceKind === 'tax_invoice' ? (
+            {salesPresentation ? (
               <div>
-                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Tax invoice</span>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Tax treatment</span>
                 <div>
-                  <strong>{doc.taxInvoiceNumber || doc.documentNumber}</strong>
+                  <strong>{salesPresentation.taxTreatmentLabel}</strong>
+                </div>
+              </div>
+            ) : null}
+            {salesPresentation?.taxNumberLabel ? (
+              <div>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>{salesPresentation.taxNumberLabel}</span>
+                <div>
+                  <strong>{salesPresentation.taxNumberValue || '—'}</strong>
                 </div>
               </div>
             ) : null}
@@ -491,7 +511,7 @@ export function CommercialDocumentDetail({
         </div>
       </Card>
 
-      {convertPanel ? <div style={{ marginTop: 16 }}>{convertPanel}</div> : null}
+      {canWrite && convertPanel ? <div style={{ marginTop: 16 }}>{convertPanel}</div> : null}
       {extraPanel ? <div style={{ marginTop: 16 }}>{extraPanel}</div> : null}
 
       <ConfirmDialog

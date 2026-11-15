@@ -116,3 +116,65 @@ export function expectedInvoiceVat(args: {
     invoiceTotal: Math.round((Math.max(0, args.net) + vatAmount) * 100) / 100,
   };
 }
+
+const SALES_TYPE_LABEL: Record<string, string> = {
+  quotation: 'Quotation',
+  sales_order: 'Sales order',
+  sales_invoice: 'Invoice',
+  customer_invoice: 'Invoice',
+  sales_return: 'Sales return',
+  pos_sale: 'POS sale',
+};
+
+export type SalesDocumentPresentation = {
+  typeLabel: string;
+  taxTreatmentLabel: string;
+  taxNumberLabel: string | null;
+  taxNumberValue: string | null;
+  postsOutputVat: boolean;
+};
+
+/**
+ * Document type, tax treatment, and tax-invoice number are separate.
+ * Quotes/orders may store an intended tax invoice without posting VAT
+ * and without using the quotation/order number as a tax invoice number.
+ */
+export function salesDocumentPresentation(args: {
+  documentType: string;
+  invoiceKind: string;
+  documentNumber: string;
+  taxInvoiceNumber?: string | null;
+  posted?: boolean;
+}): SalesDocumentPresentation {
+  const typeLabel = SALES_TYPE_LABEL[args.documentType] ?? args.documentType;
+  const taxInvoice = args.invoiceKind === 'tax_invoice';
+  const postsOutputVat = salesDocumentPostsOutputVat({
+    documentType: args.documentType,
+    invoiceKind: args.invoiceKind,
+  });
+  if (!taxInvoice) {
+    return {
+      typeLabel,
+      taxTreatmentLabel: 'Commercial — no output VAT',
+      taxNumberLabel: null,
+      taxNumberValue: null,
+      postsOutputVat,
+    };
+  }
+  if (!postsOutputVat) {
+    return {
+      typeLabel,
+      taxTreatmentLabel: 'Intended tax invoice — VAT posts when invoiced',
+      taxNumberLabel: null,
+      taxNumberValue: null,
+      postsOutputVat,
+    };
+  }
+  return {
+    typeLabel,
+    taxTreatmentLabel: 'Tax invoice',
+    taxNumberLabel: 'Tax invoice no.',
+    taxNumberValue: args.taxInvoiceNumber || null,
+    postsOutputVat,
+  };
+}

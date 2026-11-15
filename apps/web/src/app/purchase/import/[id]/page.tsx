@@ -4,6 +4,7 @@ import { getSalesSettings } from '@/app/actions/sales-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function ImportPurchaseDetailPage({
   params,
@@ -31,11 +32,16 @@ export default async function ImportPurchaseDetailPage({
         doc={doc}
         listHref="/purchase/import"
         listLabel="Import purchases"
-        payHref={doc.balanceDue > 0.005 ? `/purchase/payments/new?documentId=${doc.id}` : null}
+        payHref={
+          jobCanWrite(tenant, 'Pay Vendors') && doc.balanceDue > 0.005
+            ? `/purchase/payments/new?documentId=${doc.id}`
+            : null
+        }
         printHref={`/purchase/print/${doc.id}`}
         returnFromBill
         vatRegistered={salesSettings.vatRegistered}
         vatRatePercent={salesSettings.vatRatePercent}
+        canWrite={jobCanWrite(tenant, 'Import Purchases')}
       />
     </BookOneShell>
   );

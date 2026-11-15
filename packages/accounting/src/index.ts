@@ -26,6 +26,7 @@ export {
   buildStockAdjustmentPosting,
   buildOpeningStockPosting,
   sumSides,
+  formatVatPercent,
 } from './engine/document-posting';
 export type {
   PostingLine,
@@ -42,9 +43,10 @@ export {
   ineligibleTaxInvoice,
   postedSalesVatRatePercent,
   expectedInvoiceVat,
+  salesDocumentPresentation,
   INELIGIBLE_TAX_INVOICE_MESSAGE,
 } from './engine/sales-vat';
-export type { SalesTaxProfile } from './engine/sales-vat';
+export type { SalesTaxProfile, SalesDocumentPresentation } from './engine/sales-vat';
 export {
   isPurchaseInputVatPostingDocument,
   isPurchaseCommercialDocument,
@@ -53,8 +55,22 @@ export {
   purchaseInputVatRatePercent,
   postedPurchaseVatRatePercent,
   expectedPurchaseVat,
+  purchasePreviewTotals,
   INELIGIBLE_INPUT_VAT_MESSAGE,
 } from './engine/purchase-vat';
+export type { PurchasePreviewTotals } from './engine/purchase-vat';
+export {
+  OUTPUT_VAT_ACCOUNT_CODE,
+  INPUT_VAT_ACCOUNT_CODE,
+  VAT_REPORT_DISCLAIMER,
+  composeVatSummary,
+  vatReportCsv,
+} from './vat-report';
+export type {
+  VatReportBalanceRow,
+  VatReportLedgerLine,
+  VatReportSummary,
+} from './vat-report';
 export { posLinkedReturnPreview } from './pos-linked-return';
 export type {
   PosLinkedReturnSource,
@@ -147,11 +163,16 @@ export {
   SALES_RETURN_PARTY_MESSAGE,
   PURCHASE_RETURN_PARTY_MESSAGE,
   PAYMENT_OVER_BALANCE_MESSAGE,
+  PAYMENT_INVALID_AMOUNT_MESSAGE,
   PAYMENT_OVER_BALANCE_EPSILON,
   parsePaymentAmount,
+  parsePaymentAmountStrict,
+  isTwoDecimalCurrencyAmount,
   paymentAmountExceedsBalance,
   paymentAllocationFieldError,
   paymentAllocationsHaveOverBalance,
+  paymentAllocationsHaveFieldError,
+  validatePaymentAllocationBatch,
 } from './document-guards';
 export type {
   QtyLine,
@@ -169,6 +190,10 @@ export type {
   HydratedDraftLineState,
   ManualHeaderDiscountInput,
   ManualHeaderDiscountResult,
+  ParsedPaymentAmount,
+  PaymentAllocationRowInput,
+  ValidatedPaymentAllocationRow,
+  ValidatedPaymentBatch,
 } from './document-guards';
 export {
   isCashSettledReturn,

@@ -9,6 +9,7 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CommercialDocumentDetail } from '@/components/purchase/commercial-document-detail';
 import { PoConvertForm } from '@/components/purchase/po-convert-form';
+import { jobCanWrite } from '@/lib/access';
 
 export default async function PurchaseOrderDetailPage({
   params,
@@ -43,6 +44,7 @@ export default async function PurchaseOrderDetailPage({
         printHref={`/purchase/print/${doc.id}`}
         vatRegistered={salesSettings.vatRegistered}
         vatRatePercent={salesSettings.vatRatePercent}
+        canWrite={jobCanWrite(tenant, 'Purchase Orders')}
         convertPanel={
           remaining.ok && remaining.lines ? (
             <PoConvertForm

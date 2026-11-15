@@ -22,6 +22,7 @@ import {
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button } from '@/components/ui/bookone-ui';
 import { withFormPending } from '@/components/ui/form-busy';
+import { jobCanWrite } from '@/lib/access';
 import { recordEntry, type RecordEntryResult } from '@/app/actions/record-entry';
 import {
   getActiveAccounts,
@@ -312,8 +313,11 @@ export function SimpleEntryScreen() {
     setUploadError(null);
   }
 
+  const canWrite = jobCanWrite(tenant, 'Simple Entry');
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canWrite) return;
     setResult(null);
 
     const amount = parseFloat(amountStr.replace(/[^0-9.]/g, ''));
@@ -742,10 +746,16 @@ export function SimpleEntryScreen() {
               ) : null}
 
               <div className="entry-submit-bar">
-                <Button variant="primary" type="submit" disabled={isPending || accountsLoading}>
-                  {isPending ? <Loader2 size={16} /> : null}
-                  {isPending ? 'Recording...' : actionLabel}
-                </Button>
+                {canWrite ? (
+                  <Button variant="primary" type="submit" disabled={isPending || accountsLoading}>
+                    {isPending ? <Loader2 size={16} /> : null}
+                    {isPending ? 'Recording...' : actionLabel}
+                  </Button>
+                ) : (
+                  <p className="party-hint" style={{ margin: 0 }}>
+                    Read-only — this job cannot record entries.
+                  </p>
+                )}
                 <button type="button" className="link-button" onClick={() => clearForm()}>
                   Clear
                 </button>

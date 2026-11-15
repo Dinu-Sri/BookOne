@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { CURRENT_EARNINGS_CODE } from '@bookone/accounting';
+import { CURRENT_EARNINGS_CODE, vatReportCsv, type VatReportSummary } from '@bookone/accounting';
 import { getPeriodOptions, getReports, getTenantInfo, type ReportRow } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Card } from '@/components/ui/bookone-ui';
-import { BookOpenCheck, Landmark, LineChart, ReceiptText, Scale } from 'lucide-react';
+import { BookOpenCheck, Landmark, LineChart, Percent, ReceiptText, Scale } from 'lucide-react';
 
-type ReportView = 'pnl' | 'balance' | 'cashflow' | 'ledger' | 'trial';
+type ReportView = 'pnl' | 'balance' | 'cashflow' | 'ledger' | 'trial' | 'vat';
 
 interface SearchParams {
   period?: string;
@@ -19,6 +19,7 @@ const reportTabs: { id: ReportView; label: string; icon: typeof LineChart }[] = 
   { id: 'cashflow', label: 'Cash Flow', icon: ReceiptText },
   { id: 'ledger', label: 'General Ledger', icon: BookOpenCheck },
   { id: 'trial', label: 'Trial Balance', icon: Scale },
+  { id: 'vat', label: 'VAT summary', icon: Percent },
 ];
 
 function formatLKR(value: number) {
@@ -161,6 +162,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             {activeReport === 'trial' ? (
               <TrialBalanceTable rows={data.trialBalance} />
             ) : null}
+
+            {activeReport === 'vat' ? (
+              <VatSummaryPanel summary={data.vat} periodLabel={periodLabel} />
+            ) : null}
           </div>
         </Card>
       </div>
@@ -194,6 +199,64 @@ function StatementTotal({ label, value }: { label: string; value: number }) {
     <div className="statement-total">
       <span>{label}</span>
       <strong className={value >= 0 ? 'amount-positive' : 'amount-negative'}>{formatLKR(value)}</strong>
+    </div>
+  );
+}
+
+function VatSummaryPanel({ summary, periodLabel }: { summary: VatReportSummary; periodLabel: string }) {
+  const csv = vatReportCsv(summary, periodLabel);
+  const href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+  const filePeriod = periodLabel.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'period';
+  return (
+    <div className="statement-layout">
+      <p className="party-hint" style={{ marginTop: 0 }}>
+        {summary.disclaimer}
+      </p>
+      <StatementTotal label="Output VAT (2200 credits − debits)" value={summary.outputVat} />
+      <StatementTotal label="Input VAT (2300 debits − credits)" value={summary.inputVat} />
+      <StatementTotal label="Net payable (output − input)" value={summary.netPayable} />
+      <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--ink-soft)' }}>
+        Returns reverse the original VAT side. Export uses Reports read access.
+      </p>
+      <p style={{ margin: '8px 0 12px' }}>
+        <a href={href} download={`bookone-vat-${filePeriod}.csv`} style={{ fontWeight: 700 }}>
+          Export CSV
+        </a>
+      </p>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Party</th>
+              <th>Account</th>
+              <th>Side</th>
+              <th>Memo</th>
+              <th style={{ textAlign: 'right' }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.correspondence.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ color: 'var(--ink-soft)' }}>
+                  No VAT journal lines in this period.
+                </td>
+              </tr>
+            ) : (
+              summary.correspondence.map((row, i) => (
+                <tr key={`${row.date}-${row.accountCode}-${row.side}-${i}`}>
+                  <td>{row.date}</td>
+                  <td>{row.party}</td>
+                  <td>{row.accountCode}</td>
+                  <td>{row.side}</td>
+                  <td>{row.memo}</td>
+                  <td style={{ textAlign: 'right' }}>{formatLKR(row.amount)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

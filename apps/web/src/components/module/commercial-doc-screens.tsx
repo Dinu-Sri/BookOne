@@ -9,7 +9,9 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  formatVatPercent,
   linkedReturnPreviewDisplay,
+  purchasePreviewTotals,
   PURCHASE_RETURN_QTY_MESSAGE,
   type ProrateSourceLine,
 } from '@bookone/accounting';
@@ -274,6 +276,9 @@ export function CommercialDocNewForm({
     initialHeaderDiscount && initialHeaderDiscount > 0 ? 'fixed' : 'percent',
   );
   const [discountId, setDiscountId] = useState('');
+  const [invoiceKind, setInvoiceKind] = useState(
+    defaultInvoiceKind === 'tax_invoice' ? 'tax_invoice' : 'commercial',
+  );
   const sourceStateKey = sourceDocumentId ?? '';
   useEffect(() => {
     setLines(initialLines ?? []);
@@ -282,6 +287,7 @@ export function CommercialDocNewForm({
     );
     setHeaderDiscountType(initialHeaderDiscount && initialHeaderDiscount > 0 ? 'fixed' : 'percent');
     setDiscountId('');
+    setInvoiceKind(defaultInvoiceKind === 'tax_invoice' ? 'tax_invoice' : 'commercial');
     // Replace all source-backed fields when the picker navigates empty→bill or bill A→B.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceStateKey]);
@@ -339,6 +345,10 @@ export function CommercialDocNewForm({
           remainingQty: preview.remainingQty,
           subtotal: 0,
           discountAmt: 0,
+          vatAmount: 0,
+          vatRate: 0,
+          postsVat: false,
+          informationalVat: false,
           total: 0,
         };
       }
@@ -346,6 +356,10 @@ export function CommercialDocNewForm({
         invalidQuantity: false as const,
         subtotal: preview.subtotal,
         discountAmt: preview.headerDiscount,
+        vatAmount: preview.vat,
+        vatRate: sourceVatRate,
+        postsVat: preview.vat > 0,
+        informationalVat: false,
         total: preview.total,
       };
     }
@@ -368,8 +382,24 @@ export function CommercialDocNewForm({
           : v;
     }
     discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
-    const total = Math.round((subtotal - discountAmt) * 100) / 100;
-    return { invalidQuantity: false as const, subtotal, discountAmt, total };
+    const net = Math.round((subtotal - discountAmt) * 100) / 100;
+    const vatPreview = purchasePreviewTotals({
+      documentType,
+      invoiceKind,
+      vatRegistered: Boolean(vatRegistered),
+      ratePercent: vatRatePercent ?? 18,
+      net,
+    });
+    return {
+      invalidQuantity: false as const,
+      subtotal,
+      discountAmt,
+      vatAmount: vatPreview.vatAmount,
+      vatRate: vatPreview.vatRate,
+      postsVat: vatPreview.postsInputVat,
+      informationalVat: vatPreview.informational,
+      total: vatPreview.postsInputVat ? vatPreview.payableGross : net,
+    };
   }, [
     lines,
     headerDiscount,
@@ -383,6 +413,10 @@ export function CommercialDocNewForm({
     sourceVatRate,
     alreadyReturnedTotal,
     priorReturnLines,
+    documentType,
+    invoiceKind,
+    vatRegistered,
+    vatRatePercent,
   ]);
 
   return (
@@ -530,6 +564,8 @@ export function CommercialDocNewForm({
                 vatRatePercent={vatRatePercent ?? 18}
                 defaultInvoiceKind={defaultInvoiceKind}
                 informational={documentType === 'purchase_order' || documentType === 'goods_receipt'}
+                value={invoiceKind}
+                onChange={setInvoiceKind}
               />
             ) : null}
             {showLandedCost ? (
@@ -692,8 +728,26 @@ export function CommercialDocNewForm({
                     <span>Discount</span>
                     <strong>LKR {money(computed.discountAmt)}</strong>
                   </div>
+                  {computed.postsVat && computed.vatAmount > 0 ? (
+                    <div className="doc-totals-row">
+                      <span>Input VAT ({formatVatPercent(computed.vatRate)}%)</span>
+                      <strong>LKR {money(computed.vatAmount)}</strong>
+                    </div>
+                  ) : null}
+                  {computed.informationalVat ? (
+                    <>
+                      <div className="doc-totals-row">
+                        <span>Input VAT on bill ({formatVatPercent(computed.vatRate)}%)</span>
+                        <strong>LKR {money(computed.vatAmount)}</strong>
+                      </div>
+                      <div className="doc-totals-row">
+                        <span>Bill total after convert</span>
+                        <strong>LKR {money(Math.round((computed.subtotal - computed.discountAmt + computed.vatAmount) * 100) / 100)}</strong>
+                      </div>
+                    </>
+                  ) : null}
                   <div className="doc-totals-row is-total">
-                    <span>Total</span>
+                    <span>{computed.postsVat ? 'Payable gross' : 'Total'}</span>
                     <strong>LKR {money(computed.total)}</strong>
                   </div>
                 </>

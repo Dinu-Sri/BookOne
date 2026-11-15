@@ -658,38 +658,141 @@ export const SALES_RETURN_PARTY_MESSAGE =
 export const PURCHASE_RETURN_PARTY_MESSAGE =
   'This return must use the same supplier as the original bill.';
 export const PAYMENT_OVER_BALANCE_MESSAGE = 'Payment cannot exceed balance due.';
+export const PAYMENT_INVALID_AMOUNT_MESSAGE =
+  'Enter a positive amount with at most two decimal places.';
+/** Kept for callers that still pass a third argument; cap checks use integer cents. */
 export const PAYMENT_OVER_BALANCE_EPSILON = 0.005;
 
+export type ParsedPaymentAmount =
+  | { ok: true; amount: number; cents: number }
+  | { ok: false; error: string };
+
+const PAYMENT_STRING_PATTERN = /^[+]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/;
+
+function paymentCentsFromNumber(n: number): number | null {
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const cents = Math.round(n * 100);
+  if (Math.abs(n * 100 - cents) > 1e-6) return null;
+  if (cents <= 0) return null;
+  return cents;
+}
+
+/** Raw selected strings before coercion: positive finite currency, two decimals, valid separators. */
+export function parsePaymentAmountStrict(raw: string | number | null | undefined): ParsedPaymentAmount {
+  if (typeof raw === 'number') {
+    const cents = paymentCentsFromNumber(raw);
+    if (cents == null) return { ok: false, error: PAYMENT_INVALID_AMOUNT_MESSAGE };
+    return { ok: true, amount: cents / 100, cents };
+  }
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return { ok: false, error: PAYMENT_INVALID_AMOUNT_MESSAGE };
+  if (/[eE]/.test(trimmed) || trimmed === 'Infinity' || trimmed === '+Infinity' || trimmed === 'NaN') {
+    return { ok: false, error: PAYMENT_INVALID_AMOUNT_MESSAGE };
+  }
+  if (!PAYMENT_STRING_PATTERN.test(trimmed)) {
+    return { ok: false, error: PAYMENT_INVALID_AMOUNT_MESSAGE };
+  }
+  const normalized = trimmed.replace(/,/g, '');
+  const n = Number(normalized);
+  const cents = paymentCentsFromNumber(n);
+  if (cents == null) return { ok: false, error: PAYMENT_INVALID_AMOUNT_MESSAGE };
+  return { ok: true, amount: cents / 100, cents };
+}
+
+export function isTwoDecimalCurrencyAmount(amount: number): boolean {
+  return parsePaymentAmountStrict(amount).ok;
+}
+
+/** Coerces a valid payment amount; invalid input is 0 (never silent prefix parse). */
 export function parsePaymentAmount(raw: string | number | null | undefined): number {
-  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
-  return Number(String(raw ?? '').replace(/[^0-9.-]/g, '')) || 0;
+  const parsed = parsePaymentAmountStrict(raw);
+  return parsed.ok ? parsed.amount : 0;
 }
 
 export function paymentAmountExceedsBalance(
   amount: number,
   balanceDue: number,
-  epsilon = PAYMENT_OVER_BALANCE_EPSILON,
+  _epsilon = PAYMENT_OVER_BALANCE_EPSILON,
 ): boolean {
-  return amount > balanceDue + epsilon;
+  return Math.round(amount * 100) > Math.round(balanceDue * 100);
 }
 
-/** Field-level over-balance copy. Empty/zero selected rows are not over-allocation. */
+export type PaymentAllocationRowInput = {
+  documentId?: string;
+  selected: boolean;
+  amountRaw: string;
+  balanceDue: number;
+};
+
+export type ValidatedPaymentAllocationRow = PaymentAllocationRowInput & {
+  error: string | null;
+  amount: number | null;
+  cents: number | null;
+};
+
+export type ValidatedPaymentBatch = {
+  rows: ValidatedPaymentAllocationRow[];
+  validAllocations: { documentId: string; amount: number }[];
+  total: number;
+  hasFieldError: boolean;
+  canSubmit: boolean;
+};
+
+/** Field-level error for a selected row. Unselected rows are ignored. */
 export function paymentAllocationFieldError(
   amountRaw: string,
   balanceDue: number,
   selected: boolean,
 ): string | null {
   if (!selected) return null;
-  const amount = parsePaymentAmount(amountRaw);
-  if (amount <= 0) return null;
-  if (paymentAmountExceedsBalance(amount, balanceDue)) return PAYMENT_OVER_BALANCE_MESSAGE;
+  const parsed = parsePaymentAmountStrict(amountRaw);
+  if (!parsed.ok) return parsed.error;
+  if (paymentAmountExceedsBalance(parsed.amount, balanceDue)) return PAYMENT_OVER_BALANCE_MESSAGE;
   return null;
+}
+
+export function validatePaymentAllocationBatch(
+  rows: PaymentAllocationRowInput[],
+): ValidatedPaymentBatch {
+  const mapped: ValidatedPaymentAllocationRow[] = rows.map((row) => {
+    if (!row.selected) {
+      return { ...row, error: null, amount: null, cents: null };
+    }
+    const parsed = parsePaymentAmountStrict(row.amountRaw);
+    if (!parsed.ok) {
+      return { ...row, error: parsed.error, amount: null, cents: null };
+    }
+    if (paymentAmountExceedsBalance(parsed.amount, row.balanceDue)) {
+      return { ...row, error: PAYMENT_OVER_BALANCE_MESSAGE, amount: null, cents: null };
+    }
+    return { ...row, error: null, amount: parsed.amount, cents: parsed.cents };
+  });
+  const validAllocations = mapped
+    .filter((row) => row.selected && row.amount != null && row.documentId)
+    .map((row) => ({ documentId: row.documentId as string, amount: row.amount as number }));
+  const hasFieldError = mapped.some((row) => row.error != null);
+  const total = hasFieldError
+    ? 0
+    : Math.round(validAllocations.reduce((sum, row) => sum + row.amount, 0) * 100) / 100;
+  return {
+    rows: mapped,
+    validAllocations,
+    total,
+    hasFieldError,
+    canSubmit: !hasFieldError && validAllocations.length > 0,
+  };
 }
 
 export function paymentAllocationsHaveOverBalance(
   rows: { selected: boolean; amountRaw: string; balanceDue: number }[],
 ): boolean {
   return rows.some((row) => paymentAllocationFieldError(row.amountRaw, row.balanceDue, row.selected) != null);
+}
+
+export function paymentAllocationsHaveFieldError(
+  rows: { selected: boolean; amountRaw: string; balanceDue: number }[],
+): boolean {
+  return paymentAllocationsHaveOverBalance(rows);
 }
 
 function sumLineQty(lines: { quantity: number }[]): number {

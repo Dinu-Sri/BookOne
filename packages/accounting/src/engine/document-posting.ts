@@ -64,6 +64,14 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+/** Human-readable VAT % for journal memos. Does not change money rounding. */
+export function formatVatPercent(rate: number): string {
+  if (!Number.isFinite(rate) || rate === 0) return '0';
+  const cleaned = Number((Math.round(rate * 1e10) / 1e10).toPrecision(12));
+  if (!Number.isFinite(cleaned) || cleaned === 0) return '0';
+  return cleaned.toFixed(10).replace(/\.?0+$/, '');
+}
+
 function assertBalanced(lines: PostingLine[]) {
   const debit = round2(lines.filter((l) => l.side === 'debit').reduce((s, l) => s + l.amount, 0));
   const credit = round2(lines.filter((l) => l.side === 'credit').reduce((s, l) => s + l.amount, 0));
@@ -174,7 +182,7 @@ export function buildSalesInvoicePosting(input: {
       accountCode: vatCode,
       side: 'credit',
       amount: vatTotal,
-      memo: `Output VAT ${vatRate}%`,
+      memo: `Output VAT ${formatVatPercent(vatRate)}%`,
     });
   }
   lines.push(...cogsLines);
@@ -248,7 +256,7 @@ export function buildSalesReturnPosting(input: {
       accountCode: vatCode,
       side: 'debit',
       amount: vatTotal,
-      memo: `Output VAT reverse ${vatRate}%`,
+      memo: `Output VAT reverse ${formatVatPercent(vatRate)}%`,
     });
   }
   lines.push({
@@ -439,7 +447,12 @@ export function buildVendorBillPosting(input: {
   const apTotal = round2(baseDebit + vatTotal);
   const lines: PostingLine[] = [...debits];
   if (vatTotal > 0) {
-    lines.push({ accountCode: vatCode, side: 'debit', amount: vatTotal, memo: `Input VAT ${vatRate}%` });
+    lines.push({
+      accountCode: vatCode,
+      side: 'debit',
+      amount: vatTotal,
+      memo: `Input VAT ${formatVatPercent(vatRate)}%`,
+    });
   }
   lines.push({ accountCode: '2100', side: 'credit', amount: apTotal, memo });
   assertBalanced(lines);
@@ -481,7 +494,12 @@ export function buildCashPurchasePosting(input: {
   const payTotal = round2(baseDebit + vatTotal);
   const lines: PostingLine[] = [...debits];
   if (vatTotal > 0) {
-    lines.push({ accountCode: vatCode, side: 'debit', amount: vatTotal, memo: `Input VAT ${vatRate}%` });
+    lines.push({
+      accountCode: vatCode,
+      side: 'debit',
+      amount: vatTotal,
+      memo: `Input VAT ${formatVatPercent(vatRate)}%`,
+    });
   }
   lines.push({ accountCode: payCode, side: 'credit', amount: payTotal, memo });
   assertBalanced(lines);
@@ -549,7 +567,7 @@ export function buildPurchaseReturnPosting(input: {
       accountCode: vatCode,
       side: 'credit',
       amount: vatTotal,
-      memo: `Input VAT reverse ${vatRate}%`,
+      memo: `Input VAT reverse ${formatVatPercent(vatRate)}%`,
     });
   }
   assertBalanced(lines);

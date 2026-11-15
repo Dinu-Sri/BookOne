@@ -865,7 +865,8 @@ Unlisted mutating export = **deny** until mapped. Reads on a page use the page k
 | | `completePosReturn` | `sales.returns.write` **and** `pos.terminal.write` (Cashier lacks returns → denied) |
 | | `listRecentPosSales`, `lookupPosSale`, `getPosReceiptData` | `pos.history.read` |
 | | `openPosShift`, `closePosShift`, `getShiftZReport`, `previewShiftZReport` | `pos.shift.write` |
-| `pos-registers.ts` | list/save/archive | `company.inventory_settings.write` (register master; Owner/Admin). Out of cashier. |
+| `pos-registers.ts` | list | tenant + dimension scope (POS cashiers need the list). No insert on the read path. |
+| | `savePosRegisterFromForm` / `archivePosRegisterFromForm` | `company.sales_settings.write` (register master on `/company/sales`; Owner/Admin). Out of cashier and Viewer. |
 | `record-entry.ts` | `recordEntry`, reversals | `accounting.simple_entry.write` |
 | `accounts.ts` | `getActiveAccounts` | `.read`; no write API today |
 | `cashbook.ts` | list rows/totals | `accounting.cashbook.read` |

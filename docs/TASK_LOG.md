@@ -1,3 +1,9 @@
+## 2026-11-15 — Simple Entry write comes from the server home page (v2.5.30)
+
+- Record: [CHG-20261115-simple-entry-canwrite](changes/CHG-20261115-simple-entry-canwrite.md). Baseline product `ba840d0` / v2.5.29. Docker web image `43706093919` and Production Check `43706093976` failed `next build`: client Simple Entry imported `@/lib/access` (`next/headers`). Home now passes `canWrite={jobCanWrite(tenant, 'Simple Entry')}`. Preserve V/N/A/B, Walk-in, dates, closed shifts. Never replay CONT11 or the accepted POS 118 refund.
+- Checks: `@bookone/auth` vitest `pos-register-write-auth` 6 passed. Local `apps/web` `next build` compiled (previous `next/headers` via Simple Entry is gone). Isolated runtime and live browser not-run. Mixed-TENDER split not claimed.
+- Next: Owner waits for Docker web image green, then Portainer Update with Re-pull ON. Medium reviews v2.5.29+v2.5.30. Mission2 retests deployed affected paths. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-15 — Mission1 grouped register auth, payment validation, purchase VAT preview, labels, VAT summary (v2.5.29)
 
 - Record: [CHG-20261115-mission1-grouped](changes/CHG-20261115-mission1-grouped.md). Baseline product `48e4407` / v2.5.28. Frozen QA `24534f7`. Owner asked this candidate to be pushed to master for the Docker web image Action. Preserve V/N/A/B, Walk-in, dates, closed shifts. Never replay CONT11 or the accepted POS 118 refund.

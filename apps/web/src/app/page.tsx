@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { SimpleEntryScreen } from '@/components/simple-entry/simple-entry-screen';
+import { jobCanWrite } from '@/lib/access';
 import {
   canAccessFullErp,
   needsOnboarding,
@@ -32,5 +33,5 @@ export default async function HomePage() {
 
   // Sole full may land on cashbook by product preference after onboarding,
   // but `/` is a valid advanced entry (settings "Open full BookOne").
-  return <SimpleEntryScreen />;
+  return <SimpleEntryScreen canWrite={jobCanWrite(tenant, 'Simple Entry')} />;
 }

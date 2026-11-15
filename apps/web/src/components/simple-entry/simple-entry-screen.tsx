@@ -22,7 +22,6 @@ import {
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button } from '@/components/ui/bookone-ui';
 import { withFormPending } from '@/components/ui/form-busy';
-import { jobCanWrite } from '@/lib/access';
 import { recordEntry, type RecordEntryResult } from '@/app/actions/record-entry';
 import {
   getActiveAccounts,
@@ -85,7 +84,7 @@ interface DimensionOption {
   code: string | null;
 }
 
-export function SimpleEntryScreen() {
+export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) {
   const [direction, setDirection] = useState<Direction>('money_out');
   const [party, setParty] = useState('');
   const [amountStr, setAmountStr] = useState('');
@@ -312,8 +311,6 @@ export function SimpleEntryScreen() {
     setReceipt(null);
     setUploadError(null);
   }
-
-  const canWrite = jobCanWrite(tenant, 'Simple Entry');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

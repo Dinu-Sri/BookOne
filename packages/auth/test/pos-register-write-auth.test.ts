@@ -89,8 +89,10 @@ describe('POS register write authorization (Mission1 P1)', () => {
     expect(salesPage).toContain("jobCanWrite(tenant, 'Sales Settings')");
     expect(salesPage).toContain('canWrite ? saveSalesSettingsFromForm');
     expect(salesPage).toContain('Add register');
+    const home = readRepo('apps/web/src/app/page.tsx');
+    expect(home).toContain("jobCanWrite(tenant, 'Simple Entry')");
     const simple = readRepo('apps/web/src/components/simple-entry/simple-entry-screen.tsx');
-    expect(simple).toContain("jobCanWrite(tenant, 'Simple Entry')");
+    expect(simple).not.toContain("from '@/lib/access'");
     expect(simple).toContain('this job cannot record entries');
     const invoice = readRepo('apps/web/src/app/sales/invoices/[id]/page.tsx');
     expect(invoice).toContain("jobCanWrite(tenant, 'Sales Invoices')");

@@ -52,6 +52,23 @@ export type StoredOperation = {
   receipt: OperationReceipt;
 };
 
+export type StoredJob = {
+  id: string;
+  tenantId: string;
+  documentId: string;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  attempts: number;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const ACTIVE_OPERATION_STATUSES = ['posting', 'posted', 'unknown_outcome'] as const;
+
+export function isActiveOperationStatus(status: OperationReceipt['status']): boolean {
+  return (ACTIVE_OPERATION_STATUSES as readonly string[]).includes(status);
+}
+
 export type StoredBlob = {
   key: string;
   tenantId: string;
@@ -76,8 +93,13 @@ export interface AgentBridgeStore {
   getOperationByKey(tenantId: string, key: string): Promise<StoredOperation | null>;
   findOperationForProposal(tenantId: string, proposalId: string): Promise<StoredOperation | null>;
   saveOperation(op: StoredOperation): Promise<void>;
+  claimCommit(op: StoredOperation): Promise<{ claimed: true } | { claimed: false; existing: StoredOperation }>;
+  revokeApprovalsForProposal(tenantId: string, proposalId: string, nowIso: string): Promise<void>;
   putBlob(blob: StoredBlob): Promise<void>;
   getBlob(tenantId: string, key: string): Promise<StoredBlob | null>;
+  saveJob(job: StoredJob): Promise<void>;
+  getJob(tenantId: string, id: string): Promise<StoredJob | null>;
+  listJobs(tenantId: string): Promise<StoredJob[]>;
 }
 
 export class MemoryStore implements AgentBridgeStore {
@@ -87,6 +109,7 @@ export class MemoryStore implements AgentBridgeStore {
   approvals = new Map<string, ApprovalRecord>();
   ops = new Map<string, StoredOperation>();
   blobs = new Map<string, StoredBlob>();
+  jobs = new Map<string, StoredJob>();
 
   async flags(tenantId: string) {
     return (
@@ -146,6 +169,35 @@ export class MemoryStore implements AgentBridgeStore {
   }
   async saveOperation(op: StoredOperation) {
     this.ops.set(op.id, op);
+  }
+  async claimCommit(op: StoredOperation) {
+    const existingActive = [...this.ops.values()].find(
+      (o) => o.tenantId === op.tenantId && o.proposalId === op.proposalId && isActiveOperationStatus(o.receipt.status),
+    );
+    if (existingActive) return { claimed: false as const, existing: existingActive };
+    const byKey = [...this.ops.values()].find(
+      (o) => o.tenantId === op.tenantId && o.idempotencyKey === op.idempotencyKey,
+    );
+    if (byKey) return { claimed: false as const, existing: byKey };
+    this.ops.set(op.id, { ...op, receipt: { ...op.receipt } });
+    return { claimed: true as const };
+  }
+  async revokeApprovalsForProposal(tenantId: string, proposalId: string, nowIso: string) {
+    for (const a of this.approvals.values()) {
+      if (a.tenantId === tenantId && a.proposalId === proposalId && !a.revokedAt) {
+        a.revokedAt = nowIso;
+      }
+    }
+  }
+  async saveJob(job: StoredJob) {
+    this.jobs.set(job.id, job);
+  }
+  async getJob(tenantId: string, id: string) {
+    const j = this.jobs.get(id);
+    return j && j.tenantId === tenantId ? j : null;
+  }
+  async listJobs(tenantId: string) {
+    return [...this.jobs.values()].filter((j) => j.tenantId === tenantId);
   }
   async putBlob(blob: StoredBlob) {
     this.blobs.set(blob.key, blob);

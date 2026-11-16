@@ -65,6 +65,13 @@ import {
   tenantTeams,
   tenants,
   transactions,
+  agentBridgeSettings,
+  agentBridgeDocuments,
+  agentBridgeProposals,
+  agentBridgeApprovals,
+  agentBridgeOperations,
+  agentBridgeBlobs,
+  agentBridgeJobs,
 } from '../schema';
 import {
   ARCHIVE_DATA_TABLE_NAMES,
@@ -144,6 +151,13 @@ export const ARCHIVE_DUMP_TABLES: DumpTable[] = [
   { table: tenantTeams, by: 'tenantId' },
   { table: tenantTeamMembers, by: 'tenantId' },
   { table: tenantMembershipScopes, by: 'tenantId' },
+  { table: agentBridgeSettings, by: 'tenantId' },
+  { table: agentBridgeDocuments, by: 'tenantId' },
+  { table: agentBridgeProposals, by: 'tenantId' },
+  { table: agentBridgeApprovals, by: 'tenantId' },
+  { table: agentBridgeOperations, by: 'tenantId' },
+  { table: agentBridgeBlobs, by: 'tenantId' },
+  { table: agentBridgeJobs, by: 'tenantId' },
 ];
 
 function serializeRow(row: Record<string, unknown>): Record<string, unknown> {
@@ -208,7 +222,7 @@ export async function trialBalanceHash(tenantId: string): Promise<string> {
 }
 
 export async function collectLiveStoragePointers(tenantId: string): Promise<string[]> {
-  const [txns, styles, products, photos, imports] = await Promise.all([
+  const [txns, styles, products, photos, imports, inboxDocs] = await Promise.all([
     db()
       .select({ receiptRef: transactions.receiptRef })
       .from(transactions)
@@ -229,6 +243,10 @@ export async function collectLiveStoragePointers(tenantId: string): Promise<stri
       .select({ storageKey: bankStatementImports.storageKey })
       .from(bankStatementImports)
       .where(eq(bankStatementImports.tenantId, tenantId)),
+    db()
+      .select({ storageKey: agentBridgeDocuments.storageKey })
+      .from(agentBridgeDocuments)
+      .where(eq(agentBridgeDocuments.tenantId, tenantId)),
   ]);
   return collectStoragePointers({
     transactions: txns as Record<string, unknown>[],
@@ -236,6 +254,7 @@ export async function collectLiveStoragePointers(tenantId: string): Promise<stri
     inventory_products: products as Record<string, unknown>[],
     rental_return_photos: photos as Record<string, unknown>[],
     bank_statement_imports: imports as Record<string, unknown>[],
+    agent_bridge_documents: inboxDocs as Record<string, unknown>[],
   });
 }
 
@@ -249,6 +268,8 @@ export function collectStoragePointers(tables: Record<string, Record<string, unk
   for (const row of tables.inventory_products ?? []) take(row.imageKey);
   for (const row of tables.rental_return_photos ?? []) take(row.imageKey);
   for (const row of tables.bank_statement_imports ?? []) take(row.storageKey);
+  for (const row of tables.agent_bridge_documents ?? []) take(row.storageKey);
+  for (const row of tables.agent_bridge_blobs ?? []) take(row.key);
   return [...keys];
 }
 

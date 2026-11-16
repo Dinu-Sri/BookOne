@@ -19,6 +19,7 @@ import {
   sha256,
   type AgentBridgeStore,
   type StoredDocument,
+  type StoredOperation,
   type StoredProposal,
 } from './store';
 
@@ -33,6 +34,10 @@ export type PostingPort = {
     preview: PreviewEffect;
     idempotencyKey: string;
   }): Promise<{ billId: string; documentNumber: string }>;
+  lookupByIdempotencyKey?(
+    tenantId: string,
+    key: string,
+  ): Promise<{ billId: string; documentNumber: string } | null>;
 };
 
 export type AgentBridgeDeps = {
@@ -58,7 +63,7 @@ export class AgentBridgeService {
     assertCapability(actor, 'read');
     const flags = await this.flags(actor.tenantId);
     return {
-      schemaVersion: 'ab-01.1',
+      schemaVersion: 'ab-02.1',
       policyVersion: (await this.deps.policyFor(actor.tenantId)).policyVersion,
       flags,
       capabilities: actor.capabilities,
@@ -110,7 +115,7 @@ export class AgentBridgeService {
       updatedAt: new Date(this.now()).toISOString(),
     };
     await this.deps.store.saveDocument(doc);
-    await this.runExtraction(doc, input.textHint, Boolean(existing));
+    await this.runExtraction(doc, input.textHint, Boolean(existing), input.bytes);
     const fresh = await this.deps.store.getDocument(actor.tenantId, id);
     return { ok: true as const, document: fresh, duplicateOf: existing && existing.id !== id ? existing.id : undefined };
   }
@@ -184,6 +189,7 @@ export class AgentBridgeService {
     proposal.revision += 1;
     proposal.hash = '';
     await this.deps.store.saveProposal(proposal);
+    await this.deps.store.revokeApprovalsForProposal(actor.tenantId, proposal.id, new Date(this.now()).toISOString());
     const doc = await this.requireDoc(actor.tenantId, proposal.documentId);
     assertTransition(doc.status, blockingIssues(issues).length ? 'needs_clarification' : 'draft');
     doc.status = blockingIssues(issues).length ? 'needs_clarification' : 'draft';
@@ -256,10 +262,19 @@ export class AgentBridgeService {
 
   async grantApproval(actor: Actor, proposalId: string) {
     assertCapability(actor, 'approve');
+    if (actor.connectionId) {
+      return fail('HUMAN_APPROVAL_REQUIRED', 'A connected agent cannot mint human approval.');
+    }
     const flags = await this.flags(actor.tenantId);
     if (!flags.enabled) return fail('FEATURE_DISABLED', 'AgentBridge is off for this company.');
     const proposal = await this.requireProposal(actor.tenantId, proposalId);
+    const doc = await this.requireDoc(actor.tenantId, proposal.documentId);
+    if (!['validated', 'awaiting_approval', 'draft'].includes(doc.status)) {
+      return fail('STALE_REVISION', `Cannot approve from status ${doc.status}.`);
+    }
     const policy = await this.deps.policyFor(actor.tenantId);
+    const blocked = this.closedForCommit(proposal.facts, policy);
+    if (blocked) return blocked;
     const preview = calculatePreview(proposal.facts, policy);
     const hash = proposalHash(proposal.facts, preview.previewVersion, policy.policyVersion);
     proposal.preview = preview;
@@ -277,7 +292,7 @@ export class AgentBridgeService {
       expiresAt: new Date(this.now() + APPROVAL_TTL_MS).toISOString(),
     };
     await this.deps.store.saveApproval(approval);
-    const doc = await this.requireDoc(actor.tenantId, proposal.documentId);
+    assertTransition(doc.status, 'awaiting_approval');
     doc.status = 'awaiting_approval';
     await this.deps.store.saveDocument(doc);
     return approval;
@@ -300,30 +315,22 @@ export class AgentBridgeService {
     if (approval.revokedAt) return fail('EXPIRED_APPROVAL', 'Approval was revoked.');
     if (Date.parse(approval.expiresAt) <= this.now()) return fail('EXPIRED_APPROVAL', 'Approval expired. Preview again.');
     const policy = await this.deps.policyFor(actor.tenantId);
+    const blocked = this.closedForCommit(proposal.facts, policy);
+    if (blocked) return blocked;
     const preview = calculatePreview(proposal.facts, policy);
     const hash = proposalHash(proposal.facts, preview.previewVersion, policy.policyVersion);
-    if (hash !== approval.proposalHash) return fail('STALE_REVISION', 'The proposal changed after approval.');
+    if (hash !== approval.proposalHash || policy.policyVersion !== approval.policyVersion) {
+      return fail('STALE_REVISION', 'The proposal or policy changed after approval.');
+    }
 
     const payloadHash = sha256(JSON.stringify({ proposalId: proposal.id, hash, approvalId: approval.id }));
-    const existingKey = await this.deps.store.getOperationByKey(actor.tenantId, input.idempotencyKey);
-    if (existingKey) {
-      if (existingKey.payloadHash !== payloadHash) {
-        return fail('IDEMPOTENCY_MISMATCH', 'This key was used with a different payload.');
-      }
-      return existingKey.receipt;
-    }
-    const existingProposal = await this.deps.store.findOperationForProposal(actor.tenantId, proposal.id);
-    if (existingProposal && existingProposal.idempotencyKey !== input.idempotencyKey) {
-      return existingProposal.receipt;
-    }
-
     const opId = newId();
     const receipt: OperationReceipt = {
       operationId: opId,
       idempotencyKey: input.idempotencyKey,
       status: 'posting',
     };
-    await this.deps.store.saveOperation({
+    const claimed = await this.deps.store.claimCommit({
       id: opId,
       tenantId: actor.tenantId,
       idempotencyKey: input.idempotencyKey,
@@ -332,7 +339,15 @@ export class AgentBridgeService {
       approvalId: approval.id,
       receipt,
     });
+    if (!claimed.claimed) {
+      if (claimed.existing.payloadHash !== payloadHash && claimed.existing.idempotencyKey === input.idempotencyKey) {
+        return fail('IDEMPOTENCY_MISMATCH', 'This key was used with a different payload.');
+      }
+      return this.reconcileExisting(actor, claimed.existing);
+    }
+
     const doc = await this.requireDoc(actor.tenantId, proposal.documentId);
+    assertTransition(doc.status, 'posting');
     doc.status = 'posting';
     await this.deps.store.saveDocument(doc);
 
@@ -351,9 +366,16 @@ export class AgentBridgeService {
       receipt.journalMemo = preview.plainLanguage;
       doc.status = 'posted';
     } catch (e) {
-      receipt.status = 'failed';
-      receipt.error = e instanceof Error ? e.message : String(e);
-      doc.status = 'failed';
+      const message = e instanceof Error ? e.message : String(e);
+      if (isUncertainCommit(e)) {
+        receipt.status = 'unknown_outcome';
+        receipt.error = message;
+        doc.status = 'unknown_outcome';
+      } else {
+        receipt.status = 'failed';
+        receipt.error = message;
+        doc.status = 'failed';
+      }
     }
     await this.deps.store.saveOperation({
       id: opId,
@@ -388,6 +410,44 @@ export class AgentBridgeService {
     assertCapability(actor, 'read');
     if (!isOwnedAgentBridgeKey(actor.tenantId, key)) return fail('ATTACHMENT_REJECTED', 'Foreign attachment handle.');
     return this.deps.store.getBlob(actor.tenantId, key);
+  }
+
+  private closedForCommit(facts: ProposalFacts, policy: CompanyPolicy) {
+    if (!Number.isFinite(policy.vatRatePercent) || policy.vatRatePercent < 0) {
+      return fail('MISSING_TAX_POLICY', 'Company tax policy is not configured.');
+    }
+    if (!policy.currency) return fail('AMBIGUOUS_CURRENCY', 'Company currency is not configured.');
+    if (!policy.approvedCategories.length) {
+      return fail('AMBIGUOUS_CATEGORY', 'No approved expense category is configured.');
+    }
+    const issues = issuesFromProposal(facts, policy);
+    const blocked = blockingIssues(issues);
+    if (blocked.length) return fail(blocked[0]!.code, blocked[0]!.message);
+    if (facts.paidStatus !== 'unpaid') {
+      return fail('UNSUPPORTED_PAID', 'Evidence of payment does not authorize a payment or a paid bill in this workflow.');
+    }
+    if (facts.documentKind !== 'service_expense') {
+      return fail('UNSUPPORTED_STOCK', 'Stock or mixed stock/service invoices are out of this first workflow.');
+    }
+    if (facts.currency !== policy.currency) {
+      return fail('CURRENCY_MISMATCH', `This company books ${policy.currency}.`);
+    }
+    return null;
+  }
+
+  private async reconcileExisting(actor: Actor, op: StoredOperation) {
+    if (op.receipt.status === 'posted') return op.receipt;
+    if ((op.receipt.status === 'posting' || op.receipt.status === 'unknown_outcome') && this.deps.posting?.lookupByIdempotencyKey) {
+      const found = await this.deps.posting.lookupByIdempotencyKey(actor.tenantId, op.idempotencyKey);
+      if (found) {
+        op.receipt.status = 'posted';
+        op.receipt.billId = found.billId;
+        op.receipt.documentNumber = found.documentNumber;
+        await this.deps.store.saveOperation(op);
+        return op.receipt;
+      }
+    }
+    return op.receipt;
   }
 
   private async requireDoc(tenantId: string, id: string) {
@@ -439,11 +499,16 @@ function fail(code: string, error: string) {
   return { ok: false as const, code, error };
 }
 
+function isUncertainCommit(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout|timed out|ECONNRESET|EPIPE|uncertain|network|fetch failed/i.test(message);
+}
+
 function factsFromExtracted(
   extracted: NonNullable<StoredDocument['facts']>,
   policy: CompanyPolicy,
 ): ProposalFacts {
-  const category = policy.approvedCategories[0]!;
+  const category = policy.approvedCategories[0];
   const net = extracted.net?.value ?? money(0);
   const tax = extracted.tax?.value ?? money(0);
   const gross = extracted.gross?.value ?? money(net.minor + tax.minor);
@@ -454,8 +519,8 @@ function factsFromExtracted(
     currency: extracted.currency?.value ?? policy.currency,
     paidStatus: extracted.paidStatus?.value ?? 'unknown',
     documentKind: extracted.documentKind?.value ?? 'unknown',
-    expenseAccountCode: category.accountCode,
-    categoryLabel: category.label,
+    expenseAccountCode: category?.accountCode ?? '',
+    categoryLabel: category?.label ?? '',
     invoiceKind: policy.vatRegistered && tax.minor > 0 ? 'tax_invoice' : 'commercial',
     net,
     tax,

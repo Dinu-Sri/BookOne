@@ -104,6 +104,9 @@ describe('archive table whitelist', () => {
     expect(ARCHIVE_DATA_TABLE_NAMES).toContain('business_documents');
     expect(ARCHIVE_DATA_TABLE_NAMES).toContain('journal_lines');
     expect(ARCHIVE_DATA_TABLE_NAMES).toContain('inventory_products');
+    expect(ARCHIVE_DATA_TABLE_NAMES).toContain('agent_bridge_documents');
+    expect(ARCHIVE_DATA_TABLE_NAMES).toContain('agent_bridge_blobs');
+    expect(ARCHIVE_DATA_TABLE_NAMES as readonly string[]).not.toContain('agent_bridge_connections');
   });
 
   it('keeps prepared archives out of the files pack prefix', () => {

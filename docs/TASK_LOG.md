@@ -1,3 +1,10 @@
+## 2026-11-16 — AgentBridge grouped repair AB-02 (v2.7.1)
+
+- Record: [CHG-20261116-agentbridge-02](changes/CHG-20261116-agentbridge-02.md). Baseline product `ab54e34` / v2.7.0. Independent review https://github.com/Dinu-Sri/bookone-qa/pull/121 and CODING-AGENTBRIDGE-02. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11 or the accepted POS 118 refund.
+- Approval and commit fail closed on blocking issues, unpaid-service scope and policy. Concurrent proposal claims use MemoryStore atomic insert plus `045` unique index. Tokens require finite bounded expiry/issuer/audience. Agent connections cannot mint human approval. OCR HTTP adapter forwards bytes. Store methods re-enter `withTenantContext`. Archive dumps AgentBridge tables except connections. Tenant policy uses vendors/expense accounts and preserves a zero VAT rate.
+- Checks: `@bookone/agent-bridge` vitest 12 files / 39 passed (includes independent AB-02 acceptance 6 and OCR HTTP 2). `@bookone/auth` tenant-archive + permissions + release-gate 33 passed. Playwright inbox + UI-NAV-01 10 passed / 1 skipped (`AGENT_BRIDGE_E2E_BASE_URL` unset). Isolated staging browser not-run. Live OCR remote smoke / production IdP / external MCP client / GitHub branch protection stay BLOCKED. Mixed-TENDER split not claimed.
+- Next: Fast-forward master so Docker web image runs. Owner Portainer Update with Re-pull ON. Do not enable AgentBridge posting on a live company until independent QA. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-16 — AgentBridge Foundation AB-01 (v2.7.0)
 
 - Record: [CHG-20261116-agentbridge-01](changes/CHG-20261116-agentbridge-01.md). Baseline product `aa3e101` / v2.6.1. Owner asked for the full AgentBridge Foundation plus a reviewable PR, then deploy to master for the Docker web image Action. Preserve UI-NAV-01 list clipping and docs isolation. Tiles stay removed. Never replay CONT11 or the accepted POS 118 refund.

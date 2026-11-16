@@ -46,6 +46,7 @@ export const ARCHIVE_EXCLUDED_TABLES = [
   'ops_idempotency',
   'health_check_runs',
   'tenant_invites',
+  'agent_bridge_connections',
 ] as const;
 
 export const ARCHIVE_DATA_TABLE_NAMES = [
@@ -111,6 +112,13 @@ export const ARCHIVE_DATA_TABLE_NAMES = [
   'tenant_teams',
   'tenant_team_members',
   'tenant_membership_scopes',
+  'agent_bridge_settings',
+  'agent_bridge_documents',
+  'agent_bridge_proposals',
+  'agent_bridge_approvals',
+  'agent_bridge_operations',
+  'agent_bridge_blobs',
+  'agent_bridge_jobs',
 ] as const;
 
 export const TRADING_COUNT_KEYS = [
@@ -195,6 +203,13 @@ export const ARCHIVE_RESTORE_INSERT_ORDER = [
   'rental_kit_components',
   'rental_serials',
   'audit_log',
+  'agent_bridge_settings',
+  'agent_bridge_documents',
+  'agent_bridge_blobs',
+  'agent_bridge_proposals',
+  'agent_bridge_approvals',
+  'agent_bridge_operations',
+  'agent_bridge_jobs',
 ] as const;
 
 export function isOperationallyEmpty(counts: Record<string, number>): boolean {

@@ -1,6 +1,6 @@
 import { DEFAULT_CURRENCY, type Money } from './money';
 
-export const SCHEMA_VERSION = 'ab-01.1';
+export const SCHEMA_VERSION = 'ab-02.1';
 export const POLICY_VERSION = 'ab-01.purchase-bill.unpaid-service.v1';
 export const MCP_PROTOCOL_VERSION = '2025-03-26';
 export const API_VERSION = 'v1';
@@ -103,7 +103,11 @@ export type IssueCode =
   | 'MALICIOUS_INSTRUCTION_IGNORED'
   | 'EXTRACTION_FAILED'
   | 'PROVIDER_UNCONFIGURED'
-  | 'ATTACHMENT_REJECTED';
+  | 'ATTACHMENT_REJECTED'
+  | 'HUMAN_APPROVAL_REQUIRED'
+  | 'TOKEN_INVALID'
+  | 'CONNECTION_REVOKED'
+  | 'UNKNOWN_OUTCOME';
 
 export type Issue = {
   id: string;
@@ -170,6 +174,8 @@ export type Actor = {
   capabilities: Capability[];
   connectionId?: string;
   clientId?: string;
+  /** Display name of a trusted human approver when known. */
+  displayName?: string;
 };
 
 export type FeatureFlags = {

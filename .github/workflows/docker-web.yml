@@ -142,6 +142,12 @@ jobs:
         run: pnpm --filter @bookone/agent-bridge test
         env:
           NODE_ENV: test
+          AUTH_SECRET: test-secret-for-ci-only
+
+      - name: Independent AgentBridge acceptance
+        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/extraction-http.test.ts
+        env:
+          NODE_ENV: test
 
       - name: AgentBridge permissions and publication gate
         run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts

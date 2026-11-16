@@ -1,3 +1,7 @@
+## 2026-11-16 — AgentBridge grouped repair AB-02 (v2.7.1)
+
+Independent review of v2.7.0 `ab54e34` reproduced seven acceptance failures (QA draft PR #121). This candidate fails closed on blocking issues at approval and posting, claims one operation per proposal, rejects tokens without finite expiry, refuses agent-minted human approval, implements the OCR HTTP adapter, keeps tenant scope on every store call, and dumps AgentBridge records in tenant archive (connections excluded). Flags stay off. See [CHG-20261116-agentbridge-02](changes/CHG-20261116-agentbridge-02.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not enable posting until qualification. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-16 — AgentBridge Foundation AB-01 (v2.7.0)
 
 Document Inbox and the shared AgentBridge purchase-bill service land behind company flags that default off. List clipping and docs isolation from UI-NAV-01 stay. See [CHG-20261116-agentbridge-01](changes/CHG-20261116-agentbridge-01.md) and [AGENT_BRIDGE.md](AGENT_BRIDGE.md). Owner deploys via Docker web image then Portainer Re-pull ON. Live OCR, production IdP, and external MCP clients stay BLOCKED. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

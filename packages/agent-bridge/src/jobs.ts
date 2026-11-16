@@ -1,23 +1,15 @@
-import { newId, type AgentBridgeStore } from './store';
+import { newId, type AgentBridgeStore, type StoredJob } from './store';
 import type { Actor } from './contracts';
 import type { AgentBridgeService } from './service';
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'failed';
 
-export type ExtractionJob = {
-  id: string;
-  tenantId: string;
-  documentId: string;
-  status: JobStatus;
-  attempts: number;
-  lastError?: string;
-  createdAt: string;
-  updatedAt: string;
-};
+export type ExtractionJob = StoredJob;
 
-/** In-process durable queue. Postgres adapter persists the same records. */
+/** Durable queue. Records persist on the store when one is provided. Tables alone are not the worker. */
 export class MemoryJobQueue {
   jobs: ExtractionJob[] = [];
+  constructor(private readonly store?: AgentBridgeStore) {}
 
   async enqueue(tenantId: string, documentId: string): Promise<ExtractionJob> {
     const job: ExtractionJob = {
@@ -30,6 +22,7 @@ export class MemoryJobQueue {
       updatedAt: new Date().toISOString(),
     };
     this.jobs.push(job);
+    await this.store?.saveJob(job);
     return job;
   }
 
@@ -44,6 +37,7 @@ export class MemoryJobQueue {
     job.status = 'running';
     job.attempts += 1;
     job.updatedAt = new Date().toISOString();
+    await this.store?.saveJob(job);
     return job;
   }
 
@@ -53,6 +47,7 @@ export class MemoryJobQueue {
     job.status = error ? 'failed' : 'done';
     job.lastError = error;
     job.updatedAt = new Date().toISOString();
+    await this.store?.saveJob(job);
   }
 
   /** Redeliver jobs left running after a crash. */
@@ -61,8 +56,15 @@ export class MemoryJobQueue {
     for (const job of stuck) {
       job.status = 'pending';
       job.updatedAt = new Date().toISOString();
+      await this.store?.saveJob(job);
     }
     return stuck;
+  }
+
+  async hydrate(tenantId: string) {
+    if (!this.store) return;
+    const rows = await this.store.listJobs(tenantId);
+    for (const row of rows) this.jobs.push(row);
   }
 
   async runNext(service: AgentBridgeService, actor: Actor): Promise<ExtractionJob | null> {

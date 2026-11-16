@@ -3,6 +3,7 @@ import {
   actorFromToken,
   mintLocalFixtureToken,
   parseScopes,
+  signConnectionToken,
   verifyConnectionToken,
 } from '../src/authz';
 
@@ -28,5 +29,13 @@ describe('local fixture tokens', () => {
     expect(() => verifyConnectionToken(token, 'other')).toThrow(/signature/);
     expect(() => verifyConnectionToken('nope', secret)).toThrow(/malformed/);
     expect(() => verifyConnectionToken(token, secret, Date.now() + 9 * 3600_000)).toThrow(/expired/);
+  });
+
+  it('rejects a valid signature when expiry, issuer or audience is missing', () => {
+    const incomplete = signConnectionToken(
+      { tenantId: 't1', userId: 'u1', scopes: ['read'], connectionId: 'c1', clientId: 'cli' } as never,
+      secret,
+    );
+    expect(() => verifyConnectionToken(incomplete, secret)).toThrow();
   });
 });

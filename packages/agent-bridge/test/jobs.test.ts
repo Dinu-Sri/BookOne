@@ -42,4 +42,16 @@ describe('durable extraction jobs', () => {
     expect(['draft', 'needs_clarification']).toContain(after.document.status);
     expect(posting.posts).toHaveLength(0);
   });
+
+  it('persists jobs on the store so a restarted worker can recover', async () => {
+    const store = new MemoryStore();
+    const queue = new MemoryJobQueue(store);
+    const job = await queue.enqueue('t1', 'doc-1');
+    await queue.claim(job.id);
+    const restarted = new MemoryJobQueue(store);
+    await restarted.hydrate('t1');
+    const recovered = await restarted.recoverRunning();
+    expect(recovered).toHaveLength(1);
+    expect(await store.getJob('t1', job.id)).toMatchObject({ status: 'pending', documentId: 'doc-1' });
+  });
 });

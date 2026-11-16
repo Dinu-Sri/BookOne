@@ -90,6 +90,9 @@ export async function dispatchTool(
     case 'request_approval':
       return service.requestApproval(actor, String(args.proposalId ?? ''));
     case 'grant_approval':
+      if (actor.connectionId) {
+        return { ok: false, code: 'HUMAN_APPROVAL_REQUIRED', error: 'A connected agent cannot mint human approval.' };
+      }
       return service.grantApproval(actor, String(args.proposalId ?? ''));
     case 'commit_approved_proposal':
       return service.commitApprovedProposal(actor, {
@@ -121,7 +124,7 @@ export async function handleMcpJsonRpc(input: {
         result: {
           protocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'bookone-agent-bridge', version: 'ab-01.1' },
+          serverInfo: { name: 'bookone-agent-bridge', version: 'ab-02.1' },
         },
       };
     }

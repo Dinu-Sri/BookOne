@@ -44,6 +44,8 @@ describe('AgentBridge permission catalog v2', () => {
 
   it('044 enables RLS and docker-web keeps quality plus CoreGuard', () => {
     const sql = readFileSync(path.resolve(__dirname, '../../../packages/db/migrations/044_agent_bridge.sql'), 'utf8');
+    const claim = readFileSync(path.resolve(__dirname, '../../../packages/db/migrations/045_agent_bridge_claim.sql'), 'utf8');
+    expect(claim).toMatch(/agent_bridge_operations_active_proposal_uq/);
     expect(sql).toMatch(/ENABLE ROW LEVEL SECURITY/);
     expect(sql).toMatch(/agent_bridge_documents_isolation/);
     const yaml = readFileSync(path.resolve(__dirname, '../../../.github/workflows/docker-web.yml'), 'utf8');

@@ -175,7 +175,14 @@ export default async function InboxDocumentPage({
               </form>
             ) : null}
 
-            {storeApproval && canPost ? (
+            {storeApproval ? (
+              <p data-testid="inbox-approver">
+                Approved by {storeApproval.actorUserId}
+                {storeApproval.revokedAt ? ' (revoked after a later edit)' : ''}. Expires {storeApproval.expiresAt}.
+              </p>
+            ) : null}
+
+            {storeApproval && canPost && !storeApproval.revokedAt ? (
               <form action={commitInboxProposal}>
                 <input type="hidden" name="proposalId" value={proposal!.id} />
                 <input type="hidden" name="approvalId" value={storeApproval.id} />

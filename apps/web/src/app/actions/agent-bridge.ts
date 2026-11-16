@@ -16,7 +16,8 @@ import { agentBridgeTokenSecret } from '@/lib/agent-bridge-runtime';
 
 export async function uploadInboxDocument(formData: FormData) {
   await assertPermission('purchase.inbox.write', 'write');
-  const { service, actor } = await getAgentBridgeService();
+  const user = await requireTenantContext();
+  const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   const file = formData.get('file');
   if (!(file instanceof File)) {
     redirect('/purchase/inbox?err=Choose%20a%20PDF%20or%20image');
@@ -37,7 +38,8 @@ export async function uploadInboxDocument(formData: FormData) {
 
 export async function answerInboxIssue(formData: FormData) {
   await assertPermission('purchase.inbox.write', 'write');
-  const { service, actor } = await getAgentBridgeService();
+  const user = await requireTenantContext();
+  const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   await service.answerIssue(actor, {
     proposalId: String(formData.get('proposalId') ?? ''),
     issueId: String(formData.get('issueId') ?? ''),
@@ -50,7 +52,8 @@ export async function answerInboxIssue(formData: FormData) {
 
 export async function previewInboxProposal(formData: FormData) {
   await assertPermission('purchase.inbox.read', 'read');
-  const { service, actor } = await getAgentBridgeService();
+  const user = await requireTenantContext();
+  const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   const proposalId = String(formData.get('proposalId') ?? '');
   await service.validateProposal(actor, proposalId);
   await service.getPreview(actor, proposalId);
@@ -61,7 +64,8 @@ export async function previewInboxProposal(formData: FormData) {
 
 export async function approveInboxProposal(formData: FormData) {
   await assertPermission('agent_bridge.approve', 'write');
-  const { service, actor } = await getAgentBridgeService();
+  const user = await requireTenantContext();
+  const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   await service.grantApproval(actor, String(formData.get('proposalId') ?? ''));
   const documentId = String(formData.get('documentId') ?? '');
   revalidatePath(`/purchase/inbox/${documentId}`);
@@ -70,7 +74,8 @@ export async function approveInboxProposal(formData: FormData) {
 
 export async function commitInboxProposal(formData: FormData) {
   await assertPermission('agent_bridge.post', 'write');
-  const { service, actor } = await getAgentBridgeService();
+  const user = await requireTenantContext();
+  const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   const receipt = await service.commitApprovedProposal(actor, {
     proposalId: String(formData.get('proposalId') ?? ''),
     approvalId: String(formData.get('approvalId') ?? ''),

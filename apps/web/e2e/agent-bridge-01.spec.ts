@@ -27,6 +27,11 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
   expect(posting).toMatch(/withTenantContext/);
   expect(posting).toMatch(/intersectCapabilities/);
   expect(posting).toMatch(/loadAccessForUser/);
+  expect(posting).toMatch(/allows\('agent_bridge.approve', 'write'\)/);
+  expect(posting).toMatch(/allows\('agent_bridge.post', 'write'\)/);
+  const resolve = readFileSync(path.join(root, 'packages/auth/src/permissions/resolve.ts'), 'utf8');
+  expect(resolve).toMatch(/isActionPermissionKey/);
+  expect(resolve).toMatch(/writeLookupKey/);
   expect(nav).toMatch(/Document Inbox/);
   expect(nav).not.toMatch(/TileSuiteNav|NavModeToggle/);
 });
@@ -162,7 +167,7 @@ test('deployed Next login, inbox, and posting readback when AGENT_BRIDGE_E2E_BAS
   const base = process.env.AGENT_BRIDGE_E2E_BASE_URL;
   test.skip(
     !base,
-    'Fresh synthetic tenant Next+Postgres browser remains skipped until AGENT_BRIDGE_E2E_BASE_URL is set.',
+    'Isolated Next+Postgres browser on a fresh synthetic tenant is not run in this CoreGuard job. Independent QA completes that workflow after the Owner grant fix. AGENT_BRIDGE_E2E_BASE_URL is not a substitute for a working standard Owner grant.',
   );
   await page.goto(`${base}/login`);
   await expect(page.locator('body')).toBeVisible();

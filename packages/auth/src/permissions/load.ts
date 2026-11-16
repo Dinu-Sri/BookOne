@@ -13,11 +13,10 @@ import {
   tenants,
   withTenantContext,
 } from '@bookone/db';
-import type { AccessLevel } from './catalog';
+import { canonicalPermissionKey, type AccessLevel, type PermissionKey } from './catalog';
 import { effectiveModules } from './ceiling';
+import { grantsFromTemplateKey } from './grants';
 import { allows, isReadOnlyJob, type ResolveInput } from './resolve';
-import { templateByKey } from './templates';
-import type { PermissionKey } from './catalog';
 import { scopeIgnoresJob } from './scope';
 
 export type LoadedAccess = ResolveInput & {
@@ -34,12 +33,7 @@ export type LoadedAccess = ResolveInput & {
 };
 
 function grantsFromTemplate(templateKey: string | null): { key: string; level: AccessLevel }[] {
-  const t = templateKey ? templateByKey(templateKey) : undefined;
-  if (!t) return [];
-  return t.grants.map((key) => ({
-    key,
-    level: (key.endsWith('.read') ? 'read' : 'write') as AccessLevel,
-  }));
+  return grantsFromTemplateKey(templateKey);
 }
 
 export async function loadAccessForUser(userId: string, tenantId: string, platformRole: 'super_admin' | 'user'): Promise<LoadedAccess | null> {
@@ -149,7 +143,7 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
       );
     for (const row of rows) {
       grants.push({
-        key: row.permissionKey,
+        key: canonicalPermissionKey(row.permissionKey),
         level: row.level === 'write' ? 'write' : 'read',
       });
     }
@@ -177,7 +171,7 @@ async function loadAccessForUserInner(userId: string, tenantId: string, platform
     extraTemplateKey: extraRole?.templateKey ?? extraRole?.slug ?? null,
     grants,
     overrides: overrideRows.map((o) => ({
-      key: o.permissionKey,
+      key: canonicalPermissionKey(o.permissionKey),
       effect: o.effect === 'deny' ? 'deny' : 'allow',
     })),
     entityKind: tenant.entityKind,

@@ -1,6 +1,8 @@
 import {
+  isActionPermissionKey,
   isPrivilegedKey,
   moduleOfKey,
+  permissionGrantAliases,
   type AccessLevel,
   type PermissionKey,
 } from './catalog';
@@ -100,11 +102,31 @@ export function isReadOnlyJob(input: {
   );
 }
 
+function isWriteCatalogKey(key: string): boolean {
+  return key.endsWith('.write') || isActionPermissionKey(key);
+}
+
+function grantCovers(grantKey: string, lookupKey: string): boolean {
+  return permissionGrantAliases(lookupKey).includes(grantKey);
+}
+
+function writeLookupKey(requested: string): string {
+  const raw = String(requested);
+  const prefix = raw.replace(/\.(read|write)$/, '');
+  if (isActionPermissionKey(raw)) return raw;
+  if (isActionPermissionKey(prefix)) return prefix;
+  return `${prefix}.write`;
+}
+
+function overrideMatches(overrideKey: string, lookupKey: string): boolean {
+  return permissionGrantAliases(lookupKey).includes(overrideKey);
+}
+
 export function resolveLevel(input: ResolveInput, key: string): AccessLevel {
   if (key.startsWith('control_room')) {
     return input.platformRole === 'super_admin' ? 'write' : 'none';
   }
-  const needWrite = key.endsWith('.write');
+  const needWrite = isWriteCatalogKey(key);
   if (needWrite && isReadOnlyJob(input)) return 'none';
   const need: 'read' | 'write' = needWrite ? 'write' : 'read';
   if (!ceilingAllows(input, key, need)) {
@@ -123,7 +145,7 @@ export function resolveLevel(input: ResolveInput, key: string): AccessLevel {
   // when RBAC is off. Admin must not inherit Owner-only backup via fallbackFullAccess.
   if (fallbackFullAccess(input) && !isPrivilegedKey(key)) {
     if (need === 'write' && ceilingAllows(input, key, 'write')) return 'write';
-    if (ceilingAllows(input, key, 'read')) return key.endsWith('.write') ? 'write' : 'read';
+    if (ceilingAllows(input, key, 'read')) return isWriteCatalogKey(key) ? 'write' : 'read';
   }
 
   let have: AccessLevel = 'none';
@@ -131,17 +153,17 @@ export function resolveLevel(input: ResolveInput, key: string): AccessLevel {
     have = privilegedLevel(input.primaryTemplateKey, key);
   } else {
     for (const g of input.grants) {
-      if (g.key === key) have = maxLevel(have, g.level);
+      if (grantCovers(g.key, key)) have = maxLevel(have, g.level);
       if (key.endsWith('.read') && g.key === key.replace(/\.read$/, '.write') && g.level === 'write') {
         have = maxLevel(have, 'read');
       }
     }
   }
 
-  const deny = input.overrides.find((o) => o.key === key && o.effect === 'deny');
+  const deny = input.overrides.find((o) => overrideMatches(o.key, key) && o.effect === 'deny');
   if (deny) return 'none';
-  const allow = input.overrides.find((o) => o.key === key && o.effect === 'allow' && !isPrivilegedKey(key));
-  if (allow) have = maxLevel(have, key.endsWith('.write') ? 'write' : 'read');
+  const allow = input.overrides.find((o) => overrideMatches(o.key, key) && o.effect === 'allow' && !isPrivilegedKey(key));
+  if (allow) have = maxLevel(have, isWriteCatalogKey(key) ? 'write' : 'read');
 
   if (key.endsWith('.read') && have === 'none') {
     const writeHave = resolveWriteOnly(input, key.replace(/\.read$/, '.write'));
@@ -154,7 +176,7 @@ function resolveWriteOnly(input: ResolveInput, writeKey: string): AccessLevel {
   if (isPrivilegedKey(writeKey)) return privilegedLevel(input.primaryTemplateKey, writeKey);
   let have: AccessLevel = 'none';
   for (const g of input.grants) {
-    if (g.key === writeKey) have = maxLevel(have, g.level);
+    if (grantCovers(g.key, writeKey)) have = maxLevel(have, g.level);
   }
   return have;
 }
@@ -163,8 +185,14 @@ export function allows(input: ResolveInput, key: PermissionKey | string, need: '
   const prefix = String(key).replace(/\.(read|write)$/, '');
   if (need === 'write') {
     if (isReadOnlyJob(input)) return false;
-    if (!ceilingAllows(input, `${prefix}.write`, 'write')) return false;
-    return resolveLevel(input, `${prefix}.write`) === 'write';
+    const lookup = writeLookupKey(key);
+    if (!ceilingAllows(input, lookup, 'write')) return false;
+    return resolveLevel(input, lookup) === 'write';
+  }
+  if (isActionPermissionKey(String(key)) || isActionPermissionKey(prefix)) {
+    const leaf = isActionPermissionKey(String(key)) ? String(key) : prefix;
+    if (!ceilingAllows(input, leaf, 'read')) return false;
+    return needSatisfied(resolveLevel(input, leaf), 'read');
   }
   if (!ceilingAllows(input, `${prefix}.read`, 'read')) return false;
   const writeHave = resolveLevel(input, `${prefix}.write`);

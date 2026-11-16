@@ -1,3 +1,7 @@
+## 2026-11-16 — AgentBridge approve/post permission keys AB-04 (v2.7.4)
+
+Independent retest of v2.7.3 `382f0d8` found catalog `agent_bridge.approve` / `agent_bridge.post` grants that `allows(..., 'write')` did not recognize for Owner, Accountant and Purchasing (QA draft PR #123). This candidate uses an explicit-key rule plus a persisted `.write` alias so those standard jobs can approve and post. Viewer stays read-only. Flags stay off. Staging remains unchanged. See [CHG-20261116-agentbridge-04](changes/CHG-20261116-agentbridge-04.md). Owner deploys after independent qualification. Do not enable posting until then. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-16 — AgentBridge authorization, reconciliation, restore AB-03 (v2.7.3)
 
 Independent retest of v2.7.2 `2967526` reproduced Viewer stale-scope posting, lost-response document drift, and restore attachment lookup failure (QA draft PR #122). This candidate intersects token scopes with current grants, reconciles receipt and document together, and remaps blob keys with the shared storage-pointer rule. Flags stay off. See [CHG-20261116-agentbridge-03](changes/CHG-20261116-agentbridge-03.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not enable posting until qualification. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

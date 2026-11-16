@@ -1,3 +1,7 @@
+## 2026-11-16 — Type AgentBridge operation receipts for web lint (v2.7.2)
+
+v2.7.1 `4e9b7ba` quality job failed `tsc` on `mapOp` receipt `never`. This candidate types receipts as `OperationReceipt` so the Docker web image can build. Flags stay off. See [CHG-20261116-agentbridge-02-lint](changes/CHG-20261116-agentbridge-02-lint.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not enable posting until qualification. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-16 — AgentBridge grouped repair AB-02 (v2.7.1)
 
 Independent review of v2.7.0 `ab54e34` reproduced seven acceptance failures (QA draft PR #121). This candidate fails closed on blocking issues at approval and posting, claims one operation per proposal, rejects tokens without finite expiry, refuses agent-minted human approval, implements the OCR HTTP adapter, keeps tenant scope on every store call, and dumps AgentBridge records in tenant archive (connections excluded). Flags stay off. See [CHG-20261116-agentbridge-02](changes/CHG-20261116-agentbridge-02.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not enable posting until qualification. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

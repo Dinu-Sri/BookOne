@@ -8,6 +8,7 @@ import {
   type Capability,
   type CompanyPolicy,
   type FeatureFlags,
+  type OperationReceipt,
   type PostingPort,
   parseScopes,
 } from '@bookone/agent-bridge';
@@ -497,7 +498,7 @@ function mapApproval(row: typeof agentBridgeApprovals.$inferSelect) {
   };
 }
 
-function mapOp(row: typeof agentBridgeOperations.$inferSelect) {
+function mapOp(row: typeof agentBridgeOperations.$inferSelect): StoredOperation {
   return {
     id: row.id,
     tenantId: row.tenantId,
@@ -505,7 +506,7 @@ function mapOp(row: typeof agentBridgeOperations.$inferSelect) {
     payloadHash: row.payloadHash,
     proposalId: row.proposalId,
     approvalId: row.approvalId ?? undefined,
-    receipt: row.receiptJson as never,
+    receipt: row.receiptJson as OperationReceipt,
   };
 }
 

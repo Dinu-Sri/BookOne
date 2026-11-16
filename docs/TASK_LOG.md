@@ -1,3 +1,10 @@
+## 2026-11-16 — Type AgentBridge operation receipts for web lint (v2.7.2)
+
+- Record: [CHG-20261116-agentbridge-02-lint](changes/CHG-20261116-agentbridge-02-lint.md). Baseline product `4e9b7ba` / v2.7.1. Docker web image `43851851649` and Production Check `43851851906` failed `@bookone/web` lint: `mapOp` cast `receiptJson as never`, then `claimCommit` read `.status`. Keep Inbox OFF, draft-only ON, posting-stop ON. Never replay CONT11 or the accepted POS 118 refund.
+- `mapOp` returns `StoredOperation` with `receipt` as `OperationReceipt`. No behaviour change.
+- Checks: local web `tsc --noEmit` after the type fix. CoreGuard on v2.7.1 already passed (independent acceptance, Playwright inbox + UI-NAV-01). Isolated staging browser not-run. Live OCR / production IdP / external MCP / GitHub branch protection stay BLOCKED.
+- Next: Fast-forward master so Docker web image runs. Owner Portainer Update with Re-pull ON. Do not enable AgentBridge posting until independent QA. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-16 — AgentBridge grouped repair AB-02 (v2.7.1)
 
 - Record: [CHG-20261116-agentbridge-02](changes/CHG-20261116-agentbridge-02.md). Baseline product `ab54e34` / v2.7.0. Independent review https://github.com/Dinu-Sri/bookone-qa/pull/121 and CODING-AGENTBRIDGE-02. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11 or the accepted POS 118 refund.

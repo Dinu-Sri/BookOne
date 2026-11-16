@@ -1,35 +1,6 @@
 'use client';
 
-import {
-  Archive,
-  Bell,
-  BookOpen,
-  BookOpenCheck,
-  Building2,
-  CalendarDays,
-  Calculator,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  ClipboardList,
-  FileText,
-  Globe2,
-  History,
-  Landmark,
-  LayoutDashboard,
-  LineChart,
-  LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Package,
-  ReceiptText,
-  SlidersHorizontal,
-  ShieldCheck,
-  ShoppingCart,
-  Tags,
-  Users,
-} from 'lucide-react';
-import Link from 'next/link';
+import { Bell, CalendarDays, Check, ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
@@ -37,153 +8,27 @@ import { bookoneAppVersion, bookoneBuildId, bookoneVersionLabel } from '@/lib/bu
 import { PeriodSelector } from '@/components/layout/period-selector';
 import { StatusToast } from '@/components/layout/status-toast';
 import { signOutCurrentUser } from '@/app/actions/auth-session';
+import { normalizeModules, type TenantModules } from '@/lib/platform-modules';
 import {
-  isPosNavItem,
-  isRentalNavItem,
-  normalizeModules,
-  suiteModuleKey,
-  type TenantModules,
-} from '@/lib/platform-modules';
-import {
-  canAccessFullErp,
-  canWriteModule,
   hasReadOnlyAdvancedModules,
   homePathForEntity,
   needsOnboarding,
   parseEntityKind,
   usesPersonalShell,
-  type ModuleWriteKey,
 } from '@/lib/entity-kind';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
-import { keepNavItem } from '@/lib/nav-visibility';
+import { ListSuiteNav, NavModeToggle, TileSuiteNav } from '@/components/layout/sidebar-nav';
+import { CASHBOOK_NAV_ITEM, NAV_SUITES, type NavItem } from '@/lib/nav-suites';
+import {
+  parseNavMode,
+  readNavMode,
+  resolveTileSuite,
+  writeNavMode,
+  type NavMode,
+} from '@/lib/nav-preference';
+import { filterVisibleSuites, suiteIdForActiveLabel } from '@/lib/nav-visibility';
 
-export interface NavItem {
-  label: string;
-  /** Optional second line (e.g. Dispatch Note) — nowrap, smaller */
-  subtitle?: string;
-  icon: typeof Bell;
-  href?: string;
-}
-
-interface NavSuite {
-  id: string;
-  label: string;
-  icon: typeof Bell;
-  items: NavItem[];
-  superAdminOnly?: boolean;
-}
-
-const navSuites: NavSuite[] = [
-  {
-    id: 'accounting',
-    label: 'Accounting',
-    icon: Landmark,
-    items: [
-      { label: 'Simple Entry', icon: ReceiptText, href: '/' },
-      // Injected at runtime for sole prop: Cashbook (personal + business domains)
-      { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-      { label: 'Transactions', icon: ClipboardList, href: '/transactions' },
-      { label: 'Journal', icon: BookOpenCheck, href: '/journal' },
-      { label: 'Activity', icon: History, href: '/journal/audit' },
-      { label: 'Reports', icon: LineChart, href: '/reports' },
-      { label: 'Accounts', icon: Landmark, href: '/accounts' },
-      { label: 'Reconciliation', icon: ShieldCheck, href: '/reconciliation' },
-      { label: 'Documentation', icon: BookOpen, href: '/docs' },
-    ],
-  },
-  {
-    id: 'parties',
-    label: 'Parties',
-    icon: Users,
-    items: [
-      { label: 'Customers', icon: Users, href: '/parties/customers' },
-      { label: 'Vendors', icon: Building2, href: '/parties/vendors' },
-    ],
-  },
-  {
-    id: 'sales',
-    label: 'Sales',
-    icon: ShoppingCart,
-    items: [
-      { label: 'Quotations', icon: FileText, href: '/sales/quotations' },
-      { label: 'Sales Orders', subtitle: 'Dispatch Note', icon: ClipboardList, href: '/sales/orders' },
-      { label: 'Sales Invoices', icon: ReceiptText, href: '/sales/invoices' },
-      { label: 'Receive Payments', icon: Landmark, href: '/sales/payments' },
-      { label: 'AR Aging', icon: CalendarDays, href: '/sales/aging' },
-      { label: 'Sales Returns', icon: BookOpenCheck, href: '/sales/returns' },
-      { label: 'POS', subtitle: 'Terminal', icon: ShoppingCart, href: '/pos' },
-      { label: 'POS History', icon: ReceiptText, href: '/sales/pos' },
-      { label: 'Discounts', icon: Calculator, href: '/sales/discounts' },
-    ],
-  },
-  {
-    id: 'purchase',
-    label: 'Purchase',
-    icon: Package,
-    items: [
-      { label: 'Purchase Orders', icon: ClipboardList, href: '/purchase/orders' },
-      { label: 'Goods Received', icon: Package, href: '/purchase/receipts' },
-      { label: 'Purchases', icon: ReceiptText, href: '/purchase/purchases' },
-      { label: 'Cash Purchases', icon: ShoppingCart, href: '/purchase/expenses' },
-      { label: 'Import Purchases', icon: Globe2, href: '/purchase/import' },
-      { label: 'Purchase Returns', icon: BookOpenCheck, href: '/purchase/returns' },
-      { label: 'Pay Vendors', icon: Landmark, href: '/purchase/payments' },
-      { label: 'AP Aging', icon: CalendarDays, href: '/purchase/aging' },
-      { label: 'Suppliers', icon: Building2, href: '/purchase/suppliers' },
-    ],
-  },
-  {
-    id: 'inventory',
-    label: 'Inventory',
-    icon: Package,
-    items: [
-      { label: 'Products', icon: Package, href: '/inventory/products' },
-      { label: 'Categories', icon: Tags, href: '/inventory/categories' },
-      { label: 'Stock Levels', icon: Landmark, href: '/inventory/levels' },
-      { label: 'Low Stock', icon: SlidersHorizontal, href: '/inventory/levels?low=1' },
-      { label: 'Stock Ledger', icon: BookOpenCheck, href: '/inventory/ledger' },
-      { label: 'Stock Transfers', icon: ClipboardList, href: '/inventory/transfers' },
-      { label: 'Stock Adjustments', icon: SlidersHorizontal, href: '/inventory/adjustments' },
-      { label: 'Rental calendar', icon: CalendarDays, href: '/inventory/calendar' },
-      { label: 'Dispatch / returns', icon: ClipboardList, href: '/inventory/on-rent' },
-      { label: 'On rent', icon: CalendarDays, href: '/inventory/levels?fleet=on_rent' },
-    ],
-  },
-  {
-    id: 'company',
-    label: 'Company',
-    icon: Building2,
-    items: [
-      { label: 'Company Details', icon: Building2, href: '/company/details' },
-      { label: 'Tax Info', icon: FileText, href: '/company/tax' },
-      { label: 'Sales Settings', icon: ReceiptText, href: '/company/sales' },
-      { label: 'Document styles', icon: FileText, href: '/company/document-styles' },
-      { label: 'Purchase Settings', icon: ShoppingCart, href: '/company/purchase' },
-      { label: 'Inventory Settings', icon: Package, href: '/company/inventory' },
-      { label: 'Rental Settings', icon: CalendarDays, href: '/company/rental' },
-      { label: 'Brands', icon: Package, href: '/company/brands' },
-      { label: 'Locations', icon: Landmark, href: '/company/locations' },
-      { label: 'Domain Verification', icon: Globe2, href: '/company/domains' },
-      { label: 'Backup', icon: Archive, href: '/company/backup' },
-      { label: 'Team', icon: Users, href: '/company/team' },
-      { label: 'Jobs', icon: ShieldCheck, href: '/company/team/jobs' },
-      { label: 'Groups', icon: Users, href: '/company/team/groups' },
-    ],
-  },
-  {
-    id: 'control-room',
-    label: 'Control Room',
-    icon: SlidersHorizontal,
-    superAdminOnly: true,
-    items: [
-      { label: 'Overview', icon: LayoutDashboard, href: '/control-room' },
-      { label: 'Companies', icon: Building2, href: '/control-room/companies' },
-      { label: 'Modules', icon: SlidersHorizontal, href: '/control-room/modules' },
-      { label: 'Access', icon: ShieldCheck, href: '/control-room/access' },
-      { label: 'ERP Health Check', icon: CheckCircle2, href: '/control-room/health-check' },
-    ],
-  },
-];
+export type { NavItem };
 
 function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -358,66 +203,58 @@ export function BookOneShell({
     entityKind != null &&
     hasReadOnlyAdvancedModules(entityKind, tenant?.capabilityTier, modules);
 
-  const visibleSuites = useMemo(() => {
-    return navSuites
-      .filter((suite) => !suite.superAdminOnly || isSuperAdmin)
-      .map((suite) => {
-        const modKey = suiteModuleKey(suite.id) as ModuleWriteKey | null;
-        if (modKey && !modules[modKey]) {
-          return null;
-        }
-        let items = suite.items;
-        // POS nav items require the pos module (sales suite may still show).
-        if (suite.id === 'sales' && !modules.pos) {
-          items = items.filter((item) => !isPosNavItem(item.label));
-        }
-        if ((suite.id === 'company' || suite.id === 'inventory') && !modules.rental) {
-          items = items.filter((item) => !isRentalNavItem(item.label));
-        }
-        if (suite.id === 'company' && entityKind === 'personal') {
-          items = items.filter((item) => item.label !== 'Team' && item.label !== 'Jobs' && item.label !== 'Groups');
-        }
-        if (tenant?.accessByLabel) {
-          items = items.filter((item) =>
-            keepNavItem({
-              label: item.label,
-              href: item.href,
-              accessByLabel: tenant.accessByLabel,
-              suiteSuperAdminOnly: suite.superAdminOnly,
-              isSuperAdmin,
-            }),
-          );
-        }
-        // Sole: always link Cashbook (Personal | Business domains) from ERP
-        if (suite.id === 'accounting' && soleNeedsCashbook) {
-          items = [
-            items[0]!,
-            { label: 'Cashbook', subtitle: 'Personal · Business', icon: BookOpen, href: '/cashbook' },
-            ...items.slice(1),
-          ];
-        }
-        // Mark inventory/POS as view-only in nav when sole lite after downgrade
-        if (
-          entityKind &&
-          modKey &&
-          (modKey === 'inventory' || modKey === 'pos') &&
-          !canWriteModule(entityKind, tenant?.capabilityTier, modules, modKey)
-        ) {
-          return {
-            ...suite,
-            label: `${suite.label} (view)`,
-            items,
-          };
-        }
-        return { ...suite, items };
-      })
-      .filter((suite): suite is NavSuite => suite != null && suite.items.length > 0);
-  }, [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier, tenant?.accessByLabel]);
-  const activeSuite = visibleSuites.find((suite) => suite.items.some((item) => item.label === active))?.id ?? 'accounting';
+  const visibleSuites = useMemo(
+    () =>
+      filterVisibleSuites({
+        suites: NAV_SUITES,
+        isSuperAdmin,
+        modules,
+        entityKind,
+        capabilityTier: tenant?.capabilityTier,
+        accessByLabel: tenant?.accessByLabel,
+        soleNeedsCashbook,
+        cashbookItem: CASHBOOK_NAV_ITEM,
+      }),
+    [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier, tenant?.accessByLabel],
+  );
+  const activeSuite = suiteIdForActiveLabel(visibleSuites, active) ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
+  const [navMode, setNavMode] = useState<NavMode>('list');
+  const [tileSuiteId, setTileSuiteId] = useState<string | null>(activeSuite);
+  const visibleSuiteIds = useMemo(() => visibleSuites.map((suite) => suite.id), [visibleSuites]);
+
+  useEffect(() => {
+    const stored = readNavMode(window.localStorage);
+    setNavMode(stored);
+    if (stored === 'tiles') {
+      setTileSuiteId((current) => resolveTileSuite(current, visibleSuiteIds, activeSuite));
+    }
+    // Intentionally once after hydration so SSR stays List.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setOpenSuite(activeSuite);
+  }, [activeSuite]);
+
+  useEffect(() => {
+    setTileSuiteId((current) => {
+      if (current && !visibleSuiteIds.includes(current)) return null;
+      return current;
+    });
+  }, [visibleSuiteIds]);
+
+  function changeNavMode(next: NavMode) {
+    const mode = parseNavMode(next);
+    setNavMode(mode);
+    writeNavMode(mode, window.localStorage);
+    if (mode === 'tiles') {
+      setTileSuiteId((current) => resolveTileSuite(current, visibleSuiteIds, activeSuite));
+    }
+  }
 
   return (
-    <div className={`app-shell ${sidebarOpen ? '' : 'is-collapsed'}`}>
+    <div className={`app-shell ${sidebarOpen ? '' : 'is-collapsed'}`} data-nav-mode={navMode}>
       <aside className="sidebar" aria-label="BookOne workspace sidebar">
         <div className="sidebar-header">
           <BrandLockup compact={!sidebarOpen} href="/dashboard" />
@@ -430,6 +267,7 @@ export function BookOneShell({
             {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
           </Button>
         </div>
+        <NavModeToggle mode={navMode} collapsed={!sidebarOpen} onChange={changeNavMode} />
         {readOnlyAdvanced ? (
           <div className="sidebar-readonly-banner" title="Inventory/POS are view-only until you upgrade to sole full">
             View-only advanced modules
@@ -437,75 +275,23 @@ export function BookOneShell({
         ) : null}
 
         <div className="sidebar-section suite-nav">
-          <nav aria-label="Suite navigation">
-            {visibleSuites.map((suite) => {
-              const isOpen = openSuite === suite.id;
-              const hasActiveItem = suite.items.some((item) => item.label === active);
-              return (
-                <div className={`suite-group ${isOpen ? 'open' : ''}`} key={suite.id}>
-                  <button
-                    className={`suite-trigger ${hasActiveItem ? 'active' : ''}`}
-                    type="button"
-                    title={suite.label}
-                    aria-expanded={isOpen}
-                    onClick={() => setOpenSuite((current) => (current === suite.id ? '' : suite.id))}
-                  >
-                    <suite.icon size={17} />
-                    <span>{suite.label}</span>
-                    <ChevronDown className="suite-chevron" size={15} />
-                  </button>
-                  <div
-                    className="suite-panel"
-                    style={{
-                      maxHeight: isOpen
-                        ? `${suite.items.reduce((h, it) => h + (it.subtitle ? 52 : 40), 12)}px`
-                        : '0px',
-                    }}
-                  >
-                    <div className="nav-list" aria-label={`${suite.label} navigation`}>
-                      {suite.items.map((item) => {
-                        const isActive = item.label === active;
-                        const title = item.subtitle ? `${item.label} (${item.subtitle})` : item.label;
-                        const content = (
-                          <>
-                            <item.icon size={16} />
-                            <span className="nav-item-text">
-                              <span className="nav-item-label">{item.label}</span>
-                              {item.subtitle ? (
-                                <span className="nav-item-sub">{item.subtitle}</span>
-                              ) : null}
-                              {tenant?.accessByLabel?.[item.label] === 'read' ? (
-                                <span className="nav-item-sub">View only</span>
-                              ) : null}
-                            </span>
-                            {!item.href ? <em>Soon</em> : null}
-                          </>
-                        );
-                        return item.href ? (
-                          <Link
-                            className={`nav-item nav-child ${item.subtitle ? 'nav-child-multi' : ''} ${isActive ? 'active' : ''}`}
-                            href={item.href}
-                            key={item.label}
-                            title={title}
-                          >
-                            {content}
-                          </Link>
-                        ) : (
-                          <span
-                            className={`nav-item nav-child ${item.subtitle ? 'nav-child-multi' : ''} disabled`}
-                            key={item.label}
-                            title={`${title} coming soon`}
-                          >
-                            {content}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </nav>
+          {navMode === 'tiles' ? (
+            <TileSuiteNav
+              suites={visibleSuites}
+              active={active}
+              tileSuiteId={tileSuiteId}
+              onTileSuite={setTileSuiteId}
+              accessByLabel={tenant?.accessByLabel}
+            />
+          ) : (
+            <ListSuiteNav
+              suites={visibleSuites}
+              active={active}
+              openSuite={openSuite}
+              onOpenSuite={setOpenSuite}
+              accessByLabel={tenant?.accessByLabel}
+            />
+          )}
         </div>
         <div className="sidebar-identity">
           {tenant?.userFirstName || tenant?.jobTitle ? (

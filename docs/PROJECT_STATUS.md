@@ -1,3 +1,7 @@
+## 2026-11-16 — UI-NAV-01 sidebar clipping, docs isolation, List/Tiles (v2.6.0)
+
+Accounting View-only children no longer clip Documentation. Documentation opens in a new tab; same-tab history Back restores BookOne chrome. Sidebar List/Tiles toggle defaults to List. See [CHG-20261116-ui-nav-01](changes/CHG-20261116-ui-nav-01.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-15 — Simple Entry write comes from the server home page (v2.5.30)
 
 v2.5.29 Docker web image and Production Check failed compile because client Simple Entry imported `@/lib/access` (`next/headers`). Home now derives `jobCanWrite(tenant, 'Simple Entry')` on the server and passes `canWrite`. Viewer still sees the read-only Record hint. See [CHG-20261115-simple-entry-canwrite](changes/CHG-20261115-simple-entry-canwrite.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -1,3 +1,10 @@
+## 2026-11-16 — UI-NAV-01 sidebar clipping, docs isolation, List/Tiles (v2.6.0)
+
+- Record: [CHG-20261116-ui-nav-01](changes/CHG-20261116-ui-nav-01.md). Baseline product `ca05491` / v2.5.30. Owner asked this candidate to be pushed to master after a reviewable PR. Preserve V/N/A/B, Walk-in, dates, closed shifts. Never replay CONT11 or the accepted POS 118 refund.
+- Expanded suite panels use natural height (`grid-template-rows` 0fr/1fr) with `inert` when collapsed. Sidebar nav scrolls. Documentation is `target=_blank rel=noopener noreferrer`. Docs CSS is scoped to `#bookone-docs`; html class is restored on unmount. List/Tiles toggle persists in `bookone.nav.mode`.
+- Checks: `@bookone/auth` vitest `test/ui-nav-01.test.ts` 11 passed. `pnpm --dir apps/web test:nav-browser` 7 passed (clipping, inert, 1366×600 scroll, tablet 768/390, zoom 125/150/200, tiles 2-col vs collapsed 1-col). Docs history isolation against `next start` `http://127.0.0.1:3000` (`UI_NAV_BASE_URL`) 1 passed: `/login` 200 → `/docs` 200 → Back/Forward/Back restores html class, font, and background. Local `apps/web` `next build` compiled (no `@media important(#bookone-docs)` CSS warning). Isolated staging browser and full accounting/auth suites not re-run. Mixed-TENDER split not claimed.
+- Next: Owner waits for Docker web image green, then Portainer Update with Re-pull ON. Medium reviews this exact diff. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-15 — Simple Entry write comes from the server home page (v2.5.30)
 
 - Record: [CHG-20261115-simple-entry-canwrite](changes/CHG-20261115-simple-entry-canwrite.md). Baseline product `ba840d0` / v2.5.29. Docker web image `43706093919` and Production Check `43706093976` failed `next build`: client Simple Entry imported `@/lib/access` (`next/headers`). Home now passes `canWrite={jobCanWrite(tenant, 'Simple Entry')}`. Preserve V/N/A/B, Walk-in, dates, closed shifts. Never replay CONT11 or the accepted POS 118 refund.

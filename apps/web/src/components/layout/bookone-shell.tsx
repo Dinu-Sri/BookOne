@@ -17,15 +17,8 @@ import {
   usesPersonalShell,
 } from '@/lib/entity-kind';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
-import { ListSuiteNav, NavModeToggle, TileSuiteNav } from '@/components/layout/sidebar-nav';
+import { ListSuiteNav } from '@/components/layout/sidebar-nav';
 import { CASHBOOK_NAV_ITEM, NAV_SUITES, type NavItem } from '@/lib/nav-suites';
-import {
-  parseNavMode,
-  readNavMode,
-  resolveTileSuite,
-  writeNavMode,
-  type NavMode,
-} from '@/lib/nav-preference';
 import { filterVisibleSuites, suiteIdForActiveLabel } from '@/lib/nav-visibility';
 
 export type { NavItem };
@@ -219,42 +212,13 @@ export function BookOneShell({
   );
   const activeSuite = suiteIdForActiveLabel(visibleSuites, active) ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
-  const [navMode, setNavMode] = useState<NavMode>('list');
-  const [tileSuiteId, setTileSuiteId] = useState<string | null>(activeSuite);
-  const visibleSuiteIds = useMemo(() => visibleSuites.map((suite) => suite.id), [visibleSuites]);
-
-  useEffect(() => {
-    const stored = readNavMode(window.localStorage);
-    setNavMode(stored);
-    if (stored === 'tiles') {
-      setTileSuiteId((current) => resolveTileSuite(current, visibleSuiteIds, activeSuite));
-    }
-    // Intentionally once after hydration so SSR stays List.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     setOpenSuite(activeSuite);
   }, [activeSuite]);
 
-  useEffect(() => {
-    setTileSuiteId((current) => {
-      if (current && !visibleSuiteIds.includes(current)) return null;
-      return current;
-    });
-  }, [visibleSuiteIds]);
-
-  function changeNavMode(next: NavMode) {
-    const mode = parseNavMode(next);
-    setNavMode(mode);
-    writeNavMode(mode, window.localStorage);
-    if (mode === 'tiles') {
-      setTileSuiteId((current) => resolveTileSuite(current, visibleSuiteIds, activeSuite));
-    }
-  }
-
   return (
-    <div className={`app-shell ${sidebarOpen ? '' : 'is-collapsed'}`} data-nav-mode={navMode}>
+    <div className={`app-shell ${sidebarOpen ? '' : 'is-collapsed'}`}>
       <aside className="sidebar" aria-label="BookOne workspace sidebar">
         <div className="sidebar-header">
           <BrandLockup compact={!sidebarOpen} href="/dashboard" />
@@ -267,7 +231,6 @@ export function BookOneShell({
             {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
           </Button>
         </div>
-        <NavModeToggle mode={navMode} collapsed={!sidebarOpen} onChange={changeNavMode} />
         {readOnlyAdvanced ? (
           <div className="sidebar-readonly-banner" title="Inventory/POS are view-only until you upgrade to sole full">
             View-only advanced modules
@@ -275,23 +238,13 @@ export function BookOneShell({
         ) : null}
 
         <div className="sidebar-section suite-nav">
-          {navMode === 'tiles' ? (
-            <TileSuiteNav
-              suites={visibleSuites}
-              active={active}
-              tileSuiteId={tileSuiteId}
-              onTileSuite={setTileSuiteId}
-              accessByLabel={tenant?.accessByLabel}
-            />
-          ) : (
-            <ListSuiteNav
-              suites={visibleSuites}
-              active={active}
-              openSuite={openSuite}
-              onOpenSuite={setOpenSuite}
-              accessByLabel={tenant?.accessByLabel}
-            />
-          )}
+          <ListSuiteNav
+            suites={visibleSuites}
+            active={active}
+            openSuite={openSuite}
+            onOpenSuite={setOpenSuite}
+            accessByLabel={tenant?.accessByLabel}
+          />
         </div>
         <div className="sidebar-identity">
           {tenant?.userFirstName || tenant?.jobTitle ? (

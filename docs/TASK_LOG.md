@@ -1,3 +1,10 @@
+## 2026-11-16 — Remove sidebar Tiles; keep list clipping fix (v2.6.1)
+
+- Record: [CHG-20261116-remove-nav-tiles](changes/CHG-20261116-remove-nav-tiles.md). Baseline product `9062bbc` / v2.6.0. Owner asked to remove the tile system and keep the list cropping fix. Preserve V/N/A/B, Walk-in, dates, closed shifts. Never replay CONT11 or the accepted POS 118 refund.
+- Sidebar is list accordion only. Natural-height suite panels, `inert` collapsed children, docs new-tab, and docs CSS isolation stay. `bookone.nav.mode` is unread leftover storage.
+- Checks: `@bookone/auth` vitest `test/ui-nav-01.test.ts` 8 passed. `pnpm --dir apps/web test:nav-browser` 6 passed (clipping, inert, 1366×600 scroll, zoom 125/150/200, tablet 768/390). Docs history spec skipped without `UI_NAV_BASE_URL` (isolation unchanged). Isolated staging browser not-run. Mixed-TENDER split not claimed.
+- Next: Owner waits for Docker web image green, then Portainer Update with Re-pull ON. Medium reviews this exact diff. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-16 — UI-NAV-01 sidebar clipping, docs isolation, List/Tiles (v2.6.0)
 
 - Record: [CHG-20261116-ui-nav-01](changes/CHG-20261116-ui-nav-01.md). Baseline product `ca05491` / v2.5.30. Owner asked this candidate to be pushed to master after a reviewable PR. Preserve V/N/A/B, Walk-in, dates, closed shifts. Never replay CONT11 or the accepted POS 118 refund.

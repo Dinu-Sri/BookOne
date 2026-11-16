@@ -1,3 +1,7 @@
+## 2026-11-16 — Remove sidebar Tiles; keep list clipping fix (v2.6.1)
+
+Sidebar List/Tiles toggle and tile navigation are gone. Accounting View-only children still show Documentation fully; docs still open in a new tab. See [CHG-20261116-remove-nav-tiles](changes/CHG-20261116-remove-nav-tiles.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-16 — UI-NAV-01 sidebar clipping, docs isolation, List/Tiles (v2.6.0)
 
 Accounting View-only children no longer clip Documentation. Documentation opens in a new tab; same-tab history Back restores BookOne chrome. Sidebar List/Tiles toggle defaults to List. See [CHG-20261116-ui-nav-01](changes/CHG-20261116-ui-nav-01.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -6,13 +6,6 @@ import {
   keepNavItem,
   legacySuitePanelMaxHeightPx,
 } from '../../../apps/web/src/lib/nav-visibility';
-import {
-  parseNavMode,
-  readNavMode,
-  resolveTileSuite,
-  writeNavMode,
-  NAV_MODE_STORAGE_KEY,
-} from '../../../apps/web/src/lib/nav-preference';
 import { modulesForPlan } from '../../../apps/web/src/lib/platform-modules';
 
 type NavItem = {
@@ -108,13 +101,18 @@ describe('UI-NAV-01 clipping reproduction', () => {
     expect(css).toContain('prefers-reduced-motion');
     expect(css).not.toMatch(/@media \(max-width: 1180px\)[\s\S]*\.suite-panel \{\s*display: none/);
     expect(shell).not.toContain('subtitle ? 52 : 40');
+    expect(shell).not.toContain('TileSuiteNav');
+    expect(shell).not.toContain('data-nav-mode');
     expect(list).not.toContain('maxHeight');
+    expect(list).not.toContain('TileSuiteNav');
     expect(list).toContain('inert={!isOpen');
+    expect(css).not.toContain('.nav-tile-grid');
+    expect(css).not.toContain('.nav-mode-toggle');
   });
 });
 
 describe('UI-NAV-01 documentation link and theme isolation', () => {
-  it('Documentation is a real new-tab anchor in List and Tiles', () => {
+  it('Documentation is a real new-tab anchor', () => {
     const nav = readRepo('apps/web/src/components/layout/sidebar-nav.tsx');
     expect(nav).toContain('target="_blank"');
     expect(nav).toContain('rel="noopener noreferrer"');
@@ -138,32 +136,7 @@ describe('UI-NAV-01 documentation link and theme isolation', () => {
   });
 });
 
-describe('UI-NAV-01 List/Tiles preference', () => {
-  it('defaults unknown and missing values to list', () => {
-    expect(parseNavMode(undefined)).toBe('list');
-    expect(parseNavMode('grid')).toBe('list');
-    expect(parseNavMode('tiles')).toBe('tiles');
-    expect(readNavMode(null)).toBe('list');
-    expect(readNavMode({ getItem: () => { throw new Error('blocked'); } })).toBe('list');
-  });
-
-  it('writes the namespaced key and survives storage failure', () => {
-    const store: Record<string, string> = {};
-    writeNavMode('tiles', { setItem: (k, v) => { store[k] = v; } });
-    expect(store[NAV_MODE_STORAGE_KEY]).toBe('tiles');
-    expect(readNavMode({ getItem: (k) => store[k] ?? null })).toBe('tiles');
-    writeNavMode('list', { setItem: () => { throw new Error('quota'); } });
-  });
-
-  it('does not restore a suite the current job cannot see', () => {
-    expect(resolveTileSuite('inventory', ['accounting', 'sales'], 'accounting')).toBe('accounting');
-    expect(resolveTileSuite('sales', ['accounting', 'sales'], 'accounting')).toBe('sales');
-    expect(resolveTileSuite(null, ['accounting'], 'accounting')).toBe('accounting');
-    expect(resolveTileSuite('ghost', [], null)).toBe(null);
-  });
-});
-
-describe('UI-NAV-01 one permission model for List and Tiles', () => {
+describe('UI-NAV-01 permission model', () => {
   it('Owner with full modules sees Control Room only when super-admin', () => {
     const owner = filterVisibleSuites({
       suites: allSuites,
@@ -229,7 +202,7 @@ describe('UI-NAV-01 one permission model for List and Tiles', () => {
     expect(companySuite.items.some((i) => i.label === 'Rental Settings')).toBe(false);
   });
 
-  it('List and Tiles share the same destinations for a given job', () => {
+  it('visible suites expose unique destinations for a given job', () => {
     const visible = filterVisibleSuites({
       suites: allSuites,
       isSuperAdmin: true,

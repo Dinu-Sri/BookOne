@@ -34,13 +34,9 @@ function sidebarHtml(opts?: { open?: boolean; viewOnly?: boolean; lastLabel?: st
 <html class="light" lang="en">
 <head><meta charset="utf-8"><style>${CSS}</style></head>
 <body>
-<div class="app-shell" data-nav-mode="list" id="shell">
+<div class="app-shell" id="shell">
   <aside class="sidebar" aria-label="BookOne workspace sidebar">
     <div class="sidebar-header"><strong>BookOne</strong></div>
-    <div class="nav-mode-toggle" role="group" aria-label="Sidebar layout">
-      <button type="button" class="is-selected" aria-pressed="true">List</button>
-      <button type="button" id="tiles-btn" aria-pressed="false">Tiles</button>
-    </div>
     <div class="sidebar-section suite-nav">
       <nav aria-label="Suite navigation">
         <div class="suite-group${open ? ' open' : ''}">
@@ -117,7 +113,7 @@ test.describe('UI-NAV-01 sidebar geometry', () => {
   });
 });
 
-test.describe('UI-NAV-01 tiles layout', () => {
+test.describe('UI-NAV-01 zoom and viewports', () => {
   test('browser zoom 125/150/200 keeps Documentation inside the open panel', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.setContent(sidebarHtml({ open: true, viewOnly: true }));
@@ -148,29 +144,5 @@ test.describe('UI-NAV-01 tiles layout', () => {
       expect(box).toBeTruthy();
       expect(box!.height).toBeGreaterThan(16);
     }
-  });
-
-  test('two-column tiles on desktop and one column when collapsed', async ({ page }) => {
-    const html = `<!doctype html><html><head><style>${CSS}</style></head><body>
-      <div class="app-shell" data-nav-mode="tiles" id="shell">
-        <aside class="sidebar">
-          <div class="nav-tile-grid" id="grid">
-            <button class="nav-tile" type="button"><span class="nav-tile-label">Accounting</span></button>
-            <button class="nav-tile" type="button"><span class="nav-tile-label">Parties</span></button>
-            <button class="nav-tile" type="button"><span class="nav-tile-label">Sales</span></button>
-            <button class="nav-tile" type="button"><span class="nav-tile-label">Purchase</span></button>
-          </div>
-        </aside>
-        <main class="main"></main>
-      </div></body></html>`;
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.setContent(html);
-    const cols = await page.locator('#grid').evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
-    expect(cols).toBe(2);
-    await page.locator('#shell').evaluate((el) => el.classList.add('is-collapsed'));
-    const collapsedCols = await page
-      .locator('#grid')
-      .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
-    expect(collapsedCols).toBe(1);
   });
 });

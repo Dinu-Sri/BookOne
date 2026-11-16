@@ -38,7 +38,7 @@ function grantsFromTemplate(templateKey: string | null): { key: string; level: A
   if (!t) return [];
   return t.grants.map((key) => ({
     key,
-    level: (key.endsWith('.write') ? 'write' : 'read') as AccessLevel,
+    level: (key.endsWith('.read') ? 'read' : 'write') as AccessLevel,
   }));
 }
 

@@ -1133,6 +1133,15 @@ async function assertPurchaseWrite(documentType: string): Promise<void> {
 export async function createCommercialDocument(
   input: z.input<typeof createSchema>,
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
+  const user = await requireTenantContext();
+  return createCommercialDocumentWithUser(user, input);
+}
+
+export async function createCommercialDocumentWithUser(
+  user: Awaited<ReturnType<typeof requireTenantContext>>,
+  input: z.input<typeof createSchema>,
+  opts?: { alreadyAuthorized?: boolean },
+): Promise<{ ok: boolean; error?: string; id?: string }> {
   const started = Date.now();
   let parsedType = 'document';
   let claimed = false;
@@ -1142,13 +1151,14 @@ export async function createCommercialDocument(
   try {
     const parsed = createSchema.parse(input);
     parsedType = parsed.documentType;
-    const user = await requireTenantContext();
     tenantId = user.tenantId;
     idempotencyKey = parsed.idempotencyKey;
-    const { assertPermission } = await import('@/lib/access');
     const perm = permissionForDocumentType(parsed.documentType);
     if (!perm) return { ok: false, error: 'You do not have permission to do that.' };
-    await assertPermission(perm, 'write');
+    if (!opts?.alreadyAuthorized) {
+      const { assertPermission } = await import('@/lib/access');
+      await assertPermission(perm, 'write');
+    }
     const { claimIdempotency, writeIdempotency, concludeCommercialCreateClaim } = await import(
       '@/lib/idempotency'
     );

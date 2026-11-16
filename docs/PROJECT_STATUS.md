@@ -1,3 +1,7 @@
+## 2026-11-16 — AgentBridge Foundation AB-01 (v2.7.0)
+
+Document Inbox and the shared AgentBridge purchase-bill service land behind company flags that default off. List clipping and docs isolation from UI-NAV-01 stay. See [CHG-20261116-agentbridge-01](changes/CHG-20261116-agentbridge-01.md) and [AGENT_BRIDGE.md](AGENT_BRIDGE.md). Owner deploys via Docker web image then Portainer Re-pull ON. Live OCR, production IdP, and external MCP clients stay BLOCKED. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-16 — Remove sidebar Tiles; keep list clipping fix (v2.6.1)
 
 Sidebar List/Tiles toggle and tile navigation are gone. Accounting View-only children still show Documentation fully; docs still open in a new tab. See [CHG-20261116-remove-nav-tiles](changes/CHG-20261116-remove-nav-tiles.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

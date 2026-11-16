@@ -1,4 +1,4 @@
-export const CATALOG_VERSION = 1;
+export const CATALOG_VERSION = 2;
 
 export type AccessLevel = 'none' | 'read' | 'write';
 export type PermissionAction = 'read' | 'write';
@@ -51,6 +51,10 @@ export const PERMISSION_KEYS = [
   'purchase.payments.read',
   'purchase.payments.write',
   'purchase.aging.read',
+  'purchase.inbox.read',
+  'purchase.inbox.write',
+  'agent_bridge.approve',
+  'agent_bridge.post',
   'inventory.products.read',
   'inventory.products.write',
   'inventory.categories.read',
@@ -142,6 +146,7 @@ export const SCREEN_DEFS: {
   { keyPrefix: 'purchase.returns', label: 'Purchase Returns', href: '/purchase/returns', module: 'purchase', writeable: true },
   { keyPrefix: 'purchase.payments', label: 'Pay Vendors', href: '/purchase/payments', module: 'purchase', writeable: true },
   { keyPrefix: 'purchase.aging', label: 'AP Aging', href: '/purchase/aging', module: 'purchase', writeable: false },
+  { keyPrefix: 'purchase.inbox', label: 'Document Inbox', href: '/purchase/inbox', module: 'purchase', writeable: true },
   { keyPrefix: 'inventory.products', label: 'Products', href: '/inventory/products', module: 'inventory', writeable: true },
   { keyPrefix: 'inventory.categories', label: 'Categories', href: '/inventory/categories', module: 'inventory', writeable: true },
   { keyPrefix: 'inventory.levels', label: 'Stock Levels', href: '/inventory/levels', module: 'inventory', writeable: false },

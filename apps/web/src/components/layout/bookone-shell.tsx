@@ -139,6 +139,7 @@ export interface TenantLite {
   accessByLabel?: Record<string, 'none' | 'read' | 'write'>;
   /** First screen this job can open; used when a typed URL is denied. */
   landingHref?: string;
+  agentBridgeEnabled?: boolean;
 }
 
 export interface PeriodLite {
@@ -207,8 +208,9 @@ export function BookOneShell({
         accessByLabel: tenant?.accessByLabel,
         soleNeedsCashbook,
         cashbookItem: CASHBOOK_NAV_ITEM,
+        agentBridgeEnabled: Boolean(tenant?.agentBridgeEnabled),
       }),
-    [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier, tenant?.accessByLabel],
+    [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier, tenant?.accessByLabel, tenant?.agentBridgeEnabled],
   );
   const activeSuite = suiteIdForActiveLabel(visibleSuites, active) ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);

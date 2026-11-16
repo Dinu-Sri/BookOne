@@ -69,6 +69,8 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     name: 'Accountant',
     slug: 'accountant',
     grants: unique([
+      'agent_bridge.approve',
+      'agent_bridge.post',
       ...prefixKeys(
         [
           'accounting.simple_entry',
@@ -136,6 +138,8 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     name: 'Purchasing',
     slug: 'purchasing',
     grants: unique([
+      'agent_bridge.approve',
+      'agent_bridge.post',
       ...prefixKeys(
         [
           'parties.vendors',
@@ -145,6 +149,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
           'purchase.expenses',
           'purchase.import',
           'purchase.returns',
+          'purchase.inbox',
         ],
         'write',
       ),
@@ -158,6 +163,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
           'purchase.import',
           'purchase.returns',
           'purchase.aging',
+          'purchase.inbox',
           'inventory.products',
           'inventory.levels',
         ],

@@ -55,6 +55,16 @@ export { rentalEvents, rentalBookingLines, rentalReturnPhotos, rentalKitComponen
 
 export { healthCheckRuns } from './health-check';
 export { opsRequestLogs, opsIdempotency } from './ops';
+export {
+  agentBridgeSettings,
+  agentBridgeDocuments,
+  agentBridgeProposals,
+  agentBridgeApprovals,
+  agentBridgeOperations,
+  agentBridgeBlobs,
+  agentBridgeJobs,
+  agentBridgeConnections,
+} from './agent-bridge';
 export { posRegisters, posShifts } from './pos';
 export {
   tenantRoles,

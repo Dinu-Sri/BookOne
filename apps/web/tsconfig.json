@@ -37,6 +37,9 @@
       "@bookone/accounting": [
         "../../packages/accounting/src"
       ],
+      "@bookone/agent-bridge": [
+        "../../packages/agent-bridge/src"
+      ],
       "@bookone/modules": [
         "../../packages/modules/src"
       ],

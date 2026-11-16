@@ -44,6 +44,9 @@ importers:
       '@bookone/accounting':
         specifier: workspace:*
         version: link:../../packages/accounting
+      '@bookone/agent-bridge':
+        specifier: workspace:*
+        version: link:../../packages/agent-bridge
       '@bookone/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -145,6 +148,22 @@ importers:
         specifier: workspace:*
         version: link:../db
     devDependencies:
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.21)(lightningcss@1.32.0)
+
+  packages/agent-bridge:
+    dependencies:
+      '@bookone/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.21
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.21)(lightningcss@1.32.0)

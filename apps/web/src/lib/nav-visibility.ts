@@ -44,6 +44,8 @@ export type FilterVisibleSuitesInput = {
   accessByLabel?: Record<string, 'none' | 'read' | 'write'>;
   soleNeedsCashbook: boolean;
   cashbookItem: NavItem;
+  /** Document Inbox stays hidden until the company AgentBridge flag is on. */
+  agentBridgeEnabled?: boolean;
 };
 
 /** One permission/module filter for List and Tiles. */
@@ -67,6 +69,9 @@ export function filterVisibleSuites(input: FilterVisibleSuitesInput): NavSuite[]
         items = items.filter(
           (item) => item.label !== 'Team' && item.label !== 'Jobs' && item.label !== 'Groups',
         );
+      }
+      if (!input.agentBridgeEnabled) {
+        items = items.filter((item) => item.label !== 'Document Inbox');
       }
       if (input.accessByLabel) {
         items = items.filter((item) =>

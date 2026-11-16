@@ -113,9 +113,48 @@ jobs:
           REDIS_URL: redis://localhost:6379
           AUTH_SECRET: test-secret-for-ci-only
 
+  coreguard:
+    name: AgentBridge CoreGuard
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: AgentBridge unit API MCP jobs security
+        run: pnpm --filter @bookone/agent-bridge test
+        env:
+          NODE_ENV: test
+
+      - name: AgentBridge permissions and publication gate
+        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts
+
+      - name: Install Playwright Chromium
+        run: pnpm --dir apps/web exec playwright install --with-deps chromium
+
+      - name: Browser inbox and UI-NAV-01 clipping
+        run: pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/ui-nav-01.spec.ts
+
   build-and-push:
     name: Build & push web image
-    needs: [quality]
+    needs: [quality, coreguard]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

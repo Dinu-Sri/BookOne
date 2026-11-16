@@ -102,6 +102,7 @@ export const NAV_SUITES: NavSuite[] = [
       { label: 'Purchase Orders', icon: ClipboardList, href: '/purchase/orders' },
       { label: 'Goods Received', icon: Package, href: '/purchase/receipts' },
       { label: 'Purchases', icon: ReceiptText, href: '/purchase/purchases' },
+      { label: 'Document Inbox', icon: FileText, href: '/purchase/inbox' },
       { label: 'Cash Purchases', icon: ShoppingCart, href: '/purchase/expenses' },
       { label: 'Import Purchases', icon: Globe2, href: '/purchase/import' },
       { label: 'Purchase Returns', icon: BookOpenCheck, href: '/purchase/returns' },

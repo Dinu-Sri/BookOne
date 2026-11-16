@@ -1,3 +1,10 @@
+## 2026-11-16 — AgentBridge Foundation AB-01 (v2.7.0)
+
+- Record: [CHG-20261116-agentbridge-01](changes/CHG-20261116-agentbridge-01.md). Baseline product `aa3e101` / v2.6.1. Owner asked for the full AgentBridge Foundation plus a reviewable PR, then deploy to master for the Docker web image Action. Preserve UI-NAV-01 list clipping and docs isolation. Tiles stay removed. Never replay CONT11 or the accepted POS 118 refund.
+- Shared `@bookone/agent-bridge` service, migration `044_agent_bridge.sql`, feature-flagged `/purchase/inbox`, versioned `/api/agent-bridge/v1/*` and MCP HTTP `2025-03-26`, permission catalog v2 (`purchase.inbox.*`, `agent_bridge.approve`, `agent_bridge.post`). Posting reuses `createCommercialDocumentWithUser`. Flags default off; draft-only and posting-disable default on. CoreGuard is an extra `needs` of Build & push; quality stays unmasked.
+- Checks: `@bookone/agent-bridge` vitest 10 files / 29 passed. `@bookone/auth` vitest 13 files / 109 passed (includes catalog v2, UI-NAV-01 8, release-gate 4). `@bookone/accounting` vitest 18 files / 237 passed. `@bookone/agent-bridge` tsc --noEmit passed. `@bookone/db` tsc --noEmit passed. `pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/ui-nav-01.spec.ts` 9 passed (inbox keyboard/narrow/source routes + list clipping/inert/scroll/zoom/tablet). Isolated staging browser not-run. Live OCR / production IdP / external MCP client BLOCKED. Mixed-TENDER split not claimed.
+- Next: Fast-forward master so Docker web image runs. Owner Portainer Update with Re-pull ON. Do not enable AgentBridge posting on a live company until independent QA. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-16 — Remove sidebar Tiles; keep list clipping fix (v2.6.1)
 
 - Record: [CHG-20261116-remove-nav-tiles](changes/CHG-20261116-remove-nav-tiles.md). Baseline product `9062bbc` / v2.6.0. Owner asked to remove the tile system and keep the list cropping fix. Preserve V/N/A/B, Walk-in, dates, closed shifts. Never replay CONT11 or the accepted POS 118 refund.

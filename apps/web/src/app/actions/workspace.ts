@@ -67,6 +67,8 @@ export interface TenantInfo {
   accessByLabel?: Record<string, 'none' | 'read' | 'write'>;
   /** First screen this job can open; used when a typed URL is denied. */
   landingHref?: string;
+  /** Document Inbox is hidden until the company AgentBridge flag is on. */
+  agentBridgeEnabled?: boolean;
 }
 
 export interface AccountBalance {
@@ -196,8 +198,23 @@ export async function getTenantInfo(): Promise<TenantInfo> {
       jobSlug: user.jobSlug,
       accessByLabel,
       landingHref: landingHrefForAccess(access),
+      agentBridgeEnabled: await loadAgentBridgeEnabled(user.tenantId),
     };
   });
+}
+
+async function loadAgentBridgeEnabled(tenantId: string): Promise<boolean> {
+  try {
+    const { agentBridgeSettings } = await import('@bookone/db');
+    const [row] = await db()
+      .select({ enabled: agentBridgeSettings.enabled })
+      .from(agentBridgeSettings)
+      .where(eq(agentBridgeSettings.tenantId, tenantId))
+      .limit(1);
+    return row?.enabled === '1';
+  } catch {
+    return false;
+  }
 }
 
 /**

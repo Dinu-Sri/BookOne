@@ -234,6 +234,38 @@ describe('archive restore remap', () => {
     expect(String(tables.transactions[0]?.receiptRef)).not.toContain(sourceTenant);
   });
 
+  it('rewrites AgentBridge blob keys with the shared storage-pointer rule', () => {
+    const docId = '99999999-9999-9999-9999-999999999999';
+    const pointer = `tenants/${sourceTenant}/agent-bridge/${docId}-scan.pdf`;
+    const { tables } = remapArchiveTables({
+      sourceTenantId: sourceTenant,
+      targetTenantId: targetTenant,
+      restorerUserId: restorer,
+      tables: {
+        tenant_memberships: [
+          { id: ownerMembership, tenantId: sourceTenant, userId: ownerUser, role: 'owner', voidedAt: null },
+        ],
+        agent_bridge_documents: [
+          { id: docId, tenantId: sourceTenant, storageKey: pointer, filename: 'scan.pdf', status: 'posted' },
+        ],
+        agent_bridge_blobs: [
+          { key: pointer, tenantId: sourceTenant, filename: 'scan.pdf', mime: 'application/pdf', content: 'Zg==' },
+        ],
+        agent_bridge_settings: [{ tenantId: sourceTenant, enabled: '1', draftOnly: '0', postingDisabled: '0' }],
+        agent_bridge_approvals: [
+          { id: '12121212-1212-1212-1212-121212121212', tenantId: sourceTenant, proposalId: docId, revokedAt: null },
+        ],
+      },
+    });
+    const restoredKey = `tenants/${targetTenant}/agent-bridge/${docId}-scan.pdf`;
+    expect(tables.agent_bridge_documents[0]?.storageKey).toBe(restoredKey);
+    expect(tables.agent_bridge_blobs[0]?.key).toBe(restoredKey);
+    expect(String(tables.agent_bridge_blobs[0]?.key)).toContain(docId);
+    expect(tables.agent_bridge_settings[0]?.draftOnly).toBe('1');
+    expect(tables.agent_bridge_settings[0]?.postingDisabled).toBe('1');
+    expect(tables.agent_bridge_approvals[0]?.revokedAt).toBeTruthy();
+  });
+
   it('accepts balanced journals and rejects unbalanced ones', () => {
     const balanced = {
       journal_entries: [{ id: entryId }],

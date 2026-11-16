@@ -1,3 +1,7 @@
+## 2026-11-16 — AgentBridge authorization, reconciliation, restore AB-03 (v2.7.3)
+
+Independent retest of v2.7.2 `2967526` reproduced Viewer stale-scope posting, lost-response document drift, and restore attachment lookup failure (QA draft PR #122). This candidate intersects token scopes with current grants, reconciles receipt and document together, and remaps blob keys with the shared storage-pointer rule. Flags stay off. See [CHG-20261116-agentbridge-03](changes/CHG-20261116-agentbridge-03.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not enable posting until qualification. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-16 — Type AgentBridge operation receipts for web lint (v2.7.2)
 
 v2.7.1 `4e9b7ba` quality job failed `tsc` on `mapOp` receipt `never`. This candidate types receipts as `OperationReceipt` so the Docker web image can build. Flags stay off. See [CHG-20261116-agentbridge-02-lint](changes/CHG-20261116-agentbridge-02-lint.md). Owner deploys via Docker web image then Portainer Re-pull ON. Do not enable posting until qualification. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  actorFromAuthorization,
   dispatchTool,
   rateLimit,
+  resolveActorFromAuthorization,
 } from '@bookone/agent-bridge';
 import { agentBridgeTokenSecret, getAgentBridgeServiceForActor } from '@/lib/agent-bridge-runtime';
 
@@ -18,7 +18,11 @@ function jsonError(status: number, code: string, error: string) {
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   try {
-    const actor = actorFromAuthorization(req.headers.get('authorization'), agentBridgeTokenSecret());
+    const actor = await resolveActorFromAuthorization(
+      req.headers.get('authorization'),
+      agentBridgeTokenSecret(),
+      process.env,
+    );
     if (!rateLimit(`${actor.tenantId}:${actor.clientId ?? actor.userId}`)) {
       return jsonError(429, 'PERMISSION_DENIED', 'Rate limit exceeded.');
     }
@@ -47,7 +51,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   try {
-    const actor = actorFromAuthorization(req.headers.get('authorization'), agentBridgeTokenSecret());
+    const actor = await resolveActorFromAuthorization(
+      req.headers.get('authorization'),
+      agentBridgeTokenSecret(),
+      process.env,
+    );
     if (!rateLimit(`${actor.tenantId}:${actor.clientId ?? actor.userId}`)) {
       return jsonError(429, 'PERMISSION_DENIED', 'Rate limit exceeded.');
     }

@@ -167,6 +167,10 @@ function remapValue(value: unknown, map: Map<string, string>): unknown {
   return value;
 }
 
+function isStoragePointerField(field: string, value: unknown): value is string {
+  return STORAGE_POINTER_KEY_SET.has(field) && typeof value === 'string' && value.startsWith('tenants/');
+}
+
 function remapRow(
   row: Record<string, unknown>,
   map: Map<string, string>,
@@ -175,7 +179,7 @@ function remapRow(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, inner] of Object.entries(row)) {
-    if (STORAGE_POINTER_KEY_SET.has(key) && typeof inner === 'string') {
+    if (isStoragePointerField(key, inner)) {
       out[key] = rewriteTenantPrefix(inner, sourceTenantId, targetTenantId);
     } else {
       out[key] = remapValue(inner, map);
@@ -227,7 +231,26 @@ export function remapArchiveTables(args: {
     ];
   }
 
+  applyAgentBridgeRestoreSafety(tables);
   return { tables, uuidMap: map };
+}
+
+/** Restored connections stay excluded. Force posting stop and revoke approvals. */
+export function applyAgentBridgeRestoreSafety(tables: Record<string, Record<string, unknown>[]>): void {
+  const now = new Date().toISOString();
+  if (tables.agent_bridge_settings) {
+    tables.agent_bridge_settings = tables.agent_bridge_settings.map((row) => ({
+      ...row,
+      draftOnly: '1',
+      postingDisabled: '1',
+    }));
+  }
+  if (tables.agent_bridge_approvals) {
+    tables.agent_bridge_approvals = tables.agent_bridge_approvals.map((row) => ({
+      ...row,
+      revokedAt: row.revokedAt ?? now,
+    }));
+  }
 }
 
 export function journalsAreBalanced(

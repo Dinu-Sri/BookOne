@@ -3,6 +3,7 @@ import {
   MemoryStore,
   defaultPolicy,
   extractorFor,
+  intersectCapabilities,
   type Actor,
   type AgentBridgeStore,
   type Capability,
@@ -12,7 +13,7 @@ import {
   type PostingPort,
   parseScopes,
 } from '@bookone/agent-bridge';
-import { requireTenantContext } from '@bookone/auth';
+import { loadAccessForUser, requireTenantContext } from '@bookone/auth';
 import {
   accounts,
   agentBridgeApprovals,
@@ -547,8 +548,12 @@ function webPostingPort(): PostingPort {
   return {
     async commitPurchaseBill(input) {
       return scoped(input.actor.tenantId, async () => {
-        const user = await sessionUserForActor(input.actor);
-        if (user.tenantId !== input.actor.tenantId) {
+        const authorized = await authorizeAgentConnection(input.actor);
+        if (!authorized.capabilities.includes('post')) {
+          throw Object.assign(new Error('Missing capability post.'), { code: 'PERMISSION_DENIED' });
+        }
+        const user = await sessionUserForActor(authorized);
+        if (user.tenantId !== authorized.tenantId) {
           throw new Error('Actor tenant does not match the posting session.');
         }
         const net = minorToMajor(input.facts.net);
@@ -622,6 +627,7 @@ export function makeAgentBridgeService(): AgentBridgeService {
     extractor: extractorFor(process.env),
     posting: webPostingPort(),
     policyFor: policyForTenant,
+    authorizeActor: authorizeAgentConnection,
   });
 }
 
@@ -653,22 +659,28 @@ export async function authorizeAgentConnection(actor: Actor): Promise<Actor> {
           ),
         )
         .limit(1);
-      if (connection?.revokedAt) {
+      if (!connection) {
+        throw Object.assign(new Error('AgentBridge connection was not found.'), { code: 'CONNECTION_REVOKED' });
+      }
+      if (connection.revokedAt) {
         throw Object.assign(new Error('AgentBridge connection was revoked.'), { code: 'CONNECTION_REVOKED' });
       }
+      if (connection.userId !== actor.userId) {
+        throw Object.assign(new Error('AgentBridge connection belongs to another user.'), { code: 'PERMISSION_DENIED' });
+      }
     }
-    const access = await getMyAccess().catch(() => null);
-    if (access) {
-      const keys: string[] = [];
-      if (access.allows('purchase.inbox.read', 'read')) keys.push('purchase.inbox.read');
-      if (access.allows('purchase.inbox.write', 'write')) keys.push('purchase.inbox.write');
-      if (access.allows('agent_bridge.approve', 'write')) keys.push('agent_bridge.approve');
-      if (access.allows('agent_bridge.post', 'write')) keys.push('agent_bridge.post');
-      if (access.allows('purchase.bills.write', 'write')) keys.push('purchase.bills.write');
-      const live = parseScopes(keys);
-      return { ...actor, capabilities: live.length ? live : actor.capabilities };
+    const access = await loadAccessForUser(actor.userId, actor.tenantId, 'user');
+    if (!access) {
+      throw Object.assign(new Error('Current grants could not be loaded for this actor.'), { code: 'PERMISSION_DENIED' });
     }
-    return actor;
+    const keys: string[] = [];
+    if (access.allows('purchase.inbox.read', 'read')) keys.push('purchase.inbox.read');
+    if (access.allows('purchase.inbox.write', 'write')) keys.push('purchase.inbox.write');
+    if (access.allows('agent_bridge.approve', 'write')) keys.push('agent_bridge.approve');
+    if (access.allows('agent_bridge.post', 'write')) keys.push('agent_bridge.post');
+    if (access.allows('purchase.bills.write', 'write')) keys.push('purchase.bills.write');
+    const live = parseScopes(keys);
+    return { ...actor, capabilities: intersectCapabilities(actor.capabilities, live) };
   });
 }
 

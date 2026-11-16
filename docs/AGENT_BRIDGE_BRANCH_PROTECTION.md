@@ -1,8 +1,8 @@
-# AgentBridge GitHub branch protection handoff (AB-02)
+# AgentBridge GitHub branch protection handoff (AB-03)
 
 This file is the concrete owner checklist. It does **not** change GitHub access. YAML in `.github/workflows/docker-web.yml` is not proof that rules are on.
 
-Independent review of `ab54e34` reported `master` `protected: false`, protection disabled, zero required contexts, empty ruleset list. This repair does not call the GitHub administration API.
+Independent review of `2967526` again reported `master` unprotected, zero required contexts, empty rulesets. This repair does not call the GitHub administration API.
 
 ## Required rules for `master` (apply in GitHub Settings)
 
@@ -23,7 +23,7 @@ Repository: `Dinu-Sri/BookOne`. Branch: `master`.
 
 ## Actual applied rules (this candidate)
 
-GitHub API `GET /repos/Dinu-Sri/BookOne/branches/master/protection` on 2026-11-16 returned HTTP 404 `Branch not protected`. No ruleset was applied by this change. YAML publication gates remain quality + CoreGuard.
+GitHub API `GET /repos/Dinu-Sri/BookOne/branches/master/protection` on 2026-11-16 (AB-03) returned HTTP 404 `Branch not protected`. No ruleset was applied by this change. YAML publication gates remain quality + CoreGuard. Attest applied rules separately after the owner turns protection on.
 
 ## AgentBridge posting
 

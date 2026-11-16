@@ -34,6 +34,12 @@ export function parseScopes(keys: string[]): Capability[] {
   return [...out];
 }
 
+/** Effective scopes are token scopes INTERSECT current grants. Never expand a token. */
+export function intersectCapabilities(token: Capability[], live: Capability[]): Capability[] {
+  const liveSet = new Set(live);
+  return token.filter((scope) => liveSet.has(scope));
+}
+
 export function assertCapability(actor: Actor, need: Capability): void {
   if (!actor.capabilities.includes(need)) {
     const err = new Error(`Missing capability ${need}.`);
@@ -129,6 +135,23 @@ export function actorFromToken(payload: ConnectionToken): Actor {
   };
 }
 
+export async function resolveActorFromAuthorization(
+  header: string | null | undefined,
+  secret: string,
+  env: OAuthEnv = {},
+  now = Date.now(),
+  fetchImpl: typeof fetch = fetch,
+): Promise<Actor> {
+  if (!header || !header.toLowerCase().startsWith('bearer ')) {
+    throw Object.assign(new Error('Missing Bearer token.'), { code: 'PERMISSION_DENIED' });
+  }
+  const token = header.slice(7).trim();
+  if (isLocalFixtureToken(token)) {
+    return actorFromToken(verifyConnectionToken(token, secret, now));
+  }
+  return actorFromToken(await verifyOAuthAccessToken(token, env, now, fetchImpl));
+}
+
 export function mintLocalFixtureToken(args: {
   tenantId: string;
   userId: string;
@@ -159,6 +182,7 @@ export type OAuthEnv = {
   AGENT_BRIDGE_OAUTH_ISSUER?: string;
   AGENT_BRIDGE_OAUTH_AUDIENCE?: string;
   AGENT_BRIDGE_OAUTH_JWKS_URL?: string;
+  [key: string]: string | undefined;
 };
 
 /** Production OAuth/OIDC access tokens. Local HMAC `ab1.*` fixtures are rejected here. */
@@ -233,16 +257,23 @@ function encodeRsaPublicKey(n: Buffer, e: Buffer): Buffer {
   return encodeSequence(Buffer.concat([alg, bitString]));
 }
 
+function encodeLength(len: number): Buffer {
+  if (len < 128) return Buffer.from([len]);
+  if (len < 256) return Buffer.from([0x81, len]);
+  if (len < 65536) return Buffer.from([0x82, (len >> 8) & 0xff, len & 0xff]);
+  throw tokenError('OAuth public key is too large.');
+}
+
 function encodeInteger(value: Buffer): Buffer {
   const body = value[0]! & 0x80 ? Buffer.concat([Buffer.from([0]), value]) : value;
-  return Buffer.concat([Buffer.from([0x02, body.length]), body]);
+  return Buffer.concat([Buffer.from([0x02]), encodeLength(body.length), body]);
 }
 
 function encodeBitString(value: Buffer): Buffer {
   const body = Buffer.concat([Buffer.from([0x00]), value]);
-  return Buffer.concat([Buffer.from([0x03, body.length]), body]);
+  return Buffer.concat([Buffer.from([0x03]), encodeLength(body.length), body]);
 }
 
 function encodeSequence(value: Buffer): Buffer {
-  return Buffer.concat([Buffer.from([0x30, value.length]), value]);
+  return Buffer.concat([Buffer.from([0x30]), encodeLength(value.length), value]);
 }

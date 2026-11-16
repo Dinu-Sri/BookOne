@@ -1,11 +1,13 @@
 import type {
   Actor,
+  Capability,
   CompanyPolicy,
   FeatureFlags,
   OperationReceipt,
   PreviewEffect,
   ProposalFacts,
 } from './contracts';
+import { SCHEMA_VERSION } from './contracts';
 import { money } from './money';
 import { blockingIssues, issuesFromExtraction, issuesFromProposal } from './issues';
 import { assertTransition } from './state';
@@ -46,6 +48,7 @@ export type AgentBridgeDeps = {
   posting?: PostingPort;
   policyFor(tenantId: string): Promise<CompanyPolicy>;
   now?: () => number;
+  authorizeActor?(actor: Actor): Promise<Actor>;
 };
 
 export class AgentBridgeService {
@@ -59,11 +62,17 @@ export class AgentBridgeService {
     return this.deps.store.flags(tenantId);
   }
 
+  private async authorized(actor: Actor, need: Capability): Promise<Actor> {
+    const next = this.deps.authorizeActor ? await this.deps.authorizeActor(actor) : actor;
+    assertCapability(next, need);
+    return next;
+  }
+
   async getCapabilities(actor: Actor) {
-    assertCapability(actor, 'read');
+    actor = await this.authorized(actor, 'read');
     const flags = await this.flags(actor.tenantId);
     return {
-      schemaVersion: 'ab-02.1',
+      schemaVersion: SCHEMA_VERSION,
       policyVersion: (await this.deps.policyFor(actor.tenantId)).policyVersion,
       flags,
       capabilities: actor.capabilities,
@@ -73,7 +82,7 @@ export class AgentBridgeService {
   }
 
   async getPolicyContext(actor: Actor) {
-    assertCapability(actor, 'read');
+    actor = await this.authorized(actor, 'read');
     return this.deps.policyFor(actor.tenantId);
   }
 
@@ -81,7 +90,7 @@ export class AgentBridgeService {
     actor: Actor,
     input: { filename: string; mime: string; bytes: Uint8Array; textHint?: string },
   ) {
-    assertCapability(actor, 'upload');
+    actor = await this.authorized(actor, 'upload');
     const flags = await this.flags(actor.tenantId);
     if (!flags.enabled) return fail('FEATURE_DISABLED', 'AgentBridge is off for this company.');
     if (!ALLOWED_MIME.has(input.mime)) return fail('ATTACHMENT_REJECTED', `Unsupported type ${input.mime}.`);
@@ -121,7 +130,7 @@ export class AgentBridgeService {
   }
 
   async processDocument(actor: Actor, documentId: string) {
-    assertCapability(actor, 'draft');
+    actor = await this.authorized(actor, 'draft');
     const doc = await this.requireDoc(actor.tenantId, documentId);
     const blob = await this.deps.store.getBlob(actor.tenantId, doc.storageKey);
     await this.runExtraction(doc, undefined, false, blob?.bytes);
@@ -158,26 +167,26 @@ export class AgentBridgeService {
   }
 
   async getProcessingStatus(actor: Actor, documentId: string) {
-    assertCapability(actor, 'read');
+    actor = await this.authorized(actor, 'read');
     const doc = await this.requireDoc(actor.tenantId, documentId);
     const proposal = doc.proposalId ? await this.deps.store.getProposal(actor.tenantId, doc.proposalId) : null;
     return { document: doc, proposal, allowedNext: nextActions(doc.status, actor) };
   }
 
   async listInbox(actor: Actor) {
-    assertCapability(actor, 'read');
+    actor = await this.authorized(actor, 'read');
     return this.deps.store.listDocuments(actor.tenantId);
   }
 
   async proposePurchaseBill(actor: Actor, documentId: string) {
-    assertCapability(actor, 'draft');
+    actor = await this.authorized(actor, 'draft');
     const doc = await this.requireDoc(actor.tenantId, documentId);
     if (!doc.proposalId) return fail('EXTRACTION_FAILED', 'No proposal yet.');
     return this.deps.store.getProposal(actor.tenantId, doc.proposalId);
   }
 
   async updateDraft(actor: Actor, input: { proposalId: string; expectedRevision: number; patch: Partial<ProposalFacts> }) {
-    assertCapability(actor, 'draft');
+    actor = await this.authorized(actor, 'draft');
     const proposal = await this.requireProposal(actor.tenantId, input.proposalId);
     if (proposal.revision !== input.expectedRevision) return fail('STALE_REVISION', 'Draft changed. Reload and try again.');
     const facts = { ...proposal.facts, ...input.patch };
@@ -199,7 +208,7 @@ export class AgentBridgeService {
   }
 
   async answerIssue(actor: Actor, input: { proposalId: string; issueId: string; value: string }) {
-    assertCapability(actor, 'draft');
+    actor = await this.authorized(actor, 'draft');
     const proposal = await this.requireProposal(actor.tenantId, input.proposalId);
     const issue = proposal.issues.find((i) => i.id === input.issueId);
     if (!issue) return fail('STALE_REVISION', 'That question is no longer open.');
@@ -220,7 +229,7 @@ export class AgentBridgeService {
   }
 
   async validateProposal(actor: Actor, proposalId: string) {
-    assertCapability(actor, 'draft');
+    actor = await this.authorized(actor, 'draft');
     const proposal = await this.requireProposal(actor.tenantId, proposalId);
     const policy = await this.deps.policyFor(actor.tenantId);
     proposal.issues = issuesFromProposal(proposal.facts, policy);
@@ -239,7 +248,7 @@ export class AgentBridgeService {
   }
 
   async getPreview(actor: Actor, proposalId: string) {
-    assertCapability(actor, 'read');
+    actor = await this.authorized(actor, 'read');
     const proposal = await this.requireProposal(actor.tenantId, proposalId);
     const policy = await this.deps.policyFor(actor.tenantId);
     const blocked = blockingIssues(issuesFromProposal(proposal.facts, policy));
@@ -251,7 +260,7 @@ export class AgentBridgeService {
   }
 
   async requestApproval(actor: Actor, proposalId: string) {
-    assertCapability(actor, 'draft');
+    actor = await this.authorized(actor, 'draft');
     const preview = await this.getPreview(actor, proposalId);
     if ('ok' in preview && preview.ok === false) return preview;
     const doc = await this.requireDoc(actor.tenantId, (await this.requireProposal(actor.tenantId, proposalId)).documentId);
@@ -261,7 +270,7 @@ export class AgentBridgeService {
   }
 
   async grantApproval(actor: Actor, proposalId: string) {
-    assertCapability(actor, 'approve');
+    actor = await this.authorized(actor, 'approve');
     if (actor.connectionId) {
       return fail('HUMAN_APPROVAL_REQUIRED', 'A connected agent cannot mint human approval.');
     }
@@ -302,7 +311,7 @@ export class AgentBridgeService {
     actor: Actor,
     input: { proposalId: string; approvalId: string; idempotencyKey: string },
   ) {
-    assertCapability(actor, 'post');
+    actor = await this.authorized(actor, 'post');
     const flags = await this.flags(actor.tenantId);
     if (!flags.enabled) return fail('FEATURE_DISABLED', 'AgentBridge is off for this company.');
     if (flags.postingDisabled) return fail('POSTING_DISABLED', 'Agent posting is stopped for this company.');
@@ -391,10 +400,10 @@ export class AgentBridgeService {
   }
 
   async getOperationStatus(actor: Actor, operationId: string) {
-    assertCapability(actor, 'read');
+    actor = await this.authorized(actor, 'read');
     const op = await this.deps.store.getOperation(actor.tenantId, operationId);
     if (!op) return fail('STALE_REVISION', 'Operation was not found.');
-    return op.receipt;
+    return this.reconcileExisting(actor, op);
   }
 
   async getReceipt(actor: Actor, operationId: string) {
@@ -402,12 +411,12 @@ export class AgentBridgeService {
   }
 
   async getApprovalForProposal(actor: Actor, proposalId: string) {
-    assertCapability(actor, 'read');
+    actor = await this.authorized(actor, 'read');
     return this.deps.store.findApprovalForProposal(actor.tenantId, proposalId);
   }
 
   async getOwnedAttachment(actor: Actor, key: string) {
-    assertCapability(actor, 'read');
+    actor = await this.authorized(actor, 'read');
     if (!isOwnedAgentBridgeKey(actor.tenantId, key)) return fail('ATTACHMENT_REJECTED', 'Foreign attachment handle.');
     return this.deps.store.getBlob(actor.tenantId, key);
   }
@@ -436,18 +445,38 @@ export class AgentBridgeService {
   }
 
   private async reconcileExisting(actor: Actor, op: StoredOperation) {
-    if (op.receipt.status === 'posted') return op.receipt;
+    if (op.receipt.status === 'posted') {
+      await this.syncPostedDocument(op);
+      return op.receipt;
+    }
     if ((op.receipt.status === 'posting' || op.receipt.status === 'unknown_outcome') && this.deps.posting?.lookupByIdempotencyKey) {
       const found = await this.deps.posting.lookupByIdempotencyKey(actor.tenantId, op.idempotencyKey);
       if (found) {
         op.receipt.status = 'posted';
         op.receipt.billId = found.billId;
         op.receipt.documentNumber = found.documentNumber;
+        op.receipt.postedAt = op.receipt.postedAt ?? new Date(this.now()).toISOString();
+        op.receipt.error = undefined;
         await this.deps.store.saveOperation(op);
+        await this.syncPostedDocument(op);
         return op.receipt;
       }
     }
     return op.receipt;
+  }
+
+  private async syncPostedDocument(op: StoredOperation) {
+    const proposal = await this.deps.store.getProposal(op.tenantId, op.proposalId);
+    if (!proposal) return;
+    const doc = await this.deps.store.getDocument(op.tenantId, proposal.documentId);
+    if (!doc) return;
+    if (doc.status === 'posted') return;
+    if (doc.status === 'posting' || doc.status === 'unknown_outcome') {
+      assertTransition(doc.status, 'posted');
+    }
+    doc.status = 'posted';
+    doc.updatedAt = new Date(this.now()).toISOString();
+    await this.deps.store.saveDocument(doc);
   }
 
   private async requireDoc(tenantId: string, id: string) {
@@ -570,12 +599,20 @@ function nextActions(status: StoredDocument['status'], actor: Actor): string[] {
 
 export function recordingPostingPort(): PostingPort & { posts: { billId: string; facts: ProposalFacts }[] } {
   const posts: { billId: string; facts: ProposalFacts }[] = [];
+  const byKey = new Map<string, { billId: string; documentNumber: string }>();
   return {
     posts,
     async commitPurchaseBill(input) {
+      const existing = byKey.get(input.idempotencyKey);
+      if (existing) return existing;
       const billId = newId();
+      const result = { billId, documentNumber: `APB-${posts.length + 1}` };
       posts.push({ billId, facts: input.facts });
-      return { billId, documentNumber: `APB-${posts.length}` };
+      byKey.set(input.idempotencyKey, result);
+      return result;
+    },
+    async lookupByIdempotencyKey(_tenantId, key) {
+      return byKey.get(key) ?? null;
     },
   };
 }

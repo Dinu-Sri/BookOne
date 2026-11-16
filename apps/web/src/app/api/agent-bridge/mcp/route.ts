@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  actorFromAuthorization,
   handleMcpJsonRpc,
   rateLimit,
+  resolveActorFromAuthorization,
   type JsonRpcRequest,
 } from '@bookone/agent-bridge';
 import { agentBridgeTokenSecret, getAgentBridgeServiceForActor } from '@/lib/agent-bridge-runtime';
@@ -11,7 +11,11 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = actorFromAuthorization(req.headers.get('authorization'), agentBridgeTokenSecret());
+    const actor = await resolveActorFromAuthorization(
+      req.headers.get('authorization'),
+      agentBridgeTokenSecret(),
+      process.env,
+    );
     if (!rateLimit(`mcp:${actor.tenantId}:${actor.connectionId ?? actor.userId}`)) {
       return NextResponse.json(
         { jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Rate limit exceeded.' } },

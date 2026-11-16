@@ -1,7 +1,7 @@
 /** Scoped AgentBridge CoreGuard registry (not all-module CG-01). */
 
 export const COREGUARD_MODULE = 'agent-bridge';
-export const COREGUARD_VERSION = 'ab-01.1';
+export const COREGUARD_VERSION = 'ab-03.1';
 
 export const COREGUARD_SUITES = [
   {
@@ -49,7 +49,13 @@ export const COREGUARD_SUITES = [
   {
     id: 'independent-acceptance',
     layer: 'acceptance',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/oauth-jwks.test.ts',
+    required: true,
+  },
+  {
+    id: 'archive-restore-pointers',
+    layer: 'recovery',
+    command: 'pnpm --filter @bookone/auth exec vitest run test/tenant-archive.test.ts',
     required: true,
   },
   {

@@ -1,3 +1,10 @@
+## 2026-11-16 — AgentBridge authorization, reconciliation, restore AB-03 (v2.7.3)
+
+- Record: [CHG-20261116-agentbridge-03](changes/CHG-20261116-agentbridge-03.md). Baseline product `2967526` / v2.7.2. Independent review https://github.com/Dinu-Sri/bookone-qa/pull/122 and CODING-AGENTBRIDGE-03. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11 or the accepted POS 118 refund.
+- Current grants for the token subject intersect token scopes on every operation. Lost-response reconciliation updates receipt and document together. Archive remap applies the shared storage-pointer rule to blob keys. REST/MCP resolve RS256/JWKS or labelled HMAC fixtures. Restored settings stay posting-stopped; restored approvals are revoked; connections stay excluded.
+- Checks: `@bookone/agent-bridge` vitest 14 files / 44 passed (AB-02 6, AB-03 3, OAuth JWKS 2). `@bookone/auth` tenant-archive + permissions + release-gate 34 passed. Playwright inbox + UI-NAV-01 10 passed / 1 skipped (`AGENT_BRIDGE_E2E_BASE_URL` unset). AgentBridge `tsc --noEmit` passed. GitHub `master` protection still HTTP 404. Isolated staging Next browser not-run. Live OCR / production IdP / external MCP / GitHub branch protection stay BLOCKED.
+- Next: Fast-forward master so Docker web image runs. Owner Portainer Update with Re-pull ON. Do not enable AgentBridge posting until independent QA. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-16 — Type AgentBridge operation receipts for web lint (v2.7.2)
 
 - Record: [CHG-20261116-agentbridge-02-lint](changes/CHG-20261116-agentbridge-02-lint.md). Baseline product `4e9b7ba` / v2.7.1. Docker web image `43851851649` and Production Check `43851851906` failed `@bookone/web` lint: `mapOp` cast `receiptJson as never`, then `claimCommit` read `.status`. Keep Inbox OFF, draft-only ON, posting-stop ON. Never replay CONT11 or the accepted POS 118 refund.

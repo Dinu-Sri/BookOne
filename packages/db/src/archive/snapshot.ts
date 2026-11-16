@@ -222,7 +222,7 @@ export async function trialBalanceHash(tenantId: string): Promise<string> {
 }
 
 export async function collectLiveStoragePointers(tenantId: string): Promise<string[]> {
-  const [txns, styles, products, photos, imports, inboxDocs] = await Promise.all([
+  const [txns, styles, products, photos, imports, inboxDocs, inboxBlobs] = await Promise.all([
     db()
       .select({ receiptRef: transactions.receiptRef })
       .from(transactions)
@@ -247,6 +247,10 @@ export async function collectLiveStoragePointers(tenantId: string): Promise<stri
       .select({ storageKey: agentBridgeDocuments.storageKey })
       .from(agentBridgeDocuments)
       .where(eq(agentBridgeDocuments.tenantId, tenantId)),
+    db()
+      .select({ key: agentBridgeBlobs.key })
+      .from(agentBridgeBlobs)
+      .where(eq(agentBridgeBlobs.tenantId, tenantId)),
   ]);
   return collectStoragePointers({
     transactions: txns as Record<string, unknown>[],
@@ -255,6 +259,7 @@ export async function collectLiveStoragePointers(tenantId: string): Promise<stri
     rental_return_photos: photos as Record<string, unknown>[],
     bank_statement_imports: imports as Record<string, unknown>[],
     agent_bridge_documents: inboxDocs as Record<string, unknown>[],
+    agent_bridge_blobs: inboxBlobs as Record<string, unknown>[],
   });
 }
 

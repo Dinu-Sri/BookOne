@@ -145,12 +145,12 @@ jobs:
           AUTH_SECRET: test-secret-for-ci-only
 
       - name: Independent AgentBridge acceptance
-        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/extraction-http.test.ts
+        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/extraction-http.test.ts test/oauth-jwks.test.ts
         env:
           NODE_ENV: test
 
-      - name: AgentBridge permissions and publication gate
-        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts
+      - name: AgentBridge permissions archive and publication gate
+        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/tenant-archive.test.ts
 
       - name: Install Playwright Chromium
         run: pnpm --dir apps/web exec playwright install --with-deps chromium

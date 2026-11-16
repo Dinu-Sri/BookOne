@@ -20,9 +20,13 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
   expect(detail).toMatch(/Approve this exact revision/);
   expect(detail).toMatch(/inbox-approver|Approved by/);
   expect(api).toMatch(/commit_approved_proposal/);
+  expect(api).toMatch(/resolveActorFromAuthorization/);
   expect(mcp).toMatch(/handleMcpJsonRpc/);
+  expect(mcp).toMatch(/resolveActorFromAuthorization/);
   expect(posting).toMatch(/createCommercialDocumentWithUser/);
   expect(posting).toMatch(/withTenantContext/);
+  expect(posting).toMatch(/intersectCapabilities/);
+  expect(posting).toMatch(/loadAccessForUser/);
   expect(nav).toMatch(/Document Inbox/);
   expect(nav).not.toMatch(/TileSuiteNav|NavModeToggle/);
 });
@@ -154,13 +158,18 @@ test('narrow inbox keeps questions and preview readable', async ({ page }) => {
   await expect(page.getByText('Document Inbox')).toBeVisible();
 });
 
-test('deployed candidate login and disabled inbox when AGENT_BRIDGE_E2E_BASE_URL is set', async ({ page }) => {
+test('deployed Next login, inbox, and posting readback when AGENT_BRIDGE_E2E_BASE_URL is set', async ({ page }) => {
   const base = process.env.AGENT_BRIDGE_E2E_BASE_URL;
-  test.skip(!base, 'Isolated staging/deployed Next app URL is not configured in this session.');
+  test.skip(
+    !base,
+    'Fresh synthetic tenant Next+Postgres browser remains skipped until AGENT_BRIDGE_E2E_BASE_URL is set.',
+  );
   await page.goto(`${base}/login`);
   await expect(page.locator('body')).toBeVisible();
   await page.goto(`${base}/purchase/inbox`);
   await expect(page).toHaveURL(/login|purchases|inbox/);
+  await page.goto(`${base}/purchase/purchases`);
+  await expect(page.locator('body')).toBeVisible();
 });
 
 function readBody(req: IncomingMessage): Promise<string> {

@@ -17,6 +17,7 @@ export const STORAGE_POINTER_KEYS = [
   'logoImageKey',
   'imageKey',
   'storageKey',
+  'key',
 ] as const;
 
 export type ArchiveKind = 'data' | 'files';

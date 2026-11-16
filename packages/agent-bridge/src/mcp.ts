@@ -1,5 +1,5 @@
 import { MCP_PROTOCOL_VERSION, type Actor } from './contracts';
-import { actorFromToken, verifyConnectionToken } from './authz';
+import { actorFromToken, resolveActorFromAuthorization, verifyConnectionToken } from './authz';
 import { AgentBridgeService, TOOL_NAMES } from './service';
 
 export type JsonRpcRequest = {
@@ -124,7 +124,7 @@ export async function handleMcpJsonRpc(input: {
         result: {
           protocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'bookone-agent-bridge', version: 'ab-02.1' },
+          serverInfo: { name: 'bookone-agent-bridge', version: 'ab-03.1' },
         },
       };
     }
@@ -185,5 +185,7 @@ export function actorFromAuthorization(header: string | null | undefined, secret
   const payload = verifyConnectionToken(token, secret, now);
   return actorFromToken(payload);
 }
+
+export { resolveActorFromAuthorization };
 
 export { MCP_PROTOCOL_VERSION };

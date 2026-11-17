@@ -18,7 +18,7 @@ function input(over: Partial<ResolveInput> = {}): ResolveInput {
     over.grants ??
     (tmpl?.grants ?? []).map((key) => ({
       key,
-      level: (key.endsWith('.write') ? 'write' : 'read') as 'read' | 'write',
+      level: (key.endsWith('.read') ? 'read' : 'write') as 'read' | 'write',
     }));
   return {
     platformRole: 'user',

@@ -191,8 +191,44 @@ export function isPrivilegedKey(key: string): boolean {
   return (PRIVILEGED_KEYS as readonly string[]).includes(key);
 }
 
+/** Write actions that are catalog keys without a `.read` / `.write` suffix. */
+export function isActionPermissionKey(key: string): boolean {
+  return isPermissionKey(key) && !key.endsWith('.read') && !key.endsWith('.write');
+}
+
+/**
+ * Stored `agent_bridge.approve` and `agent_bridge.approve.write` are the same
+ * grant. Unknown keys are never aliased or granted.
+ */
+export function permissionGrantAliases(key: string): string[] {
+  const raw = String(key);
+  const prefix = raw.replace(/\.(read|write)$/, '');
+  if (isActionPermissionKey(prefix)) {
+    return [...new Set([prefix, `${prefix}.write`])];
+  }
+  return [raw];
+}
+
+/** Map a persisted `.write` suffix back to the catalog action key. */
+export function canonicalPermissionKey(raw: string): string {
+  const prefix = String(raw).replace(/\.(read|write)$/, '');
+  if (isActionPermissionKey(prefix) && raw === `${prefix}.write`) return prefix;
+  return raw;
+}
+
+export const ACTION_PERMISSIONS: {
+  key: PermissionKey;
+  label: string;
+  module: (typeof SCREEN_DEFS)[number]['module'];
+}[] = [
+  { key: 'agent_bridge.approve', label: 'Approve inbox proposals', module: 'purchase' },
+  { key: 'agent_bridge.post', label: 'Post approved inbox bills', module: 'purchase' },
+];
+
 export function moduleOfKey(key: string): string {
-  return key.split('.')[0] ?? '';
+  const top = key.split('.')[0] ?? '';
+  if (top === 'agent_bridge') return 'purchase';
+  return top;
 }
 
 export function screenKeyFromHref(href: string): string | null {

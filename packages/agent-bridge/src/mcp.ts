@@ -124,7 +124,7 @@ export async function handleMcpJsonRpc(input: {
         result: {
           protocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'bookone-agent-bridge', version: 'ab-03.1' },
+          serverInfo: { name: 'bookone-agent-bridge', version: 'ab-04.1' },
         },
       };
     }

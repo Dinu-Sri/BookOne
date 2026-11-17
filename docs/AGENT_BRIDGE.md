@@ -25,7 +25,7 @@ Stock receipts, payments, foreign currency, arbitrary journals, posted rewrites,
 
 1. Apply migration `044_agent_bridge.sql` (startup `db:init` already walks `packages/db/migrations`).
 2. On **Purchase settings**, enable Document Inbox. Leave draft-only and posting-disable on for the first week.
-3. Grant `purchase.inbox.*`, `agent_bridge.approve`, and `agent_bridge.post` on Jobs if the tenant was seeded before catalog v2. New seeds from catalog v2 grant purchasing write plus accountant/owner/admin approve/post.
+3. Grant `purchase.inbox.*`, `agent_bridge.approve`, and `agent_bridge.post` on Jobs if the tenant was seeded before catalog v2. New seeds from catalog v2 grant purchasing write plus accountant/owner/admin approve/post. `allows(key, 'write')` matches those exact catalog action keys (and a persisted `*.write` alias). Do not invent a custom role to bypass a missing Owner grant.
 4. Optional live OCR: set `AGENT_BRIDGE_OCR_ENDPOINT`, `AGENT_BRIDGE_OCR_KEY`, and `AGENT_BRIDGE_OCR_LIVE=1`. The HTTP adapter forwards attachment bytes and MIME. Without opt-in the runtime stays unconfigured. Tests use the labelled fixture extractor or a local HTTP contract server.
 5. MCP: `AGENT_BRIDGE_TOKEN_SECRET` or `AUTH_SECRET` is required (no development fallback). Production OAuth is **not** registered until `AGENT_BRIDGE_OAUTH_ISSUER` / JWKS are set.
 6. After restore, MCP connections are excluded from the archive. Reauthorize clients; do not reuse old tokens. Restored inbox flags stay draft-only and posting-stopped; restored approvals are revoked. Blob keys keep the document path UUID (tenant prefix only).

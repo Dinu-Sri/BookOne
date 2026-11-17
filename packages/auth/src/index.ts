@@ -10,15 +10,25 @@ export {
   PERMISSION_KEYS,
   PRIVILEGED_KEYS,
   SCREEN_DEFS,
+  ACTION_PERMISSIONS,
   navHrefToPermissionPrefix,
   screenKeyFromHref,
   isPrivilegedKey,
+  isActionPermissionKey,
+  permissionGrantAliases,
+  canonicalPermissionKey,
   type PermissionKey,
   type AccessLevel,
 } from './permissions/catalog';
 export { JOB_TEMPLATES, templateByKey, type JobTemplateKey } from './permissions/templates';
 export { getRequestAccess, loadAccessForUser, type LoadedAccess } from './permissions/load';
+export { grantsFromTemplateKey } from './permissions/grants';
 export { allows, resolveLevel, isReadOnlyJob } from './permissions/resolve';
+export {
+  persistedGrantsFromJobForm,
+  actionPermissionLevel,
+  jobMatrixActionRows,
+} from './permissions/job-matrix';
 export {
   inDimensionScope,
   isUnrestrictedScope,

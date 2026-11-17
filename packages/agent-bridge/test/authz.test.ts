@@ -14,6 +14,7 @@ describe('local fixture tokens', () => {
     expect(parseScopes(['purchase.inbox.read'])).toEqual(['read']);
     expect(parseScopes(['purchase.inbox.write'])).toEqual(['read', 'upload', 'draft']);
     expect(parseScopes(['agent_bridge.approve', 'agent_bridge.post'])).toEqual(['approve', 'post']);
+    expect(parseScopes(['agent_bridge.approve.write', 'agent_bridge.post.write'])).toEqual(['approve', 'post']);
   });
 
   it('rejects expired, wrong-secret and malformed tokens', () => {

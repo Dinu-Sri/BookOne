@@ -28,8 +28,8 @@ export function parseScopes(keys: string[]): Capability[] {
       out.add('upload');
       out.add('draft');
     }
-    if (k === 'agent_bridge.approve') out.add('approve');
-    if (k === 'agent_bridge.post' || k === 'purchase.bills.write') out.add('post');
+    if (k === 'agent_bridge.approve' || k === 'agent_bridge.approve.write') out.add('approve');
+    if (k === 'agent_bridge.post' || k === 'agent_bridge.post.write' || k === 'purchase.bills.write') out.add('post');
   }
   return [...out];
 }

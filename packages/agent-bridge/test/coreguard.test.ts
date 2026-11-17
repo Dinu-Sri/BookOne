@@ -12,6 +12,7 @@ describe('scoped CoreGuard registry', () => {
     expect(blocked).toEqual(['live-ocr-provider', 'production-idp', 'external-mcp-client', 'github-branch-protection']);
     expect(required).toContain('independent-acceptance');
     expect(required).toContain('archive-restore-pointers');
+    expect(required).toContain('permissions-catalog');
     expect(coreGuardReport().note).toMatch(/does not certify all ERP modules/);
   });
 

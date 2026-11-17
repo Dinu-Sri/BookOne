@@ -23,7 +23,7 @@ Repository: `Dinu-Sri/BookOne`. Branch: `master`.
 
 ## Actual applied rules (this candidate)
 
-GitHub API `GET /repos/Dinu-Sri/BookOne/branches/master/protection` on 2026-11-16 (AB-03) returned HTTP 404 `Branch not protected`. No ruleset was applied by this change. YAML publication gates remain quality + CoreGuard. Attest applied rules separately after the owner turns protection on.
+GitHub API `GET /repos/Dinu-Sri/BookOne/branches/master/protection` on 2026-11-16 (AB-04) returned HTTP 404 `Branch not protected`. No ruleset was applied by this change. YAML publication gates remain quality + CoreGuard. Attest applied rules separately after the owner turns protection on.
 
 ## AgentBridge posting
 

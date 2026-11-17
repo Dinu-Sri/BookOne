@@ -7,7 +7,9 @@ import {
   PRIVILEGED_KEYS,
   SCREEN_DEFS,
   createCredentialLogin,
+  jobMatrixActionRows,
   loadAccessForUser,
+  persistedGrantsFromJobForm,
   setCredentialPassword,
   requireTenantContext,
   scopeIgnoresJob,
@@ -148,7 +150,8 @@ export async function listJobMatrix(roleId: string) {
         .where(and(eq(tenantRolePermissions.roleId, roleId), isNull(tenantRolePermissions.voidedAt)));
       for (const r of rows) grantSet.add(r.permissionKey as PermissionKey);
     }
-    const screens = SCREEN_DEFS.map((s) => {
+    const screens = [
+      ...SCREEN_DEFS.map((s) => {
         const write = grantSet.has(`${s.keyPrefix}.write` as PermissionKey);
         const read = write || grantSet.has(`${s.keyPrefix}.read` as PermissionKey);
         const privileged = (PRIVILEGED_KEYS as readonly string[]).some((k) => k.startsWith(s.keyPrefix));
@@ -157,7 +160,9 @@ export async function listJobMatrix(roleId: string) {
           level: (write ? 'write' : read ? 'read' : 'none') as 'none' | 'read' | 'write',
           locked: privileged,
         };
-      });
+      }),
+      ...jobMatrixActionRows(grantSet),
+    ];
     const grantKeys = screens.flatMap((s) =>
       s.level === 'write' ? [`${s.keyPrefix}.write`] : s.level === 'read' ? [`${s.keyPrefix}.read`] : [],
     );
@@ -185,13 +190,7 @@ export async function saveJobMatrix(formData: FormData) {
     if (role.templateKey === 'owner' && user.jobSlug !== 'owner') {
       throw new Error('Only the owner can change the Owner job.');
     }
-    const grants: { key: string; level: 'read' | 'write' }[] = [];
-    for (const screen of SCREEN_DEFS) {
-      if ((PRIVILEGED_KEYS as readonly string[]).some((k) => k.startsWith(screen.keyPrefix))) continue;
-      const v = String(formData.get(`perm_${screen.keyPrefix}`) ?? 'none');
-      if (v === 'write' && screen.writeable) grants.push({ key: `${screen.keyPrefix}.write`, level: 'write' });
-      else if (v === 'read' || v === 'write') grants.push({ key: `${screen.keyPrefix}.read`, level: 'read' });
-    }
+    const grants = persistedGrantsFromJobForm((name) => String(formData.get(name) ?? 'none'));
     await db()
       .update(tenantRolePermissions)
       .set({ voidedAt: new Date() })

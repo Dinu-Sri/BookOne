@@ -1,3 +1,10 @@
+## 2026-11-16 — AgentBridge approve/post permission keys AB-04 (v2.7.4)
+
+- Record: [CHG-20261116-agentbridge-04](changes/CHG-20261116-agentbridge-04.md). Baseline product `382f0d8` / v2.7.3. Independent review https://github.com/Dinu-Sri/bookone-qa/pull/123 and CODING-AGENTBRIDGE-04. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Staging remains unchanged. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11 or the accepted POS 118 refund. Never reopen the consumed v2.7.3 retest.
+- Catalog action keys `agent_bridge.approve` / `agent_bridge.post` now resolve through `allows(..., 'write')`. Persisted `*.write` aliases map to the same grant. Job Save keeps those keys. Viewer copied grants stay denied. Purchase module ceiling still applies. Token scopes still intersect current grants.
+- Checks: `@bookone/agent-bridge` vitest 15 files / 46 passed (AB-02 6, AB-03 3, AB-04 2, OAuth JWKS 2). `@bookone/auth` ab04-permissions 13 passed. Playwright inbox + UI-NAV-01 10 passed / 1 skipped (`AGENT_BRIDGE_E2E_BASE_URL` unset). AgentBridge and auth `tsc --noEmit` passed. Isolated Next+Postgres browser not-run. Independent QA PostgreSQL runtime not-run here. Live OCR / production IdP / external MCP / GitHub branch protection stay BLOCKED.
+- Next: Independent QA retest of this SHA. Owner deploys only after qualification. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-16 — AgentBridge authorization, reconciliation, restore AB-03 (v2.7.3)
 
 - Record: [CHG-20261116-agentbridge-03](changes/CHG-20261116-agentbridge-03.md). Baseline product `2967526` / v2.7.2. Independent review https://github.com/Dinu-Sri/bookone-qa/pull/122 and CODING-AGENTBRIDGE-03. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11 or the accepted POS 118 refund.

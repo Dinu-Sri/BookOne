@@ -20,6 +20,17 @@ export const STORAGE_POINTER_KEYS = [
   'key',
 ] as const;
 
+/** Blob keys whose bytes already live in the data archive. Do not count these as missing S3 objects. */
+export function dbBackedAgentBridgeBlobKeys(tables: Record<string, Record<string, unknown>[]>): Set<string> {
+  const keys = new Set<string>();
+  for (const row of tables.agent_bridge_blobs ?? []) {
+    if (typeof row.key === 'string' && typeof row.content === 'string' && row.content.length > 0) {
+      keys.add(row.key);
+    }
+  }
+  return keys;
+}
+
 export type ArchiveKind = 'data' | 'files';
 
 export type ArchiveManifest = {
@@ -48,6 +59,8 @@ export const ARCHIVE_EXCLUDED_TABLES = [
   'health_check_runs',
   'tenant_invites',
   'agent_bridge_connections',
+  'agent_bridge_upload_sessions',
+  'agent_bridge_oauth_codes',
 ] as const;
 
 export const ARCHIVE_DATA_TABLE_NAMES = [
@@ -120,6 +133,8 @@ export const ARCHIVE_DATA_TABLE_NAMES = [
   'agent_bridge_operations',
   'agent_bridge_blobs',
   'agent_bridge_jobs',
+  'agent_bridge_batches',
+  'agent_bridge_facts_keys',
 ] as const;
 
 export const TRADING_COUNT_KEYS = [
@@ -211,6 +226,8 @@ export const ARCHIVE_RESTORE_INSERT_ORDER = [
   'agent_bridge_approvals',
   'agent_bridge_operations',
   'agent_bridge_jobs',
+  'agent_bridge_batches',
+  'agent_bridge_facts_keys',
 ] as const;
 
 export function isOperationallyEmpty(counts: Record<string, number>): boolean {

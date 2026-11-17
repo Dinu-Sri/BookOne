@@ -10,7 +10,7 @@ import { jobCanWrite } from '@/lib/access';
 export default async function DocumentInboxPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ err?: string }>;
+  searchParams?: Promise<{ err?: string; uploadSession?: string }>;
 }) {
   let tenant;
   try {
@@ -24,7 +24,9 @@ export default async function DocumentInboxPage({
 
   const { service, actor } = await getAgentBridgeService();
   const docs = await service.listInbox(actor);
-  const err = (await searchParams)?.err;
+  const query = await searchParams;
+  const err = query?.err;
+  const uploadSession = query?.uploadSession;
   const canWrite = jobCanWrite(tenant, 'Document Inbox');
 
   return (
@@ -57,12 +59,25 @@ export default async function DocumentInboxPage({
             ) : null}
             {canWrite ? (
               <form action={uploadInboxDocument} style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
+                <div className="party-form-top" style={{ padding: 0, marginBottom: 8 }}>
+                  <Link href="/purchase/inbox/connections" className="party-back-btn" style={{ marginLeft: 'auto' }}>
+                    <span>
+                      <strong>Connections</strong>
+                      <small>Agents</small>
+                    </span>
+                  </Link>
+                </div>
+                {uploadSession ? (
+                  <p role="status">
+                    A connected agent asked you to attach the original invoice here. Choose the file, then open it to enter facts.
+                  </p>
+                ) : null}
                 <div className="field field-full">
                   <label htmlFor="inbox-file">Upload supplier invoice (PDF or image)</label>
                   <input id="inbox-file" className="input" type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp" required />
                 </div>
                 <div className="field field-full">
-                  <label htmlFor="inbox-hint">Optional printed text (used when extraction is a fixture)</label>
+                  <label htmlFor="inbox-hint">Optional printed text from the invoice</label>
                   <textarea id="inbox-hint" className="input" name="textHint" rows={2} />
                 </div>
                 <Button type="submit">Receive document</Button>

@@ -1,6 +1,14 @@
-import { MCP_PROTOCOL_VERSION, type Actor } from './contracts';
+import {
+  MCP_PROTOCOL_VERSION,
+  MCP_SUPPORTED_PROTOCOL_VERSIONS,
+  SCHEMA_VERSION,
+  type Actor,
+  type ProposalFacts,
+} from './contracts';
 import { actorFromToken, resolveActorFromAuthorization, verifyConnectionToken } from './authz';
 import { AgentBridgeService, TOOL_NAMES } from './service';
+import { TOOL_INPUT_SCHEMAS, validateAgainstSchema } from './schemas';
+import { money } from './money';
 
 export type JsonRpcRequest = {
   jsonrpc?: string;
@@ -17,9 +25,19 @@ export type JsonRpcResponse = {
 };
 
 const TOOL_DESCRIPTIONS: Record<(typeof TOOL_NAMES)[number], string> = {
-  get_capabilities: 'List AgentBridge flags, scopes and tools for this connection.',
+  get_capabilities: 'List AgentBridge flags, scopes, operations and tools for this connection.',
   get_policy_context: 'Return the company purchase-bill policy in force.',
-  submit_document: 'Upload an owned PDF or image. Pass filename, mime and contentBase64. Never a filesystem path.',
+  submit_document: 'Upload an owned PDF or image. Pass filename, mime and contentBase64. Never a filesystem path or URL.',
+  submit_extracted_facts:
+    'Submit structured invoice facts against an owned stored document, content hash and expected revision. Works without server OCR.',
+  create_upload_session:
+    'Create a short-lived upload session and an authenticated BookOne review URL when the chat client cannot forward file bytes.',
+  finalize_upload_session: 'Finalize an upload session with contentBase64 after the original bytes are available.',
+  submit_batch_manifest: 'Submit one manifest item per file. Items are reviewed separately. Never a batch approval.',
+  get_batch_status: 'Read per-item batch status.',
+  lookup_suppliers: 'Search approved suppliers in this company. Returns name and partyId only.',
+  lookup_expense_accounts: 'Search approved expense accounts in this company.',
+  list_own_proposals: 'List the caller’s own documents and proposals.',
   get_processing_status: 'Read document status, issues and allowed next actions.',
   propose_purchase_bill: 'Return the current proposal for a document.',
   update_draft: 'Patch proposal facts with expectedRevision optimistic concurrency.',
@@ -27,7 +45,7 @@ const TOOL_DESCRIPTIONS: Record<(typeof TOOL_NAMES)[number], string> = {
   answer_issue: 'Answer one clarification question in plain language.',
   get_preview: 'Server-calculated unpaid service bill preview. Does not post.',
   request_approval: 'Move a validated proposal into awaiting-approval.',
-  grant_approval: 'Human-only grant bound to the current proposal hash.',
+  grant_approval: 'Human-only grant bound to the current proposal hash. Agents cannot call this.',
   commit_approved_proposal: 'Post once with a durable idempotency key.',
   get_operation_status: 'Read a commit operation without retrying.',
   get_receipt: 'Read the durable receipt for a finished operation.',
@@ -37,8 +55,26 @@ export function mcpToolsList() {
   return TOOL_NAMES.map((name) => ({
     name,
     description: TOOL_DESCRIPTIONS[name],
-    inputSchema: { type: 'object', additionalProperties: true },
+    inputSchema: TOOL_INPUT_SCHEMAS[name] ?? { type: 'object', additionalProperties: false, properties: {} },
   }));
+}
+
+function factsPatch(args: Record<string, unknown>): Partial<ProposalFacts> {
+  const patch: Partial<ProposalFacts> = {};
+  if (typeof args.supplierName === 'string') patch.supplierName = args.supplierName;
+  if (typeof args.supplierInvoiceNumber === 'string') patch.supplierInvoiceNumber = args.supplierInvoiceNumber;
+  if (typeof args.issueDate === 'string') patch.issueDate = args.issueDate;
+  if (typeof args.currency === 'string') patch.currency = args.currency;
+  if (typeof args.paidStatus === 'string') patch.paidStatus = args.paidStatus as ProposalFacts['paidStatus'];
+  if (typeof args.documentKind === 'string') patch.documentKind = args.documentKind as ProposalFacts['documentKind'];
+  if (typeof args.expenseAccountCode === 'string') patch.expenseAccountCode = args.expenseAccountCode;
+  if (typeof args.categoryLabel === 'string') patch.categoryLabel = args.categoryLabel;
+  if (typeof args.lineDescription === 'string') patch.lineDescription = args.lineDescription;
+  const currency = typeof args.currency === 'string' ? args.currency : undefined;
+  if (typeof args.netMinor === 'number') patch.net = money(args.netMinor, currency);
+  if (typeof args.taxMinor === 'number') patch.tax = money(args.taxMinor, currency);
+  if (typeof args.grossMinor === 'number') patch.gross = money(args.grossMinor, currency);
+  return patch;
 }
 
 export async function dispatchTool(
@@ -47,6 +83,12 @@ export async function dispatchTool(
   name: string,
   args: Record<string, unknown> = {},
 ): Promise<unknown> {
+  const schema = TOOL_INPUT_SCHEMAS[name];
+  if (schema) {
+    const checked = validateAgainstSchema(schema, args ?? {});
+    if (!checked.ok) return { ok: false, code: 'STALE_REVISION', error: checked.error };
+    args = checked.value as Record<string, unknown>;
+  }
   switch (name) {
     case 'get_capabilities':
       return service.getCapabilities(actor);
@@ -59,14 +101,76 @@ export async function dispatchTool(
       if (args.filePath || args.path || args.url) {
         return { ok: false, code: 'ATTACHMENT_REJECTED', error: 'Arbitrary paths and URLs are not accepted.' };
       }
-      const bytes = Buffer.from(b64, 'base64');
+      let bytes: Uint8Array;
+      try {
+        const buf = Buffer.from(b64, 'base64');
+        if (!buf.byteLength) return { ok: false, code: 'ATTACHMENT_REJECTED', error: 'contentBase64 is empty or malformed.' };
+        bytes = new Uint8Array(buf);
+      } catch {
+        return { ok: false, code: 'ATTACHMENT_REJECTED', error: 'contentBase64 is not valid base64.' };
+      }
       return service.submitDocument(actor, {
         filename,
         mime,
-        bytes: new Uint8Array(bytes),
+        bytes,
         textHint: args.textHint ? String(args.textHint) : undefined,
+        idempotencyKey: args.idempotencyKey ? String(args.idempotencyKey) : undefined,
       });
     }
+    case 'submit_extracted_facts':
+      return service.submitExtractedFacts(actor, {
+        documentId: String(args.documentId ?? ''),
+        contentHash: String(args.contentHash ?? ''),
+        expectedRevision: Number(args.expectedRevision ?? 0),
+        idempotencyKey: args.idempotencyKey ? String(args.idempotencyKey) : undefined,
+        supplierName: args.supplierName ? String(args.supplierName) : undefined,
+        supplierInvoiceNumber: args.supplierInvoiceNumber ? String(args.supplierInvoiceNumber) : undefined,
+        issueDate: args.issueDate ? String(args.issueDate) : undefined,
+        currency: args.currency ? String(args.currency) : undefined,
+        paidStatus: args.paidStatus as never,
+        documentKind: args.documentKind as never,
+        netMinor: typeof args.netMinor === 'number' ? args.netMinor : undefined,
+        taxMinor: typeof args.taxMinor === 'number' ? args.taxMinor : undefined,
+        grossMinor: typeof args.grossMinor === 'number' ? args.grossMinor : undefined,
+        expenseAccountCode: args.expenseAccountCode ? String(args.expenseAccountCode) : undefined,
+        categoryLabel: args.categoryLabel ? String(args.categoryLabel) : undefined,
+        lineDescription: args.lineDescription ? String(args.lineDescription) : undefined,
+        origin: 'agent-facts',
+      });
+    case 'create_upload_session':
+      return service.createUploadSession(actor, {
+        filename: String(args.filename ?? ''),
+        mime: String(args.mime ?? ''),
+        declaredBytes: typeof args.declaredBytes === 'number' ? args.declaredBytes : undefined,
+        contentHash: args.contentHash ? String(args.contentHash) : undefined,
+        requestKey: args.requestKey ? String(args.requestKey) : undefined,
+      });
+    case 'finalize_upload_session':
+      return service.finalizeUploadSession(actor, {
+        sessionId: String(args.sessionId ?? ''),
+        contentBase64: args.contentBase64 ? String(args.contentBase64) : undefined,
+      });
+    case 'submit_batch_manifest':
+      return service.submitBatchManifest(actor, {
+        items: (args.items as never) ?? [],
+      });
+    case 'get_batch_status':
+      return service.getBatchStatus(actor, String(args.batchId ?? ''));
+    case 'lookup_suppliers':
+      return service.lookupSuppliers(actor, {
+        q: args.q ? String(args.q) : undefined,
+        limit: typeof args.limit === 'number' ? args.limit : undefined,
+      });
+    case 'lookup_expense_accounts':
+      return service.lookupExpenseAccounts(actor, {
+        q: args.q ? String(args.q) : undefined,
+        limit: typeof args.limit === 'number' ? args.limit : undefined,
+      });
+    case 'list_own_proposals':
+      return service.listOwnProposals(actor, {
+        q: args.q ? String(args.q) : undefined,
+        limit: typeof args.limit === 'number' ? args.limit : undefined,
+      });
     case 'get_processing_status':
       return service.getProcessingStatus(actor, String(args.documentId ?? ''));
     case 'propose_purchase_bill':
@@ -75,7 +179,7 @@ export async function dispatchTool(
       return service.updateDraft(actor, {
         proposalId: String(args.proposalId ?? ''),
         expectedRevision: Number(args.expectedRevision ?? 0),
-        patch: (args.patch ?? {}) as never,
+        patch: factsPatch(args),
       });
     case 'validate_proposal':
       return service.validateProposal(actor, String(args.proposalId ?? ''));
@@ -109,6 +213,22 @@ export async function dispatchTool(
   }
 }
 
+function negotiateProtocolVersion(requested: unknown): { ok: true; version: string } | { ok: false; error: string } {
+  if (requested === undefined || requested === null || requested === '') {
+    return { ok: true, version: MCP_PROTOCOL_VERSION };
+  }
+  if (typeof requested !== 'string') {
+    return { ok: false, error: 'protocolVersion must be a string.' };
+  }
+  if ((MCP_SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested)) {
+    return { ok: true, version: requested };
+  }
+  return {
+    ok: false,
+    error: `Unsupported MCP protocol version ${requested}. Supported: ${MCP_SUPPORTED_PROTOCOL_VERSIONS.join(', ')}.`,
+  };
+}
+
 export async function handleMcpJsonRpc(input: {
   body: JsonRpcRequest;
   service: AgentBridgeService;
@@ -118,13 +238,21 @@ export async function handleMcpJsonRpc(input: {
   const method = input.body.method ?? '';
   try {
     if (method === 'initialize') {
+      const negotiated = negotiateProtocolVersion(input.body.params?.protocolVersion);
+      if (!negotiated.ok) {
+        return {
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32602, message: negotiated.error, data: { code: 'UNSUPPORTED_PROTOCOL' } },
+        };
+      }
       return {
         jsonrpc: '2.0',
         id,
         result: {
-          protocolVersion: MCP_PROTOCOL_VERSION,
+          protocolVersion: negotiated.version,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'bookone-agent-bridge', version: 'ab-04.1' },
+          serverInfo: { name: 'bookone-agent-bridge', version: SCHEMA_VERSION },
         },
       };
     }

@@ -3,6 +3,8 @@ import { caseIdFromHash, GOLDEN_CASES, type GoldenCaseId } from './oracles';
 
 export const FIXTURE_EXTRACTOR_ID = 'fixture:ab-01-corpus';
 export const LIVE_EXTRACTOR_ID = 'provider:configurable-ocr';
+export const AGENT_FACTS_EXTRACTOR_ID = 'agent:submitted-facts';
+export const MANUAL_FACTS_EXTRACTOR_ID = 'human:manual-facts';
 
 export type ExtractionResult = {
   extractorId: string;

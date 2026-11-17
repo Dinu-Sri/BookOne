@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type {
   ApprovalRecord,
+  Capability,
   DocumentState,
   ExtractedFacts,
   FeatureFlags,
+  IntakeMode,
   Issue,
   OperationReceipt,
   PreviewEffect,
@@ -26,8 +28,65 @@ export type StoredDocument = {
   facts?: ExtractedFacts;
   proposalId?: string;
   proposalRevision: number;
+  lastErrorCode?: string;
+  lastErrorMessage?: string;
+  intakeMode?: IntakeMode;
   createdAt: string;
   updatedAt: string;
+};
+
+export type StoredUploadSession = {
+  id: string;
+  tenantId: string;
+  userId: string;
+  connectionId?: string;
+  filename: string;
+  mime: string;
+  declaredBytes?: number;
+  expectedHash?: string;
+  requestKey?: string;
+  bytes?: Uint8Array;
+  expiresAt: string;
+  finalizedDocumentId?: string;
+  createdAt: string;
+};
+
+export type StoredBatchItem = {
+  requestKey: string;
+  filename: string;
+  mime: string;
+  status: 'pending' | 'received' | 'awaiting_facts' | 'failed' | 'done';
+  documentId?: string;
+  error?: string;
+  contentHash?: string;
+};
+
+export type StoredBatch = {
+  id: string;
+  tenantId: string;
+  userId: string;
+  items: StoredBatchItem[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StoredFactsKey = {
+  tenantId: string;
+  key: string;
+  payloadHash: string;
+  documentId: string;
+};
+
+export type StoredConnection = {
+  id: string;
+  tenantId: string;
+  userId: string;
+  clientId: string;
+  scopes: Capability[];
+  label?: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+  createdAt: string;
 };
 
 export type StoredProposal = {
@@ -100,6 +159,16 @@ export interface AgentBridgeStore {
   saveJob(job: StoredJob): Promise<void>;
   getJob(tenantId: string, id: string): Promise<StoredJob | null>;
   listJobs(tenantId: string): Promise<StoredJob[]>;
+  saveUploadSession?(session: StoredUploadSession): Promise<void>;
+  getUploadSession?(tenantId: string, id: string): Promise<StoredUploadSession | null>;
+  saveBatch?(batch: StoredBatch): Promise<void>;
+  getBatch?(tenantId: string, id: string): Promise<StoredBatch | null>;
+  findBatchItemByKey?(tenantId: string, requestKey: string): Promise<{ batch: StoredBatch; item: StoredBatchItem } | null>;
+  saveFactsKey?(row: StoredFactsKey): Promise<void>;
+  getFactsKey?(tenantId: string, key: string): Promise<StoredFactsKey | null>;
+  listConnections?(tenantId: string, userId?: string): Promise<StoredConnection[]>;
+  saveConnection?(row: StoredConnection): Promise<void>;
+  getConnection?(tenantId: string, id: string): Promise<StoredConnection | null>;
 }
 
 export class MemoryStore implements AgentBridgeStore {
@@ -110,6 +179,10 @@ export class MemoryStore implements AgentBridgeStore {
   ops = new Map<string, StoredOperation>();
   blobs = new Map<string, StoredBlob>();
   jobs = new Map<string, StoredJob>();
+  sessions = new Map<string, StoredUploadSession>();
+  batches = new Map<string, StoredBatch>();
+  factsKeys = new Map<string, StoredFactsKey>();
+  connections = new Map<string, StoredConnection>();
 
   async flags(tenantId: string) {
     return (
@@ -205,6 +278,46 @@ export class MemoryStore implements AgentBridgeStore {
   async getBlob(tenantId: string, key: string) {
     const b = this.blobs.get(key);
     return b && b.tenantId === tenantId ? b : null;
+  }
+  async saveUploadSession(session: StoredUploadSession) {
+    this.sessions.set(session.id, session);
+  }
+  async getUploadSession(tenantId: string, id: string) {
+    const s = this.sessions.get(id);
+    return s && s.tenantId === tenantId ? s : null;
+  }
+  async saveBatch(batch: StoredBatch) {
+    this.batches.set(batch.id, batch);
+  }
+  async getBatch(tenantId: string, id: string) {
+    const b = this.batches.get(id);
+    return b && b.tenantId === tenantId ? b : null;
+  }
+  async findBatchItemByKey(tenantId: string, requestKey: string) {
+    for (const batch of this.batches.values()) {
+      if (batch.tenantId !== tenantId) continue;
+      const item = batch.items.find((i) => i.requestKey === requestKey);
+      if (item) return { batch, item };
+    }
+    return null;
+  }
+  async saveFactsKey(row: StoredFactsKey) {
+    this.factsKeys.set(`${row.tenantId}:${row.key}`, row);
+  }
+  async getFactsKey(tenantId: string, key: string) {
+    return this.factsKeys.get(`${tenantId}:${key}`) ?? null;
+  }
+  async listConnections(tenantId: string, userId?: string) {
+    return [...this.connections.values()].filter(
+      (c) => c.tenantId === tenantId && (!userId || c.userId === userId),
+    );
+  }
+  async saveConnection(row: StoredConnection) {
+    this.connections.set(row.id, row);
+  }
+  async getConnection(tenantId: string, id: string) {
+    const c = this.connections.get(id);
+    return c && c.tenantId === tenantId ? c : null;
   }
 }
 

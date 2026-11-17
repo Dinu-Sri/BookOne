@@ -32,6 +32,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
     const route = (path ?? []).join('/');
     const tool =
       route === 'documents' ? 'submit_document'
+      : route === 'facts' ? 'submit_extracted_facts'
+      : route === 'upload-sessions' ? 'create_upload_session'
+      : route === 'upload-sessions/finalize' ? 'finalize_upload_session'
+      : route === 'batches' ? 'submit_batch_manifest'
       : route === 'drafts' ? 'update_draft'
       : route === 'answers' ? 'answer_issue'
       : route === 'preview' ? 'get_preview'
@@ -78,6 +82,20 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
     }
     if (route === 'documents') {
       return NextResponse.json(await service.listInbox(actor));
+    }
+    if (route === 'suppliers') {
+      const q = req.nextUrl.searchParams.get('q') ?? undefined;
+      return NextResponse.json(await service.lookupSuppliers(actor, { q }));
+    }
+    if (route === 'expense-accounts') {
+      const q = req.nextUrl.searchParams.get('q') ?? undefined;
+      return NextResponse.json(await service.lookupExpenseAccounts(actor, { q }));
+    }
+    if (route === 'proposals') {
+      return NextResponse.json(await service.listOwnProposals(actor));
+    }
+    if (route.startsWith('batches/')) {
+      return NextResponse.json(await service.getBatchStatus(actor, route.slice('batches/'.length)));
     }
     return jsonError(404, 'STALE_REVISION', 'Unknown AgentBridge route.');
   } catch (e) {

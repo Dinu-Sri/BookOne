@@ -72,6 +72,8 @@ import {
   agentBridgeOperations,
   agentBridgeBlobs,
   agentBridgeJobs,
+  agentBridgeBatches,
+  agentBridgeFactsKeys,
 } from '../schema';
 import {
   ARCHIVE_DATA_TABLE_NAMES,
@@ -158,6 +160,8 @@ export const ARCHIVE_DUMP_TABLES: DumpTable[] = [
   { table: agentBridgeOperations, by: 'tenantId' },
   { table: agentBridgeBlobs, by: 'tenantId' },
   { table: agentBridgeJobs, by: 'tenantId' },
+  { table: agentBridgeBatches, by: 'tenantId' },
+  { table: agentBridgeFactsKeys, by: 'tenantId' },
 ];
 
 function serializeRow(row: Record<string, unknown>): Record<string, unknown> {

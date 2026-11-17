@@ -2,6 +2,7 @@ import type {
   Actor,
   Capability,
   CompanyPolicy,
+  ExtractedFacts,
   FeatureFlags,
   OperationReceipt,
   PreviewEffect,
@@ -12,17 +13,28 @@ import { money } from './money';
 import { blockingIssues, issuesFromExtraction, issuesFromProposal } from './issues';
 import { assertTransition } from './state';
 import { calculatePreview, proposalHash } from './preview';
-import { fixtureExtractor, type ExtractionProvider } from './extraction';
+import {
+  AGENT_FACTS_EXTRACTOR_ID,
+  extractorFor,
+  FIXTURE_EXTRACTOR_ID,
+  LIVE_EXTRACTOR_ID,
+  MANUAL_FACTS_EXTRACTOR_ID,
+  type ExtractionProvider,
+} from './extraction';
 import { assertCapability } from './authz';
+import { capabilityMatrix } from './operations';
+import { UPLOAD_SESSION_TTL_MS } from './oauth';
 import {
   isOwnedAgentBridgeKey,
   newId,
   ownedStorageKey,
   sha256,
   type AgentBridgeStore,
+  type StoredBatch,
   type StoredDocument,
   type StoredOperation,
   type StoredProposal,
+  type StoredUploadSession,
 } from './store';
 
 const ALLOWED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
@@ -49,6 +61,7 @@ export type AgentBridgeDeps = {
   policyFor(tenantId: string): Promise<CompanyPolicy>;
   now?: () => number;
   authorizeActor?(actor: Actor): Promise<Actor>;
+  publicBaseUrl?: string;
 };
 
 export class AgentBridgeService {
@@ -68,6 +81,14 @@ export class AgentBridgeService {
     return next;
   }
 
+  private extractor(): ExtractionProvider {
+    return this.deps.extractor ?? extractorFor();
+  }
+
+  private publicBase(): string {
+    return (this.deps.publicBaseUrl || process.env.AGENT_BRIDGE_PUBLIC_URL || process.env.AUTH_URL || '').replace(/\/$/, '');
+  }
+
   async getCapabilities(actor: Actor) {
     actor = await this.authorized(actor, 'read');
     const flags = await this.flags(actor.tenantId);
@@ -77,7 +98,13 @@ export class AgentBridgeService {
       flags,
       capabilities: actor.capabilities,
       tools: TOOL_NAMES,
+      operations: capabilityMatrix(),
       posting: flags.enabled && !flags.postingDisabled && !flags.draftOnly && actor.capabilities.includes('post'),
+      defaultConnectionScopes: ['read', 'upload', 'draft'],
+      fileTransfer: {
+        bytes: 'contentBase64 on submit_document or finalize_upload_session',
+        fallback: 'create_upload_session returns an authenticated BookOne review URL. Chat attachments are not forwarded automatically.',
+      },
     };
   }
 
@@ -88,15 +115,30 @@ export class AgentBridgeService {
 
   async submitDocument(
     actor: Actor,
-    input: { filename: string; mime: string; bytes: Uint8Array; textHint?: string },
+    input: { filename: string; mime: string; bytes: Uint8Array; textHint?: string; idempotencyKey?: string },
   ) {
     actor = await this.authorized(actor, 'upload');
     const flags = await this.flags(actor.tenantId);
     if (!flags.enabled) return fail('FEATURE_DISABLED', 'AgentBridge is off for this company.');
     if (!ALLOWED_MIME.has(input.mime)) return fail('ATTACHMENT_REJECTED', `Unsupported type ${input.mime}.`);
+    if (input.bytes.byteLength < 1) return fail('ATTACHMENT_REJECTED', 'Empty file.');
     if (input.bytes.byteLength > MAX_BYTES) return fail('ATTACHMENT_REJECTED', 'File exceeds 8 MB.');
     if (input.filename.includes('..') || input.filename.includes('/') || input.filename.includes('\\')) {
       return fail('ATTACHMENT_REJECTED', 'Unsafe filename.');
+    }
+    if (!mimeSignatureOk(input.mime, input.bytes)) {
+      return fail('ATTACHMENT_REJECTED', 'File bytes do not match the declared type.');
+    }
+    if (input.idempotencyKey && this.deps.store.getFactsKey) {
+      const prior = await this.deps.store.getFactsKey(actor.tenantId, `upload:${input.idempotencyKey}`);
+      if (prior) {
+        const payloadHash = sha256(input.bytes);
+        if (prior.payloadHash !== payloadHash) {
+          return fail('IDEMPOTENCY_MISMATCH', 'This upload key was used with a different file.');
+        }
+        const existingDoc = await this.deps.store.getDocument(actor.tenantId, prior.documentId);
+        return { ok: true as const, document: existingDoc };
+      }
     }
     const hash = sha256(input.bytes);
     const existing = await this.deps.store.findByHash(actor.tenantId, hash);
@@ -120,10 +162,29 @@ export class AgentBridgeService {
       mime: input.mime,
       bytes: input.bytes.byteLength,
       proposalRevision: 0,
+      intakeMode: 'upload',
       createdAt: new Date(this.now()).toISOString(),
       updatedAt: new Date(this.now()).toISOString(),
     };
     await this.deps.store.saveDocument(doc);
+    if (input.idempotencyKey && this.deps.store.saveFactsKey) {
+      await this.deps.store.saveFactsKey({
+        tenantId: actor.tenantId,
+        key: `upload:${input.idempotencyKey}`,
+        payloadHash: hash,
+        documentId: id,
+      });
+    }
+    if (this.shouldSkipServerOcr(this.extractor()) && !input.textHint) {
+      assertTransition(doc.status, 'awaiting_facts');
+      doc.status = 'awaiting_facts';
+      doc.lastErrorCode = 'PROVIDER_UNCONFIGURED';
+      doc.lastErrorMessage =
+        'Server OCR is not configured. Enter the invoice facts here, or ask a connected agent to submit them against this document.';
+      doc.updatedAt = new Date(this.now()).toISOString();
+      await this.deps.store.saveDocument(doc);
+      return { ok: true as const, document: doc, duplicateOf: existing && existing.id !== id ? existing.id : undefined };
+    }
     await this.runExtraction(doc, input.textHint, Boolean(existing), input.bytes);
     const fresh = await this.deps.store.getDocument(actor.tenantId, id);
     return { ok: true as const, document: fresh, duplicateOf: existing && existing.id !== id ? existing.id : undefined };
@@ -137,32 +198,47 @@ export class AgentBridgeService {
     return this.deps.store.getDocument(actor.tenantId, documentId);
   }
 
+  private shouldSkipServerOcr(extractor: ExtractionProvider): boolean {
+    if (extractor.id === FIXTURE_EXTRACTOR_ID) return false;
+    if (extractor.id === LIVE_EXTRACTOR_ID) {
+      return process.env.AGENT_BRIDGE_OCR_LIVE !== '1' && process.env.AGENT_BRIDGE_EXTRACTOR !== 'live';
+    }
+    return true;
+  }
+
   private async runExtraction(doc: StoredDocument, textHint?: string, duplicateScan = false, bytes?: Uint8Array) {
     assertTransition(doc.status, 'extracting');
     doc.status = 'extracting';
+    doc.lastErrorCode = undefined;
+    doc.lastErrorMessage = undefined;
     await this.deps.store.saveDocument(doc);
-    const extractor = this.deps.extractor ?? fixtureExtractor;
+    const extractor = this.extractor();
     try {
       const result = await extractor.extract({ contentHash: doc.contentHash, bytes, mime: doc.mime, textHint });
       doc.extractorId = result.extractorId;
       doc.extractorLive = result.live;
       doc.facts = result.facts;
+      doc.intakeMode = result.live ? 'ocr' : doc.intakeMode ?? 'upload';
       const policy = await this.deps.policyFor(doc.tenantId);
       const issues = issuesFromExtraction(result.facts, policy, duplicateScan);
       const proposal = await this.writeProposal(doc, factsFromExtracted(result.facts, policy), issues);
       doc.proposalId = proposal.id;
+      doc.proposalRevision = proposal.revision;
       doc.status = blockingIssues(issues).length ? 'needs_clarification' : 'draft';
       doc.updatedAt = new Date(this.now()).toISOString();
       await this.deps.store.saveDocument(doc);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      doc.status = 'failed';
+      const code = (e as { code?: string }).code;
+      const msg = sanitizeExtractorMessage(e instanceof Error ? e.message : String(e));
+      doc.lastErrorCode = code === 'PROVIDER_UNCONFIGURED' ? 'PROVIDER_UNCONFIGURED' : 'EXTRACTION_FAILED';
+      doc.lastErrorMessage =
+        code === 'PROVIDER_UNCONFIGURED'
+          ? 'Server OCR is not configured. Enter the invoice facts against this stored document.'
+          : msg;
+      doc.status = code === 'PROVIDER_UNCONFIGURED' ? 'awaiting_facts' : 'failed';
       doc.updatedAt = new Date(this.now()).toISOString();
       await this.deps.store.saveDocument(doc);
-      if ((e as { code?: string }).code === 'PROVIDER_UNCONFIGURED') {
-        return fail('PROVIDER_UNCONFIGURED', msg);
-      }
-      return fail('EXTRACTION_FAILED', msg);
+      return fail(doc.lastErrorCode, doc.lastErrorMessage);
     }
   }
 
@@ -170,7 +246,350 @@ export class AgentBridgeService {
     actor = await this.authorized(actor, 'read');
     const doc = await this.requireDoc(actor.tenantId, documentId);
     const proposal = doc.proposalId ? await this.deps.store.getProposal(actor.tenantId, doc.proposalId) : null;
-    return { document: doc, proposal, allowedNext: nextActions(doc.status, actor) };
+    return {
+      document: doc,
+      proposal,
+      allowedNext: nextActions(doc.status, actor),
+      lastErrorCode: doc.lastErrorCode,
+      lastErrorMessage: doc.lastErrorMessage,
+    };
+  }
+
+  async submitExtractedFacts(
+    actor: Actor,
+    input: {
+      documentId: string;
+      contentHash: string;
+      expectedRevision: number;
+      idempotencyKey?: string;
+      supplierName?: string;
+      supplierInvoiceNumber?: string;
+      issueDate?: string;
+      currency?: string;
+      paidStatus?: ProposalFacts['paidStatus'];
+      documentKind?: ProposalFacts['documentKind'];
+      netMinor?: number;
+      taxMinor?: number;
+      grossMinor?: number;
+      expenseAccountCode?: string;
+      categoryLabel?: string;
+      lineDescription?: string;
+      invoiceKind?: ProposalFacts['invoiceKind'];
+      origin?: 'agent-facts' | 'manual';
+    },
+  ) {
+    actor = await this.authorized(actor, 'draft');
+    const flags = await this.flags(actor.tenantId);
+    if (!flags.enabled) return fail('FEATURE_DISABLED', 'AgentBridge is off for this company.');
+    const payloadHash = sha256(
+      JSON.stringify({
+        documentId: input.documentId,
+        contentHash: input.contentHash,
+        expectedRevision: input.expectedRevision,
+        supplierName: input.supplierName ?? '',
+        supplierInvoiceNumber: input.supplierInvoiceNumber ?? '',
+        issueDate: input.issueDate ?? '',
+        currency: input.currency ?? '',
+        paidStatus: input.paidStatus ?? '',
+        documentKind: input.documentKind ?? '',
+        netMinor: input.netMinor ?? 0,
+        taxMinor: input.taxMinor ?? 0,
+        grossMinor: input.grossMinor ?? 0,
+        expenseAccountCode: input.expenseAccountCode ?? '',
+      }),
+    );
+    if (input.idempotencyKey && this.deps.store.getFactsKey) {
+      const prior = await this.deps.store.getFactsKey(actor.tenantId, `facts:${input.idempotencyKey}`);
+      if (prior) {
+        if (prior.payloadHash !== payloadHash) {
+          return fail('IDEMPOTENCY_MISMATCH', 'This facts key was used with a different payload.');
+        }
+        const status = await this.getProcessingStatus(actor, prior.documentId);
+        return { ok: true as const, document: status.document, proposal: status.proposal };
+      }
+    }
+    const doc = await this.requireDoc(actor.tenantId, input.documentId);
+    if (doc.userId !== actor.userId && !actor.capabilities.includes('approve')) {
+      return fail('PERMISSION_DENIED', 'This document belongs to another user in the company.');
+    }
+    if (doc.contentHash !== input.contentHash) {
+      return fail('FACTS_HASH_MISMATCH', 'The content hash does not match the stored original.');
+    }
+    if (doc.proposalRevision !== input.expectedRevision) {
+      return fail('STALE_REVISION', 'This document changed. Reload the current revision and try again.');
+    }
+    if (['posted', 'posting', 'rejected'].includes(doc.status)) {
+      return fail('STALE_REVISION', `Cannot submit facts from status ${doc.status}.`);
+    }
+    const policy = await this.deps.policyFor(actor.tenantId);
+    const currency = input.currency || policy.currency;
+    const net = money(input.netMinor ?? 0, currency);
+    const tax = money(input.taxMinor ?? 0, currency);
+    const gross = money(input.grossMinor ?? net.minor + tax.minor, currency);
+    const extracted: ExtractedFacts = {
+      supplierName: input.supplierName ? { value: input.supplierName, origin: 'user' } : undefined,
+      supplierInvoiceNumber: input.supplierInvoiceNumber
+        ? { value: input.supplierInvoiceNumber, origin: 'user' }
+        : undefined,
+      issueDate: input.issueDate ? { value: input.issueDate, origin: 'user' } : undefined,
+      currency: { value: currency, origin: 'user' },
+      paidStatus: { value: input.paidStatus ?? 'unknown', origin: 'user' },
+      documentKind: { value: input.documentKind ?? 'unknown', origin: 'user' },
+      net: { value: net, origin: 'user' },
+      tax: { value: tax, origin: 'user' },
+      gross: { value: gross, origin: 'user' },
+      lineDescription: input.lineDescription ? { value: input.lineDescription, origin: 'user' } : undefined,
+    };
+    const facts = factsFromExtracted(extracted, policy);
+    if (input.expenseAccountCode) facts.expenseAccountCode = input.expenseAccountCode;
+    if (input.categoryLabel) facts.categoryLabel = input.categoryLabel;
+    if (input.invoiceKind) facts.invoiceKind = input.invoiceKind;
+    const issues = issuesFromProposal(facts, policy);
+    const proposal = await this.writeProposal(doc, facts, issues, doc.proposalRevision + 1);
+    const next = blockingIssues(issues).length ? 'needs_clarification' : 'draft';
+    if (doc.status !== next) assertTransition(doc.status, next);
+    doc.facts = extracted;
+    doc.proposalId = proposal.id;
+    doc.proposalRevision = proposal.revision;
+    doc.status = next;
+    doc.extractorId = input.origin === 'manual' ? MANUAL_FACTS_EXTRACTOR_ID : AGENT_FACTS_EXTRACTOR_ID;
+    doc.extractorLive = false;
+    doc.intakeMode = input.origin === 'manual' ? 'manual' : 'agent-facts';
+    doc.lastErrorCode = undefined;
+    doc.lastErrorMessage = undefined;
+    doc.updatedAt = new Date(this.now()).toISOString();
+    await this.deps.store.saveDocument(doc);
+    if (input.idempotencyKey && this.deps.store.saveFactsKey) {
+      await this.deps.store.saveFactsKey({
+        tenantId: actor.tenantId,
+        key: `facts:${input.idempotencyKey}`,
+        payloadHash,
+        documentId: doc.id,
+      });
+    }
+    return { ok: true as const, document: doc, proposal };
+  }
+
+  async createUploadSession(
+    actor: Actor,
+    input: { filename: string; mime: string; declaredBytes?: number; contentHash?: string; requestKey?: string },
+  ) {
+    actor = await this.authorized(actor, 'upload');
+    const flags = await this.flags(actor.tenantId);
+    if (!flags.enabled) return fail('FEATURE_DISABLED', 'AgentBridge is off for this company.');
+    if (!ALLOWED_MIME.has(input.mime)) return fail('ATTACHMENT_REJECTED', `Unsupported type ${input.mime}.`);
+    if (input.filename.includes('..') || input.filename.includes('/') || input.filename.includes('\\')) {
+      return fail('ATTACHMENT_REJECTED', 'Unsafe filename.');
+    }
+    if (!this.deps.store.saveUploadSession || !this.deps.store.getUploadSession) {
+      return fail('FEATURE_DISABLED', 'Upload sessions are not available on this store.');
+    }
+    const session: StoredUploadSession = {
+      id: newId(),
+      tenantId: actor.tenantId,
+      userId: actor.userId,
+      connectionId: actor.connectionId,
+      filename: input.filename,
+      mime: input.mime,
+      declaredBytes: input.declaredBytes,
+      expectedHash: input.contentHash,
+      requestKey: input.requestKey,
+      expiresAt: new Date(this.now() + UPLOAD_SESSION_TTL_MS).toISOString(),
+      createdAt: new Date(this.now()).toISOString(),
+    };
+    await this.deps.store.saveUploadSession(session);
+    const base = this.publicBase();
+    const reviewPath = `/purchase/inbox?uploadSession=${session.id}`;
+    return {
+      ok: true as const,
+      sessionId: session.id,
+      expiresAt: session.expiresAt,
+      reviewUrl: base ? `${base}${reviewPath}` : reviewPath,
+      note: 'Open the review URL in BookOne while signed in, attach the original there, then resume with submit_extracted_facts. Chat attachments are not sent to this server automatically.',
+    };
+  }
+
+  async finalizeUploadSession(actor: Actor, input: { sessionId: string; bytes?: Uint8Array; contentBase64?: string }) {
+    actor = await this.authorized(actor, 'upload');
+    if (!this.deps.store.getUploadSession || !this.deps.store.saveUploadSession) {
+      return fail('FEATURE_DISABLED', 'Upload sessions are not available on this store.');
+    }
+    const session = await this.deps.store.getUploadSession(actor.tenantId, input.sessionId);
+    if (!session || session.userId !== actor.userId) {
+      return fail('UPLOAD_SESSION_EXPIRED', 'Upload session was not found for this connection.');
+    }
+    if (session.connectionId && actor.connectionId && session.connectionId !== actor.connectionId) {
+      return fail('PERMISSION_DENIED', 'Upload session belongs to another connection.');
+    }
+    if (Date.parse(session.expiresAt) <= this.now()) {
+      return fail('UPLOAD_SESSION_EXPIRED', 'Upload session expired. Create a new session.');
+    }
+    if (session.finalizedDocumentId) {
+      const existing = await this.deps.store.getDocument(actor.tenantId, session.finalizedDocumentId);
+      return { ok: true as const, document: existing, sessionId: session.id };
+    }
+    let bytes = input.bytes;
+    if (!bytes && input.contentBase64) {
+      const decoded = decodeBase64Strict(input.contentBase64);
+      if (!decoded) return fail('ATTACHMENT_REJECTED', 'contentBase64 is not valid base64.');
+      bytes = decoded;
+    }
+    if (!bytes) return fail('ATTACHMENT_REJECTED', 'Attach the original file bytes to finalize this session.');
+    if (session.declaredBytes && bytes.byteLength !== session.declaredBytes) {
+      return fail('ATTACHMENT_REJECTED', 'Uploaded byte length does not match the session declaration.');
+    }
+    if (session.expectedHash && sha256(bytes) !== session.expectedHash) {
+      return fail('FACTS_HASH_MISMATCH', 'Uploaded bytes do not match the declared content hash.');
+    }
+    const submitted = await this.submitDocument(actor, {
+      filename: session.filename,
+      mime: session.mime,
+      bytes,
+      idempotencyKey: session.requestKey,
+    });
+    if (!submitted.ok) return submitted;
+    session.finalizedDocumentId = submitted.document?.id;
+    await this.deps.store.saveUploadSession(session);
+    return submitted;
+  }
+
+  async submitBatchManifest(
+    actor: Actor,
+    input: {
+      items: Array<{
+        requestKey: string;
+        filename: string;
+        mime: string;
+        contentBase64?: string;
+        contentHash?: string;
+      }>;
+    },
+  ) {
+    actor = await this.authorized(actor, 'upload');
+    const flags = await this.flags(actor.tenantId);
+    if (!flags.enabled) return fail('FEATURE_DISABLED', 'AgentBridge is off for this company.');
+    if (!this.deps.store.saveBatch || !this.deps.store.getBatch) {
+      return fail('FEATURE_DISABLED', 'Batch manifests are not available on this store.');
+    }
+    const batch: StoredBatch = {
+      id: newId(),
+      tenantId: actor.tenantId,
+      userId: actor.userId,
+      items: input.items.map((item) => ({
+        requestKey: item.requestKey,
+        filename: item.filename,
+        mime: item.mime,
+        status: 'pending',
+        contentHash: item.contentHash,
+      })),
+      createdAt: new Date(this.now()).toISOString(),
+      updatedAt: new Date(this.now()).toISOString(),
+    };
+    for (let i = 0; i < input.items.length; i++) {
+      const spec = input.items[i]!;
+      const item = batch.items[i]!;
+      const existing = this.deps.store.findBatchItemByKey
+        ? await this.deps.store.findBatchItemByKey(actor.tenantId, spec.requestKey)
+        : null;
+      if (existing?.item.documentId && existing.item.status !== 'failed') {
+        if (spec.contentHash && existing.item.contentHash && spec.contentHash !== existing.item.contentHash) {
+          item.status = 'failed';
+          item.error = 'This request key was used with a different file.';
+          continue;
+        }
+        item.status = existing.item.status;
+        item.documentId = existing.item.documentId;
+        item.contentHash = existing.item.contentHash;
+        continue;
+      }
+      if (!spec.contentBase64) {
+        const session = await this.createUploadSession(actor, {
+          filename: spec.filename,
+          mime: spec.mime,
+          contentHash: spec.contentHash,
+          requestKey: spec.requestKey,
+        });
+        item.status = 'pending';
+        item.error = session && 'reviewUrl' in session ? `Attach original at ${session.reviewUrl}` : 'Bytes missing.';
+        continue;
+      }
+      const bytes = decodeBase64Strict(spec.contentBase64);
+      if (!bytes) {
+        item.status = 'failed';
+        item.error = 'contentBase64 is not valid base64.';
+        continue;
+      }
+      const submitted = await this.submitDocument(actor, {
+        filename: spec.filename,
+        mime: spec.mime,
+        bytes,
+        idempotencyKey: spec.requestKey,
+      });
+      if (!submitted.ok) {
+        item.status = 'failed';
+        item.error = submitted.error;
+        continue;
+      }
+      item.status = submitted.document?.status === 'awaiting_facts' ? 'awaiting_facts' : 'received';
+      item.documentId = submitted.document?.id;
+      item.contentHash = submitted.document?.contentHash;
+    }
+    batch.updatedAt = new Date(this.now()).toISOString();
+    await this.deps.store.saveBatch(batch);
+    return {
+      ok: true as const,
+      batchId: batch.id,
+      items: batch.items,
+      note: 'Each item must be reviewed and approved separately. A batch is never approved as a whole.',
+    };
+  }
+
+  async getBatchStatus(actor: Actor, batchId: string) {
+    actor = await this.authorized(actor, 'read');
+    const batch = this.deps.store.getBatch ? await this.deps.store.getBatch(actor.tenantId, batchId) : null;
+    if (!batch) return fail('STALE_REVISION', 'Batch was not found.');
+    return batch;
+  }
+
+  async lookupSuppliers(actor: Actor, input: { q?: string; limit?: number } = {}) {
+    actor = await this.authorized(actor, 'read');
+    const policy = await this.deps.policyFor(actor.tenantId);
+    const q = (input.q ?? '').trim().toLowerCase();
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    return policy.approvedSuppliers
+      .filter((s) => !q || s.name.toLowerCase().includes(q) || (s.partyId ?? '').toLowerCase().includes(q))
+      .slice(0, limit)
+      .map((s) => ({ name: s.name, partyId: s.partyId }));
+  }
+
+  async lookupExpenseAccounts(actor: Actor, input: { q?: string; limit?: number } = {}) {
+    actor = await this.authorized(actor, 'read');
+    const policy = await this.deps.policyFor(actor.tenantId);
+    const q = (input.q ?? '').trim().toLowerCase();
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    return policy.approvedCategories
+      .filter((c) => !q || c.label.toLowerCase().includes(q) || c.accountCode.toLowerCase().includes(q))
+      .slice(0, limit)
+      .map((c) => ({ label: c.label, accountCode: c.accountCode }));
+  }
+
+  async listOwnProposals(actor: Actor, input: { q?: string; limit?: number } = {}) {
+    actor = await this.authorized(actor, 'read');
+    const docs = await this.deps.store.listDocuments(actor.tenantId);
+    const mine = docs.filter((d) => d.userId === actor.userId);
+    const q = (input.q ?? '').trim().toLowerCase();
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    return mine
+      .filter((d) => !q || d.filename.toLowerCase().includes(q) || d.status.includes(q))
+      .slice(0, limit)
+      .map((d) => ({
+        documentId: d.id,
+        filename: d.filename,
+        status: d.status,
+        proposalId: d.proposalId,
+        proposalRevision: d.proposalRevision,
+        updatedAt: d.updatedAt,
+      }));
   }
 
   async listInbox(actor: Actor) {
@@ -181,7 +600,14 @@ export class AgentBridgeService {
   async proposePurchaseBill(actor: Actor, documentId: string) {
     actor = await this.authorized(actor, 'draft');
     const doc = await this.requireDoc(actor.tenantId, documentId);
-    if (!doc.proposalId) return fail('EXTRACTION_FAILED', 'No proposal yet.');
+    if (!doc.proposalId) {
+      return fail(
+        doc.status === 'awaiting_facts' || doc.lastErrorCode === 'PROVIDER_UNCONFIGURED'
+          ? 'PROVIDER_UNCONFIGURED'
+          : 'EXTRACTION_FAILED',
+        doc.lastErrorMessage || 'No proposal yet. Submit invoice facts against this document.',
+      );
+    }
     return this.deps.store.getProposal(actor.tenantId, doc.proposalId);
   }
 
@@ -491,12 +917,17 @@ export class AgentBridgeService {
     return p;
   }
 
-  private async writeProposal(doc: StoredDocument, facts: ProposalFacts, issues: ReturnType<typeof issuesFromProposal>) {
+  private async writeProposal(
+    doc: StoredDocument,
+    facts: ProposalFacts,
+    issues: ReturnType<typeof issuesFromProposal>,
+    revision = 1,
+  ) {
     const proposal: StoredProposal = {
       id: newId(),
       tenantId: doc.tenantId,
       documentId: doc.id,
-      revision: 1,
+      revision,
       hash: '',
       facts,
       issues,
@@ -511,6 +942,14 @@ export const TOOL_NAMES = [
   'get_capabilities',
   'get_policy_context',
   'submit_document',
+  'submit_extracted_facts',
+  'create_upload_session',
+  'finalize_upload_session',
+  'submit_batch_manifest',
+  'get_batch_status',
+  'lookup_suppliers',
+  'lookup_expense_accounts',
+  'list_own_proposals',
   'get_processing_status',
   'propose_purchase_bill',
   'update_draft',
@@ -587,6 +1026,10 @@ function applyAnswer(facts: ProposalFacts, code: string, value: string, policy: 
 
 function nextActions(status: StoredDocument['status'], actor: Actor): string[] {
   const out: string[] = ['get_processing_status'];
+  if ((status === 'awaiting_facts' || status === 'failed' || status === 'received') && actor.capabilities.includes('draft')) {
+    out.push('submit_extracted_facts');
+  }
+  if (status === 'failed' && actor.capabilities.includes('draft')) out.push('process_document');
   if (status === 'needs_clarification' && actor.capabilities.includes('draft')) out.push('answer_issue', 'update_draft');
   if (status === 'draft' || status === 'validated') {
     if (actor.capabilities.includes('draft')) out.push('validate_proposal', 'get_preview', 'request_approval');
@@ -595,6 +1038,47 @@ function nextActions(status: StoredDocument['status'], actor: Actor): string[] {
   if (status === 'awaiting_approval' && actor.capabilities.includes('post')) out.push('commit_approved_proposal');
   if (status === 'posted') out.push('get_receipt');
   return out;
+}
+
+function mimeSignatureOk(mime: string, bytes: Uint8Array): boolean {
+  if (bytes.byteLength >= 8) {
+    const head = Buffer.from(bytes.subarray(0, 8)).toString('ascii');
+    if (head.startsWith('fixture:')) return true;
+  }
+  if (mime === 'application/pdf') {
+    return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+  }
+  if (mime === 'image/jpeg') return bytes[0] === 0xff && bytes[1] === 0xd8;
+  if (mime === 'image/png') {
+    return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  }
+  if (mime === 'image/webp') {
+    return (
+      bytes.byteLength > 12 &&
+      Buffer.from(bytes.subarray(0, 4)).toString('ascii') === 'RIFF' &&
+      Buffer.from(bytes.subarray(8, 12)).toString('ascii') === 'WEBP'
+    );
+  }
+  return false;
+}
+
+function decodeBase64Strict(value: string): Uint8Array | null {
+  if (!value || /[^A-Za-z0-9+/_=-]/.test(value)) return null;
+  try {
+    const buf = Buffer.from(value, 'base64');
+    if (buf.byteLength === 0) return null;
+    return new Uint8Array(buf);
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeExtractorMessage(message: string): string {
+  return message
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/AGENT_BRIDGE_OCR_KEY\S*/gi, 'OCR key [redacted]')
+    .replace(/https?:\/\/\S+/gi, '[endpoint]')
+    .slice(0, 280);
 }
 
 export function recordingPostingPort(): PostingPort & { posts: { billId: string; facts: ProposalFacts }[] } {

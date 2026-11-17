@@ -17,13 +17,17 @@ import { loadAccessForUser, requireTenantContext } from '@bookone/auth';
 import {
   accounts,
   agentBridgeApprovals,
+  agentBridgeBatches,
   agentBridgeBlobs,
   agentBridgeConnections,
   agentBridgeDocuments,
+  agentBridgeFactsKeys,
   agentBridgeJobs,
+  agentBridgeOauthCodes,
   agentBridgeOperations,
   agentBridgeProposals,
   agentBridgeSettings,
+  agentBridgeUploadSessions,
   and,
   companyProfiles,
   db,
@@ -42,10 +46,14 @@ import { createCommercialDocumentWithUser } from '@/app/actions/commercial-docs'
 import {
   isActiveOperationStatus,
   minorToMajor,
+  type StoredBatch,
+  type StoredConnection,
   type StoredDocument,
+  type StoredFactsKey,
   type StoredJob,
   type StoredProposal,
   type StoredOperation,
+  type StoredUploadSession,
 } from '@bookone/agent-bridge';
 import type { ApprovalRecord } from '@bookone/agent-bridge';
 
@@ -212,6 +220,9 @@ class PostgresStore implements AgentBridgeStore {
       factsJson: d.facts ?? null,
       proposalId: d.proposalId,
       proposalRevision: d.proposalRevision,
+      lastErrorCode: d.lastErrorCode ?? null,
+      lastErrorMessage: d.lastErrorMessage ?? null,
+      intakeMode: d.intakeMode ?? null,
       updatedAt: new Date(),
     };
     const existing = await this.getDocument(d.tenantId, d.id);
@@ -447,6 +458,234 @@ class PostgresStore implements AgentBridgeStore {
       };
     });
   }
+  async saveUploadSession(session: StoredUploadSession) {
+    return this.run(session.tenantId, async () => {
+      const values = {
+        tenantId: session.tenantId,
+        userId: session.userId,
+        connectionId: session.connectionId ?? null,
+        filename: session.filename,
+        mime: session.mime,
+        declaredBytes: session.declaredBytes ?? null,
+        expectedHash: session.expectedHash ?? null,
+        requestKey: session.requestKey ?? null,
+        content: session.bytes ? Buffer.from(session.bytes).toString('base64') : null,
+        expiresAt: new Date(session.expiresAt),
+        finalizedDocumentId: session.finalizedDocumentId ?? null,
+      };
+      const existing = await this.getUploadSession(session.tenantId, session.id);
+      if (existing) {
+        await db().update(agentBridgeUploadSessions).set(values).where(eq(agentBridgeUploadSessions.id, session.id));
+      } else {
+        await db()
+          .insert(agentBridgeUploadSessions)
+          .values({ id: session.id, createdAt: new Date(session.createdAt), ...values });
+      }
+    });
+  }
+  async getUploadSession(tenantId: string, id: string) {
+    return this.run(tenantId, async () => {
+      const [row] = await db()
+        .select()
+        .from(agentBridgeUploadSessions)
+        .where(and(eq(agentBridgeUploadSessions.tenantId, tenantId), eq(agentBridgeUploadSessions.id, id)))
+        .limit(1);
+      if (!row) return null;
+      return {
+        id: row.id,
+        tenantId: row.tenantId,
+        userId: row.userId,
+        connectionId: row.connectionId ?? undefined,
+        filename: row.filename,
+        mime: row.mime,
+        declaredBytes: row.declaredBytes ?? undefined,
+        expectedHash: row.expectedHash ?? undefined,
+        requestKey: row.requestKey ?? undefined,
+        bytes: row.content ? new Uint8Array(Buffer.from(row.content, 'base64')) : undefined,
+        expiresAt: row.expiresAt.toISOString(),
+        finalizedDocumentId: row.finalizedDocumentId ?? undefined,
+        createdAt: row.createdAt.toISOString(),
+      };
+    });
+  }
+  async saveBatch(batch: StoredBatch) {
+    return this.run(batch.tenantId, async () => {
+      const values = {
+        tenantId: batch.tenantId,
+        userId: batch.userId,
+        itemsJson: batch.items,
+        updatedAt: new Date(batch.updatedAt),
+      };
+      const existing = await this.getBatch(batch.tenantId, batch.id);
+      if (existing) {
+        await db().update(agentBridgeBatches).set(values).where(eq(agentBridgeBatches.id, batch.id));
+      } else {
+        await db().insert(agentBridgeBatches).values({ id: batch.id, createdAt: new Date(batch.createdAt), ...values });
+      }
+    });
+  }
+  async getBatch(tenantId: string, id: string) {
+    return this.run(tenantId, async () => {
+      const [row] = await db()
+        .select()
+        .from(agentBridgeBatches)
+        .where(and(eq(agentBridgeBatches.tenantId, tenantId), eq(agentBridgeBatches.id, id)))
+        .limit(1);
+      if (!row) return null;
+      return {
+        id: row.id,
+        tenantId: row.tenantId,
+        userId: row.userId,
+        items: row.itemsJson as StoredBatch['items'],
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      };
+    });
+  }
+  async findBatchItemByKey(tenantId: string, requestKey: string) {
+    const rows = await this.run(tenantId, async () =>
+      db().select().from(agentBridgeBatches).where(eq(agentBridgeBatches.tenantId, tenantId)),
+    );
+    for (const row of rows) {
+      const batch: StoredBatch = {
+        id: row.id,
+        tenantId: row.tenantId,
+        userId: row.userId,
+        items: row.itemsJson as StoredBatch['items'],
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      };
+      const item = batch.items.find((i) => i.requestKey === requestKey);
+      if (item) return { batch, item };
+    }
+    return null;
+  }
+  async saveFactsKey(row: StoredFactsKey) {
+    return this.run(row.tenantId, async () => {
+      const existing = await this.getFactsKey(row.tenantId, row.key);
+      if (existing) {
+        await db()
+          .update(agentBridgeFactsKeys)
+          .set({ payloadHash: row.payloadHash, documentId: row.documentId })
+          .where(and(eq(agentBridgeFactsKeys.tenantId, row.tenantId), eq(agentBridgeFactsKeys.key, row.key)));
+      } else {
+        await db().insert(agentBridgeFactsKeys).values({
+          tenantId: row.tenantId,
+          key: row.key,
+          payloadHash: row.payloadHash,
+          documentId: row.documentId,
+        });
+      }
+    });
+  }
+  async getFactsKey(tenantId: string, key: string) {
+    return this.run(tenantId, async () => {
+      const [row] = await db()
+        .select()
+        .from(agentBridgeFactsKeys)
+        .where(and(eq(agentBridgeFactsKeys.tenantId, tenantId), eq(agentBridgeFactsKeys.key, key)))
+        .limit(1);
+      return row ?? null;
+    });
+  }
+  async listConnections(tenantId: string, userId?: string) {
+    return this.run(tenantId, async () => {
+      const rows = await db()
+        .select()
+        .from(agentBridgeConnections)
+        .where(eq(agentBridgeConnections.tenantId, tenantId));
+      return rows
+        .filter((r) => !userId || r.userId === userId)
+        .map(
+          (r): StoredConnection => ({
+            id: r.id,
+            tenantId: r.tenantId,
+            userId: r.userId,
+            clientId: r.clientId,
+            scopes: (r.scopes || 'read,upload,draft').split(',').filter(Boolean) as StoredConnection['scopes'],
+            label: r.label ?? undefined,
+            lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : undefined,
+            revokedAt: r.revokedAt ? r.revokedAt.toISOString() : undefined,
+            createdAt: r.createdAt.toISOString(),
+          }),
+        );
+    });
+  }
+  async saveConnection(row: StoredConnection) {
+    return this.run(row.tenantId, async () => {
+      const values = {
+        tenantId: row.tenantId,
+        userId: row.userId,
+        clientId: row.clientId,
+        scopes: row.scopes.join(','),
+        label: row.label ?? null,
+        lastUsedAt: row.lastUsedAt ? new Date(row.lastUsedAt) : null,
+        revokedAt: row.revokedAt ? new Date(row.revokedAt) : null,
+      };
+      const existing = await this.getConnection(row.tenantId, row.id);
+      if (existing) {
+        await db().update(agentBridgeConnections).set(values).where(eq(agentBridgeConnections.id, row.id));
+      } else {
+        await db()
+          .insert(agentBridgeConnections)
+          .values({ id: row.id, createdAt: new Date(row.createdAt), ...values });
+      }
+    });
+  }
+  async getConnection(tenantId: string, id: string) {
+    return this.run(tenantId, async () => {
+      const [row] = await db()
+        .select()
+        .from(agentBridgeConnections)
+        .where(and(eq(agentBridgeConnections.tenantId, tenantId), eq(agentBridgeConnections.id, id)))
+        .limit(1);
+      if (!row) return null;
+      return {
+        id: row.id,
+        tenantId: row.tenantId,
+        userId: row.userId,
+        clientId: row.clientId,
+        scopes: (row.scopes || 'read,upload,draft').split(',').filter(Boolean) as StoredConnection['scopes'],
+        label: row.label ?? undefined,
+        lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : undefined,
+        revokedAt: row.revokedAt ? row.revokedAt.toISOString() : undefined,
+        createdAt: row.createdAt.toISOString(),
+      };
+    });
+  }
+}
+
+export async function saveOauthCode(row: {
+  code: string;
+  tenantId: string;
+  userId: string;
+  clientId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  codeChallengeMethod: string;
+  scopes: string;
+  connectionId?: string;
+  expiresAt: Date;
+}) {
+  await withTenantContext(row.tenantId, async () => {
+    await db().insert(agentBridgeOauthCodes).values(row);
+  });
+}
+
+export async function takeOauthCode(tenantId: string, code: string) {
+  return withTenantContext(tenantId, async () => {
+    const [row] = await db()
+      .select()
+      .from(agentBridgeOauthCodes)
+      .where(and(eq(agentBridgeOauthCodes.tenantId, tenantId), eq(agentBridgeOauthCodes.code, code)))
+      .limit(1);
+    if (!row || row.usedAt) return null;
+    await db()
+      .update(agentBridgeOauthCodes)
+      .set({ usedAt: new Date() })
+      .where(eq(agentBridgeOauthCodes.code, code));
+    return row;
+  });
 }
 
 function mapDoc(row: typeof agentBridgeDocuments.$inferSelect) {
@@ -465,6 +704,9 @@ function mapDoc(row: typeof agentBridgeDocuments.$inferSelect) {
     facts: (row.factsJson as never) ?? undefined,
     proposalId: row.proposalId ?? undefined,
     proposalRevision: row.proposalRevision,
+    lastErrorCode: row.lastErrorCode ?? undefined,
+    lastErrorMessage: row.lastErrorMessage ?? undefined,
+    intakeMode: (row.intakeMode as StoredDocument['intakeMode']) ?? undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -628,6 +870,7 @@ export function makeAgentBridgeService(): AgentBridgeService {
     posting: webPostingPort(),
     policyFor: policyForTenant,
     authorizeActor: authorizeAgentConnection,
+    publicBaseUrl: process.env.AGENT_BRIDGE_PUBLIC_URL || process.env.AUTH_URL,
   });
 }
 
@@ -668,6 +911,10 @@ export async function authorizeAgentConnection(actor: Actor): Promise<Actor> {
       if (connection.userId !== actor.userId) {
         throw Object.assign(new Error('AgentBridge connection belongs to another user.'), { code: 'PERMISSION_DENIED' });
       }
+      await db()
+        .update(agentBridgeConnections)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(agentBridgeConnections.id, connection.id));
     }
     const access = await loadAccessForUser(actor.userId, actor.tenantId, 'user');
     if (!access) {
@@ -687,6 +934,32 @@ export async function authorizeAgentConnection(actor: Actor): Promise<Actor> {
 export async function getAgentBridgeServiceForActor(actor: Actor): Promise<AgentBridgeService> {
   await authorizeAgentConnection(actor);
   return withTenantContext(actor.tenantId, async () => makeAgentBridgeService());
+}
+
+export async function listAgentBridgeConnections(tenantId: string, userId: string) {
+  const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
+  if (!store.listConnections) return [];
+  return store.listConnections(tenantId, userId);
+}
+
+export async function revokeAgentBridgeConnection(tenantId: string, userId: string, connectionId: string) {
+  const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
+  if (!store.getConnection || !store.saveConnection) {
+    throw new Error('Connections are not available on this store.');
+  }
+  const row = await store.getConnection(tenantId, connectionId);
+  if (!row || row.userId !== userId) {
+    throw Object.assign(new Error('Connection was not found.'), { code: 'CONNECTION_REVOKED' });
+  }
+  row.revokedAt = new Date().toISOString();
+  await store.saveConnection(row);
+  return row;
+}
+
+export async function recordAgentBridgeConnection(row: StoredConnection) {
+  const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
+  if (!store.saveConnection) throw new Error('Connections are not available on this store.');
+  await store.saveConnection(row);
 }
 
 export { memory as agentBridgeMemoryStore };

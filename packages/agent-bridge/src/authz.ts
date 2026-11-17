@@ -135,6 +135,12 @@ export function actorFromToken(payload: ConnectionToken): Actor {
   };
 }
 
+export function hmacFixturesAllowed(env: NodeJS.ProcessEnv | OAuthEnv = process.env): boolean {
+  if (env.AGENT_BRIDGE_ALLOW_HMAC === '1') return true;
+  if (env.NODE_ENV === 'production') return false;
+  return true;
+}
+
 export async function resolveActorFromAuthorization(
   header: string | null | undefined,
   secret: string,
@@ -147,6 +153,12 @@ export async function resolveActorFromAuthorization(
   }
   const token = header.slice(7).trim();
   if (isLocalFixtureToken(token)) {
+    if (!hmacFixturesAllowed(env)) {
+      throw tokenError(
+        'Local HMAC fixtures are disabled in production. Register OAuth or set AGENT_BRIDGE_ALLOW_HMAC=1 for a labelled fixture.',
+        'HMAC_DISABLED',
+      );
+    }
     return actorFromToken(verifyConnectionToken(token, secret, now));
   }
   return actorFromToken(await verifyOAuthAccessToken(token, env, now, fetchImpl));
@@ -182,6 +194,8 @@ export type OAuthEnv = {
   AGENT_BRIDGE_OAUTH_ISSUER?: string;
   AGENT_BRIDGE_OAUTH_AUDIENCE?: string;
   AGENT_BRIDGE_OAUTH_JWKS_URL?: string;
+  AGENT_BRIDGE_ALLOW_HMAC?: string;
+  NODE_ENV?: string;
   [key: string]: string | undefined;
 };
 

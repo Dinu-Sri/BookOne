@@ -4,6 +4,9 @@ import { assertTransition, canTransition, isTerminal } from '../src/state';
 describe('document state machine', () => {
   it('allows the Build1 happy path', () => {
     expect(canTransition('received', 'extracting')).toBe(true);
+    expect(canTransition('received', 'awaiting_facts')).toBe(true);
+    expect(canTransition('awaiting_facts', 'draft')).toBe(true);
+    expect(canTransition('failed', 'awaiting_facts')).toBe(true);
     expect(canTransition('extracting', 'draft')).toBe(true);
     expect(canTransition('draft', 'validated')).toBe(true);
     expect(canTransition('validated', 'awaiting_approval')).toBe(true);

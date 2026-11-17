@@ -14,6 +14,65 @@ import {
 import { mintLocalFixtureToken, parseScopes } from '@bookone/agent-bridge';
 import { agentBridgeTokenSecret } from '@/lib/agent-bridge-runtime';
 
+export async function submitInboxFacts(formData: FormData) {
+  await assertPermission('purchase.inbox.write', 'write');
+  const user = await requireTenantContext();
+  const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
+  const documentId = String(formData.get('documentId') ?? '');
+  const majorToMinor = (raw: string) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 0;
+    return Math.round(n * 100);
+  };
+  const result = await service.submitExtractedFacts(actor, {
+    documentId,
+    contentHash: String(formData.get('contentHash') ?? ''),
+    expectedRevision: Number(formData.get('expectedRevision') ?? 0),
+    supplierName: String(formData.get('supplierName') ?? ''),
+    supplierInvoiceNumber: String(formData.get('supplierInvoiceNumber') ?? ''),
+    issueDate: String(formData.get('issueDate') ?? ''),
+    currency: String(formData.get('currency') ?? '') || undefined,
+    paidStatus: (String(formData.get('paidStatus') ?? 'unpaid') as 'unpaid' | 'paid' | 'part_paid' | 'unknown'),
+    documentKind: (String(formData.get('documentKind') ?? 'service_expense') as
+      | 'service_expense'
+      | 'stock'
+      | 'mixed'
+      | 'unknown'),
+    netMinor: majorToMinor(String(formData.get('net') ?? '0')),
+    taxMinor: majorToMinor(String(formData.get('tax') ?? '0')),
+    grossMinor: majorToMinor(String(formData.get('gross') ?? '0')),
+    expenseAccountCode: String(formData.get('expenseAccountCode') ?? '') || undefined,
+    categoryLabel: String(formData.get('categoryLabel') ?? '') || undefined,
+    lineDescription: String(formData.get('lineDescription') ?? '') || undefined,
+    origin: 'manual',
+  });
+  if (result && 'ok' in result && result.ok === false) {
+    redirect(`/purchase/inbox/${documentId}?err=${encodeURIComponent(result.error)}`);
+  }
+  revalidatePath(`/purchase/inbox/${documentId}`);
+  redirect(`/purchase/inbox/${documentId}`);
+}
+
+export async function retryInboxExtraction(formData: FormData) {
+  await assertPermission('purchase.inbox.write', 'write');
+  const user = await requireTenantContext();
+  const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
+  const documentId = String(formData.get('documentId') ?? '');
+  await service.processDocument(actor, documentId);
+  revalidatePath(`/purchase/inbox/${documentId}`);
+  redirect(`/purchase/inbox/${documentId}`);
+}
+
+export async function revokeAgentConnection(formData: FormData) {
+  await assertPermission('purchase.inbox.write', 'write');
+  const user = await requireTenantContext();
+  const id = String(formData.get('connectionId') ?? '');
+  const { revokeAgentBridgeConnection } = await import('@/lib/agent-bridge-runtime');
+  await withTenantContext(user.tenantId, () => revokeAgentBridgeConnection(user.tenantId, user.id, id));
+  revalidatePath('/purchase/inbox/connections');
+  redirect('/purchase/inbox/connections');
+}
+
 export async function uploadInboxDocument(formData: FormData) {
   await assertPermission('purchase.inbox.write', 'write');
   const user = await requireTenantContext();

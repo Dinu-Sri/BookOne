@@ -1,7 +1,7 @@
 /** Scoped AgentBridge CoreGuard registry (not all-module CG-01). */
 
 export const COREGUARD_MODULE = 'agent-bridge';
-export const COREGUARD_VERSION = 'ab-04.1';
+export const COREGUARD_VERSION = 'ab-05.1';
 
 export const COREGUARD_SUITES = [
   {
@@ -49,8 +49,21 @@ export const COREGUARD_SUITES = [
   {
     id: 'independent-acceptance',
     layer: 'acceptance',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/oauth-jwks.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/oauth-jwks.test.ts',
     required: true,
+  },
+  {
+    id: 'full-workflow',
+    layer: 'application-service',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab05-acceptance.test.ts test/service.test.ts test/schemas.test.ts test/oauth-pkce.test.ts',
+    required: true,
+  },
+  {
+    id: 'codex-claude-live-clients',
+    layer: 'client',
+    command: 'LIVE-UNVERIFIED until a real Codex surface and a real Claude surface complete initialize, tools/list, OAuth consent, file transfer or explicit fallback, and disconnect against this SHA',
+    required: false,
+    blocked: true,
   },
   {
     id: 'archive-restore-pointers',

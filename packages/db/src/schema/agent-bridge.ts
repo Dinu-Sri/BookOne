@@ -31,6 +31,9 @@ export const agentBridgeDocuments = pgTable('agent_bridge_documents', {
   factsJson: jsonb('facts_json'),
   proposalId: uuid('proposal_id'),
   proposalRevision: integer('proposal_revision').notNull().default(0),
+  lastErrorCode: varchar('last_error_code', { length: 80 }),
+  lastErrorMessage: text('last_error_message'),
+  intakeMode: varchar('intake_mode', { length: 40 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -108,6 +111,63 @@ export const agentBridgeConnections = pgTable('agent_bridge_connections', {
     .references(() => tenants.id),
   userId: uuid('user_id').notNull(),
   clientId: varchar('client_id', { length: 80 }).notNull(),
+  scopes: text('scopes').notNull().default('read,upload,draft'),
+  label: text('label'),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const agentBridgeUploadSessions = pgTable('agent_bridge_upload_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  userId: uuid('user_id').notNull(),
+  connectionId: varchar('connection_id', { length: 80 }),
+  filename: text('filename').notNull(),
+  mime: varchar('mime', { length: 80 }).notNull(),
+  declaredBytes: integer('declared_bytes'),
+  expectedHash: varchar('expected_hash', { length: 64 }),
+  requestKey: varchar('request_key', { length: 80 }),
+  content: text('content'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  finalizedDocumentId: uuid('finalized_document_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const agentBridgeBatches = pgTable('agent_bridge_batches', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  userId: uuid('user_id').notNull(),
+  itemsJson: jsonb('items_json').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const agentBridgeFactsKeys = pgTable('agent_bridge_facts_keys', {
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  key: varchar('key', { length: 120 }).notNull(),
+  payloadHash: varchar('payload_hash', { length: 64 }).notNull(),
+  documentId: uuid('document_id').notNull(),
+});
+
+export const agentBridgeOauthCodes = pgTable('agent_bridge_oauth_codes', {
+  code: varchar('code', { length: 120 }).primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  userId: uuid('user_id').notNull(),
+  clientId: varchar('client_id', { length: 80 }).notNull(),
+  redirectUri: text('redirect_uri').notNull(),
+  codeChallenge: text('code_challenge').notNull(),
+  codeChallengeMethod: varchar('code_challenge_method', { length: 10 }).notNull().default('S256'),
+  scopes: text('scopes').notNull(),
+  connectionId: uuid('connection_id'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
 });

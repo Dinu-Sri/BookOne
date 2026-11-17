@@ -9,7 +9,14 @@ describe('scoped CoreGuard registry', () => {
     const blocked = blockedCoreGuardSuites().map((s) => s.id);
     expect(required).toContain('unit-schema-state');
     expect(required).toContain('browser');
-    expect(blocked).toEqual(['live-ocr-provider', 'production-idp', 'external-mcp-client', 'github-branch-protection']);
+    expect(blocked).toEqual([
+      'codex-claude-live-clients',
+      'live-ocr-provider',
+      'production-idp',
+      'external-mcp-client',
+      'github-branch-protection',
+    ]);
+    expect(required).toContain('full-workflow');
     expect(required).toContain('independent-acceptance');
     expect(required).toContain('archive-restore-pointers');
     expect(required).toContain('permissions-catalog');

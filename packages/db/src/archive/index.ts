@@ -11,6 +11,7 @@ export {
   ARCHIVE_RESTORE_NOTES,
   ARCHIVE_SCHEMA_VERSION,
   STORAGE_POINTER_KEYS,
+  dbBackedAgentBridgeBlobKeys,
   TRADING_COUNT_KEYS,
   archiveObjectPrefix,
   canonicalJson,

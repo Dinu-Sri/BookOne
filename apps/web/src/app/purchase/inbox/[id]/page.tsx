@@ -9,6 +9,8 @@ import {
   approveInboxProposal,
   commitInboxProposal,
   previewInboxProposal,
+  retryInboxExtraction,
+  submitInboxFacts,
 } from '@/app/actions/agent-bridge';
 import { jobCanWrite } from '@/lib/access';
 import { minorToMajor } from '@bookone/agent-bridge';
@@ -38,6 +40,22 @@ export default async function InboxDocumentPage({
   const proposal = status.proposal;
   const preview = proposal?.preview;
   const storeApproval = proposal ? await service.getApprovalForProposal(actor, proposal.id) : null;
+  const policy = await service.getPolicyContext(actor);
+  const awaitingFacts =
+    status.document.status === 'awaiting_facts' ||
+    status.document.status === 'failed' ||
+    status.document.status === 'received';
+  const extractorLabel = status.document.extractorId
+    ? status.document.extractorId.startsWith('agent:')
+      ? 'Facts submitted by a connected agent'
+      : status.document.extractorId.startsWith('human:')
+        ? 'Facts entered in BookOne'
+        : status.document.extractorId.startsWith('fixture:')
+          ? 'Test fixture extractor'
+          : status.document.extractorLive
+            ? 'Configured OCR provider'
+            : 'Stored original, no server OCR'
+    : 'Original stored. Waiting for invoice facts.';
 
   return (
     <BookOneShell active="Document Inbox" tenant={tenant}>
@@ -63,11 +81,160 @@ export default async function InboxDocumentPage({
             ) : null}
             <section>
               <h2 style={{ fontSize: 16, margin: '0 0 8px' }}>{status.document.filename}</h2>
-              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-                Extractor {status.document.extractorId ?? 'pending'}
-                {status.document.extractorLive ? ' (live)' : ' (fixture or unconfigured)'}
+              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{extractorLabel}</p>
+              {status.document.lastErrorMessage ? (
+                <p role="status" style={{ fontSize: 13 }}>
+                  {status.document.lastErrorMessage}
+                </p>
+              ) : null}
+              <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                Source stored · {status.document.bytes} bytes · hash {status.document.contentHash.slice(0, 12)}…
+                {proposal ? ' · proposal ready' : ''}
+                {status.document.status === 'posted' ? ' · posted' : ''}
+              </p>
+              <p>
+                <Link href={`/purchase/inbox/${id}/file`}>Download original</Link>
+                {' · '}
+                <Link href="/purchase/inbox/connections">Connections</Link>
               </p>
             </section>
+            {awaitingFacts && canWrite ? (
+              <section>
+                <h3 style={{ fontSize: 15 }}>Enter invoice facts</h3>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                  The original file is stored. Fill the printed amounts. Server OCR is optional.
+                </p>
+                <form action={submitInboxFacts} style={{ display: 'grid', gap: 10 }}>
+                  <input type="hidden" name="documentId" value={id} />
+                  <input type="hidden" name="contentHash" value={status.document.contentHash} />
+                  <input type="hidden" name="expectedRevision" value={String(status.document.proposalRevision)} />
+                  <div className="party-tab-grid">
+                    <div className="field">
+                      <label htmlFor="facts-supplier">Supplier</label>
+                      <input
+                        id="facts-supplier"
+                        className="input"
+                        name="supplierName"
+                        defaultValue={proposal?.facts.supplierName ?? ''}
+                        list="facts-suppliers"
+                        required
+                      />
+                      <datalist id="facts-suppliers">
+                        {policy.approvedSuppliers.map((s) => (
+                          <option key={s.partyId ?? s.name} value={s.name} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-number">Supplier invoice</label>
+                      <input
+                        id="facts-number"
+                        className="input"
+                        name="supplierInvoiceNumber"
+                        defaultValue={proposal?.facts.supplierInvoiceNumber ?? ''}
+                        required
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-date">Date</label>
+                      <input
+                        id="facts-date"
+                        className="input"
+                        name="issueDate"
+                        type="date"
+                        defaultValue={proposal?.facts.issueDate ?? ''}
+                        required
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-currency">Currency</label>
+                      <input
+                        id="facts-currency"
+                        className="input"
+                        name="currency"
+                        defaultValue={proposal?.facts.currency ?? policy.currency}
+                        required
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-net">Net</label>
+                      <input
+                        id="facts-net"
+                        className="input"
+                        name="net"
+                        inputMode="decimal"
+                        defaultValue={proposal ? minorToMajor(proposal.facts.net).toFixed(2) : ''}
+                        required
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-tax">VAT</label>
+                      <input
+                        id="facts-tax"
+                        className="input"
+                        name="tax"
+                        inputMode="decimal"
+                        defaultValue={proposal ? minorToMajor(proposal.facts.tax).toFixed(2) : ''}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-gross">Gross</label>
+                      <input
+                        id="facts-gross"
+                        className="input"
+                        name="gross"
+                        inputMode="decimal"
+                        defaultValue={proposal ? minorToMajor(proposal.facts.gross).toFixed(2) : ''}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-category">Category</label>
+                      <select id="facts-category" className="input" name="expenseAccountCode" defaultValue={proposal?.facts.expenseAccountCode ?? policy.defaultExpenseAccount}>
+                        {policy.approvedCategories.map((c) => (
+                          <option key={c.accountCode} value={c.accountCode}>
+                            {c.label} ({c.accountCode})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-paid">Paid status</label>
+                      <select id="facts-paid" className="input" name="paidStatus" defaultValue={proposal?.facts.paidStatus ?? 'unpaid'}>
+                        <option value="unpaid">Unpaid</option>
+                        <option value="paid">Paid</option>
+                        <option value="part_paid">Part paid</option>
+                        <option value="unknown">Unknown</option>
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="facts-kind">Document kind</label>
+                      <select id="facts-kind" className="input" name="documentKind" defaultValue={proposal?.facts.documentKind ?? 'service_expense'}>
+                        <option value="service_expense">Service / expense</option>
+                        <option value="stock">Stock</option>
+                        <option value="mixed">Mixed</option>
+                        <option value="unknown">Unknown</option>
+                      </select>
+                    </div>
+                    <div className="field field-full">
+                      <label htmlFor="facts-desc">Line description</label>
+                      <input
+                        id="facts-desc"
+                        className="input"
+                        name="lineDescription"
+                        defaultValue={proposal?.facts.lineDescription ?? ''}
+                      />
+                    </div>
+                  </div>
+                  <Button type="submit">Save facts and continue</Button>
+                </form>
+                <form action={retryInboxExtraction} style={{ marginTop: 8 }}>
+                  <input type="hidden" name="documentId" value={id} />
+                  <Button type="submit" variant="secondary">
+                    Retry optional server extraction
+                  </Button>
+                </form>
+              </section>
+            ) : null}
             {proposal ? (
               <section className="party-tab-grid">
                 <div className="field">

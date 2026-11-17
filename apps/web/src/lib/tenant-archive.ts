@@ -16,6 +16,7 @@ import {
   buildArchiveEnvelope,
   collectLiveStoragePointers,
   collectStoragePointers,
+  dbBackedAgentBridgeBlobKeys,
   db,
   desc,
   encryptArchivePayload,
@@ -305,6 +306,7 @@ export async function prepareTenantArchive(password: string, confirm: string): P
         isOwnedTenantStorageKey(user.tenantId, key),
       );
       const keySet = new Set([...listed, ...pointed]);
+      const dbBackedKeys = dbBackedAgentBridgeBlobKeys(snapshot.tables);
       const objects: Array<{
         key: string;
         contentType: string;
@@ -314,7 +316,12 @@ export async function prepareTenantArchive(password: string, confirm: string): P
       }> = [];
       let packBytes = 0;
       let missingCount = 0;
+      let dbBackedCount = 0;
       for (const key of keySet) {
+        if (dbBackedKeys.has(key)) {
+          dbBackedCount += 1;
+          continue;
+        }
         const got = await getObjectBytes(key);
         if (!got) {
           missingCount += 1;
@@ -385,6 +392,7 @@ export async function prepareTenantArchive(password: string, confirm: string): P
         filesBytes: filesEnc.length,
         fileCount: objects.length,
         missingCount,
+        dbBackedCount,
         rowCounts: snapshot.rowCounts,
         empty: emptyState.empty,
         schemaVersion: ARCHIVE_SCHEMA_VERSION,

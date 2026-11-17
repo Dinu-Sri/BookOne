@@ -64,6 +64,10 @@ export {
   agentBridgeBlobs,
   agentBridgeJobs,
   agentBridgeConnections,
+  agentBridgeUploadSessions,
+  agentBridgeBatches,
+  agentBridgeFactsKeys,
+  agentBridgeOauthCodes,
 } from './agent-bridge';
 export { posRegisters, posShifts } from './pos';
 export {

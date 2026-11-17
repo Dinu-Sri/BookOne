@@ -15,10 +15,15 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
   const api = readFileSync(path.join(root, 'apps/web/src/app/api/agent-bridge/v1/[...path]/route.ts'), 'utf8');
   const mcp = readFileSync(path.join(root, 'apps/web/src/app/api/agent-bridge/mcp/route.ts'), 'utf8');
   const posting = readFileSync(path.join(root, 'apps/web/src/lib/agent-bridge-runtime.ts'), 'utf8');
+  const jobs = readFileSync(path.join(root, 'apps/web/src/components/team/team-jobs-screen.tsx'), 'utf8');
   const nav = readFileSync(path.join(root, 'apps/web/src/lib/nav-suites.ts'), 'utf8');
   expect(inbox).toMatch(/uploadInboxDocument/);
   expect(detail).toMatch(/Approve this exact revision/);
   expect(detail).toMatch(/inbox-approver|Approved by/);
+  expect(detail).toMatch(/Enter invoice facts/);
+  expect(detail).not.toMatch(/fixture or unconfigured/);
+  expect(inbox).not.toMatch(/fixture or unconfigured/);
+  expect(inbox).toMatch(/Connections/);
   expect(api).toMatch(/commit_approved_proposal/);
   expect(api).toMatch(/resolveActorFromAuthorization/);
   expect(mcp).toMatch(/handleMcpJsonRpc/);
@@ -34,6 +39,9 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
   expect(resolve).toMatch(/writeLookupKey/);
   expect(nav).toMatch(/Document Inbox/);
   expect(nav).not.toMatch(/TileSuiteNav|NavModeToggle/);
+  expect(jobs).toMatch(/key=\{roleId\}/);
+  expect(jobs).toMatch(/value=\{levels\[s\.keyPrefix\]/);
+  expect(jobs).toMatch(/unsaved job changes/i);
 });
 
 test('disabled inbox still redirects to the purchase list in source', () => {

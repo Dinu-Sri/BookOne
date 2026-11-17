@@ -1,8 +1,9 @@
 import { DOCUMENT_STATES, type DocumentState } from './contracts';
 
 const ALLOWED: Record<DocumentState, DocumentState[]> = {
-  received: ['extracting', 'failed', 'rejected'],
-  extracting: ['needs_clarification', 'draft', 'failed'],
+  received: ['extracting', 'awaiting_facts', 'failed', 'rejected'],
+  extracting: ['needs_clarification', 'draft', 'awaiting_facts', 'failed'],
+  awaiting_facts: ['draft', 'needs_clarification', 'extracting', 'failed', 'rejected', 'awaiting_facts'],
   needs_clarification: ['draft', 'needs_clarification', 'rejected', 'failed'],
   draft: ['validated', 'awaiting_approval', 'needs_clarification', 'rejected', 'failed'],
   validated: ['awaiting_approval', 'draft', 'rejected'],
@@ -10,7 +11,7 @@ const ALLOWED: Record<DocumentState, DocumentState[]> = {
   posting: ['posted', 'failed', 'unknown_outcome'],
   posted: [],
   rejected: [],
-  failed: ['received', 'extracting'],
+  failed: ['received', 'extracting', 'awaiting_facts'],
   unknown_outcome: ['posted', 'failed', 'posting'],
 };
 

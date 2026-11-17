@@ -1,13 +1,15 @@
 import { DEFAULT_CURRENCY, type Money } from './money';
 
-export const SCHEMA_VERSION = 'ab-04.1';
+export const SCHEMA_VERSION = 'ab-05.1';
 export const POLICY_VERSION = 'ab-01.purchase-bill.unpaid-service.v1';
 export const MCP_PROTOCOL_VERSION = '2025-03-26';
+export const MCP_SUPPORTED_PROTOCOL_VERSIONS = ['2025-03-26', '2024-11-05'] as const;
 export const API_VERSION = 'v1';
 
 export const DOCUMENT_STATES = [
   'received',
   'extracting',
+  'awaiting_facts',
   'needs_clarification',
   'draft',
   'validated',
@@ -22,6 +24,12 @@ export type DocumentState = (typeof DOCUMENT_STATES)[number];
 
 export const CAPABILITIES = ['read', 'upload', 'draft', 'approve', 'post'] as const;
 export type Capability = (typeof CAPABILITIES)[number];
+
+/** New agent connections receive these scopes. Post remains explicit. Approve is never mintable by an agent. */
+export const DEFAULT_CONNECTION_SCOPES: Capability[] = ['read', 'upload', 'draft'];
+
+export const INTAKE_MODES = ['upload', 'agent-facts', 'manual', 'ocr'] as const;
+export type IntakeMode = (typeof INTAKE_MODES)[number];
 
 export type ObservedInferred<T> = {
   value: T;
@@ -107,7 +115,12 @@ export type IssueCode =
   | 'HUMAN_APPROVAL_REQUIRED'
   | 'TOKEN_INVALID'
   | 'CONNECTION_REVOKED'
-  | 'UNKNOWN_OUTCOME';
+  | 'UNKNOWN_OUTCOME'
+  | 'FACTS_HASH_MISMATCH'
+  | 'UPLOAD_SESSION_EXPIRED'
+  | 'HMAC_DISABLED'
+  | 'UNSUPPORTED_PROTOCOL'
+  | 'BATCH_ITEM_FAILED';
 
 export type Issue = {
   id: string;
@@ -209,3 +222,50 @@ export function defaultPolicy(over: Partial<CompanyPolicy> = {}): CompanyPolicy 
     ...over,
   };
 }
+
+export const OPERATION_REGISTRY = [
+  {
+    id: 'purchase.bill.unpaid-service.v1',
+    title: 'Unpaid domestic local-currency supplier service/expense bill',
+    write: true,
+    supported: true,
+    requiredCapabilities: ['upload', 'draft', 'approve', 'post'] as Capability[],
+  },
+  {
+    id: 'purchase.bill.stock-or-mixed',
+    title: 'Stock or mixed stock/service supplier bill',
+    write: true,
+    supported: false,
+    requiredCapabilities: ['post'] as Capability[],
+  },
+  {
+    id: 'purchase.bill.paid-or-part-paid',
+    title: 'Paid or part-paid supplier bill',
+    write: true,
+    supported: false,
+    requiredCapabilities: ['post'] as Capability[],
+  },
+  {
+    id: 'purchase.bill.foreign-currency',
+    title: 'Foreign-currency supplier bill',
+    write: true,
+    supported: false,
+    requiredCapabilities: ['post'] as Capability[],
+  },
+  {
+    id: 'payments.execute',
+    title: 'Execute a payment',
+    write: true,
+    supported: false,
+    requiredCapabilities: ['post'] as Capability[],
+  },
+  {
+    id: 'journal.arbitrary',
+    title: 'Arbitrary journal',
+    write: true,
+    supported: false,
+    requiredCapabilities: ['post'] as Capability[],
+  },
+] as const;
+
+export type OperationId = (typeof OPERATION_REGISTRY)[number]['id'];

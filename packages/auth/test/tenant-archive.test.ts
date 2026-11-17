@@ -12,6 +12,7 @@ import {
   ARCHIVE_EXCLUDED_TABLES,
   ARCHIVE_RESTORE_INSERT_ORDER,
 } from '../../db/src/archive/format';
+import { dbBackedAgentBridgeBlobKeys } from '../../db/src/archive/format';
 import {
   arApMatchesDocuments,
   invoiceTotalsFromTables,
@@ -107,6 +108,18 @@ describe('archive table whitelist', () => {
     expect(ARCHIVE_DATA_TABLE_NAMES).toContain('agent_bridge_documents');
     expect(ARCHIVE_DATA_TABLE_NAMES).toContain('agent_bridge_blobs');
     expect(ARCHIVE_DATA_TABLE_NAMES as readonly string[]).not.toContain('agent_bridge_connections');
+    expect(ARCHIVE_DATA_TABLE_NAMES as readonly string[]).not.toContain('agent_bridge_upload_sessions');
+    expect(ARCHIVE_DATA_TABLE_NAMES as readonly string[]).not.toContain('agent_bridge_oauth_codes');
+    expect(ARCHIVE_DATA_TABLE_NAMES).toContain('agent_bridge_batches');
+    expect(ARCHIVE_DATA_TABLE_NAMES).toContain('agent_bridge_facts_keys');
+    const backed = dbBackedAgentBridgeBlobKeys({
+      agent_bridge_blobs: [
+        { key: 'tenants/t/agent-bridge/a.pdf', content: 'JVBERi0x' },
+        { key: 'tenants/t/agent-bridge/missing.pdf', content: '' },
+      ],
+    });
+    expect(backed.has('tenants/t/agent-bridge/a.pdf')).toBe(true);
+    expect(backed.has('tenants/t/agent-bridge/missing.pdf')).toBe(false);
   });
 
   it('keeps prepared archives out of the files pack prefix', () => {

@@ -7,6 +7,7 @@ export type PreparedArchiveMeta = {
   filesBytes: number;
   fileCount: number;
   missingCount: number;
+  dbBackedCount: number;
   rowCounts: Record<string, number>;
   empty: boolean;
   schemaVersion: number;

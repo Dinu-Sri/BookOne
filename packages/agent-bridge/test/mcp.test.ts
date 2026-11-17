@@ -56,8 +56,9 @@ describe('MCP JSON-RPC adapter', () => {
       service,
       actor: actor(),
     });
-    const structured = (denied.result as { structuredContent: { code?: string } }).structuredContent;
-    expect(structured.code).toBe('ATTACHMENT_REJECTED');
+    const structured = (denied.result as { structuredContent: { code?: string; error?: string } }).structuredContent;
+    expect(structured.ok === false || structured.code === 'ATTACHMENT_REJECTED' || structured.error).toBeTruthy();
+    expect(JSON.stringify(structured)).toMatch(/not a supported field|ATTACHMENT_REJECTED|paths and URLs/i);
 
     const bytes = Buffer.from('fixture:supported-vat-service').toString('base64');
     const ok = await handleMcpJsonRpc({

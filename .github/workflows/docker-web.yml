@@ -145,7 +145,7 @@ jobs:
           AUTH_SECRET: test-secret-for-ci-only
 
       - name: Independent AgentBridge acceptance
-        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/extraction-http.test.ts test/oauth-jwks.test.ts
+        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/extraction-http.test.ts test/oauth-jwks.test.ts test/schemas.test.ts test/oauth-pkce.test.ts
         env:
           NODE_ENV: test
 

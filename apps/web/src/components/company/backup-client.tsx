@@ -91,9 +91,12 @@ export function BackupClient({ initialMeta }: { initialMeta: PreparedArchiveMeta
       {meta ? (
         <div className="field field-full" style={{ display: 'grid', gap: 12 }}>
           <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: 0 }}>
-            Pair {meta.exportId.slice(0, 8)} · data {formatBytes(meta.dataBytes)} · attachments{' '}
-            {formatBytes(meta.filesBytes)} ({meta.fileCount} file{meta.fileCount === 1 ? '' : 's'}
-            {meta.missingCount ? `, ${meta.missingCount} missing` : ''}). Download both. The password is not stored here.
+            Backup prepared. Pair {meta.exportId.slice(0, 8)} · data {formatBytes(meta.dataBytes)} · object-storage
+            pack {formatBytes(meta.filesBytes)} ({meta.fileCount} packed file{meta.fileCount === 1 ? '' : 's'}
+            {meta.dbBackedCount ? `, ${meta.dbBackedCount} AgentBridge attachment(s) already in company data` : ''}
+            {meta.missingCount ? `, ${meta.missingCount} missing from object storage` : ''}). Download both files to
+            start the transfer. This page cannot confirm that the browser finished saving them. The password is not
+            stored here.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <a className="btn-secondary" href="/api/company/backup/download?kind=data" download={meta.dataFileName}>

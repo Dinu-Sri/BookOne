@@ -11,11 +11,15 @@ import {
   OAUTH_SETUP_CHECKLIST,
   parseRequestedScopes,
   TOKEN_AUDIENCE,
-  verifyPkce,
   encodeTenantBoundCode,
   type Capability,
 } from '@bookone/agent-bridge';
-import { agentBridgeTokenSecret, saveOauthCode, takeOauthCode } from '@/lib/agent-bridge-runtime';
+import {
+  agentBridgeTokenSecret,
+  markAgentBridgeTokenIssued,
+  redeemOauthCode,
+  saveOauthCode,
+} from '@/lib/agent-bridge-runtime';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +28,13 @@ const REFRESH_TTL_MS = 30 * 24 * 3600 * 1000;
 
 function jsonError(error: string, status: number, description?: string) {
   return NextResponse.json(description ? { error, error_description: description } : { error }, { status });
+}
+
+function mintIsReady(): boolean {
+  const pem = ensureOauthSigningPem(process.env);
+  const issuer = oauthIssuer(process.env);
+  if (pem) return Boolean(issuer);
+  return hmacFixturesAllowed(process.env);
 }
 
 async function mintTokens(row: {
@@ -79,6 +90,7 @@ async function mintTokens(row: {
     connectionId,
     expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
   });
+  await markAgentBridgeTokenIssued(row.tenantId, row.connectionId);
   return {
     body: {
       access_token: accessToken,
@@ -105,20 +117,26 @@ export async function POST(req: NextRequest) {
   if (grant === 'refresh_token') {
     const refresh = String(body.get('refresh_token') ?? '');
     if (!refresh || !isRefreshTokenValue(refresh)) return jsonError('invalid_request', 400);
-    const row = await takeOauthCode(refresh);
-    if (!row || row.clientId !== clientId || row.codeChallenge !== 'refresh_token') {
-      return jsonError('invalid_grant', 400);
-    }
-    if (Date.parse(row.expiresAt.toISOString()) <= Date.now()) {
-      return jsonError('invalid_grant', 400, 'Refresh token expired.');
+    if (!mintIsReady()) return jsonError('temporarily_unavailable', 503, OAUTH_SETUP_CHECKLIST);
+    const redeemed = await redeemOauthCode({
+      code: refresh,
+      clientId,
+      kind: 'refresh_token',
+      mintReady: true,
+    });
+    if (!redeemed.ok) {
+      if (redeemed.error === 'temporarily_unavailable') {
+        return jsonError('temporarily_unavailable', 503, redeemed.description || OAUTH_SETUP_CHECKLIST);
+      }
+      return jsonError('invalid_grant', 400, redeemed.description);
     }
     const minted = await mintTokens({
-      tenantId: row.tenantId,
-      userId: row.userId,
-      clientId: row.clientId,
-      connectionId: row.connectionId,
-      scopes: row.scopes,
-      redirectUri: row.redirectUri,
+      tenantId: redeemed.row.tenantId,
+      userId: redeemed.row.userId,
+      clientId: redeemed.row.clientId,
+      connectionId: redeemed.row.connectionId,
+      scopes: redeemed.row.scopes,
+      redirectUri: redeemed.row.redirectUri,
     });
     if ('error' in minted) return minted.error;
     return NextResponse.json(minted.body);
@@ -131,26 +149,32 @@ export async function POST(req: NextRequest) {
   const verifier = String(body.get('code_verifier') ?? '');
   const redirectUri = String(body.get('redirect_uri') ?? '');
   const tenantHint = String(body.get('tenant_id') ?? process.env.AGENT_BRIDGE_OAUTH_TENANT_HINT ?? '');
-  if (!code || !verifier || !clientId) {
+  if (!code || !verifier || !clientId || !redirectUri) {
     return jsonError('invalid_request', 400);
   }
-  const row = await takeOauthCode(code, tenantHint || undefined);
-  if (!row || row.clientId !== clientId || row.redirectUri !== redirectUri) {
-    return jsonError('invalid_grant', 400);
-  }
-  if (Date.parse(row.expiresAt.toISOString()) <= Date.now()) {
-    return jsonError('invalid_grant', 400, 'Authorization code expired.');
-  }
-  if (!verifyPkce(verifier, row.codeChallenge, row.codeChallengeMethod)) {
-    return jsonError('invalid_grant', 400, 'PKCE verification failed.');
+  if (!mintIsReady()) return jsonError('temporarily_unavailable', 503, OAUTH_SETUP_CHECKLIST);
+  const redeemed = await redeemOauthCode({
+    code,
+    clientId,
+    redirectUri,
+    codeVerifier: verifier,
+    tenantHint: tenantHint || undefined,
+    kind: 'authorization_code',
+    mintReady: true,
+  });
+  if (!redeemed.ok) {
+    if (redeemed.error === 'temporarily_unavailable') {
+      return jsonError('temporarily_unavailable', 503, redeemed.description || OAUTH_SETUP_CHECKLIST);
+    }
+    return jsonError('invalid_grant', 400, redeemed.description);
   }
   const minted = await mintTokens({
-    tenantId: row.tenantId,
-    userId: row.userId,
-    clientId: row.clientId,
-    connectionId: row.connectionId,
-    scopes: row.scopes,
-    redirectUri: row.redirectUri,
+    tenantId: redeemed.row.tenantId,
+    userId: redeemed.row.userId,
+    clientId: redeemed.row.clientId,
+    connectionId: redeemed.row.connectionId,
+    scopes: redeemed.row.scopes,
+    redirectUri: redeemed.row.redirectUri,
   });
   if ('error' in minted) return minted.error;
   return NextResponse.json(minted.body);

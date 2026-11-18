@@ -12,11 +12,13 @@ import {
   CODEX_PUBLIC_CLIENT_ID,
   companyAccessReadiness,
   connectedClientsReadiness,
+  connectionLifecycle,
   effectiveFlagsExplanation,
   ensureOauthSigningPem,
   publicOrigin,
   scopePlainLabel,
   serverConnectionReadiness,
+  summarizeConnectionLifecycle,
   validatePublicHttpsOrigin,
 } from '@bookone/agent-bridge';
 
@@ -53,11 +55,14 @@ export default async function CompanyAgentBridgePage({
   const origin = publicOrigin(process.env);
   const originCheck = validatePublicHttpsOrigin(origin);
   const checkedAt = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-  const activeCount = connections.filter((c) => !c.revokedAt).length;
+  const counts = summarizeConnectionLifecycle(connections);
   const readiness = [
     serverConnectionReadiness({ signingReady, originCheck }),
     companyAccessReadiness(flags),
-    connectedClientsReadiness(activeCount),
+    connectedClientsReadiness(counts.authenticated, {
+      grantedOnly: counts.grantedOnly,
+      tokenIssued: counts.tokenIssuedNeverUsed,
+    }),
   ];
 
   let prompts: Array<{
@@ -112,16 +117,19 @@ export default async function CompanyAgentBridgePage({
         promptError={promptError}
         readiness={readiness}
         prompts={prompts}
-        connections={connections.map((c) => ({
-          id: c.id,
-          label: c.label || clientPlainLabel(c.clientId),
-          companyName: tenant.name,
-          scopes: c.scopes.map(scopePlainLabel).join('; '),
-          status: c.revokedAt ? 'Revoked' : 'Active',
-          lastUsed: formatStamp(c.lastUsedAt),
-          created: formatStamp(c.createdAt),
-          canRevoke: canRevoke && !c.revokedAt,
-        }))}
+        connections={connections.map((c) => {
+          const life = connectionLifecycle(c);
+          return {
+            id: c.id,
+            label: c.label || clientPlainLabel(c.clientId),
+            companyName: tenant.name,
+            scopes: c.scopes.map(scopePlainLabel).join('; '),
+            status: life.label,
+            lastUsed: life.lastUsedLabel,
+            created: formatStamp(c.createdAt),
+            canRevoke: canRevoke && !c.revokedAt,
+          };
+        })}
         technical={technical}
       />
     </BookOneShell>

@@ -160,7 +160,7 @@ jobs:
           AUTH_SECRET: test-secret-for-ci-only
 
       - name: Independent AgentBridge acceptance
-        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/extraction-http.test.ts test/oauth-jwks.test.ts test/schemas.test.ts test/oauth-pkce.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts
+        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/extraction-http.test.ts test/oauth-jwks.test.ts test/schemas.test.ts test/oauth-pkce.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts
         env:
           NODE_ENV: test
 
@@ -183,7 +183,7 @@ jobs:
         run: pnpm --dir apps/web exec playwright install --with-deps chromium
 
       - name: Browser inbox UI-NAV-01 and Dashboard DB-01
-        run: pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts
+        run: pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/agent-bridge-consent.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts
 
   build-and-push:
     name: Build & push web image

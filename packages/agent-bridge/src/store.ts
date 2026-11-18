@@ -85,6 +85,7 @@ export type StoredConnection = {
   scopes: Capability[];
   label?: string;
   lastUsedAt?: string;
+  tokenIssuedAt?: string;
   revokedAt?: string;
   createdAt: string;
 };

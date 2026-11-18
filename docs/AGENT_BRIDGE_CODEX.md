@@ -37,7 +37,9 @@ codex mcp add bookone --url https://<public-host>/api/agent-bridge/mcp --oauth-c
 codex mcp login bookone --scopes read,upload,draft
 ```
 
-Sign in to BookOne in the browser, allow Codex, return to the CLI. In the Codex TUI run `/mcp` and confirm `bookone` is connected. Then:
+Sign in to BookOne in the browser, allow Codex, return to the CLI. BookOne owns the consent page (`Connect Codex to BookOne`). After Allow, the browser hits Codex’s loopback callback (`http://127.0.0.1:<port>/callback/<id>`). The “Authentication complete. You may close this window.” page is served by Codex on your computer, not by BookOne. BookOne does not theme that page. Retry always starts a fresh authorization; do not reuse a consumed code.
+
+In the Codex TUI run `/mcp` and confirm `bookone` is connected. Then:
 
 ```text
 Connect to BookOne AgentBridge. Call get_capabilities and get_policy_context.

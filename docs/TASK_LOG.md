@@ -1,3 +1,10 @@
+## 2026-11-18 — AgentBridge login repair and consent UX (v2.11.1)
+
+- Record: [CHG-20261118-agentbridge-09-login-consent](changes/CHG-20261118-agentbridge-09-login-consent.md). Baseline product `514e51b` / v2.11.0. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AB-07 public discovery and AB-08 Company AgentBridge. Preserve the saved Codex `bookone` entry. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks including the 18 Nov 2026 authorization code.
+- Repair: atomic OAuth code redemption with binding checks; honest connection lifecycle (`token_issued_at`); branded BookOne consent/error pages with Allow/Cancel; Codex/Claude prompt line breaks and Claude name de-dupe. VERSION 2.11.1. CoreGuard `ab-09`. Schema protocol stays `ab-06.1`. Additive `047`.
+- Checks: `@bookone/agent-bridge` 26 files / 124 passed. `@bookone/auth` permissions + ui-nav-01 13 passed. Playwright consent 3 passed, connect 5 passed. AgentBridge `tsc --noEmit` passed. Screenshots in `docs/qa/ab09/`.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent `codex mcp login bookone` retry pending. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Company AgentBridge connections UI (v2.11.0)
 
 - Record: [CHG-20261118-agentbridge-08-company-connections](changes/CHG-20261118-agentbridge-08-company-connections.md). Baseline product `58eea1a` / v2.10.2. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AB-07 public discovery, `/authorize` alias, loopback `/callback/<id>`. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks. Do not recreate the saved Codex `bookone` MCP entry.

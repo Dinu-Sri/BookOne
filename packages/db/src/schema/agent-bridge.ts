@@ -114,6 +114,7 @@ export const agentBridgeConnections = pgTable('agent_bridge_connections', {
   scopes: text('scopes').notNull().default('read,upload,draft'),
   label: text('label'),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  tokenIssuedAt: timestamp('token_issued_at', { withTimezone: true }),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

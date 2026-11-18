@@ -341,6 +341,12 @@ export class MemoryAuthorizationCodeStore implements AuthorizationCodeStore {
   async saveCode(code: AuthorizationCode) {
     this.codes.set(code.code, code);
   }
+  peekCode(code: string): AuthorizationCode | null {
+    return this.codes.get(code) ?? null;
+  }
+  replaceCode(row: AuthorizationCode) {
+    this.codes.set(row.code, row);
+  }
   async takeCode(code: string) {
     const row = this.codes.get(code) ?? null;
     if (!row) return null;

@@ -4,12 +4,12 @@ Unpaid domestic local-currency supplier **service/expense** invoices: connect an
 
 Feature flags default **off**. Draft-only and posting-disable default **on**. Keep posting disabled until independent QA accepts this candidate and the owner deploys. Existing purchase screens stay usable when AgentBridge is off.
 
-Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.11.0**.
+Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.11.1**.
 
 ## Supported in this build
 
 - Document Inbox at `/purchase/inbox` (hidden until the company flag is on and the job has `purchase.inbox.read`).
-- Company → AgentBridge at `/company/agent-bridge` (Company nav, reachable when Document Inbox is off). Company flags, readiness, connected clients, and exactly two copyable prompts (Codex and Claude) live here. Settings use `company.purchase_settings`. `/purchase/inbox/connections` redirects here. Purchase Settings keeps a secondary link. New connections start with `read`, `upload`, `draft`. Post is explicit. Agents cannot mint human approval. Copying a prompt does not create a connection.
+- Company → AgentBridge at `/company/agent-bridge` (Company nav, reachable when Document Inbox is off). Company flags, readiness, connected clients, and exactly two copyable prompts (Codex and Claude) live here. Settings use `company.purchase_settings`. `/purchase/inbox/connections` redirects here. Purchase Settings keeps a secondary link. New connections start with `read`, `upload`, `draft`. Post is explicit. Agents cannot mint human approval. Copying a prompt does not create a connection. A consent-only row is **Permission granted**, not an authenticated client. Token issuance without an MCP request is **Token issued** / never used. **Active** is only after an authenticated MCP request.
 - Shared service in `@bookone/agent-bridge` used by the UI, `/api/agent-bridge/v1/*`, and `/api/agent-bridge/mcp`.
 - Posting goes through `createCommercialDocumentWithUser` (the existing unpaid purchase bill path). One bill per approved proposal.
 - Agent-first facts: a valid upload without server OCR becomes `awaiting_facts`, not a dead-end failure. `submit_extracted_facts` binds document id, content hash and expected revision. Facts can be edited on draft/validated/awaiting_approval; a new proposal replaces the current one and revokes prior approval. Category label is taken from the selected authorized mapping. Amounts use exact decimals (never Number-invalid→0).
@@ -19,9 +19,9 @@ Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Produ
 - Batch manifest: one item per file, per-item status, no implicit batch approval.
 - Lookups: approved suppliers, expense accounts, own proposals. Ambiguous matches become issues; new suppliers/accounts are not created.
 - Strict MCP/API schemas (`additionalProperties: false`). MCP protocol negotiate `2025-03-26` and `2024-11-05`; incompatible versions are rejected.
-- OAuth discovery is public (no session 307). `/.well-known/oauth-protected-resource`, path-appended `/.well-known/oauth-protected-resource/api/agent-bridge/mcp`, `/.well-known/oauth-authorization-server`, `/.well-known/jwks.json`. MCP unauthenticated initialize returns 401 with `WWW-Authenticate` `resource_metadata`. Authorization code + PKCE S256 + refresh_token for public clients `bookone-codex` and `bookone-claude`. Consent always grants `read upload draft` (never post). Tenant is encoded in the authorization code. Authorization responses include RFC 9207 `iss`. Issuer `/authorize` aliases `/api/agent-bridge/oauth/authorize`. Loopback callbacks allow `/callback` and `/callback/<id>` on 127.0.0.1/localhost.
+- OAuth discovery is public (no session 307). `/.well-known/oauth-protected-resource`, path-appended `/.well-known/oauth-protected-resource/api/agent-bridge/mcp`, `/.well-known/oauth-authorization-server`, `/.well-known/jwks.json`. MCP unauthenticated initialize returns 401 with `WWW-Authenticate` `resource_metadata`. Authorization code + PKCE S256 + refresh_token for public clients `bookone-codex` and `bookone-claude`. Consent always grants `read upload draft` (never post). Tenant is encoded in the authorization code. Authorization responses include RFC 9207 `iss`. Issuer `/authorize` aliases `/api/agent-bridge/oauth/authorize`. Loopback callbacks allow `/callback` and `/callback/<id>` on 127.0.0.1/localhost. Token exchange matches the stored `redirect_uri` exactly (`127.0.0.1` is not `localhost`). Codes are redeemed atomically: binding mismatches do not burn the code; PKCE/expiry failures do; mint-not-ready leaves the code unused. The BookOne consent page is branded; Cancel is `access_denied` only for a validated redirect. The local “Authentication complete” page after Allow is served by Codex on loopback, not by BookOne.
 - Effective scopes are token scopes INTERSECT current grants for the token subject. Human approval stays session-only.
-- Additive migration `046_agent_bridge_facts.sql` (last error/intake mode, upload sessions, batches, facts keys, oauth codes, connection scopes/last used).
+- Additive migration `046_agent_bridge_facts.sql` (last error/intake mode, upload sessions, batches, facts keys, oauth codes, connection scopes/last used). Additive `047_agent_bridge_oauth_lifecycle.sql` adds `token_issued_at` so consent is not labelled authenticated.
 - AB-02/AB-03/AB-04 gates retained: fail-closed approval, unique claim, token∩live grants, lost-response reconcile, blob storage-pointer remap, explicit `agent_bridge.approve` / `agent_bridge.post` keys.
 
 ## Out of this build
@@ -41,7 +41,7 @@ Failed documents can resume through the same facts form. Download the original f
 
 ## Owner configuration
 
-1. Apply migrations through startup `db:init` (`044`, `045`, `046`). Additive; do not drop prior AgentBridge tables.
+1. Apply migrations through startup `db:init` (`044`, `045`, `046`, `047`). Additive; do not drop prior AgentBridge tables.
 2. On **Company → AgentBridge**, enable Document Inbox only on the intended synthetic company. Leave draft-only and posting-disable on until independent QA says otherwise. Do not enable posting on the existing live company in this candidate. Copy the Codex or Claude connection prompt from that page.
 3. Grant `purchase.inbox.*`, `agent_bridge.approve`, and `agent_bridge.post` on Jobs if the tenant was seeded before catalog v2. `allows(key, 'write')` matches those exact catalog action keys (and a persisted `*.write` alias). Viewer stays read-only. Purchase module ceiling still applies.
 4. Set `AGENT_BRIDGE_PUBLIC_URL` (or `AUTH_URL`) to the public HTTPS origin so review URLs and OAuth metadata are absolute.
@@ -91,7 +91,7 @@ Public client IDs: `bookone-codex`, `bookone-claude`. Default scopes `read uploa
 
 ## Rollback
 
-Revert the product commit. Additive `046` columns remain; unused flags are harmless. Do not rewrite posted bills. Code rollback is not a data restore.
+Revert the product commit. Additive `046`/`047` columns remain; unused flags are harmless. Do not rewrite posted bills. Code rollback is not a data restore.
 
 ## CoreGuard
 

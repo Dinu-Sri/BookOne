@@ -116,7 +116,11 @@ export function buildCodexConnectionPrompt(details: PublicConnectionDetails): Co
     '',
     'Do this:',
     `1. ${steps[1]} Treat a saved entry, pending login, successful OAuth, and usable MCP tools as separate states.`,
-    `2. If no matching entry exists, use the official Codex CLI: ${add} Then: ${login} Do not include ephemeral authorization links, state, PKCE values, or callback ports.`,
+    `2. If no matching entry exists, use the official Codex CLI:`,
+    add,
+    'Then:',
+    login,
+    'Do not include ephemeral authorization links, state, PKCE values, or callback ports.',
     `3. ${steps[2]}`,
     `4. ${steps[3]}`,
     `5. ${steps[4]}`,
@@ -158,7 +162,8 @@ export function buildClaudeConnectionPrompt(details: PublicConnectionDetails): C
     '',
     'Do this:',
     `1. ${steps[1]}`,
-    `2. Ask the user to open Customize → Connectors → Add custom connector → Web. Name: BookOne AgentBridge. ${connector.slice(1).join(' ')}`,
+    '2. Ask the user to open Customize → Connectors → Add custom connector → Web.',
+    ...connector.slice(1),
     `3. ${steps[2]}`,
     `4. ${steps[3]}`,
     `5. ${steps[4]}`,
@@ -262,9 +267,21 @@ export function companyAccessReadiness(flags: CompanyAgentBridgeFlags): Readines
   };
 }
 
-export function connectedClientsReadiness(activeCount: number): ReadinessItem {
+export function connectedClientsReadiness(
+  authenticatedCount: number,
+  extras?: { grantedOnly?: number; tokenIssued?: number },
+): ReadinessItem {
   const label = 'Connected clients';
-  if (activeCount <= 0) {
+  const pending = (extras?.grantedOnly ?? 0) + (extras?.tokenIssued ?? 0);
+  if (authenticatedCount <= 0) {
+    if (pending > 0) {
+      return {
+        id: 'clients',
+        label,
+        level: 'setup_needed',
+        detail: `${pending} permission grant${pending === 1 ? '' : 's'} waiting for the client to finish sign-in. None of these are authenticated clients yet. Retry with a fresh authorization. Do not reuse a consumed code.`,
+      };
+    }
     return {
       id: 'clients',
       label,
@@ -277,7 +294,7 @@ export function connectedClientsReadiness(activeCount: number): ReadinessItem {
     id: 'clients',
     label,
     level: 'ready',
-    detail: `${activeCount} authenticated client${activeCount === 1 ? '' : 's'}.`,
+    detail: `${authenticatedCount} authenticated client${authenticatedCount === 1 ? '' : 's'}.`,
   };
 }
 

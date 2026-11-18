@@ -2,8 +2,10 @@ import {
   AgentBridgeService,
   MemoryStore,
   defaultPolicy,
+  decideOauthCodeRedemption,
   extractorFor,
   intersectCapabilities,
+  pendingGrantForReuse,
   tenantIdFromBoundToken,
   type Actor,
   type AgentBridgeStore,
@@ -656,6 +658,7 @@ class PostgresStore implements AgentBridgeStore {
             scopes: (r.scopes || 'read,upload,draft').split(',').filter(Boolean) as StoredConnection['scopes'],
             label: r.label ?? undefined,
             lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : undefined,
+            tokenIssuedAt: r.tokenIssuedAt ? r.tokenIssuedAt.toISOString() : undefined,
             revokedAt: r.revokedAt ? r.revokedAt.toISOString() : undefined,
             createdAt: r.createdAt.toISOString(),
           }),
@@ -671,6 +674,7 @@ class PostgresStore implements AgentBridgeStore {
         scopes: row.scopes.join(','),
         label: row.label ?? null,
         lastUsedAt: row.lastUsedAt ? new Date(row.lastUsedAt) : null,
+        tokenIssuedAt: row.tokenIssuedAt ? new Date(row.tokenIssuedAt) : null,
         revokedAt: row.revokedAt ? new Date(row.revokedAt) : null,
       };
       const existing = await this.getConnection(row.tenantId, row.id);
@@ -699,6 +703,7 @@ class PostgresStore implements AgentBridgeStore {
         scopes: (row.scopes || 'read,upload,draft').split(',').filter(Boolean) as StoredConnection['scopes'],
         label: row.label ?? undefined,
         lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : undefined,
+        tokenIssuedAt: row.tokenIssuedAt ? row.tokenIssuedAt.toISOString() : undefined,
         revokedAt: row.revokedAt ? row.revokedAt.toISOString() : undefined,
         createdAt: row.createdAt.toISOString(),
       };
@@ -723,21 +728,92 @@ export async function saveOauthCode(row: {
   });
 }
 
-export async function takeOauthCode(code: string, tenantHint?: string) {
-  const tenantId = tenantHint?.trim() || tenantIdFromBoundToken(code);
-  if (!tenantId) return null;
+export type OauthCodeRow = typeof agentBridgeOauthCodes.$inferSelect;
+
+export type RedeemOauthCodeArgs = {
+  code: string;
+  clientId: string;
+  redirectUri?: string;
+  codeVerifier?: string;
+  tenantHint?: string;
+  kind?: 'authorization_code' | 'refresh_token';
+  mintReady: boolean;
+};
+
+export type RedeemOauthCodeResult =
+  | { ok: true; row: OauthCodeRow }
+  | { ok: false; error: 'invalid_grant' | 'temporarily_unavailable'; description?: string };
+
+function mapCodeForDecision(row: OauthCodeRow) {
+  return {
+    code: row.code,
+    tenantId: row.tenantId,
+    userId: row.userId,
+    clientId: row.clientId,
+    redirectUri: row.redirectUri,
+    codeChallenge: row.codeChallenge,
+    codeChallengeMethod: row.codeChallengeMethod,
+    scopes: row.scopes,
+    connectionId: row.connectionId,
+    expiresAt: row.expiresAt.getTime(),
+    usedAt: row.usedAt ? row.usedAt.getTime() : null,
+  };
+}
+
+/**
+ * Atomic single-use redemption. Binding mismatches do not burn the code.
+ * Expiry and PKCE failures consume it. Mint-not-ready leaves the code unused.
+ * Concurrent winners are serialized with SELECT FOR UPDATE and used_at IS NULL.
+ */
+export async function redeemOauthCode(args: RedeemOauthCodeArgs): Promise<RedeemOauthCodeResult> {
+  const tenantId = args.tenantHint?.trim() || tenantIdFromBoundToken(args.code);
+  if (!tenantId) return { ok: false, error: 'invalid_grant' };
+  if (!args.mintReady) {
+    return { ok: false, error: 'temporarily_unavailable' };
+  }
   return withTenantContext(tenantId, async () => {
-    const [row] = await db()
-      .select()
-      .from(agentBridgeOauthCodes)
-      .where(and(eq(agentBridgeOauthCodes.tenantId, tenantId), eq(agentBridgeOauthCodes.code, code)))
-      .limit(1);
-    if (!row || row.usedAt) return null;
-    await db()
-      .update(agentBridgeOauthCodes)
-      .set({ usedAt: new Date() })
-      .where(eq(agentBridgeOauthCodes.code, code));
-    return row;
+    return db().transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(agentBridgeOauthCodes)
+        .where(and(eq(agentBridgeOauthCodes.tenantId, tenantId), eq(agentBridgeOauthCodes.code, args.code)))
+        .limit(1)
+        .for('update');
+      const decision = decideOauthCodeRedemption(row ? mapCodeForDecision(row) : null, {
+        clientId: args.clientId,
+        redirectUri: args.redirectUri ?? '',
+        codeVerifier: args.codeVerifier,
+        kind: args.kind,
+      });
+      if (decision.action !== 'issue') {
+        if (decision.consume && row && !row.usedAt) {
+          await tx
+            .update(agentBridgeOauthCodes)
+            .set({ usedAt: new Date() })
+            .where(
+              and(
+                eq(agentBridgeOauthCodes.tenantId, tenantId),
+                eq(agentBridgeOauthCodes.code, args.code),
+                isNull(agentBridgeOauthCodes.usedAt),
+              ),
+            );
+        }
+        return { ok: false as const, error: 'invalid_grant' as const, description: decision.description };
+      }
+      const consumed = await tx
+        .update(agentBridgeOauthCodes)
+        .set({ usedAt: new Date() })
+        .where(
+          and(
+            eq(agentBridgeOauthCodes.tenantId, tenantId),
+            eq(agentBridgeOauthCodes.code, args.code),
+            isNull(agentBridgeOauthCodes.usedAt),
+          ),
+        )
+        .returning();
+      if (!consumed[0]) return { ok: false as const, error: 'invalid_grant' as const };
+      return { ok: true as const, row: consumed[0] };
+    });
   });
 }
 
@@ -1020,7 +1096,34 @@ export async function revokeAgentBridgeConnection(
 export async function recordAgentBridgeConnection(row: StoredConnection) {
   const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
   if (!store.saveConnection) throw new Error('Connections are not available on this store.');
+  const existing = store.listConnections ? await store.listConnections(row.tenantId, row.userId) : [];
+  const pending = pendingGrantForReuse(existing, { userId: row.userId, clientId: row.clientId });
+  if (pending) {
+    await store.saveConnection({
+      ...pending,
+      scopes: row.scopes,
+      label: row.label ?? pending.label,
+    });
+    return pending.id;
+  }
   await store.saveConnection(row);
+  return row.id;
+}
+
+export async function markAgentBridgeTokenIssued(tenantId: string, connectionId: string | null | undefined) {
+  if (!connectionId) return;
+  await withTenantContext(tenantId, async () => {
+    await db()
+      .update(agentBridgeConnections)
+      .set({ tokenIssuedAt: new Date() })
+      .where(
+        and(
+          eq(agentBridgeConnections.tenantId, tenantId),
+          eq(agentBridgeConnections.id, connectionId),
+          isNull(agentBridgeConnections.tokenIssuedAt),
+        ),
+      );
+  });
 }
 
 export { memory as agentBridgeMemoryStore };

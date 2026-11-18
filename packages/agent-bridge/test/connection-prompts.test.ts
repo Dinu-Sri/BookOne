@@ -55,6 +55,8 @@ describe('AB-08 connection prompt contract', () => {
     expect(prompt.title).toBe('Connect with Codex');
     expect(prompt.prompt).toContain(`codex mcp add bookone --url ${details.mcpUrl} --oauth-client-id ${CODEX_PUBLIC_CLIENT_ID}`);
     expect(prompt.prompt).toContain('codex mcp login bookone --scopes read,upload,draft');
+    expect(prompt.prompt).toMatch(/official Codex CLI:\ncodex mcp add /);
+    expect(prompt.prompt).toMatch(/Then:\ncodex mcp login /);
     expect(prompt.prompt).toContain(details.mcpUrl);
     expect(prompt.prompt).toContain(details.issuer);
     expect(prompt.prompt).toMatch(/public client, no secret/i);
@@ -78,6 +80,8 @@ describe('AB-08 connection prompt contract', () => {
     const prompt = buildClaudeConnectionPrompt(details);
     expect(prompt.title).toBe('Connect with Claude');
     expect(prompt.prompt).toContain('Customize → Connectors');
+    expect(prompt.prompt).toContain('Name: BookOne AgentBridge');
+    expect(prompt.prompt.match(/Name: BookOne AgentBridge/g)?.length).toBe(1);
     expect(prompt.prompt).toContain(CLAUDE_PUBLIC_CLIENT_ID);
     expect(prompt.prompt).toContain(details.mcpUrl);
     expect(prompt.prompt).toMatch(/cannot add a connector to its own host/i);

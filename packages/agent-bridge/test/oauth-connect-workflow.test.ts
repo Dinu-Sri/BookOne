@@ -56,8 +56,9 @@ describe('AgentBridge login, consent, discovery and invoice workflow', () => {
     const login = readFileSync(path.resolve(__dirname, '../../../apps/web/src/app/login/page.tsx'), 'utf8');
     expect(authorize).toMatch(/\/login\?from=\$\{next\}/);
     expect(authorize).toMatch(/requireTenantContext/);
-    expect(authorize).toMatch(/Allow \$\{escapeHtml\(client\.clientName\)\}/);
+    expect(authorize).toMatch(/renderConsentPage/);
     expect(authorize).toMatch(/consentConnectionScopes/);
+    expect(authorize).toMatch(/decision === 'deny'/);
     expect(login).toMatch(/searchParams\.get\('from'\) \|\| searchParams\.get\('next'\)/);
   });
 

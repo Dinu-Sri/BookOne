@@ -17,6 +17,7 @@ import {
   wwwAuthenticateChallenge,
   type AuthorizationCode,
 } from '../src/oauth';
+import { renderConsentPage } from '../src/consent-page';
 
 const root = path.resolve(__dirname, '../../..');
 
@@ -83,7 +84,23 @@ describe('AB-07 Codex login discovery and callback', () => {
         }
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         res.end(
-          `<h1>Connect ${client.clientName} to BookOne</h1><p>This grants read, upload and draft</p><button>Allow ${client.clientName}</button>`,
+          renderConsentPage({
+            kind: 'consent',
+            clientName: client.clientName,
+            companyName: 'Demo company',
+            accountName: 'Owner',
+            accountEmail: 'owner@example.com',
+            flags: { enabled: true, draftOnly: true, postingDisabled: true },
+            fields: {
+              client_id: clientId,
+              redirect_uri: redirectUri,
+              state: '',
+              code_challenge: challenge,
+              code_challenge_method: method,
+              resource,
+              scope: 'read upload draft',
+            },
+          }),
         );
         return;
       }
@@ -132,10 +149,11 @@ describe('AB-07 Codex login discovery and callback', () => {
     const body = await consent.text();
     expect(body).toMatch(/Connect Codex to BookOne/);
     expect(body).toMatch(/read, upload and draft/);
-    expect(body).toMatch(/Allow Codex/);
+    expect(body).toMatch(/Allow connection/);
+    expect(body).toMatch(/Allow Codex to connect to BookOne/);
     const alias = await fetch(`${origin}/authorize?${query}`);
     expect(alias.status).toBe(200);
-    expect(await alias.text()).toMatch(/Allow Codex/);
+    expect(await alias.text()).toMatch(/Allow connection/);
   });
 
   it('refuses wrong client, redirect, resource and PKCE', async () => {

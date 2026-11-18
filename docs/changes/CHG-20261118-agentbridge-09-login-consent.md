@@ -1,0 +1,34 @@
+# CHG-20261118-agentbridge-09-login-consent — Codex token exchange repair and branded consent
+
+Status: ready-for-QA.
+
+- Author/agent and date: coding agent, 2026-11-18
+- Product version (`VERSION` file) and base SHA / branch/PR: 2.11.1 on `fix/v2111-agentbridge-09-login-consent` from origin/master `514e51bc5c7b90e66d47901419965de373068183` (v2.11.0)
+- QA repository revision and companion PR/change ID: independent live Codex/Claude pending after owner deploy. Handoff CODING-AGENTBRIDGE-09-LOGIN-AND-CONSENT-UX.md. No bookone-qa companion opened in this change. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve the saved Codex `bookone` entry. Do not revoke or recreate it. Do not replay the consumed 18 Nov 2026 authorization code.
+- Intended before/after behaviour with a concrete example: after Allow, Codex previously showed its local “Authentication complete” page then exited `invalid_grant` because BookOne marked the code used before checking client, exact redirect, PKCE and expiry. After this change the code is locked and classified first. A host/path/port mismatch (`127.0.0.1` vs `localhost`) is `invalid_grant` without burning the code. PKCE/expiry failures consume it. Missing signing/issuer returns `temporarily_unavailable` without consuming. Company → AgentBridge no longer labels a consent-only row as an authenticated client. The BookOne consent page is branded with Allow connection and Cancel.
+- Existing behaviour that must remain correct: AB-07 public OAuth/MCP discovery, `/authorize` alias, loopback `/callback/<id>`, RFC 9207 `iss`, exact redirect equality, PKCE S256, public client ids `bookone-codex` / `bookone-claude`, generate-once signing, FILE-wins PEM, HMAC unset, Inbox/posting flags unchanged by opening consent, UI-NAV-01 list clipping, tiles removed, dashboard DB-01, AB-08 Company AgentBridge two prompts
+- Actual changed paths/symbols/routes: `redeemOauthCode` / `decideOauthCodeRedemption`; `/api/agent-bridge/oauth/token`; `/api/agent-bridge/oauth/authorize` branded `renderConsentPage`; `token_issued_at`; `connectionLifecycle`; CoreGuard `ab-09`
+- Business rule/profile/scenario IDs: AgentBridge AB-09 login repair and consent UX. Live 18 Nov 2026 Codex `invalid_grant` after loopback callback
+- Accounting, stock/rental, tenant/access and customer-data effects: none. No new posting. Existing company flags unchanged. Consent still never grants post. Cancel grants no access
+- Migrations, schema/history compatibility and recovery implications: additive `047_agent_bridge_oauth_lifecycle.sql` (`token_issued_at`). Existing consent rows stay permission-granted until a token is issued. Schema protocol stays `ab-06.1`. CoreGuard version `ab-09`
+- Dependencies, settings/flags, deployment and external-service changes: none. Owner Portainer Re-pull ON after Docker web image green. Do not set `AGENT_BRIDGE_ALLOW_HMAC`. Do not paste the private key. Do not enable Inbox/posting on the existing live company. Do not theme Codex’s loopback HTML
+- Independent diff/impact review and uncertainties: Medium review still applies. This change does not claim a live Codex or Claude session connected. Root cause in source is consume-before-validate; the observed `127.0.0.1` vs `localhost` callback host difference remains unproven as the live cause and stays an exact-match rule
+- Checks executed: `@bookone/agent-bridge` 26 files / 124 passed (oauth-redeem 6, connection-lifecycle 5, consent-page 4, ab09-acceptance 5, oauth-codex-login 6, connection-prompts 10, coreguard 2). `@bookone/auth` agent-bridge-permissions + ui-nav-01 13 passed. Playwright `e2e/agent-bridge-consent.spec.ts` 3 passed; `e2e/agent-bridge-connect.spec.ts` 5 passed. AgentBridge `tsc --noEmit` passed. Screenshots `docs/qa/ab09/consent-375.png`, `consent-1440.png`, `error-375.png`, `error-1440.png`. Web `tsc --noEmit` leftover `.next/types` cashbook PageProps mismatches pre-existed and are not in this diff.
+- Failed/skipped/flaky/blocked/not-run checks and reasons: live Codex/Claude, OCR, production IdP, GitHub branch protection stay BLOCKED. The 18 Nov 2026 consumed code is not replayed
+- New QA assertions or outstanding work; changed expectations and owner decision: after deploy, independent `codex mcp login bookone` on the saved entry. Consent-only must not read as “1 authenticated client.” Retry is a fresh authorization
+- Created staging records/cleanup, if any: none. Existing live Codex connection row is preserved
+- Documentation updated: `docs/AGENT_BRIDGE.md`, `docs/AGENT_BRIDGE_CODEX.md`, this CHG, TASK_LOG, PROJECT_STATUS, `docs/qa/ab09/`
+- Next exact action and responsible role: reviewable PR, then fast-forward origin/master. Owner deploys. Independent Codex login retry on the saved entry. Do not enable AgentBridge posting
+
+## UI/UX impact and existing-design compatibility
+
+- Existing design guide/component/CSS references; reason for reusing/extending them: BookOne `--ink`/`--brand`/`--line` tokens inlined on the authorize HTML so the API route does not depend on the Next CSS bundle. Company AgentBridge still uses `.ab-company-page` / `.ab-panel`
+- Exact external QA commit and ux/workbook.json SHA256; UX/UXW/WB IDs/revisions: not bound in this change; design inventory commit `024f8c35223a28c0662d469b71cd96579d4ee24d`
+- Before/after behaviour; independent expected/unchanged example: consent HTML was an unstyled Allow submit. After this change it is a BookOne card with company, account, permission rows, actual draft-only vs posting-stop copy, Allow connection, and Cancel. Invalid redirect stays a local BookOne error
+- Direct screens and transitive shared consumers; applicable states/roles/entities/settings: `/api/agent-bridge/oauth/authorize`, `/authorize` alias, `/company/agent-bridge`, token endpoint, Codex loopback callback (client-owned)
+- Preserved field/line/source identity, money/stock/history/print and server permissions: posting and documents unchanged
+- Desktop/narrow/keyboard/reader evidence; baseline/after sanitized screenshots: Playwright 375/1440 consent and untrusted-redirect; Allow min height 44px; `aria-label` on Allow; progress `aria-live`
+- Exact and adjacent regressions; actual engineering checks and missing layers: AgentBridge CoreGuard suites retained plus oauth-redeem, connection-lifecycle, consent-page, ab09-acceptance, consent Playwright. Dashboard DB-01 retained. AB-07/AB-08 retained
+- Conflict/exception owner, rationale, mitigation, expiry and acceptance impact: Codex loopback “Authentication complete” page remains a client limitation, not a BookOne styling failure
+- Small rollout batch/revert plan; any schema/data implications explicitly reviewed: revert the VERSION 2.11.1 commit. `token_issued_at` column may remain unused
+- QA companion change/run and independent review link (or pending): pending live Codex login after deploy and independent UI review

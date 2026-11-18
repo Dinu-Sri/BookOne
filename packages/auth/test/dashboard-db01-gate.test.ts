@@ -31,6 +31,13 @@ describe('Dashboard DB-01 source contracts', () => {
     expect(action).toMatch(/externalCash/);
     expect(action).toMatch(/CARD_CLEARING_CODE/);
     expect(action).not.toMatch(/redirect\('\/login'\)/);
+    expect(action).not.toMatch(/^export const /m);
+  });
+
+  it('turbo forwards DATABASE_URL into package tests', () => {
+    const turbo = read('turbo.json');
+    expect(turbo).toMatch(/"globalPassThroughEnv"/);
+    expect(turbo).toMatch(/DATABASE_URL/);
   });
 
   it('cash bars share a common scale instead of independent 100% widths', () => {

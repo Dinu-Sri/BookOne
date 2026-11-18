@@ -10,6 +10,10 @@ test('connections page shows public client details and stays reachable when Inbo
     path.join(root, 'apps/web/src/app/purchase/inbox/connections/page.tsx'),
     'utf8',
   );
+  const setup = readFileSync(
+    path.join(root, 'apps/web/src/components/agent-bridge/connection-setup.tsx'),
+    'utf8',
+  );
   const purchase = readFileSync(path.join(root, 'apps/web/src/app/company/purchase/page.tsx'), 'utf8');
   const authorize = readFileSync(
     path.join(root, 'apps/web/src/app/api/agent-bridge/oauth/authorize/route.ts'),
@@ -19,6 +23,9 @@ test('connections page shows public client details and stays reachable when Inbo
   expect(connections).not.toMatch(/if \(!flags.enabled\) redirect/);
   expect(connections).toMatch(/AgentBridgeConnectionSetup/);
   expect(connections).toMatch(/ensureOauthSigningPem/);
+  expect(connections).toMatch(/codexSetupCommand/);
+  expect(connections).toMatch(/claudeConnectorSteps/);
+  expect(setup).not.toMatch(/from ['"]@bookone\/agent-bridge['"]/);
   expect(connections).not.toMatch(/BEGIN PRIVATE|PRIVATE KEY/);
   expect(purchase).toMatch(/Connect Codex or Claude/);
   expect(purchase).toMatch(/\/purchase\/inbox\/connections/);

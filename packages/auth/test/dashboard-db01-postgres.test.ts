@@ -13,6 +13,9 @@ describe('CoreGuard Dashboard DB-01 postgres path', () => {
     expect(yaml).toMatch(/dashboard-metrics\.test\.ts/);
     expect(yaml).toMatch(/dashboard-db01\.spec\.ts/);
     expect(yaml).toMatch(/needs: \[quality, coreguard\]/);
+    const turbo = readFileSync(path.resolve(__dirname, '../../../turbo.json'), 'utf8');
+    expect(turbo).toMatch(/DATABASE_URL/);
+    expect(turbo).toMatch(/globalPassThroughEnv/);
   });
 
   it.skipIf(!databaseUrl && !requirePg)('aggregates fixture journals with SQL independently of composeDashboardMetrics', async () => {
@@ -80,9 +83,18 @@ describe('CoreGuard Dashboard DB-01 postgres path', () => {
          WHERE tenant_id = 'tenant-b' AND entry_date BETWEEN $1::date AND $2::date`,
         [DB01_PERIOD.from, DB01_PERIOD.to],
       );
+      const tenantBPeriodSales = DB01_TENANT_B_JOURNALS.filter(
+        (line) =>
+          line.accountCode === '4000' &&
+          line.side === 'credit' &&
+          line.date >= DB01_PERIOD.from &&
+          line.date <= DB01_PERIOD.to,
+      ).reduce((sum, line) => sum + line.amount, 0);
+      expect(tenantBPeriodSales).toBeGreaterThan(0);
+      expect(expected.netSales).not.toBe(tenantBPeriodSales);
       expect(Number(sales.rows[0]?.net_sales)).toBe(expected.netSales);
       expect(Number(result.rows[0]?.operating_result)).toBe(expected.operatingResult);
-      expect(Number(isolation.rows[0]?.other)).toBe(0);
+      expect(Number(isolation.rows[0]?.other)).toBe(tenantBPeriodSales);
       const elapsed = Date.now() - started;
       expect(elapsed).toBeLessThan(15_000);
     } finally {

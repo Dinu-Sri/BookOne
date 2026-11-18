@@ -1,3 +1,10 @@
+## 2026-11-18 — Unblock GitHub Actions web build and DB-01 postgres (v2.10.1)
+
+- Record: [CHG-20261118-ci-web-build](changes/CHG-20261118-ci-web-build.md). Baseline product `f3a3b8d` / v2.10.0. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AgentBridge generate-once signing and connection screen. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks.
+- Repair: client connection-setup no longer imports `@bookone/agent-bridge` (webpack `node:crypto`). Dashboard `'use server'` action no longer exports unused const objects. Turbo forwards `DATABASE_URL` into package tests. DB-01 postgres isolation expects tenant-b in-period 4000 credit 9999 while tenant-a still matches `independentExpected()`. VERSION 2.10.1.
+- Checks: `@bookone/auth` dashboard-db01-gate + postgres 7 passed / 1 skipped (SQL path skipped without local `DATABASE_URL`; CI sets it). `@bookone/accounting` dashboard-metrics 18 passed. `@bookone/agent-bridge` oauth-connect-workflow 4 passed. Playwright `e2e/agent-bridge-connect.spec.ts` 3 passed. `pnpm --filter @bookone/web build` compiled successfully (Next.js 15.5.19, 139 routes including `/dashboard` and `/purchase/inbox/connections`; no `use server` object export and no `node:crypto` UnhandledSchemeError).
+- Next: Reviewable PR, then fast-forward origin/master per owner overlay. Owner Portainer Re-pull ON after Docker web image green. Independent staging QA pending. AgentBridge client qualification pending. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Persistent AgentBridge signing and connection screen (v2.10.0)
 
 - Record: [CHG-20261118-agentbridge-connect](changes/CHG-20261118-agentbridge-connect.md). Operator runbook [AGENT_BRIDGE_SIGNING_STAGING.md](AGENT_BRIDGE_SIGNING_STAGING.md). Baseline product `bcac32a` / v2.9.0. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve dashboard DB-01. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks.

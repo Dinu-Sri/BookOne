@@ -3,9 +3,7 @@
 import {
   AGING_BUCKETS,
   CARD_CLEARING_CODE,
-  CASH_UNIVERSE_CODES,
   DASHBOARD_METRIC_IDS,
-  NET_SALES_CODES,
   cashSeries,
   cashUniverseFromRows,
   composeDashboardMetrics,
@@ -676,6 +674,3 @@ export async function getBusinessOverview(input?: {
     };
   });
 }
-
-export const DASHBOARD_CASH_UNIVERSE = CASH_UNIVERSE_CODES;
-export const DASHBOARD_SALES_CODES = NET_SALES_CODES;

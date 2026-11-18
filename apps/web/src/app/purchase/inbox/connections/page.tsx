@@ -9,6 +9,8 @@ import { revokeAgentConnection } from '@/app/actions/agent-bridge';
 import { jobCanWrite } from '@/lib/access';
 import { AgentBridgeConnectionSetup } from '@/components/agent-bridge/connection-setup';
 import {
+  claudeConnectorSteps,
+  codexSetupCommand,
   ensureOauthSigningPem,
   publicConnectionDetails,
   publicOrigin,
@@ -28,6 +30,8 @@ export default async function AgentBridgeConnectionsPage() {
   const signingReady = Boolean(ensureOauthSigningPem(process.env));
   const origin = publicOrigin(process.env);
   const details = publicConnectionDetails(origin || 'https://bookone.clossyan.com', signingReady);
+  const codexCommand = codexSetupCommand(details.mcpUrl);
+  const claudeConnector = claudeConnectorSteps(details.mcpUrl).join('\n');
 
   return (
     <BookOneShell active="Document Inbox" tenant={tenant}>
@@ -46,7 +50,12 @@ export default async function AgentBridgeConnectionsPage() {
             </span>
           </div>
           <div className="party-form-body" style={{ display: 'grid', gap: 12 }}>
-            <AgentBridgeConnectionSetup details={details} inboxEnabled={flags.enabled} />
+            <AgentBridgeConnectionSetup
+              details={details}
+              inboxEnabled={flags.enabled}
+              codexCommand={codexCommand}
+              claudeConnector={claudeConnector}
+            />
             <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
               New connections start with read, upload and draft. Posting still needs an explicit grant and a human
               approval in BookOne. Connected agents cannot mint approvals.

@@ -1,3 +1,7 @@
+## 2026-11-18 — Unblock GitHub Actions web build and DB-01 postgres (v2.10.1)
+
+Candidate **2.10.1** on `fix/v2101-ci-web-build` from origin/master `f3a3b8d` / v2.10.0. Production Check and Docker web image failed on v2.9.0 and v2.10.0 (`node:crypto` in the client connection screen, `'use server'` object exports on `/dashboard`, turbo stripping `DATABASE_URL`, tenant-b isolation expected 0 vs fixture 9999). Keep Inbox OFF, draft-only ON, posting-stop ON. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Persistent AgentBridge signing and connection screen (v2.10.0)
 
 Candidate **2.10.0** on `feat/v210-agentbridge-connect` from origin/master `bcac32a` / v2.9.0. Internal generate-once PKCS8 signing on a named volume so the usual Portainer Re-pull serves JWKS. Connection details live at `/purchase/inbox/connections`. Keep Inbox OFF, draft-only ON, posting-stop ON. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

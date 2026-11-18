@@ -2,8 +2,15 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/bookone-ui';
-import type { PublicConnectionDetails } from '@bookone/agent-bridge';
-import { claudeConnectorSteps, codexSetupCommand } from '@bookone/agent-bridge';
+
+/** Serializable connection copy fields. Keep Node packages off this client module. */
+export type ConnectionSetupDetails = {
+  publicUrl: string;
+  issuer: string;
+  jwksUrl: string;
+  mcpUrl: string;
+  signingReady: boolean;
+};
 
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -49,12 +56,14 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 export function AgentBridgeConnectionSetup({
   details,
   inboxEnabled,
+  codexCommand,
+  claudeConnector,
 }: {
-  details: PublicConnectionDetails;
+  details: ConnectionSetupDetails;
   inboxEnabled: boolean;
+  codexCommand: string;
+  claudeConnector: string;
 }) {
-  const codex = codexSetupCommand(details.mcpUrl);
-  const claude = claudeConnectorSteps(details.mcpUrl).join('\n');
   return (
     <section className="ab-connect" aria-labelledby="ab-connect-title">
       <h2 id="ab-connect-title">Connect a supported AI client</h2>
@@ -90,11 +99,11 @@ export function AgentBridgeConnectionSetup({
             className="input"
             readOnly
             rows={2}
-            value={codex}
+            value={codexCommand}
             data-ab-copy="Codex CLI"
             aria-label="Codex CLI"
           />
-          <CopyButton value={codex} label="Codex CLI" />
+          <CopyButton value={codexCommand} label="Codex CLI" />
         </div>
       </div>
       <div className="ab-connect-row">
@@ -105,11 +114,11 @@ export function AgentBridgeConnectionSetup({
             className="input"
             readOnly
             rows={5}
-            value={claude}
+            value={claudeConnector}
             data-ab-copy="Claude connector"
             aria-label="Claude connector"
           />
-          <CopyButton value={claude} label="Claude connector" />
+          <CopyButton value={claudeConnector} label="Claude connector" />
         </div>
       </div>
     </section>

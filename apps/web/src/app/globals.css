@@ -9830,3 +9830,51 @@ a.bih-card:hover {
 @media (min-width: 3440px) {
   .dash-page { max-width: 1680px; }
 }
+
+.ab-connect {
+  display: grid;
+  gap: 12px;
+}
+.ab-connect h2 {
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--ink);
+}
+.ab-connect-lead,
+.ab-connect-status {
+  font-size: 13px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+.ab-connect-status.is-ready {
+  color: var(--success);
+  font-weight: 650;
+}
+.ab-connect-status.is-blocked {
+  color: var(--warning);
+  font-weight: 650;
+}
+.ab-connect-row {
+  display: grid;
+  gap: 6px;
+}
+.ab-connect-row label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.ab-connect-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.ab-connect-value .input {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+@media (max-width: 720px) {
+  .ab-connect-value {
+    grid-template-columns: 1fr;
+  }
+}

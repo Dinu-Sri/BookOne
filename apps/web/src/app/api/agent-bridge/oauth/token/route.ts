@@ -6,7 +6,8 @@ import {
   mintLocalFixtureToken,
   mintRs256AccessToken,
   oauthKid,
-  oauthSigningPem,
+  oauthIssuer,
+  ensureOauthSigningPem,
   OAUTH_SETUP_CHECKLIST,
   parseRequestedScopes,
   TOKEN_AUDIENCE,
@@ -36,10 +37,8 @@ async function mintTokens(row: {
   const parsed = parseRequestedScopes(row.scopes).filter((s) => s !== 'approve' && s !== 'post') as Capability[];
   const scopes = parsed.length ? parsed : [...DEFAULT_CONNECTION_SCOPES];
   const connectionId = row.connectionId || row.userId;
-  const pem = oauthSigningPem(process.env);
-  const issuer = (process.env.AGENT_BRIDGE_OAUTH_ISSUER || process.env.AGENT_BRIDGE_PUBLIC_URL || process.env.AUTH_URL || '')
-    .trim()
-    .replace(/\/$/, '');
+  const pem = ensureOauthSigningPem(process.env);
+  const issuer = oauthIssuer(process.env);
   let accessToken: string;
   if (pem) {
     if (!issuer) {

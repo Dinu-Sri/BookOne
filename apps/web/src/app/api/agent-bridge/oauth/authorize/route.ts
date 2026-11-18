@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     await requireTenantContext();
   } catch {
     const next = encodeURIComponent(req.url);
-    return NextResponse.redirect(new URL(`/login?next=${next}`, req.url));
+    return NextResponse.redirect(new URL(`/login?from=${next}`, req.url));
   }
   const url = req.nextUrl;
   const clientId = url.searchParams.get('client_id') ?? '';

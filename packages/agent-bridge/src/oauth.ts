@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { CAPABILITIES, DEFAULT_CONNECTION_SCOPES, type Capability } from './contracts';
-import { TOKEN_AUDIENCE } from './authz';
+import { oauthIssuer, TOKEN_AUDIENCE, type OAuthEnv } from './authz';
 
 export const OAUTH_CODE_TTL_MS = 10 * 60 * 1000;
 export const UPLOAD_SESSION_TTL_MS = 30 * 60 * 1000;
@@ -176,6 +176,61 @@ export function authorizationServerMetadata(issuer: string) {
     scopes_supported: [...DEFAULT_CONNECTION_SCOPES],
     resource: TOKEN_AUDIENCE,
   };
+}
+
+export type PublicConnectionDetails = {
+  publicUrl: string;
+  issuer: string;
+  jwksUrl: string;
+  mcpUrl: string;
+  authorizationUrl: string;
+  tokenUrl: string;
+  revocationUrl: string;
+  protectedResourceMetadataUrl: string;
+  authorizationServerMetadataUrl: string;
+  clients: Array<{ clientId: string; clientName: string }>;
+  scopes: Capability[];
+  signingReady: boolean;
+};
+
+export function publicOrigin(env: OAuthEnv = process.env, requestOrigin = ''): string {
+  return oauthIssuer(env) || requestOrigin.replace(/\/$/, '');
+}
+
+/** Public, non-secret values a person copies into Codex or Claude. Never includes a PEM. */
+export function publicConnectionDetails(
+  origin: string,
+  signingReady: boolean,
+): PublicConnectionDetails {
+  const base = origin.replace(/\/$/, '');
+  return {
+    publicUrl: base,
+    issuer: base,
+    jwksUrl: `${base}/api/agent-bridge/oauth/jwks`,
+    mcpUrl: `${base}/api/agent-bridge/mcp`,
+    authorizationUrl: `${base}/api/agent-bridge/oauth/authorize`,
+    tokenUrl: `${base}/api/agent-bridge/oauth/token`,
+    revocationUrl: `${base}/api/agent-bridge/oauth/revoke`,
+    protectedResourceMetadataUrl: `${base}/.well-known/oauth-protected-resource`,
+    authorizationServerMetadataUrl: `${base}/.well-known/oauth-authorization-server`,
+    clients: PUBLIC_MCP_CLIENTS.map((c) => ({ clientId: c.clientId, clientName: c.clientName })),
+    scopes: [...DEFAULT_CONNECTION_SCOPES],
+    signingReady,
+  };
+}
+
+export function codexSetupCommand(mcpUrl: string): string {
+  return `codex mcp add bookone --url ${mcpUrl} --oauth-client-id bookone-codex`;
+}
+
+export function claudeConnectorSteps(mcpUrl: string): string[] {
+  return [
+    'Open Claude → Customize → Connectors → Add custom connector → Web.',
+    `Name: BookOne AgentBridge. URL: ${mcpUrl}`,
+    'Authentication: Sign in when needed. Use your own OAuth client.',
+    'Client ID: bookone-claude. Leave the secret empty.',
+    'Connect, sign in to BookOne, and Allow Claude. Enable the connector in the conversation.',
+  ];
 }
 
 export interface AuthorizationCodeStore {

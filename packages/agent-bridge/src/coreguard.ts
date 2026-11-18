@@ -37,7 +37,7 @@ export const COREGUARD_SUITES = [
   {
     id: 'browser',
     layer: 'browser',
-    command: 'pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts',
+    command: 'pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts',
     required: true,
   },
   {
@@ -55,13 +55,13 @@ export const COREGUARD_SUITES = [
   {
     id: 'independent-acceptance',
     layer: 'acceptance',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/oauth-jwks.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/oauth-jwks.test.ts test/oauth-connect-workflow.test.ts',
     required: true,
   },
   {
     id: 'full-workflow',
     layer: 'application-service',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/service.test.ts test/schemas.test.ts test/oauth-pkce.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/service.test.ts test/schemas.test.ts test/oauth-pkce.test.ts test/oauth-connect-workflow.test.ts',
     required: true,
   },
   {

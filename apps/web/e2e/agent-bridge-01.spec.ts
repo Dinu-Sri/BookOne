@@ -54,7 +54,10 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
 
 test('disabled inbox still redirects to the purchase list in source', () => {
   const inbox = readFileSync(path.join(root, 'apps/web/src/app/purchase/inbox/page.tsx'), 'utf8');
+  const connections = readFileSync(path.join(root, 'apps/web/src/app/purchase/inbox/connections/page.tsx'), 'utf8');
   expect(inbox).toMatch(/if \(!flags.enabled\) redirect\('\/purchase\/purchases'\)/);
+  expect(connections).not.toMatch(/if \(!flags.enabled\) redirect/);
+  expect(connections).toMatch(/AgentBridgeConnectionSetup/);
 });
 
 test('browser exercises upload, questions, human approval and one posting against the live service', async ({

@@ -1,13 +1,15 @@
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createSign, generateKeyPairSync } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  ensureOauthSigningPem,
   jwksFromSigningPem,
   mintLocalFixtureToken,
   mintRs256AccessToken,
+  oauthIssuer,
   oauthSigningPem,
   resolveActorFromAuthorization,
   TOKEN_AUDIENCE,
@@ -189,6 +191,60 @@ describe('OAuth signing PEM file and public JWKS', () => {
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }
+  });
+});
+
+describe('persistent internal OAuth signing', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ab-signing-gen-'));
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('generates PKCS8 once into a missing FILE path and reuses the same key', () => {
+    const pemPath = path.join(dir, 'generated.pem');
+    const first = ensureOauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: pemPath });
+    const second = ensureOauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: pemPath });
+    expect(first).toMatch(/BEGIN PRIVATE KEY/);
+    expect(second).toBe(first);
+    expect(readFileSync(pemPath, 'utf8').trim()).toBe(first);
+    expect(oauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: pemPath })).toBe(first);
+  });
+
+  it('does not fall back to env PEM when FILE is set and unreadable', () => {
+    const envPem = generateKeyPairSync('rsa', { modulusLength: 2048 })
+      .privateKey.export({ type: 'pkcs8', format: 'pem' })
+      .toString();
+    const missing = path.join(dir, 'no-such-dir', 'cannot-write', 'key.pem');
+    const loaded = oauthSigningPem({
+      AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: missing,
+      AGENT_BRIDGE_OAUTH_SIGNING_PEM: envPem,
+    });
+    expect(loaded).toBeUndefined();
+  });
+
+  it('writes into a directory when the FILE path was created as a folder', () => {
+    const folder = path.join(dir, 'legacy-bind-dir');
+    mkdirSync(folder, { recursive: true });
+    const pem = ensureOauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: folder });
+    expect(pem).toMatch(/BEGIN PRIVATE KEY/);
+    expect(readFileSync(path.join(folder, 'agent_bridge_oauth_signing.pem'), 'utf8').trim()).toBe(pem);
+  });
+
+  it('keeps env PEM when FILE is unset and does not generate in non-production', () => {
+    const envPem = generateKeyPairSync('rsa', { modulusLength: 2048 })
+      .privateKey.export({ type: 'pkcs8', format: 'pem' })
+      .toString()
+      .trim();
+    expect(ensureOauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM: envPem, NODE_ENV: 'test' })).toBe(envPem);
+    expect(ensureOauthSigningPem({ NODE_ENV: 'test' })).toBeUndefined();
+  });
+
+  it('defaults issuer from PUBLIC_URL or AUTH_URL', () => {
+    expect(oauthIssuer({ AGENT_BRIDGE_OAUTH_ISSUER: 'https://as.example/' })).toBe('https://as.example');
+    expect(oauthIssuer({ AGENT_BRIDGE_PUBLIC_URL: 'https://bookone.clossyan.com' })).toBe(
+      'https://bookone.clossyan.com',
+    );
+    expect(oauthIssuer({ AUTH_URL: 'https://bookone.clossyan.com/' })).toBe('https://bookone.clossyan.com');
   });
 });
 

@@ -4,10 +4,11 @@ import {
   createPublicKey,
   createSign,
   createVerify,
+  generateKeyPairSync,
   randomBytes,
   timingSafeEqual,
 } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { CAPABILITIES, type Actor, type Capability } from './contracts';
 
@@ -209,14 +210,29 @@ export type OAuthEnv = {
   AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE?: string;
   AGENT_BRIDGE_OAUTH_KID?: string;
   AGENT_BRIDGE_ALLOW_HMAC?: string;
+  AGENT_BRIDGE_PUBLIC_URL?: string;
+  AUTH_URL?: string;
+  BETTER_AUTH_URL?: string;
   NODE_ENV?: string;
   [key: string]: string | undefined;
 };
 
+export const DEFAULT_OAUTH_SIGNING_PEM_FILE = '/var/lib/bookone/secrets/agent_bridge_oauth_signing.pem';
+
 export const OAUTH_SETUP_CHECKLIST =
-  'Set AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE to an absolute PKCS8 RSA private-key path (recommended) or AGENT_BRIDGE_OAUTH_SIGNING_PEM to the PEM body, and AGENT_BRIDGE_OAUTH_ISSUER to this host origin (same as AGENT_BRIDGE_PUBLIC_URL). JWKS is derived at /api/agent-bridge/oauth/jwks and /.well-known/jwks.json. Pre-register only bookone-codex and bookone-claude. Do not set AGENT_BRIDGE_ALLOW_HMAC=1 on staging as a substitute for RS256.';
+  'OAuth signing could not be loaded or created. Set AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE to a writable absolute PKCS8 path (BookOne generates a key there once and reuses it) or AGENT_BRIDGE_OAUTH_SIGNING_PEM to a PEM body, and AGENT_BRIDGE_OAUTH_ISSUER (or AGENT_BRIDGE_PUBLIC_URL / AUTH_URL) to this host origin. JWKS is derived at /api/agent-bridge/oauth/jwks and /.well-known/jwks.json. Pre-register only bookone-codex and bookone-claude. Do not set AGENT_BRIDGE_ALLOW_HMAC=1 on staging as a substitute for RS256.';
 
 const PRIVATE_KEY_PEM = /-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]+-----END (?:RSA )?PRIVATE KEY-----/;
+
+export function oauthIssuer(env: OAuthEnv = process.env): string {
+  const raw =
+    env.AGENT_BRIDGE_OAUTH_ISSUER?.trim() ||
+    env.AGENT_BRIDGE_PUBLIC_URL?.trim() ||
+    env.AUTH_URL?.trim() ||
+    env.BETTER_AUTH_URL?.trim() ||
+    '';
+  return raw.replace(/\/$/, '');
+}
 
 export function readSigningPemFile(filePath: string): string {
   if (!path.isAbsolute(filePath)) {
@@ -245,6 +261,81 @@ export function oauthSigningPem(
     }
   }
   return privateKeyPemBody(env.AGENT_BRIDGE_OAUTH_SIGNING_PEM);
+}
+
+export function generatePkcs8RsaPem(): string {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  return privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+}
+
+function persistFilePath(filePath: string): string {
+  try {
+    if (statSync(filePath).isDirectory()) {
+      return path.join(filePath, 'agent_bridge_oauth_signing.pem');
+    }
+  } catch {
+    // Missing path is created as a file.
+  }
+  return filePath;
+}
+
+function tryReadPem(filePath: string, readFile: (filePath: string) => string): string | undefined {
+  try {
+    return privateKeyPemBody(readFile(filePath));
+  } catch {
+    return undefined;
+  }
+}
+
+function writeExclusivePem(filePath: string, pem: string): void {
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, pem, { encoding: 'utf8', flag: 'wx' });
+  try {
+    chmodSync(filePath, 0o400);
+  } catch {
+    // Windows may refuse unix file modes. The exclusive create already happened.
+  }
+}
+
+function persistGeneratedPem(filePath: string, readFile: (filePath: string) => string): string | undefined {
+  const pem = generatePkcs8RsaPem();
+  try {
+    writeExclusivePem(filePath, pem);
+    return privateKeyPemBody(pem);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') return tryReadPem(filePath, readFile);
+    return undefined;
+  }
+}
+
+/**
+ * Load the signing PEM, generating a PKCS8 RSA key once into a durable file when missing.
+ * FILE wins. A missing FILE path does not fall back to the env PEM body.
+ * Never logs the key body.
+ */
+export function ensureOauthSigningPem(
+  env: OAuthEnv = process.env,
+  readFile: (filePath: string) => string = readSigningPemFile,
+): string | undefined {
+  const filePath = env.AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE?.trim();
+  if (filePath) {
+    if (!path.isAbsolute(filePath)) return undefined;
+    const existing = tryReadPem(filePath, readFile);
+    if (existing) return existing;
+    const target = persistFilePath(filePath);
+    if (target !== filePath) {
+      const nested = tryReadPem(target, readFile);
+      if (nested) return nested;
+    }
+    return persistGeneratedPem(target, readFile);
+  }
+  const envPem = privateKeyPemBody(env.AGENT_BRIDGE_OAUTH_SIGNING_PEM);
+  if (envPem) return envPem;
+  if (env.NODE_ENV === 'production') {
+    return persistGeneratedPem(DEFAULT_OAUTH_SIGNING_PEM_FILE, readFile);
+  }
+  return undefined;
 }
 
 export function oauthKid(env: OAuthEnv = process.env): string {
@@ -304,7 +395,7 @@ export async function verifyOAuthAccessToken(
   if (isLocalFixtureToken(token)) {
     throw tokenError('Local HMAC fixture is not production OAuth.');
   }
-  const issuer = env.AGENT_BRIDGE_OAUTH_ISSUER?.trim();
+  const issuer = oauthIssuer(env);
   if (!issuer) throw tokenError('OAuth issuer is not configured.', 'PROVIDER_UNCONFIGURED');
   const audience = env.AGENT_BRIDGE_OAUTH_AUDIENCE?.trim() || TOKEN_AUDIENCE;
   const parts = token.split('.');

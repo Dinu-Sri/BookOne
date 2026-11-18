@@ -71,16 +71,17 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - NODE_ENV=production
-      # AgentBridge BookOne-as-AS. Set the three non-secret values in the Portainer stack env.
-      # Create the host PEM as a regular file BEFORE stack update (a missing bind path
-      # becomes a directory). web runs as UID 1001. Leave AGENT_BRIDGE_ALLOW_HMAC unset.
-      - AGENT_BRIDGE_PUBLIC_URL=${AGENT_BRIDGE_PUBLIC_URL:-}
-      - AGENT_BRIDGE_OAUTH_ISSUER=${AGENT_BRIDGE_OAUTH_ISSUER:-}
-      - AGENT_BRIDGE_OAUTH_KID=${AGENT_BRIDGE_OAUTH_KID:-}
+      # AgentBridge BookOne-as-AS. Usual Portainer Re-pull is enough: the web process
+      # generates a PKCS8 RSA key once into the named volume and reuses it.
+      # Optional stack overrides: PUBLIC_URL, ISSUER, KID. Leave AGENT_BRIDGE_ALLOW_HMAC unset.
+      # Do not bind-mount a missing host file (Docker would create a directory).
+      - AGENT_BRIDGE_PUBLIC_URL=${AGENT_BRIDGE_PUBLIC_URL:-https://bookone.clossyan.com}
+      - AGENT_BRIDGE_OAUTH_ISSUER=${AGENT_BRIDGE_OAUTH_ISSUER:-https://bookone.clossyan.com}
+      - AGENT_BRIDGE_OAUTH_KID=${AGENT_BRIDGE_OAUTH_KID:-bookone-staging-agentbridge-01}
       - AGENT_BRIDGE_OAUTH_SIGNING_PEM=${AGENT_BRIDGE_OAUTH_SIGNING_PEM:-}
-      - AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE=${AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE:-/run/secrets/agent_bridge_oauth_signing.pem}
+      - AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE=${AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE:-/var/lib/bookone/secrets/agent_bridge_oauth_signing.pem}
     volumes:
-      - ${AGENT_BRIDGE_OAUTH_SIGNING_PEM_HOST:-/opt/bookone/secrets/agent_bridge_oauth_signing.pem}:/run/secrets/agent_bridge_oauth_signing.pem:ro
+      - agent_bridge_signing:/var/lib/bookone/secrets
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone-web.rule=Host(`${WEB_HOST:-bookone.clossyan.com}`)"
@@ -177,6 +178,7 @@ volumes:
   redis_data:
   minio_data:
   letsencrypt_data:
+  agent_bridge_signing:
 
 networks:
   bookone_network:

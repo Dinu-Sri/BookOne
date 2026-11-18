@@ -7,30 +7,38 @@ import { Button } from '@/components/ui/bookone-ui';
 import { loadAgentBridgeFlags, listAgentBridgeConnections } from '@/lib/agent-bridge-runtime';
 import { revokeAgentConnection } from '@/app/actions/agent-bridge';
 import { jobCanWrite } from '@/lib/access';
+import { AgentBridgeConnectionSetup } from '@/components/agent-bridge/connection-setup';
+import {
+  ensureOauthSigningPem,
+  publicConnectionDetails,
+  publicOrigin,
+} from '@bookone/agent-bridge';
 
 export default async function AgentBridgeConnectionsPage() {
   let tenant;
   try {
     tenant = await getTenantInfo();
   } catch {
-    redirect('/login');
+    redirect('/login?from=/purchase/inbox/connections');
   }
   const flags = await loadAgentBridgeFlags(tenant.id);
-  if (!flags.enabled) redirect('/purchase/purchases');
   const user = await requireTenantContext();
-  const connections = await listAgentBridgeConnections(tenant.id, user.id);
+  const connections = flags.enabled ? await listAgentBridgeConnections(tenant.id, user.id) : [];
   const canWrite = jobCanWrite(tenant, 'Document Inbox');
+  const signingReady = Boolean(ensureOauthSigningPem(process.env));
+  const origin = publicOrigin(process.env);
+  const details = publicConnectionDetails(origin || 'https://bookone.clossyan.com', signingReady);
 
   return (
     <BookOneShell active="Document Inbox" tenant={tenant}>
       <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
         <div className="party-form-shell" style={{ maxHeight: 'none' }}>
           <div className="party-form-top">
-            <Link href="/purchase/inbox" className="party-back-btn">
+            <Link href={flags.enabled ? '/purchase/inbox' : '/company/purchase'} className="party-back-btn">
               <span className="party-back-arrow">←</span>
               <span>
                 <strong>Back</strong>
-                <small>Inbox</small>
+                <small>{flags.enabled ? 'Inbox' : 'Purchase settings'}</small>
               </span>
             </Link>
             <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
@@ -38,6 +46,7 @@ export default async function AgentBridgeConnectionsPage() {
             </span>
           </div>
           <div className="party-form-body" style={{ display: 'grid', gap: 12 }}>
+            <AgentBridgeConnectionSetup details={details} inboxEnabled={flags.enabled} />
             <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
               New connections start with read, upload and draft. Posting still needs an explicit grant and a human
               approval in BookOne. Connected agents cannot mint approvals.
@@ -55,7 +64,10 @@ export default async function AgentBridgeConnectionsPage() {
               <tbody>
                 {connections.length === 0 ? (
                   <tr>
-                    <td colSpan={5}>No connections yet. Use the Codex or Claude setup guide to connect.</td>
+                    <td colSpan={5}>
+                      No connections yet. Copy the Codex or Claude details above, then allow the client when BookOne
+                      asks.
+                    </td>
                   </tr>
                 ) : (
                   connections.map((c) => (

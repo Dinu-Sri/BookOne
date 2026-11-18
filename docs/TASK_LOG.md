@@ -1,3 +1,10 @@
+## 2026-11-18 — Persistent AgentBridge signing and connection screen (v2.10.0)
+
+- Record: [CHG-20261118-agentbridge-connect](changes/CHG-20261118-agentbridge-connect.md). Operator runbook [AGENT_BRIDGE_SIGNING_STAGING.md](AGENT_BRIDGE_SIGNING_STAGING.md). Baseline product `bcac32a` / v2.9.0. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve dashboard DB-01. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks.
+- Change: BookOne generates a PKCS8 RSA signing key once into a named Docker volume so the usual Portainer Re-pull serves a nonempty JWKS. `/purchase/inbox/connections` shows public Codex/Claude copy fields. Authorize login uses `/login?from=`. Consent stays read/upload/draft. VERSION 2.10.0.
+- Checks: `@bookone/agent-bridge` 20 files / 88 passed (includes persistent signing 5 and connect workflow 4). `@bookone/auth` signing-compose + dashboard-db01-gate + permissions + local-sinhala-font 13 passed. Playwright `e2e/agent-bridge-connect.spec.ts` + `e2e/agent-bridge-01.spec.ts` 7 passed / 1 skipped (`AGENT_BRIDGE_E2E_BASE_URL` unset). AgentBridge `tsc --noEmit` passed.
+- Next: Reviewable PR, then fast-forward origin/master per owner overlay. Owner Portainer Re-pull ON after Docker web image green. Independent staging QA pending. AgentBridge client qualification pending. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Business overview dashboard DB-01 (v2.9.0)
 
 - Record: [CHG-20261118-dashboard-db01](changes/CHG-20261118-dashboard-db01.md). Metric dictionary [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md). Baseline product `9a719dc` / v2.8.3. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AgentBridge signing PEM_FILE and Compose forwarding. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks.

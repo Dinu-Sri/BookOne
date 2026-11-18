@@ -38,7 +38,7 @@ function LoginContent() {
   const [error, setError] = useState('');
 
   const callbackURL = useMemo(() => {
-    const from = searchParams.get('from');
+    const from = searchParams.get('from') || searchParams.get('next');
     if (searchParams.get('invite') === '1') return from || '/invite/complete';
     return from || '/';
   }, [searchParams]);

@@ -154,6 +154,10 @@ export default async function CompanyPurchaseSettingsPage() {
                   <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
                     Off by default. Draft-only and posting-disable stay on until you turn them off. No autonomous posting.
                   </p>
+                  <p style={{ fontSize: 12, marginTop: 8 }}>
+                    <Link href="/purchase/inbox/connections">Connect Codex or Claude</Link>
+                    {' — copy the public MCP and client details from BookOne.'}
+                  </p>
                 </div>
                 <div className="field field-full">
                   <label className="party-check">

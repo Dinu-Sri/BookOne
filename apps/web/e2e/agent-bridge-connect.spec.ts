@@ -20,6 +20,8 @@ test('connections page shows public client details and stays reachable when Inbo
     'utf8',
   );
   const jwks = readFileSync(path.join(root, 'apps/web/src/app/api/agent-bridge/oauth/jwks/route.ts'), 'utf8');
+  const middleware = readFileSync(path.join(root, 'apps/web/src/middleware.ts'), 'utf8');
+  const authorizeAlias = readFileSync(path.join(root, 'apps/web/src/app/authorize/route.ts'), 'utf8');
   expect(connections).not.toMatch(/if \(!flags.enabled\) redirect/);
   expect(connections).toMatch(/AgentBridgeConnectionSetup/);
   expect(connections).toMatch(/ensureOauthSigningPem/);
@@ -31,6 +33,9 @@ test('connections page shows public client details and stays reachable when Inbo
   expect(purchase).toMatch(/\/purchase\/inbox\/connections/);
   expect(authorize).toMatch(/\/login\?from=/);
   expect(jwks).toMatch(/ensureOauthSigningPem/);
+  expect(middleware).toMatch(/pathname === '\/authorize'/);
+  expect(middleware).toMatch(/\/api\/agent-bridge\//);
+  expect(authorizeAlias).toMatch(/api\/agent-bridge\/oauth\/authorize/);
 });
 
 test('connection screen shows Codex and Claude copy fields without secrets', async ({ page }) => {

@@ -1,3 +1,10 @@
+## 2026-11-18 — Codex MCP login discovery (v2.10.2)
+
+- Record: [CHG-20261118-agentbridge-07-codex-login](changes/CHG-20261118-agentbridge-07-codex-login.md). Baseline product `a12c182` / v2.10.1. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AgentBridge generate-once signing and connection screen. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks. Do not recreate the saved Codex `bookone` MCP entry.
+- Repair: middleware no longer 307s OAuth/MCP discovery to `/login`. Public PRM/AS metadata, MCP 401 `WWW-Authenticate`, issuer `/authorize` alias, loopback `/callback/<id>`, RFC 9207 `iss`. VERSION 2.10.2. CoreGuard `ab-07`.
+- Checks: `@bookone/agent-bridge` 21 files / 94 passed (includes oauth-codex-login 6, oauth-pkce 5, connect workflow 4, coreguard 2). AgentBridge `tsc --noEmit` passed. Playwright `e2e/agent-bridge-connect.spec.ts` 3 passed. `pnpm --filter @bookone/web build` compiled successfully (Next.js 15.5.19, 141 routes including `/authorize` and path-appended well-known metadata).
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent `codex mcp login bookone` retry pending. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Unblock GitHub Actions web build and DB-01 postgres (v2.10.1)
 
 - Record: [CHG-20261118-ci-web-build](changes/CHG-20261118-ci-web-build.md). Baseline product `f3a3b8d` / v2.10.0. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AgentBridge generate-once signing and connection screen. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks.

@@ -4,7 +4,7 @@ Unpaid domestic local-currency supplier **service/expense** invoices: connect an
 
 Feature flags default **off**. Draft-only and posting-disable default **on**. Keep posting disabled until independent QA accepts this candidate and the owner deploys. Existing purchase screens stay usable when AgentBridge is off.
 
-Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.10.0**.
+Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.10.2**.
 
 ## Supported in this build
 
@@ -19,7 +19,7 @@ Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Produ
 - Batch manifest: one item per file, per-item status, no implicit batch approval.
 - Lookups: approved suppliers, expense accounts, own proposals. Ambiguous matches become issues; new suppliers/accounts are not created.
 - Strict MCP/API schemas (`additionalProperties: false`). MCP protocol negotiate `2025-03-26` and `2024-11-05`; incompatible versions are rejected.
-- OAuth discovery: `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`, `/.well-known/jwks.json`. Authorization code + PKCE S256 + refresh_token for public clients `bookone-codex` and `bookone-claude`. Consent always grants `read upload draft` (never post). Tenant is encoded in the authorization code. MCP 401 includes `WWW-Authenticate` with `resource_metadata`.
+- OAuth discovery is public (no session 307). `/.well-known/oauth-protected-resource`, path-appended `/.well-known/oauth-protected-resource/api/agent-bridge/mcp`, `/.well-known/oauth-authorization-server`, `/.well-known/jwks.json`. MCP unauthenticated initialize returns 401 with `WWW-Authenticate` `resource_metadata`. Authorization code + PKCE S256 + refresh_token for public clients `bookone-codex` and `bookone-claude`. Consent always grants `read upload draft` (never post). Tenant is encoded in the authorization code. Authorization responses include RFC 9207 `iss`. Issuer `/authorize` aliases `/api/agent-bridge/oauth/authorize`. Loopback callbacks allow `/callback` and `/callback/<id>` on 127.0.0.1/localhost.
 - Effective scopes are token scopes INTERSECT current grants for the token subject. Human approval stays session-only.
 - Additive migration `046_agent_bridge_facts.sql` (last error/intake mode, upload sessions, batches, facts keys, oauth codes, connection scopes/last used).
 - AB-02/AB-03/AB-04 gates retained: fail-closed approval, unique claim, token∩live grants, lost-response reconcile, blob storage-pointer remap, explicit `agent_bridge.approve` / `agent_bridge.post` keys.
@@ -74,7 +74,7 @@ Failed documents can resume through the same facts form. Download the original f
 - Codex CLI / ChatGPT desktop / IDE: [AGENT_BRIDGE_CODEX.md](AGENT_BRIDGE_CODEX.md)
 - Claude web / Desktop custom connector: [AGENT_BRIDGE_CLAUDE.md](AGENT_BRIDGE_CLAUDE.md)
 
-Public client IDs: `bookone-codex`, `bookone-claude`. Default scopes `read upload draft`. Loopback callbacks `http://127.0.0.1/callback` and `http://localhost/callback` (any port). Claude hosted callback `https://claude.ai/api/mcp/auth_callback`. Dynamic client registration is not implemented; pass the pre-registered client id.
+Public client IDs: `bookone-codex`, `bookone-claude`. Default scopes `read upload draft`. Loopback callbacks `http://127.0.0.1/callback` and `http://localhost/callback` (any port, optional `/callback/<id>` path used by Codex CLI). Claude hosted callback `https://claude.ai/api/mcp/auth_callback`. Dynamic client registration is not implemented; pass the pre-registered client id.
 
 ## BLOCKED until the owner configures them
 

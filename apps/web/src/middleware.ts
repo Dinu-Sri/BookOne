@@ -28,6 +28,11 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === '/api/search') return true;
   if (pathname === '/ops/logs' || pathname.startsWith('/ops/logs')) return true;
   if (pathname === '/api/ops' || pathname.startsWith('/api/ops/')) return true;
+  // OAuth/MCP discovery must stay reachable without a session. A 307 to /login
+  // makes Codex fall back to {issuer}/authorize and never see metadata.
+  if (pathname === '/authorize') return true;
+  if (pathname === '/.well-known' || pathname.startsWith('/.well-known/')) return true;
+  if (pathname === '/api/agent-bridge' || pathname.startsWith('/api/agent-bridge/')) return true;
   return false;
 }
 

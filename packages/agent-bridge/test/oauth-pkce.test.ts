@@ -36,8 +36,11 @@ describe('OAuth PKCE and discovery', () => {
     const as = authorizationServerMetadata('https://bookone.example');
     expect(as.code_challenge_methods_supported).toEqual(['S256']);
     expect(as.authorization_endpoint).toMatch(/\/api\/agent-bridge\/oauth\/authorize$/);
+    expect(as.authorization_response_iss_parameter_supported).toBe(true);
+    expect(as.resource).toBe('https://bookone.example/api/agent-bridge/mcp');
+    expect(resource.resource).toBe('https://bookone.example/api/agent-bridge/mcp');
     expect(wwwAuthenticateChallenge('https://bookone.example')).toContain(
-      'resource_metadata="https://bookone.example/.well-known/oauth-protected-resource"',
+      'resource_metadata="https://bookone.example/.well-known/oauth-protected-resource/api/agent-bridge/mcp"',
     );
   });
 
@@ -45,7 +48,11 @@ describe('OAuth PKCE and discovery', () => {
     const codex = findPublicClient('bookone-codex');
     expect(codex).toBeTruthy();
     expect(redirectUriAllowed(codex!, 'http://127.0.0.1:1455/callback')).toBe(true);
+    expect(redirectUriAllowed(codex!, 'http://127.0.0.1/callback/989kWVAG9tcl')).toBe(true);
+    expect(redirectUriAllowed(codex!, 'http://127.0.0.1:9898/callback/abc_1')).toBe(true);
     expect(redirectUriAllowed(codex!, 'https://evil.example/callback')).toBe(false);
+    expect(redirectUriAllowed(codex!, 'http://127.0.0.1/evil')).toBe(false);
+    expect(redirectUriAllowed(codex!, 'http://127.0.0.1/callback/../secret')).toBe(false);
   });
 
   it('refuses HMAC fixtures in production unless explicitly labelled', async () => {

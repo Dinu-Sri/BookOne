@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   DEFAULT_CONNECTION_SCOPES,
+  authorizationCallbackUrl,
   consentConnectionScopes,
   encodeTenantBoundCode,
   findPublicClient,
   newId,
+  oauthIssuer,
+  publicOrigin,
   redirectUriAllowed,
+  resourceAllowed,
 } from '@bookone/agent-bridge';
 import { requireTenantContext } from '@bookone/auth';
 import { recordAgentBridgeConnection, saveOauthCode } from '@/lib/agent-bridge-runtime';
@@ -29,14 +33,18 @@ function html(body: string, status = 200) {
   );
 }
 
+function originFrom(req: NextRequest): string {
+  return publicOrigin(process.env, req.nextUrl.origin);
+}
+
 export async function GET(req: NextRequest) {
+  const url = req.nextUrl;
   try {
     await requireTenantContext();
   } catch {
-    const next = encodeURIComponent(req.url);
+    const next = encodeURIComponent(`${url.pathname}${url.search}`);
     return NextResponse.redirect(new URL(`/login?from=${next}`, req.url));
   }
-  const url = req.nextUrl;
   const clientId = url.searchParams.get('client_id') ?? '';
   const redirectUri = url.searchParams.get('redirect_uri') ?? '';
   const state = url.searchParams.get('state') ?? '';
@@ -46,6 +54,7 @@ export async function GET(req: NextRequest) {
   const client = findPublicClient(clientId);
   if (!client) return html('<p>Unknown client. Use bookone-codex or bookone-claude.</p>', 400);
   if (!redirectUriAllowed(client, redirectUri)) return html('<p>redirect_uri is not allowed for this client.</p>', 400);
+  if (!resourceAllowed(originFrom(req), resource)) return html('<p>resource is not allowed for this client.</p>', 400);
   if (method !== 'S256' || challenge.length < 43) return html('<p>PKCE S256 code_challenge is required.</p>', 400);
   return html(`
     <h1>Connect ${client.clientName} to BookOne</h1>
@@ -78,8 +87,14 @@ export async function POST(req: NextRequest) {
   const state = String(form.get('state') ?? '');
   const challenge = String(form.get('code_challenge') ?? '');
   const method = String(form.get('code_challenge_method') ?? 'S256');
+  const resource = String(form.get('resource') ?? '');
   const client = findPublicClient(clientId);
-  if (!client || !redirectUriAllowed(client, redirectUri) || method !== 'S256') {
+  if (
+    !client ||
+    !redirectUriAllowed(client, redirectUri) ||
+    !resourceAllowed(originFrom(req), resource) ||
+    method !== 'S256'
+  ) {
     return html('<p>Consent request is invalid.</p>', 400);
   }
   const scopes = consentConnectionScopes();
@@ -106,8 +121,8 @@ export async function POST(req: NextRequest) {
     connectionId,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   });
-  const next = new URL(redirectUri);
-  next.searchParams.set('code', code);
-  if (state) next.searchParams.set('state', state);
-  return NextResponse.redirect(next);
+  const issuer = oauthIssuer(process.env) || originFrom(req);
+  return NextResponse.redirect(
+    authorizationCallbackUrl(redirectUri, { code, state, issuer }),
+  );
 }

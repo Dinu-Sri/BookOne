@@ -118,18 +118,114 @@ export function parseRequestedScopes(raw: string | undefined): Capability[] {
   return [...out];
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]' || hostname === '::1';
+}
+
+/** Codex CLI uses /callback or /callback/<ephemeral-id> on a loopback port. */
+export function isLoopbackCallbackPath(pathname: string): boolean {
+  if (pathname === '/callback') return true;
+  return /^\/callback\/[A-Za-z0-9_-]{1,128}$/.test(pathname);
+}
+
 export function redirectUriAllowed(client: OAuthClientRegistration, uri: string): boolean {
   if (client.redirectUris.includes(uri)) return true;
   try {
     const parsed = new URL(uri);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-    if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
-      return parsed.pathname === '/callback' || parsed.pathname.endsWith('/callback');
-    }
+    if (parsed.username || parsed.password) return false;
+    if (!isLoopbackHostname(parsed.hostname)) return false;
+    return isLoopbackCallbackPath(parsed.pathname);
   } catch {
     return false;
   }
-  return false;
+}
+
+export function mcpResourceUrl(origin: string): string {
+  return `${origin.replace(/\/$/, '')}/api/agent-bridge/mcp`;
+}
+
+export function protectedResourceMetadataPath(origin: string): string {
+  return `${origin.replace(/\/$/, '')}/.well-known/oauth-protected-resource/api/agent-bridge/mcp`;
+}
+
+export function resourceAllowed(origin: string, resource: string): boolean {
+  if (!resource.trim()) return true;
+  const base = origin.replace(/\/$/, '');
+  return resource === mcpResourceUrl(base) || resource === base || resource === TOKEN_AUDIENCE;
+}
+
+export function authorizationCallbackUrl(
+  redirectUri: string,
+  args: { code: string; state?: string; issuer: string },
+): string {
+  const next = new URL(redirectUri);
+  next.searchParams.set('code', args.code);
+  if (args.state) next.searchParams.set('state', args.state);
+  next.searchParams.set('iss', args.issuer.replace(/\/$/, ''));
+  return next.toString();
+}
+
+export function parseWwwAuthenticateResourceMetadata(header: string): string | null {
+  const match = header.match(/resource_metadata="([^"]+)"/i);
+  return match?.[1] ?? null;
+}
+
+/** Codex-style MCP OAuth discovery: 401 WWW-Authenticate → PRM → AS metadata. */
+export async function followMcpOauthDiscovery(
+  mcpUrl: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{
+  mcpStatus: number;
+  wwwAuthenticate: string | null;
+  resourceMetadataUrl: string;
+  issuer: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+}> {
+  const mcp = await fetchImpl(mcpUrl, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'bookone-discovery', version: '0' },
+      },
+    }),
+    redirect: 'manual',
+  });
+  if (mcp.status !== 401) {
+    throw new Error(`MCP discovery expected 401, got ${mcp.status}`);
+  }
+  const wwwAuthenticate = mcp.headers.get('www-authenticate');
+  const resourceMetadataUrl = wwwAuthenticate ? parseWwwAuthenticateResourceMetadata(wwwAuthenticate) : null;
+  if (!resourceMetadataUrl) throw new Error('WWW-Authenticate resource_metadata is missing');
+  const prmRes = await fetchImpl(resourceMetadataUrl, { redirect: 'manual' });
+  if (!prmRes.ok) throw new Error(`Protected resource metadata HTTP ${prmRes.status}`);
+  const prm = (await prmRes.json()) as { authorization_servers?: string[]; resource?: string };
+  const issuer = prm.authorization_servers?.[0];
+  if (!issuer) throw new Error('authorization_servers is missing');
+  const asUrl = `${issuer.replace(/\/$/, '')}/.well-known/oauth-authorization-server`;
+  const asRes = await fetchImpl(asUrl, { redirect: 'manual' });
+  if (!asRes.ok) throw new Error(`Authorization server metadata HTTP ${asRes.status}`);
+  const as = (await asRes.json()) as { authorization_endpoint?: string; token_endpoint?: string; issuer?: string };
+  if (!as.authorization_endpoint) throw new Error('authorization_endpoint is missing');
+  if (!as.token_endpoint) throw new Error('token_endpoint is missing');
+  return {
+    mcpStatus: mcp.status,
+    wwwAuthenticate,
+    resourceMetadataUrl,
+    issuer,
+    authorizationEndpoint: as.authorization_endpoint,
+    tokenEndpoint: as.token_endpoint,
+  };
 }
 
 export function findPublicClient(clientId: string): OAuthClientRegistration | undefined {
@@ -138,14 +234,15 @@ export function findPublicClient(clientId: string): OAuthClientRegistration | un
 
 export function protectedResourceMetadata(resource: string, authorizationServers: string[]) {
   const base = resource.replace(/\/$/, '');
+  const mcp = /^https?:\/\//i.test(base) ? mcpResourceUrl(base) : undefined;
   const docs = /^https?:\/\//i.test(base) ? `${base}/docs/AGENT_BRIDGE.md` : undefined;
   return {
-    resource: base,
+    resource: mcp ?? base,
     authorization_servers: authorizationServers,
     bearer_methods_supported: ['header'],
     scopes_supported: [...DEFAULT_CONNECTION_SCOPES, 'post'],
     resource_documentation: docs,
-    mcp_endpoint: /^https?:\/\//i.test(base) ? `${base}/api/agent-bridge/mcp` : undefined,
+    mcp_endpoint: mcp,
   };
 }
 
@@ -153,7 +250,7 @@ export function protectedResourceMetadata(resource: string, authorizationServers
 export function wwwAuthenticateChallenge(origin: string, extra?: { error?: string; description?: string }): string {
   const base = origin.replace(/\/$/, '');
   const parts = [
-    `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+    `Bearer resource_metadata="${protectedResourceMetadataPath(base)}"`,
     `scope="${DEFAULT_CONNECTION_SCOPES.join(' ')}"`,
   ];
   if (extra?.error) parts.push(`error="${extra.error}"`);
@@ -174,7 +271,8 @@ export function authorizationServerMetadata(issuer: string) {
     code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['none'],
     scopes_supported: [...DEFAULT_CONNECTION_SCOPES],
-    resource: TOKEN_AUDIENCE,
+    authorization_response_iss_parameter_supported: true,
+    resource: mcpResourceUrl(base),
   };
 }
 

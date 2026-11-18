@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, text, integer, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, text, integer, jsonb, primaryKey } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { users } from './users';
 
@@ -147,14 +147,20 @@ export const agentBridgeBatches = pgTable('agent_bridge_batches', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const agentBridgeFactsKeys = pgTable('agent_bridge_facts_keys', {
-  tenantId: uuid('tenant_id')
-    .notNull()
-    .references(() => tenants.id),
-  key: varchar('key', { length: 120 }).notNull(),
-  payloadHash: varchar('payload_hash', { length: 64 }).notNull(),
-  documentId: uuid('document_id').notNull(),
-});
+export const agentBridgeFactsKeys = pgTable(
+  'agent_bridge_facts_keys',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    key: varchar('key', { length: 120 }).notNull(),
+    payloadHash: varchar('payload_hash', { length: 64 }).notNull(),
+    documentId: uuid('document_id').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.tenantId, t.key] }),
+  }),
+);
 
 export const agentBridgeOauthCodes = pgTable('agent_bridge_oauth_codes', {
   code: varchar('code', { length: 120 }).primaryKey(),

@@ -11,7 +11,7 @@ import {
   loadAgentBridgeFlags,
   saveAgentBridgeFlags,
 } from '@/lib/agent-bridge-runtime';
-import { mintLocalFixtureToken, parseScopes } from '@bookone/agent-bridge';
+import { mintLocalFixtureToken, parseMajorToMinor, parseScopes } from '@bookone/agent-bridge';
 import { agentBridgeTokenSecret } from '@/lib/agent-bridge-runtime';
 
 export async function submitInboxFacts(formData: FormData) {
@@ -19,11 +19,19 @@ export async function submitInboxFacts(formData: FormData) {
   const user = await requireTenantContext();
   const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   const documentId = String(formData.get('documentId') ?? '');
-  const majorToMinor = (raw: string) => {
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return 0;
-    return Math.round(n * 100);
-  };
+  const net = parseMajorToMinor(String(formData.get('net') ?? ''));
+  const taxRaw = String(formData.get('tax') ?? '').trim();
+  const grossRaw = String(formData.get('gross') ?? '').trim();
+  const tax = taxRaw ? parseMajorToMinor(taxRaw) : { ok: true as const, minor: 0 };
+  const gross = grossRaw ? parseMajorToMinor(grossRaw) : net.ok ? { ok: true as const, minor: net.minor } : net;
+  if (!net.ok) redirect(`/purchase/inbox/${documentId}?err=${encodeURIComponent(net.error)}`);
+  if (!tax.ok) redirect(`/purchase/inbox/${documentId}?err=${encodeURIComponent(tax.error)}`);
+  if (!gross.ok) redirect(`/purchase/inbox/${documentId}?err=${encodeURIComponent(gross.error)}`);
+  const rawCategory = String(formData.get('expenseAccountCode') ?? '');
+  const pipe = rawCategory.indexOf('|');
+  const expenseAccountCode = (pipe >= 0 ? rawCategory.slice(0, pipe) : rawCategory) || undefined;
+  const categoryLabel =
+    (pipe >= 0 ? rawCategory.slice(pipe + 1) : String(formData.get('categoryLabel') ?? '')) || undefined;
   const result = await service.submitExtractedFacts(actor, {
     documentId,
     contentHash: String(formData.get('contentHash') ?? ''),
@@ -38,11 +46,11 @@ export async function submitInboxFacts(formData: FormData) {
       | 'stock'
       | 'mixed'
       | 'unknown'),
-    netMinor: majorToMinor(String(formData.get('net') ?? '0')),
-    taxMinor: majorToMinor(String(formData.get('tax') ?? '0')),
-    grossMinor: majorToMinor(String(formData.get('gross') ?? '0')),
-    expenseAccountCode: String(formData.get('expenseAccountCode') ?? '') || undefined,
-    categoryLabel: String(formData.get('categoryLabel') ?? '') || undefined,
+    netMinor: net.minor,
+    taxMinor: tax.minor,
+    grossMinor: gross.minor,
+    expenseAccountCode,
+    categoryLabel,
     lineDescription: String(formData.get('lineDescription') ?? '') || undefined,
     origin: 'manual',
   });
@@ -82,12 +90,15 @@ export async function uploadInboxDocument(formData: FormData) {
     redirect('/purchase/inbox?err=Choose%20a%20PDF%20or%20image');
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const result = await service.submitDocument(actor, {
-    filename: file.name,
-    mime: file.type || 'application/pdf',
-    bytes,
-    textHint: String(formData.get('textHint') ?? ''),
-  });
+  const sessionId = String(formData.get('uploadSession') ?? '').trim();
+  const result = sessionId
+    ? await service.finalizeUploadSession(actor, { sessionId, bytes })
+    : await service.submitDocument(actor, {
+        filename: file.name,
+        mime: file.type || 'application/pdf',
+        bytes,
+        textHint: String(formData.get('textHint') ?? ''),
+      });
   if (!result.ok) {
     redirect(`/purchase/inbox?err=${encodeURIComponent(result.error)}`);
   }

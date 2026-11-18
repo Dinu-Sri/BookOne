@@ -1,6 +1,6 @@
 import { DEFAULT_CURRENCY, type Money } from './money';
 
-export const SCHEMA_VERSION = 'ab-05.1';
+export const SCHEMA_VERSION = 'ab-06.1';
 export const POLICY_VERSION = 'ab-01.purchase-bill.unpaid-service.v1';
 export const MCP_PROTOCOL_VERSION = '2025-03-26';
 export const MCP_SUPPORTED_PROTOCOL_VERSIONS = ['2025-03-26', '2024-11-05'] as const;

@@ -68,9 +68,12 @@ export default async function DocumentInboxPage({
                   </Link>
                 </div>
                 {uploadSession ? (
-                  <p role="status">
-                    A connected agent asked you to attach the original invoice here. Choose the file, then open it to enter facts.
-                  </p>
+                  <>
+                    <input type="hidden" name="uploadSession" value={uploadSession} />
+                    <p role="status">
+                      A connected agent asked you to attach the original invoice here. Choose the file, then open it to enter facts.
+                    </p>
+                  </>
                 ) : null}
                 <div className="field field-full">
                   <label htmlFor="inbox-file">Upload supplier invoice (PDF or image)</label>

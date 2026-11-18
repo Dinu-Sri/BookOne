@@ -16,7 +16,9 @@ import {
   buildArchiveEnvelope,
   collectLiveStoragePointers,
   collectStoragePointers,
+  agentBridgeBlobs,
   dbBackedAgentBridgeBlobKeys,
+  missingOwnedAttachmentKeys,
   db,
   desc,
   encryptArchivePayload,
@@ -708,10 +710,20 @@ export async function getArchiveBackupStatus(tenantId: string): Promise<ArchiveB
     try {
       const pointers = await collectLiveStoragePointers(tenantId);
       const listed = new Set(s3Configured() ? await listTenantObjectKeys(tenantId) : []);
-      for (const key of pointers) {
-        if (!isOwnedTenantStorageKey(tenantId, key)) continue;
-        if (!listed.has(key)) missingAttachmentCount += 1;
-      }
+      const blobRows = await db()
+        .select({ key: agentBridgeBlobs.key, content: agentBridgeBlobs.content })
+        .from(agentBridgeBlobs)
+        .where(eq(agentBridgeBlobs.tenantId, tenantId));
+      const dbBackedKeys = dbBackedAgentBridgeBlobKeys({
+        agent_bridge_blobs: blobRows as Record<string, unknown>[],
+      });
+      missingAttachmentCount = missingOwnedAttachmentKeys({
+        pointers,
+        listed,
+        dbBackedKeys,
+        tenantId,
+        isOwned: isOwnedTenantStorageKey,
+      }).length;
     } catch (error) {
       if (!isS3MissingKey(error)) {
         console.error('archive missing-attachment count failed');

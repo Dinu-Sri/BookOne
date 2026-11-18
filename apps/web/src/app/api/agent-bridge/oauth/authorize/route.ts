@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   DEFAULT_CONNECTION_SCOPES,
+  consentConnectionScopes,
+  encodeTenantBoundCode,
   findPublicClient,
-  newAuthorizationCode,
   newId,
-  parseRequestedScopes,
   redirectUriAllowed,
 } from '@bookone/agent-bridge';
 import { requireTenantContext } from '@bookone/auth';
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       <input type="hidden" name="code_challenge" value="${escapeHtml(challenge)}" />
       <input type="hidden" name="code_challenge_method" value="${escapeHtml(method)}" />
       <input type="hidden" name="resource" value="${escapeHtml(resource)}" />
-      <input type="hidden" name="scope" value="${escapeHtml(url.searchParams.get('scope') ?? DEFAULT_CONNECTION_SCOPES.join(' '))}" />
+      <input type="hidden" name="scope" value="${escapeHtml(DEFAULT_CONNECTION_SCOPES.join(' '))}" />
       <button type="submit">Allow ${escapeHtml(client.clientName)}</button>
     </form>
   `);
@@ -82,18 +82,18 @@ export async function POST(req: NextRequest) {
   if (!client || !redirectUriAllowed(client, redirectUri) || method !== 'S256') {
     return html('<p>Consent request is invalid.</p>', 400);
   }
-  const scopes = parseRequestedScopes(String(form.get('scope') ?? '')).filter((s) => s !== 'approve');
+  const scopes = consentConnectionScopes();
   const connectionId = newId();
   await recordAgentBridgeConnection({
     id: connectionId,
     tenantId: user.tenantId,
     userId: user.id,
     clientId,
-    scopes: scopes.length ? scopes : [...DEFAULT_CONNECTION_SCOPES],
+    scopes,
     label: client.clientName,
     createdAt: new Date().toISOString(),
   });
-  const code = newAuthorizationCode();
+  const code = encodeTenantBoundCode(user.tenantId);
   await saveOauthCode({
     code,
     tenantId: user.tenantId,
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     redirectUri,
     codeChallenge: challenge,
     codeChallengeMethod: 'S256',
-    scopes: (scopes.length ? scopes : DEFAULT_CONNECTION_SCOPES).join(','),
+    scopes: scopes.join(','),
     connectionId,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   });

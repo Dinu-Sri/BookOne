@@ -166,6 +166,10 @@ export interface AgentBridgeStore {
   findBatchItemByKey?(tenantId: string, requestKey: string): Promise<{ batch: StoredBatch; item: StoredBatchItem } | null>;
   saveFactsKey?(row: StoredFactsKey): Promise<void>;
   getFactsKey?(tenantId: string, key: string): Promise<StoredFactsKey | null>;
+  claimFactsKey?(
+    row: StoredFactsKey,
+  ): Promise<{ claimed: true } | { claimed: false; existing: StoredFactsKey }>;
+  casDocument?(doc: StoredDocument, expectedRevision: number): Promise<boolean>;
   listConnections?(tenantId: string, userId?: string): Promise<StoredConnection[]>;
   saveConnection?(row: StoredConnection): Promise<void>;
   getConnection?(tenantId: string, id: string): Promise<StoredConnection | null>;
@@ -208,6 +212,13 @@ export class MemoryStore implements AgentBridgeStore {
   }
   async saveDocument(doc: StoredDocument) {
     this.docs.set(doc.id, doc);
+  }
+  async casDocument(doc: StoredDocument, expectedRevision: number) {
+    const current = this.docs.get(doc.id);
+    if (!current || current.tenantId !== doc.tenantId) return false;
+    if (current.proposalRevision !== expectedRevision) return false;
+    this.docs.set(doc.id, doc);
+    return true;
   }
   async getProposal(tenantId: string, id: string) {
     const p = this.proposals.get(id);
@@ -302,7 +313,16 @@ export class MemoryStore implements AgentBridgeStore {
     return null;
   }
   async saveFactsKey(row: StoredFactsKey) {
-    this.factsKeys.set(`${row.tenantId}:${row.key}`, row);
+    const k = `${row.tenantId}:${row.key}`;
+    if (this.factsKeys.has(k)) return;
+    this.factsKeys.set(k, row);
+  }
+  async claimFactsKey(row: StoredFactsKey) {
+    const k = `${row.tenantId}:${row.key}`;
+    const existing = this.factsKeys.get(k);
+    if (existing) return { claimed: false as const, existing };
+    this.factsKeys.set(k, row);
+    return { claimed: true as const };
   }
   async getFactsKey(tenantId: string, key: string) {
     return this.factsKeys.get(`${tenantId}:${key}`) ?? null;

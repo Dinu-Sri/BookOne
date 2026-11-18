@@ -1,6 +1,6 @@
 # Connect Codex to BookOne AgentBridge
 
-Status of this guide: **IMPLEMENTED + LIVE-UNVERIFIED**. Protocol, PKCE, discovery and MCP tool contracts are tested in-repo. A real Codex CLI / ChatGPT desktop / IDE session against a deployed host was **not** completed in the AB-05 coding session. Do not treat this file as a live-client pass.
+Status of this guide: **IMPLEMENTED + LIVE-UNVERIFIED**. Protocol, PKCE, RS256 mint, discovery and MCP tool contracts are tested in-repo. A real Codex CLI / ChatGPT desktop / IDE session against a deployed host was **not** completed in the AB-06 coding session. Do not treat this file as a live-client pass.
 
 Vendor docs used while writing (2026-11-17): [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp). Codex CLI, the IDE extension and the ChatGPT desktop app share `~/.codex/config.toml`. ChatGPT **web** uses plugins, not this local file.
 
@@ -23,9 +23,9 @@ Vendor docs used while writing (2026-11-17): [Codex MCP](https://learn.chatgpt.c
 1. Deploy this candidate. Do **not** enable Inbox or posting on the existing live company.
 2. Create or select a **fresh synthetic** company. Turn Document Inbox on there. Leave draft-only and posting-disable on until independent QA authorizes a posting check.
 3. Set `AGENT_BRIDGE_PUBLIC_URL` to that HTTPS origin.
-4. Production tokens: set `AGENT_BRIDGE_OAUTH_ISSUER` and JWKS **or**, only for a labelled fixture, `AGENT_BRIDGE_ALLOW_HMAC=1`. Without one of those, `/api/agent-bridge/oauth/token` returns **503** in production.
-5. Set `AGENT_BRIDGE_OAUTH_TENANT_HINT` to the synthetic company id, or have the token request send `tenant_id`.
-6. A human BookOne user with Inbox write signs in during the browser consent step.
+4. Production tokens: set `AGENT_BRIDGE_OAUTH_SIGNING_PEM` (PKCS8 RSA) and `AGENT_BRIDGE_OAUTH_ISSUER` to this HTTPS origin. JWKS is derived automatically. **Do not** set `AGENT_BRIDGE_ALLOW_HMAC=1` on staging as a substitute. Without signing PEM (or labelled HMAC), `/api/agent-bridge/oauth/token` returns **503** in production.
+5. Tenant is encoded in the authorization code. `AGENT_BRIDGE_OAUTH_TENANT_HINT` / `tenant_id` are optional fallbacks for legacy codes.
+6. A human BookOne user with Inbox write signs in during the browser consent step. Consent grants read/upload/draft only.
 
 BookOne does not implement Dynamic Client Registration. Always pass `--oauth-client-id bookone-codex`.
 

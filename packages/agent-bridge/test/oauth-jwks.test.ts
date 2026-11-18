@@ -2,7 +2,9 @@ import { createServer, type Server } from 'node:http';
 import { createSign, generateKeyPairSync } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  jwksFromSigningPem,
   mintLocalFixtureToken,
+  mintRs256AccessToken,
   resolveActorFromAuthorization,
   TOKEN_AUDIENCE,
   verifyOAuthAccessToken,
@@ -86,5 +88,28 @@ describe('OAuth RS256 JWKS interoperability', () => {
     await expect(verifyOAuthAccessToken(hmac, { AGENT_BRIDGE_OAUTH_ISSUER: issuer })).rejects.toThrow(
       /not production OAuth/,
     );
+  });
+
+  it('mints a BookOne-as-AS RS256 access token that verifies through JWKS', async () => {
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    const token = mintRs256AccessToken({
+      privateKeyPem: pem,
+      kid: 'ab03',
+      issuer,
+      tenantId: 'tenant-as',
+      userId: 'user-as',
+      clientId: 'bookone-codex',
+      connectionId: 'conn-as',
+      scopes: ['read', 'upload', 'draft'],
+    });
+    const derived = jwksFromSigningPem(pem, 'ab03');
+    expect(derived.keys[0]?.kid).toBe('ab03');
+    const actor = await resolveActorFromAuthorization(`Bearer ${token}`, 'hmac-unused', {
+      AGENT_BRIDGE_OAUTH_ISSUER: issuer,
+      AGENT_BRIDGE_OAUTH_JWKS_URL: jwksUrl,
+    });
+    expect(actor).toMatchObject({ userId: 'user-as', tenantId: 'tenant-as', clientId: 'bookone-codex' });
+    expect(actor.capabilities).toEqual(['read', 'upload', 'draft']);
+    expect(actor.capabilities).not.toContain('post');
   });
 });

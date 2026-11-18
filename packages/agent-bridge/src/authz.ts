@@ -1,4 +1,12 @@
-import { createHmac, createVerify, randomBytes, timingSafeEqual } from 'node:crypto';
+import {
+  createHmac,
+  createPrivateKey,
+  createPublicKey,
+  createSign,
+  createVerify,
+  randomBytes,
+  timingSafeEqual,
+} from 'node:crypto';
 import { CAPABILITIES, type Actor, type Capability } from './contracts';
 
 export const TOKEN_AUDIENCE = 'bookone.agent-bridge';
@@ -22,6 +30,7 @@ export type ConnectionToken = {
 export function parseScopes(keys: string[]): Capability[] {
   const out = new Set<Capability>();
   for (const k of keys) {
+    if ((CAPABILITIES as readonly string[]).includes(k)) out.add(k as Capability);
     if (k === 'purchase.inbox.read' || k === 'agent_bridge.read') out.add('read');
     if (k === 'purchase.inbox.write' || k === 'agent_bridge.upload') {
       out.add('read');
@@ -194,10 +203,67 @@ export type OAuthEnv = {
   AGENT_BRIDGE_OAUTH_ISSUER?: string;
   AGENT_BRIDGE_OAUTH_AUDIENCE?: string;
   AGENT_BRIDGE_OAUTH_JWKS_URL?: string;
+  AGENT_BRIDGE_OAUTH_SIGNING_PEM?: string;
+  AGENT_BRIDGE_OAUTH_KID?: string;
   AGENT_BRIDGE_ALLOW_HMAC?: string;
   NODE_ENV?: string;
   [key: string]: string | undefined;
 };
+
+export const OAUTH_SETUP_CHECKLIST =
+  'Set AGENT_BRIDGE_OAUTH_SIGNING_PEM to a PKCS8 RSA private key and AGENT_BRIDGE_OAUTH_ISSUER to this host origin (same as AGENT_BRIDGE_PUBLIC_URL). JWKS is derived at /api/agent-bridge/oauth/jwks and /.well-known/jwks.json. Pre-register only bookone-codex and bookone-claude. Do not set AGENT_BRIDGE_ALLOW_HMAC=1 on staging as a substitute for RS256.';
+
+export function oauthSigningPem(env: OAuthEnv = process.env): string | undefined {
+  const pem = env.AGENT_BRIDGE_OAUTH_SIGNING_PEM?.trim();
+  return pem || undefined;
+}
+
+export function oauthKid(env: OAuthEnv = process.env): string {
+  return env.AGENT_BRIDGE_OAUTH_KID?.trim() || 'bookone-agent-bridge';
+}
+
+export function jwksFromSigningPem(pem: string, kid: string): { keys: Array<Record<string, string>> } {
+  const pub = createPublicKey(pem);
+  const jwk = pub.export({ format: 'jwk' }) as { n?: string; e?: string; kty?: string };
+  if (!jwk.n || !jwk.e) throw tokenError('OAuth signing key is not an RSA key.', 'PROVIDER_UNCONFIGURED');
+  return { keys: [{ kty: 'RSA', use: 'sig', alg: 'RS256', kid, n: jwk.n, e: jwk.e }] };
+}
+
+export function mintRs256AccessToken(args: {
+  privateKeyPem: string;
+  kid: string;
+  issuer: string;
+  tenantId: string;
+  userId: string;
+  clientId: string;
+  connectionId: string;
+  scopes: Capability[];
+  hours?: number;
+  now?: number;
+}): string {
+  const nowMs = args.now ?? Date.now();
+  const hours = args.hours ?? 8;
+  const ttlMs = Math.min(hours * 3600_000, MAX_TOKEN_TTL_MS);
+  const header = { alg: 'RS256', kid: args.kid, typ: 'JWT' };
+  const payload = {
+    iss: args.issuer,
+    aud: TOKEN_AUDIENCE,
+    sub: args.userId,
+    tenant_id: args.tenantId,
+    client_id: args.clientId,
+    connection_id: args.connectionId,
+    scope: args.scopes.join(' '),
+    iat: Math.floor(nowMs / 1000),
+    exp: Math.floor((nowMs + ttlMs) / 1000),
+  };
+  const h = Buffer.from(JSON.stringify(header)).toString('base64url');
+  const p = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signer = createSign('RSA-SHA256');
+  signer.update(`${h}.${p}`);
+  signer.end();
+  const key = createPrivateKey(args.privateKeyPem);
+  return `${h}.${p}.${signer.sign(key).toString('base64url')}`;
+}
 
 /** Production OAuth/OIDC access tokens. Local HMAC `ab1.*` fixtures are rejected here. */
 export async function verifyOAuthAccessToken(
@@ -222,7 +288,8 @@ export async function verifyOAuthAccessToken(
   const aud = claims.aud;
   const audOk = aud === audience || (Array.isArray(aud) && aud.includes(audience));
   if (!audOk) throw tokenError('OAuth token audience is invalid.');
-  const jwksUrl = env.AGENT_BRIDGE_OAUTH_JWKS_URL || `${issuer.replace(/\/$/, '')}/.well-known/jwks.json`;
+  const jwksUrl =
+    env.AGENT_BRIDGE_OAUTH_JWKS_URL || `${issuer.replace(/\/$/, '')}/api/agent-bridge/oauth/jwks`;
   const jwksRes = await fetchImpl(jwksUrl, { signal: AbortSignal.timeout(5_000) });
   if (!jwksRes.ok) throw tokenError('OAuth JWKS could not be loaded.');
   const jwks = (await jwksRes.json()) as { keys?: Array<{ kid?: string; kty?: string; n?: string; e?: string }> };

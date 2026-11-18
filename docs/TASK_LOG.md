@@ -1,3 +1,10 @@
+## 2026-11-18 — Self-host Noto Serif Sinhala so Production Check can build (v2.8.2)
+
+- Record: [CHG-20261118-local-sinhala-font](changes/CHG-20261118-local-sinhala-font.md). Baseline product merge of PR #19 `756f9fb` / v2.8.1. GitHub Production Check `44234985424` failed `next/font/google` on `layout.tsx` (`Cannot read properties of null (reading '1')` at google font loader). Docker web image on the same merge succeeded. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission2, or consumed v2.7.3/v2.7.4/v2.8.0 clocks.
+- Repair: committed Noto Serif Sinhala variable woff2 via `next/font/local`; well-known JWKS declares `runtime` locally instead of re-exporting it. VERSION 2.8.2.
+- Checks: `@bookone/auth` 16 files / 126 passed / 1 skipped. `pnpm --filter @bookone/web build` compiled successfully (Next.js 15.5.19, no `next/font` error).
+- Next: Push origin master so Production Check and Docker web image run. Owner Portainer Re-pull ON after green. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — AgentBridge AB-06 independent acceptance repair (v2.8.1)
 
 - Record: [CHG-20261118-agentbridge-06](changes/CHG-20261118-agentbridge-06.md). Baseline product `43233f0` / v2.8.0. Mission CODING-AGENTBRIDGE-06. Remaining-only QA [CODING-AGENTBRIDGE-06-QA](qa/CODING-AGENTBRIDGE-06-QA.md). Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Staging remains unchanged until the owner deploys. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission2, or consumed v2.7.3/v2.7.4/v2.8.0 clocks. Never touch source A vendor/failed PDF or the existing recovery target.

@@ -1,1 +1,3 @@
-export { GET, runtime } from '@/app/api/agent-bridge/oauth/jwks/route';
+export const runtime = 'nodejs';
+export { GET } from '@/app/api/agent-bridge/oauth/jwks/route';
+

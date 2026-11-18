@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
-import { Noto_Serif_Sinhala } from 'next/font/google';
+import localFont from 'next/font/local';
 import { FormBusyGuard } from '@/components/ui/form-busy';
 import { bookoneAppVersion, bookoneBuildId } from '@/lib/build-id';
 import './globals.css';
 
 /**
  * Noto Serif Sinhala — high readability for Sinhala gloss labels.
+ * Self-hosted so `next build` does not fetch Google Fonts CSS (CI flake:
+ * extensionless `/l/font?kit=` URLs crash next/font/google).
  * Loaded as a CSS variable; applied to .si-text and unicode Sinhala via stack.
  */
-const notoSerifSinhala = Noto_Serif_Sinhala({
-  subsets: ['sinhala'],
-  weight: ['400', '500', '600', '700'],
+const notoSerifSinhala = localFont({
+  src: '../fonts/NotoSerifSinhala-sinhala-wght.woff2',
+  weight: '400 700',
   display: 'swap',
   variable: '--font-si',
   preload: true,

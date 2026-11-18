@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   authorizationServerMetadata,
+  consentConnectionScopes,
   createPkcePair,
   parseRequestedScopes,
   protectedResourceMetadata,
@@ -21,6 +22,11 @@ describe('OAuth PKCE and discovery', () => {
   it('defaults new connections to read/upload/draft and drops approve', () => {
     expect(parseRequestedScopes(undefined)).toEqual(['read', 'upload', 'draft']);
     expect(parseRequestedScopes('read upload draft approve post')).toEqual(['read', 'upload', 'draft', 'post']);
+    expect(consentConnectionScopes()).toEqual(['read', 'upload', 'draft']);
+    expect(consentConnectionScopes()).not.toContain('post');
+    const as = authorizationServerMetadata('https://bookone.example');
+    expect(as.grant_types_supported).toEqual(['authorization_code', 'refresh_token']);
+    expect(as.scopes_supported).toEqual(['read', 'upload', 'draft']);
   });
 
   it('publishes protected-resource and authorization-server metadata', () => {

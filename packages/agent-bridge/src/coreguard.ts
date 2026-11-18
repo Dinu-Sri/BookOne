@@ -1,7 +1,7 @@
 /** Scoped AgentBridge CoreGuard registry (not all-module CG-01). */
 
 export const COREGUARD_MODULE = 'agent-bridge';
-export const COREGUARD_VERSION = 'ab-05.1';
+export const COREGUARD_VERSION = 'ab-06.1';
 
 export const COREGUARD_SUITES = [
   {
@@ -43,19 +43,19 @@ export const COREGUARD_SUITES = [
   {
     id: 'permissions-catalog',
     layer: 'auth',
-    command: 'pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts',
+    command: 'pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/ab06-postgres-claim.test.ts',
     required: true,
   },
   {
     id: 'independent-acceptance',
     layer: 'acceptance',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/oauth-jwks.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/oauth-jwks.test.ts',
     required: true,
   },
   {
     id: 'full-workflow',
     layer: 'application-service',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab05-acceptance.test.ts test/service.test.ts test/schemas.test.ts test/oauth-pkce.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/service.test.ts test/schemas.test.ts test/oauth-pkce.test.ts',
     required: true,
   },
   {

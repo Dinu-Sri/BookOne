@@ -269,8 +269,8 @@ describe('AB-05 agent-first facts without OCR', () => {
     expect(submitted.document?.status).toBe('draft');
   });
 
-  it('publishes schema ab-05.1 and a supported-only write matrix', () => {
-    expect(SCHEMA_VERSION).toBe('ab-05.1');
+  it('publishes schema ab-06.1 and a supported-only write matrix', () => {
+    expect(SCHEMA_VERSION).toBe('ab-06.1');
     const matrix = capabilityMatrix();
     expect(matrix.operations.filter((o) => o.supported).map((o) => o.id)).toEqual([
       'purchase.bill.unpaid-service.v1',

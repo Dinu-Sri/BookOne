@@ -129,20 +129,34 @@ export class AgentBridgeService {
     if (!mimeSignatureOk(input.mime, input.bytes)) {
       return fail('ATTACHMENT_REJECTED', 'File bytes do not match the declared type.');
     }
-    if (input.idempotencyKey && this.deps.store.getFactsKey) {
+    const hash = sha256(input.bytes);
+    let id = newId();
+    if (input.idempotencyKey && this.deps.store.claimFactsKey) {
+      const claimed = await this.deps.store.claimFactsKey({
+        tenantId: actor.tenantId,
+        key: `upload:${input.idempotencyKey}`,
+        payloadHash: hash,
+        documentId: id,
+      });
+      if (!claimed.claimed) {
+        if (claimed.existing.payloadHash !== hash) {
+          return fail('IDEMPOTENCY_MISMATCH', 'This upload key was used with a different file.');
+        }
+        const existingDoc = await this.deps.store.getDocument(actor.tenantId, claimed.existing.documentId);
+        if (existingDoc) return { ok: true as const, document: existingDoc };
+        id = claimed.existing.documentId;
+      }
+    } else if (input.idempotencyKey && this.deps.store.getFactsKey) {
       const prior = await this.deps.store.getFactsKey(actor.tenantId, `upload:${input.idempotencyKey}`);
       if (prior) {
-        const payloadHash = sha256(input.bytes);
-        if (prior.payloadHash !== payloadHash) {
+        if (prior.payloadHash !== hash) {
           return fail('IDEMPOTENCY_MISMATCH', 'This upload key was used with a different file.');
         }
         const existingDoc = await this.deps.store.getDocument(actor.tenantId, prior.documentId);
         return { ok: true as const, document: existingDoc };
       }
     }
-    const hash = sha256(input.bytes);
     const existing = await this.deps.store.findByHash(actor.tenantId, hash);
-    const id = newId();
     const key = ownedStorageKey(actor.tenantId, input.filename, id);
     await this.deps.store.putBlob({
       key,
@@ -167,7 +181,7 @@ export class AgentBridgeService {
       updatedAt: new Date(this.now()).toISOString(),
     };
     await this.deps.store.saveDocument(doc);
-    if (input.idempotencyKey && this.deps.store.saveFactsKey) {
+    if (input.idempotencyKey && this.deps.store.saveFactsKey && !this.deps.store.claimFactsKey) {
       await this.deps.store.saveFactsKey({
         tenantId: actor.tenantId,
         key: `upload:${input.idempotencyKey}`,
@@ -296,9 +310,26 @@ export class AgentBridgeService {
         taxMinor: input.taxMinor ?? 0,
         grossMinor: input.grossMinor ?? 0,
         expenseAccountCode: input.expenseAccountCode ?? '',
+        categoryLabel: input.categoryLabel ?? '',
+        lineDescription: input.lineDescription ?? '',
+        invoiceKind: input.invoiceKind ?? '',
       }),
     );
-    if (input.idempotencyKey && this.deps.store.getFactsKey) {
+    if (input.idempotencyKey && this.deps.store.claimFactsKey) {
+      const claimed = await this.deps.store.claimFactsKey({
+        tenantId: actor.tenantId,
+        key: `facts:${input.idempotencyKey}`,
+        payloadHash,
+        documentId: input.documentId,
+      });
+      if (!claimed.claimed) {
+        if (claimed.existing.payloadHash !== payloadHash) {
+          return fail('IDEMPOTENCY_MISMATCH', 'This facts key was used with a different payload.');
+        }
+        const status = await this.getProcessingStatus(actor, claimed.existing.documentId);
+        return { ok: true as const, document: status.document, proposal: status.proposal };
+      }
+    } else if (input.idempotencyKey && this.deps.store.getFactsKey) {
       const prior = await this.deps.store.getFactsKey(actor.tenantId, `facts:${input.idempotencyKey}`);
       if (prior) {
         if (prior.payloadHash !== payloadHash) {
@@ -322,6 +353,8 @@ export class AgentBridgeService {
       return fail('STALE_REVISION', `Cannot submit facts from status ${doc.status}.`);
     }
     const policy = await this.deps.policyFor(actor.tenantId);
+    const mapped = resolveCategoryMapping(policy, input.expenseAccountCode, input.categoryLabel);
+    if (!mapped.ok) return mapped;
     const currency = input.currency || policy.currency;
     const net = money(input.netMinor ?? 0, currency);
     const tax = money(input.taxMinor ?? 0, currency);
@@ -341,33 +374,51 @@ export class AgentBridgeService {
       lineDescription: input.lineDescription ? { value: input.lineDescription, origin: 'user' } : undefined,
     };
     const facts = factsFromExtracted(extracted, policy);
-    if (input.expenseAccountCode) facts.expenseAccountCode = input.expenseAccountCode;
-    if (input.categoryLabel) facts.categoryLabel = input.categoryLabel;
+    facts.expenseAccountCode = mapped.accountCode;
+    facts.categoryLabel = mapped.label;
     if (input.invoiceKind) facts.invoiceKind = input.invoiceKind;
     const issues = issuesFromProposal(facts, policy);
-    const proposal = await this.writeProposal(doc, facts, issues, doc.proposalRevision + 1);
     const next = blockingIssues(issues).length ? 'needs_clarification' : 'draft';
     if (doc.status !== next) assertTransition(doc.status, next);
-    doc.facts = extracted;
-    doc.proposalId = proposal.id;
-    doc.proposalRevision = proposal.revision;
-    doc.status = next;
-    doc.extractorId = input.origin === 'manual' ? MANUAL_FACTS_EXTRACTOR_ID : AGENT_FACTS_EXTRACTOR_ID;
-    doc.extractorLive = false;
-    doc.intakeMode = input.origin === 'manual' ? 'manual' : 'agent-facts';
-    doc.lastErrorCode = undefined;
-    doc.lastErrorMessage = undefined;
-    doc.updatedAt = new Date(this.now()).toISOString();
-    await this.deps.store.saveDocument(doc);
-    if (input.idempotencyKey && this.deps.store.saveFactsKey) {
+    const oldProposalId = doc.proposalId;
+    const proposalId = newId();
+    const nextRevision = doc.proposalRevision + 1;
+    const nextDoc: StoredDocument = {
+      ...doc,
+      facts: extracted,
+      proposalId,
+      proposalRevision: nextRevision,
+      status: next,
+      extractorId: input.origin === 'manual' ? MANUAL_FACTS_EXTRACTOR_ID : AGENT_FACTS_EXTRACTOR_ID,
+      extractorLive: false,
+      intakeMode: input.origin === 'manual' ? 'manual' : 'agent-facts',
+      lastErrorCode: undefined,
+      lastErrorMessage: undefined,
+      updatedAt: new Date(this.now()).toISOString(),
+    };
+    if (this.deps.store.casDocument) {
+      const swapped = await this.deps.store.casDocument(nextDoc, input.expectedRevision);
+      if (!swapped) return fail('STALE_REVISION', 'This document changed. Reload the current revision and try again.');
+    } else {
+      await this.deps.store.saveDocument(nextDoc);
+    }
+    const proposal = await this.writeProposal(nextDoc, facts, issues, nextRevision, proposalId);
+    if (oldProposalId) {
+      await this.deps.store.revokeApprovalsForProposal(
+        actor.tenantId,
+        oldProposalId,
+        new Date(this.now()).toISOString(),
+      );
+    }
+    if (input.idempotencyKey && this.deps.store.saveFactsKey && !this.deps.store.claimFactsKey) {
       await this.deps.store.saveFactsKey({
         tenantId: actor.tenantId,
         key: `facts:${input.idempotencyKey}`,
         payloadHash,
-        documentId: doc.id,
+        documentId: nextDoc.id,
       });
     }
-    return { ok: true as const, document: doc, proposal };
+    return { ok: true as const, document: nextDoc, proposal };
   }
 
   async createUploadSession(
@@ -613,7 +664,9 @@ export class AgentBridgeService {
 
   async updateDraft(actor: Actor, input: { proposalId: string; expectedRevision: number; patch: Partial<ProposalFacts> }) {
     actor = await this.authorized(actor, 'draft');
-    const proposal = await this.requireProposal(actor.tenantId, input.proposalId);
+    const bound = await this.requireCurrentProposal(actor.tenantId, input.proposalId);
+    if (!bound.ok) return bound;
+    const { proposal } = bound;
     if (proposal.revision !== input.expectedRevision) return fail('STALE_REVISION', 'Draft changed. Reload and try again.');
     const facts = { ...proposal.facts, ...input.patch };
     const policy = await this.deps.policyFor(actor.tenantId);
@@ -635,7 +688,9 @@ export class AgentBridgeService {
 
   async answerIssue(actor: Actor, input: { proposalId: string; issueId: string; value: string }) {
     actor = await this.authorized(actor, 'draft');
-    const proposal = await this.requireProposal(actor.tenantId, input.proposalId);
+    const bound = await this.requireCurrentProposal(actor.tenantId, input.proposalId);
+    if (!bound.ok) return bound;
+    const { proposal } = bound;
     const issue = proposal.issues.find((i) => i.id === input.issueId);
     if (!issue) return fail('STALE_REVISION', 'That question is no longer open.');
     if (issue.allowedResolutions.includes('stop_unsupported') && input.value === 'stop_unsupported') {
@@ -656,11 +711,12 @@ export class AgentBridgeService {
 
   async validateProposal(actor: Actor, proposalId: string) {
     actor = await this.authorized(actor, 'draft');
-    const proposal = await this.requireProposal(actor.tenantId, proposalId);
+    const bound = await this.requireCurrentProposal(actor.tenantId, proposalId);
+    if (!bound.ok) return bound;
+    const { proposal, doc } = bound;
     const policy = await this.deps.policyFor(actor.tenantId);
     proposal.issues = issuesFromProposal(proposal.facts, policy);
     const blocked = blockingIssues(proposal.issues);
-    const doc = await this.requireDoc(actor.tenantId, proposal.documentId);
     if (blocked.length) {
       doc.status = 'needs_clarification';
       await this.deps.store.saveDocument(doc);
@@ -675,7 +731,9 @@ export class AgentBridgeService {
 
   async getPreview(actor: Actor, proposalId: string) {
     actor = await this.authorized(actor, 'read');
-    const proposal = await this.requireProposal(actor.tenantId, proposalId);
+    const bound = await this.requireCurrentProposal(actor.tenantId, proposalId);
+    if (!bound.ok) return bound;
+    const { proposal } = bound;
     const policy = await this.deps.policyFor(actor.tenantId);
     const blocked = blockingIssues(issuesFromProposal(proposal.facts, policy));
     if (blocked.length) return fail('STALE_REVISION', blocked[0]!.message);
@@ -687,9 +745,12 @@ export class AgentBridgeService {
 
   async requestApproval(actor: Actor, proposalId: string) {
     actor = await this.authorized(actor, 'draft');
+    const bound = await this.requireCurrentProposal(actor.tenantId, proposalId);
+    if (!bound.ok) return bound;
     const preview = await this.getPreview(actor, proposalId);
     if ('ok' in preview && preview.ok === false) return preview;
-    const doc = await this.requireDoc(actor.tenantId, (await this.requireProposal(actor.tenantId, proposalId)).documentId);
+    const doc = bound.doc;
+    assertTransition(doc.status, 'awaiting_approval');
     doc.status = 'awaiting_approval';
     await this.deps.store.saveDocument(doc);
     return { ok: true as const, proposalId, preview };
@@ -702,8 +763,9 @@ export class AgentBridgeService {
     }
     const flags = await this.flags(actor.tenantId);
     if (!flags.enabled) return fail('FEATURE_DISABLED', 'AgentBridge is off for this company.');
-    const proposal = await this.requireProposal(actor.tenantId, proposalId);
-    const doc = await this.requireDoc(actor.tenantId, proposal.documentId);
+    const bound = await this.requireCurrentProposal(actor.tenantId, proposalId);
+    if (!bound.ok) return bound;
+    const { proposal, doc } = bound;
     if (!['validated', 'awaiting_approval', 'draft'].includes(doc.status)) {
       return fail('STALE_REVISION', `Cannot approve from status ${doc.status}.`);
     }
@@ -744,7 +806,12 @@ export class AgentBridgeService {
     if (flags.draftOnly) return fail('DRAFT_ONLY', 'This company is in draft-only mode.');
     if (!input.idempotencyKey) return fail('IDEMPOTENCY_MISMATCH', 'Idempotency key is required.');
 
-    const proposal = await this.requireProposal(actor.tenantId, input.proposalId);
+    const bound = await this.requireCurrentProposal(actor.tenantId, input.proposalId);
+    if (!bound.ok) return bound;
+    const { proposal, doc: currentDoc } = bound;
+    if (currentDoc.proposalId !== proposal.id) {
+      return fail('STALE_REVISION', 'This proposal is no longer the current revision of the document.');
+    }
     const approval = await this.deps.store.getApproval(actor.tenantId, input.approvalId);
     if (!approval || approval.proposalId !== proposal.id) return fail('EXPIRED_APPROVAL', 'Approval was not found.');
     if (approval.revokedAt) return fail('EXPIRED_APPROVAL', 'Approval was revoked.');
@@ -781,7 +848,7 @@ export class AgentBridgeService {
       return this.reconcileExisting(actor, claimed.existing);
     }
 
-    const doc = await this.requireDoc(actor.tenantId, proposal.documentId);
+    const doc = currentDoc;
     assertTransition(doc.status, 'posting');
     doc.status = 'posting';
     await this.deps.store.saveDocument(doc);
@@ -917,14 +984,24 @@ export class AgentBridgeService {
     return p;
   }
 
+  private async requireCurrentProposal(tenantId: string, proposalId: string) {
+    const proposal = await this.requireProposal(tenantId, proposalId);
+    const doc = await this.requireDoc(tenantId, proposal.documentId);
+    if (doc.proposalId !== proposal.id) {
+      return fail('STALE_REVISION', 'This proposal is no longer the current revision of the document.');
+    }
+    return { ok: true as const, proposal, doc };
+  }
+
   private async writeProposal(
     doc: StoredDocument,
     facts: ProposalFacts,
     issues: ReturnType<typeof issuesFromProposal>,
     revision = 1,
+    id = newId(),
   ) {
     const proposal: StoredProposal = {
-      id: newId(),
+      id,
       tenantId: doc.tenantId,
       documentId: doc.id,
       revision,
@@ -972,11 +1049,47 @@ function isUncertainCommit(error: unknown): boolean {
   return /timeout|timed out|ECONNRESET|EPIPE|uncertain|network|fetch failed/i.test(message);
 }
 
+function resolveCategoryMapping(
+  policy: CompanyPolicy,
+  code?: string,
+  label?: string,
+): { ok: true; accountCode: string; label: string } | { ok: false; code: string; error: string } {
+  const cats = policy.approvedCategories;
+  if (code && label) {
+    const hit = cats.find((c) => c.accountCode === code && c.label === label);
+    if (!hit) {
+      return fail('AMBIGUOUS_CATEGORY', 'Expense account and category label do not match an authorized mapping.');
+    }
+    return { ok: true, accountCode: hit.accountCode, label: hit.label };
+  }
+  if (code) {
+    const hits = cats.filter((c) => c.accountCode === code);
+    if (hits.length === 1) return { ok: true, accountCode: hits[0]!.accountCode, label: hits[0]!.label };
+    if (hits.length === 0) {
+      return fail('AMBIGUOUS_CATEGORY', `Expense account ${code} is not an authorized mapping.`);
+    }
+    return fail(
+      'AMBIGUOUS_CATEGORY',
+      `Expense account ${code} maps to more than one category. Send the category label.`,
+    );
+  }
+  if (label) {
+    const hits = cats.filter((c) => c.label === label);
+    if (hits.length === 1) return { ok: true, accountCode: hits[0]!.accountCode, label: hits[0]!.label };
+    if (hits.length === 0) return fail('AMBIGUOUS_CATEGORY', `Category ${label} is not an authorized mapping.`);
+    return fail('AMBIGUOUS_CATEGORY', `Category ${label} maps to more than one account. Send the account code.`);
+  }
+  const defaults = cats.filter((c) => c.accountCode === policy.defaultExpenseAccount);
+  if (defaults.length === 1) return { ok: true, accountCode: defaults[0]!.accountCode, label: defaults[0]!.label };
+  if (cats[0]) return { ok: true, accountCode: cats[0].accountCode, label: cats[0].label };
+  return { ok: true, accountCode: policy.defaultExpenseAccount ?? '', label: '' };
+}
+
 function factsFromExtracted(
   extracted: NonNullable<StoredDocument['facts']>,
   policy: CompanyPolicy,
 ): ProposalFacts {
-  const category = policy.approvedCategories[0];
+  const mapped = resolveCategoryMapping(policy);
   const net = extracted.net?.value ?? money(0);
   const tax = extracted.tax?.value ?? money(0);
   const gross = extracted.gross?.value ?? money(net.minor + tax.minor);
@@ -987,8 +1100,8 @@ function factsFromExtracted(
     currency: extracted.currency?.value ?? policy.currency,
     paidStatus: extracted.paidStatus?.value ?? 'unknown',
     documentKind: extracted.documentKind?.value ?? 'unknown',
-    expenseAccountCode: category?.accountCode ?? '',
-    categoryLabel: category?.label ?? '',
+    expenseAccountCode: mapped.ok ? mapped.accountCode : policy.approvedCategories[0]?.accountCode ?? '',
+    categoryLabel: mapped.ok ? mapped.label : policy.approvedCategories[0]?.label ?? '',
     invoiceKind: policy.vatRegistered && tax.minor > 0 ? 'tax_invoice' : 'commercial',
     net,
     tax,
@@ -1026,7 +1139,16 @@ function applyAnswer(facts: ProposalFacts, code: string, value: string, policy: 
 
 function nextActions(status: StoredDocument['status'], actor: Actor): string[] {
   const out: string[] = ['get_processing_status'];
-  if ((status === 'awaiting_facts' || status === 'failed' || status === 'received') && actor.capabilities.includes('draft')) {
+  if (
+    (status === 'awaiting_facts' ||
+      status === 'failed' ||
+      status === 'received' ||
+      status === 'draft' ||
+      status === 'validated' ||
+      status === 'awaiting_approval' ||
+      status === 'needs_clarification') &&
+    actor.capabilities.includes('draft')
+  ) {
     out.push('submit_extracted_facts');
   }
   if (status === 'failed' && actor.capabilities.includes('draft')) out.push('process_document');

@@ -11,6 +11,8 @@ describe('document state machine', () => {
     expect(canTransition('draft', 'validated')).toBe(true);
     expect(canTransition('validated', 'awaiting_approval')).toBe(true);
     expect(canTransition('awaiting_approval', 'posting')).toBe(true);
+    expect(canTransition('awaiting_approval', 'draft')).toBe(true);
+    expect(canTransition('awaiting_approval', 'needs_clarification')).toBe(true);
     expect(canTransition('posting', 'posted')).toBe(true);
   });
 

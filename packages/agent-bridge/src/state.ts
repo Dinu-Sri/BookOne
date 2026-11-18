@@ -7,7 +7,7 @@ const ALLOWED: Record<DocumentState, DocumentState[]> = {
   needs_clarification: ['draft', 'needs_clarification', 'rejected', 'failed'],
   draft: ['validated', 'awaiting_approval', 'needs_clarification', 'rejected', 'failed'],
   validated: ['awaiting_approval', 'draft', 'rejected'],
-  awaiting_approval: ['posting', 'validated', 'rejected', 'failed'],
+  awaiting_approval: ['posting', 'validated', 'draft', 'needs_clarification', 'rejected', 'failed'],
   posting: ['posted', 'failed', 'unknown_outcome'],
   posted: [],
   rejected: [],

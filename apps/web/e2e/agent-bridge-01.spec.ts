@@ -18,7 +18,9 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
   const jobs = readFileSync(path.join(root, 'apps/web/src/components/team/team-jobs-screen.tsx'), 'utf8');
   const nav = readFileSync(path.join(root, 'apps/web/src/lib/nav-suites.ts'), 'utf8');
   expect(inbox).toMatch(/uploadInboxDocument/);
+  expect(inbox).toMatch(/name="uploadSession"/);
   expect(detail).toMatch(/Approve this exact revision/);
+  expect(detail).toMatch(/Edit facts/);
   expect(detail).toMatch(/inbox-approver|Approved by/);
   expect(detail).toMatch(/Enter invoice facts/);
   expect(detail).not.toMatch(/fixture or unconfigured/);
@@ -34,6 +36,12 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
   expect(posting).toMatch(/loadAccessForUser/);
   expect(posting).toMatch(/allows\('agent_bridge.approve', 'write'\)/);
   expect(posting).toMatch(/allows\('agent_bridge.post', 'write'\)/);
+  expect(posting).toMatch(/claimFactsKey/);
+  expect(posting).toMatch(/casDocument/);
+  expect(posting).toMatch(/onConflictDoNothing/);
+  const actions = readFileSync(path.join(root, 'apps/web/src/app/actions/agent-bridge.ts'), 'utf8');
+  expect(actions).toMatch(/parseMajorToMinor/);
+  expect(actions).toMatch(/finalizeUploadSession/);
   const resolve = readFileSync(path.join(root, 'packages/auth/src/permissions/resolve.ts'), 'utf8');
   expect(resolve).toMatch(/isActionPermissionKey/);
   expect(resolve).toMatch(/writeLookupKey/);

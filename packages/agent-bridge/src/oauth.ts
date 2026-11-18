@@ -71,6 +71,34 @@ export function newAuthorizationCode(): string {
   return randomBytes(24).toString('base64url');
 }
 
+/** Tenant is encoded in the code so token exchange does not need a custom tenant_id field. */
+export function encodeTenantBoundCode(tenantId: string, kind: 'code' | 'refresh' = 'code'): string {
+  const tenantPart = Buffer.from(tenantId, 'utf8').toString('base64url');
+  const nonce = randomBytes(24).toString('base64url');
+  return kind === 'refresh' ? `rt.${tenantPart}.${nonce}` : `${tenantPart}.${nonce}`;
+}
+
+export function tenantIdFromBoundToken(value: string): string | null {
+  const raw = value.startsWith('rt.') ? value.slice(3) : value;
+  const dot = raw.indexOf('.');
+  if (dot <= 0) return null;
+  try {
+    const tenantId = Buffer.from(raw.slice(0, dot), 'base64url').toString('utf8');
+    return tenantId.trim() ? tenantId : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isRefreshTokenValue(value: string): boolean {
+  return value.startsWith('rt.');
+}
+
+/** Consent always grants read/upload/draft. Post is never minted through this AS. */
+export function consentConnectionScopes(): Capability[] {
+  return [...DEFAULT_CONNECTION_SCOPES];
+}
+
 export function parseRequestedScopes(raw: string | undefined): Capability[] {
   if (!raw || !raw.trim()) return [...DEFAULT_CONNECTION_SCOPES];
   const asked = raw.split(/[\s,]+/).filter(Boolean);
@@ -145,7 +173,7 @@ export function authorizationServerMetadata(issuer: string) {
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['none'],
-    scopes_supported: [...DEFAULT_CONNECTION_SCOPES, 'post'],
+    scopes_supported: [...DEFAULT_CONNECTION_SCOPES],
     resource: TOKEN_AUDIENCE,
   };
 }

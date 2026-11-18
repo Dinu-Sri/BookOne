@@ -34,3 +34,25 @@ export function assertSameCurrency(a: Money, b: Money): void {
     throw new Error('Currency or scale mismatch.');
   }
 }
+
+export type ParsedMinor =
+  | { ok: true; minor: number }
+  | { ok: false; code: 'INVALID_AMOUNT'; error: string };
+
+/** Exact decimal → integer minor units. Never coerce invalid input to 0. */
+export function parseMajorToMinor(raw: string, scale = MONEY_SCALE): ParsedMinor {
+  const text = raw.trim();
+  if (!text) return { ok: false, code: 'INVALID_AMOUNT', error: 'Amount is required.' };
+  if (/^-?\d+\.\d{3,}$/.test(text)) {
+    return { ok: false, code: 'INVALID_AMOUNT', error: 'Use at most two decimal places.' };
+  }
+  if (!/^-?\d+(\.\d{1,2})?$/.test(text)) {
+    return { ok: false, code: 'INVALID_AMOUNT', error: 'Amount must be an exact decimal.' };
+  }
+  const n = Number(text);
+  if (!Number.isFinite(n)) {
+    return { ok: false, code: 'INVALID_AMOUNT', error: 'Amount must be an exact decimal.' };
+  }
+  if (n < 0) return { ok: false, code: 'INVALID_AMOUNT', error: 'Amount cannot be negative.' };
+  return { ok: true, minor: Math.round(n * 10 ** scale) };
+}

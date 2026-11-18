@@ -1,10 +1,10 @@
-# AgentBridge v1 (AB-05)
+# AgentBridge v1 (AB-06 repair on AB-05)
 
 Unpaid domestic local-currency supplier **service/expense** invoices: connect an authorized Codex or Claude client (or use the browser), store the original, submit facts without BookOne OCR, resolve questions, review BookOne’s calculated effects, approve in the trusted human UI, and receive one durable posted bill.
 
 Feature flags default **off**. Draft-only and posting-disable default **on**. Keep posting disabled until independent QA accepts this candidate and the owner deploys. Existing purchase screens stay usable when AgentBridge is off.
 
-Protocol schema `ab-05.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.8.0**.
+Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.8.1**.
 
 ## Supported in this build
 
@@ -12,14 +12,14 @@ Protocol schema `ab-05.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Produ
 - Agent connections at `/purchase/inbox/connections`. New connections start with `read`, `upload`, `draft`. Post is explicit. Agents cannot mint human approval.
 - Shared service in `@bookone/agent-bridge` used by the UI, `/api/agent-bridge/v1/*`, and `/api/agent-bridge/mcp`.
 - Posting goes through `createCommercialDocumentWithUser` (the existing unpaid purchase bill path). One bill per approved proposal.
-- Agent-first facts: a valid upload without server OCR becomes `awaiting_facts`, not a dead-end failure. `submit_extracted_facts` binds document id, content hash and expected revision.
+- Agent-first facts: a valid upload without server OCR becomes `awaiting_facts`, not a dead-end failure. `submit_extracted_facts` binds document id, content hash and expected revision. Facts can be edited on draft/validated/awaiting_approval; a new proposal replaces the current one and revokes prior approval. Category label is taken from the selected authorized mapping. Amounts use exact decimals (never Number-invalid→0).
 - Two original-file transfer paths:
   1. Bounded `contentBase64` on `submit_document` / `finalize_upload_session`.
-  2. `create_upload_session` returns an authenticated BookOne review URL when the chat client cannot forward bytes. Chat attachments are **not** sent to MCP automatically.
+  2. `create_upload_session` returns an authenticated BookOne review URL when the chat client cannot forward bytes. The Inbox form finalizes that session (`uploadSession`). Chat attachments are **not** sent to MCP automatically. Same-key uploads claim the tenant-scoped key before writing.
 - Batch manifest: one item per file, per-item status, no implicit batch approval.
 - Lookups: approved suppliers, expense accounts, own proposals. Ambiguous matches become issues; new suppliers/accounts are not created.
 - Strict MCP/API schemas (`additionalProperties: false`). MCP protocol negotiate `2025-03-26` and `2024-11-05`; incompatible versions are rejected.
-- OAuth discovery: `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`. Authorization code + PKCE S256 for public clients `bookone-codex` and `bookone-claude`. MCP 401 includes `WWW-Authenticate` with `resource_metadata`.
+- OAuth discovery: `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`, `/.well-known/jwks.json`. Authorization code + PKCE S256 + refresh_token for public clients `bookone-codex` and `bookone-claude`. Consent always grants `read upload draft` (never post). Tenant is encoded in the authorization code. MCP 401 includes `WWW-Authenticate` with `resource_metadata`.
 - Effective scopes are token scopes INTERSECT current grants for the token subject. Human approval stays session-only.
 - Additive migration `046_agent_bridge_facts.sql` (last error/intake mode, upload sessions, batches, facts keys, oauth codes, connection scopes/last used).
 - AB-02/AB-03/AB-04 gates retained: fail-closed approval, unique claim, token∩live grants, lost-response reconcile, blob storage-pointer remap, explicit `agent_bridge.approve` / `agent_bridge.post` keys.
@@ -46,7 +46,7 @@ Failed documents can resume through the same facts form. Download the original f
 3. Grant `purchase.inbox.*`, `agent_bridge.approve`, and `agent_bridge.post` on Jobs if the tenant was seeded before catalog v2. `allows(key, 'write')` matches those exact catalog action keys (and a persisted `*.write` alias). Viewer stays read-only. Purchase module ceiling still applies.
 4. Set `AGENT_BRIDGE_PUBLIC_URL` (or `AUTH_URL`) to the public HTTPS origin so review URLs and OAuth metadata are absolute.
 5. MCP signing: `AGENT_BRIDGE_TOKEN_SECRET` or `AUTH_SECRET` is required (no development fallback).
-6. Production access tokens: register `AGENT_BRIDGE_OAUTH_ISSUER` and JWKS (`RS256`). BookOne-as-AS will **not** mint HMAC access tokens when `NODE_ENV=production` unless `AGENT_BRIDGE_ALLOW_HMAC=1` is an explicit labelled fixture. Token exchange also needs `tenant_id` or `AGENT_BRIDGE_OAUTH_TENANT_HINT`.
+6. Production access tokens: set `AGENT_BRIDGE_OAUTH_SIGNING_PEM` (PKCS8 RSA private key) and `AGENT_BRIDGE_OAUTH_ISSUER` to this host origin (same as `AGENT_BRIDGE_PUBLIC_URL`). JWKS is derived at `/api/agent-bridge/oauth/jwks` and `/.well-known/jwks.json`. BookOne-as-AS will **not** mint HMAC access tokens when `NODE_ENV=production` unless `AGENT_BRIDGE_ALLOW_HMAC=1` is an explicit labelled fixture. Do not enable HMAC on staging as a substitute for RS256. Token exchange reads tenant from the authorization code; `tenant_id` / `AGENT_BRIDGE_OAUTH_TENANT_HINT` remain optional fallbacks. Pre-registered clients only.
 7. Optional live OCR: `AGENT_BRIDGE_OCR_ENDPOINT`, `AGENT_BRIDGE_OCR_KEY`, and `AGENT_BRIDGE_OCR_LIVE=1`. Without opt-in, production `extractorFor()` skips OCR and the document waits for facts. Fixture extractors stay test-only.
 8. After restore, MCP connections, upload sessions and oauth codes stay out of the archive. Reauthorize clients. Restored inbox flags stay draft-only and posting-stopped; restored approvals are revoked. DB-backed AgentBridge blobs are counted as stored in company data, not as missing S3.
 
@@ -57,12 +57,14 @@ Failed documents can resume through the same facts form. Download the original f
 | `AGENT_BRIDGE_PUBLIC_URL` | Public origin for review URLs, OAuth metadata, MCP 401 challenges |
 | `AUTH_URL` | Fallback public origin |
 | `AGENT_BRIDGE_TOKEN_SECRET` / `AUTH_SECRET` | HMAC fixture signing (tests / labelled non-production) |
-| `AGENT_BRIDGE_OAUTH_ISSUER` | Production RS256 issuer |
+| `AGENT_BRIDGE_OAUTH_ISSUER` | Production RS256 issuer (this host origin) |
 | `AGENT_BRIDGE_OAUTH_AUDIENCE` | JWT audience override (default `bookone.agent-bridge`) |
-| `AGENT_BRIDGE_OAUTH_JWKS_URL` | JWKS URL override |
-| `AGENT_BRIDGE_OAUTH_JWKS_JSON` | Optional BookOne-hosted JWKS body |
-| `AGENT_BRIDGE_OAUTH_TENANT_HINT` | Tenant for BookOne-as-AS token exchange when the client cannot send `tenant_id` |
-| `AGENT_BRIDGE_ALLOW_HMAC` | Labelled production HMAC fixtures (`1`). Off by default in production |
+| `AGENT_BRIDGE_OAUTH_JWKS_URL` | JWKS URL override (default `{issuer}/api/agent-bridge/oauth/jwks`) |
+| `AGENT_BRIDGE_OAUTH_JWKS_JSON` | Optional BookOne-hosted JWKS body (otherwise derived from the signing PEM) |
+| `AGENT_BRIDGE_OAUTH_SIGNING_PEM` | PKCS8 RSA private key for BookOne-as-AS access tokens |
+| `AGENT_BRIDGE_OAUTH_KID` | JWKS key id (default `bookone-agent-bridge`) |
+| `AGENT_BRIDGE_OAUTH_TENANT_HINT` | Optional tenant fallback when a legacy code is not tenant-bound |
+| `AGENT_BRIDGE_ALLOW_HMAC` | Labelled production HMAC fixtures (`1`). Off by default in production. Not a live-client pass |
 | `AGENT_BRIDGE_OCR_ENDPOINT` / `AGENT_BRIDGE_OCR_KEY` / `AGENT_BRIDGE_OCR_LIVE` | Optional server OCR |
 | `AGENT_BRIDGE_STORE` | `memory` only for isolated tests |
 
@@ -79,7 +81,7 @@ Public client IDs: `bookone-codex`, `bookone-claude`. Default scopes `read uploa
 |------|-----|
 | Live Codex surface | Needs a real Codex/ChatGPT account, public HTTPS MCP, OAuth issuer or labelled HMAC, Inbox enabled on a **fresh synthetic** company |
 | Live Claude surface | Same, plus Anthropic cloud must reach the host on HTTPS port 443 |
-| Production RS256 tokens | `AGENT_BRIDGE_OAUTH_ISSUER` + JWKS. HMAC minting is 503 in production without `AGENT_BRIDGE_ALLOW_HMAC=1` |
+| Production RS256 tokens | `AGENT_BRIDGE_OAUTH_SIGNING_PEM` + `AGENT_BRIDGE_OAUTH_ISSUER`. HMAC minting is 503 in production without `AGENT_BRIDGE_ALLOW_HMAC=1` |
 | Live OCR/provider smoke | Adapter is implemented; remote smoke needs authorized endpoint/key and `AGENT_BRIDGE_OCR_LIVE=1` |
 | Staging financial posting | Existing company Inbox OFF, draft-only ON, posting-stop ON until independent QA |
 | Recovery LAST | Encrypted export/restore into an empty target after functional outcomes |
@@ -92,6 +94,6 @@ Revert the product commit. Additive `046` columns remain; unused flags are harml
 
 ## CoreGuard
 
-Scoped AgentBridge suites run as the **AgentBridge CoreGuard** job, including AB-05 full-workflow (`ab05-acceptance`, `schemas`, `oauth-pkce`). The existing **Lint typecheck build test** quality job stays unconditional and remains a publication ancestor. `build-and-push` needs `[quality, coreguard]`. Playwright is not part of turbo `pnpm test`. Live Codex/Claude, live OCR, production IdP, external MCP client and GitHub protection remain blocked registry entries.
+Scoped AgentBridge suites run as the **AgentBridge CoreGuard** job, including AB-06 independent acceptance (`ab06-independent`, `ab05-acceptance`, `schemas`, `oauth-pkce`). The existing **Lint typecheck build test** quality job stays unconditional and remains a publication ancestor. `build-and-push` needs `[quality, coreguard]`. Playwright is not part of turbo `pnpm test`. Live Codex/Claude, live OCR, production IdP, external MCP client and GitHub protection remain blocked registry entries.
 
-Independent remaining-only QA: `docs/qa/CODING-AGENTBRIDGE-05-QA.md`.
+Independent remaining-only QA: `docs/qa/CODING-AGENTBRIDGE-06-QA.md`.

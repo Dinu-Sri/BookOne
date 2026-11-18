@@ -12,7 +12,7 @@ import {
   ARCHIVE_EXCLUDED_TABLES,
   ARCHIVE_RESTORE_INSERT_ORDER,
 } from '../../db/src/archive/format';
-import { dbBackedAgentBridgeBlobKeys } from '../../db/src/archive/format';
+import { dbBackedAgentBridgeBlobKeys, missingOwnedAttachmentKeys } from '../../db/src/archive/format';
 import {
   arApMatchesDocuments,
   invoiceTotalsFromTables,
@@ -120,6 +120,21 @@ describe('archive table whitelist', () => {
     });
     expect(backed.has('tenants/t/agent-bridge/a.pdf')).toBe(true);
     expect(backed.has('tenants/t/agent-bridge/missing.pdf')).toBe(false);
+    const tenantId = 't';
+    const missing = missingOwnedAttachmentKeys({
+      pointers: [
+        'tenants/t/agent-bridge/a.pdf',
+        'tenants/t/agent-bridge/missing.pdf',
+        'tenants/t/agent-bridge/s3-only.pdf',
+        'tenants/t/receipts/other.pdf',
+      ],
+      listed: ['tenants/t/receipts/other.pdf'],
+      dbBackedKeys: backed,
+      tenantId,
+      isOwned: (tid, key) => key.startsWith(`tenants/${tid}/`),
+    });
+    expect(missing).toEqual(['tenants/t/agent-bridge/missing.pdf', 'tenants/t/agent-bridge/s3-only.pdf']);
+    expect(missing).not.toContain('tenants/t/agent-bridge/a.pdf');
   });
 
   it('keeps prepared archives out of the files pack prefix', () => {

@@ -45,6 +45,8 @@ export default async function InboxDocumentPage({
     status.document.status === 'awaiting_facts' ||
     status.document.status === 'failed' ||
     status.document.status === 'received';
+  const canEditFacts =
+    canWrite && !['posted', 'posting', 'rejected'].includes(status.document.status);
   const extractorLabel = status.document.extractorId
     ? status.document.extractorId.startsWith('agent:')
       ? 'Facts submitted by a connected agent'
@@ -98,11 +100,13 @@ export default async function InboxDocumentPage({
                 <Link href="/purchase/inbox/connections">Connections</Link>
               </p>
             </section>
-            {awaitingFacts && canWrite ? (
+            {canEditFacts ? (
               <section>
-                <h3 style={{ fontSize: 15 }}>Enter invoice facts</h3>
+                <h3 style={{ fontSize: 15 }}>{awaitingFacts ? 'Enter invoice facts' : 'Edit facts'}</h3>
                 <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-                  The original file is stored. Fill the printed amounts. Server OCR is optional.
+                  {awaitingFacts
+                    ? 'The original file is stored. Fill the printed amounts. Server OCR is optional.'
+                    : 'Correct the printed amounts on this stored original. Saving replaces the current proposal and revokes any prior approval.'}
                 </p>
                 <form action={submitInboxFacts} style={{ display: 'grid', gap: 10 }}>
                   <input type="hidden" name="documentId" value={id} />
@@ -189,9 +193,21 @@ export default async function InboxDocumentPage({
                     </div>
                     <div className="field">
                       <label htmlFor="facts-category">Category</label>
-                      <select id="facts-category" className="input" name="expenseAccountCode" defaultValue={proposal?.facts.expenseAccountCode ?? policy.defaultExpenseAccount}>
+                      <select
+                        id="facts-category"
+                        className="input"
+                        name="expenseAccountCode"
+                        defaultValue={
+                          proposal
+                            ? `${proposal.facts.expenseAccountCode}|${proposal.facts.categoryLabel}`
+                            : `${policy.defaultExpenseAccount}|${
+                                policy.approvedCategories.find((c) => c.accountCode === policy.defaultExpenseAccount)
+                                  ?.label ?? ''
+                              }`
+                        }
+                      >
                         {policy.approvedCategories.map((c) => (
-                          <option key={c.accountCode} value={c.accountCode}>
+                          <option key={`${c.accountCode}|${c.label}`} value={`${c.accountCode}|${c.label}`}>
                             {c.label} ({c.accountCode})
                           </option>
                         ))}

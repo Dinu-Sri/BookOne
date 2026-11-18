@@ -31,6 +31,21 @@ export function dbBackedAgentBridgeBlobKeys(tables: Record<string, Record<string
   return keys;
 }
 
+/** Pointers that are neither in S3 nor stored as a non-empty DB-backed AgentBridge blob. */
+export function missingOwnedAttachmentKeys(args: {
+  pointers: string[];
+  listed: Iterable<string>;
+  dbBackedKeys: Iterable<string>;
+  tenantId: string;
+  isOwned: (tenantId: string, key: string) => boolean;
+}): string[] {
+  const listed = args.listed instanceof Set ? args.listed : new Set(args.listed);
+  const dbBacked = args.dbBackedKeys instanceof Set ? args.dbBackedKeys : new Set(args.dbBackedKeys);
+  return args.pointers.filter(
+    (key) => args.isOwned(args.tenantId, key) && !dbBacked.has(key) && !listed.has(key),
+  );
+}
+
 export type ArchiveKind = 'data' | 'files';
 
 export type ArchiveManifest = {

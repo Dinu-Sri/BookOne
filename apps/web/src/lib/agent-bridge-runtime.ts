@@ -4,6 +4,7 @@ import {
   defaultPolicy,
   extractorFor,
   intersectCapabilities,
+  tenantIdFromBoundToken,
   type Actor,
   type AgentBridgeStore,
   type Capability,
@@ -231,6 +232,41 @@ class PostgresStore implements AgentBridgeStore {
     } else {
       await db().insert(agentBridgeDocuments).values({ id: d.id, createdAt: new Date(d.createdAt), ...values });
     }
+    });
+  }
+  async casDocument(d: StoredDocument, expectedRevision: number) {
+    return this.run(d.tenantId, async () => {
+      const values = {
+        tenantId: d.tenantId,
+        userId: d.userId,
+        status: d.status,
+        contentHash: d.contentHash,
+        storageKey: d.storageKey,
+        filename: d.filename,
+        mime: d.mime,
+        bytes: d.bytes,
+        extractorId: d.extractorId,
+        extractorLive: d.extractorLive ? '1' : '0',
+        factsJson: d.facts ?? null,
+        proposalId: d.proposalId,
+        proposalRevision: d.proposalRevision,
+        lastErrorCode: d.lastErrorCode ?? null,
+        lastErrorMessage: d.lastErrorMessage ?? null,
+        intakeMode: d.intakeMode ?? null,
+        updatedAt: new Date(),
+      };
+      const updated = await db()
+        .update(agentBridgeDocuments)
+        .set(values)
+        .where(
+          and(
+            eq(agentBridgeDocuments.id, d.id),
+            eq(agentBridgeDocuments.tenantId, d.tenantId),
+            eq(agentBridgeDocuments.proposalRevision, expectedRevision),
+          ),
+        )
+        .returning({ id: agentBridgeDocuments.id });
+      return updated.length === 1;
     });
   }
   async getProposal(tenantId: string, id: string) {
@@ -563,19 +599,34 @@ class PostgresStore implements AgentBridgeStore {
   async saveFactsKey(row: StoredFactsKey) {
     return this.run(row.tenantId, async () => {
       const existing = await this.getFactsKey(row.tenantId, row.key);
-      if (existing) {
-        await db()
-          .update(agentBridgeFactsKeys)
-          .set({ payloadHash: row.payloadHash, documentId: row.documentId })
-          .where(and(eq(agentBridgeFactsKeys.tenantId, row.tenantId), eq(agentBridgeFactsKeys.key, row.key)));
-      } else {
-        await db().insert(agentBridgeFactsKeys).values({
+      if (existing) return;
+      await db()
+        .insert(agentBridgeFactsKeys)
+        .values({
           tenantId: row.tenantId,
           key: row.key,
           payloadHash: row.payloadHash,
           documentId: row.documentId,
-        });
-      }
+        })
+        .onConflictDoNothing();
+    });
+  }
+  async claimFactsKey(row: StoredFactsKey) {
+    return this.run(row.tenantId, async () => {
+      const inserted = await db()
+        .insert(agentBridgeFactsKeys)
+        .values({
+          tenantId: row.tenantId,
+          key: row.key,
+          payloadHash: row.payloadHash,
+          documentId: row.documentId,
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (inserted.length) return { claimed: true as const };
+      const existing = await this.getFactsKey(row.tenantId, row.key);
+      if (!existing) return { claimed: true as const };
+      return { claimed: false as const, existing };
     });
   }
   async getFactsKey(tenantId: string, key: string) {
@@ -672,7 +723,9 @@ export async function saveOauthCode(row: {
   });
 }
 
-export async function takeOauthCode(tenantId: string, code: string) {
+export async function takeOauthCode(code: string, tenantHint?: string) {
+  const tenantId = tenantHint?.trim() || tenantIdFromBoundToken(code);
+  if (!tenantId) return null;
   return withTenantContext(tenantId, async () => {
     const [row] = await db()
       .select()

@@ -1,3 +1,10 @@
+## 2026-11-18 — Company AgentBridge connections UI (v2.11.0)
+
+- Record: [CHG-20261118-agentbridge-08-company-connections](changes/CHG-20261118-agentbridge-08-company-connections.md). Baseline product `58eea1a` / v2.10.2. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AB-07 public discovery, `/authorize` alias, loopback `/callback/<id>`. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks. Do not recreate the saved Codex `bookone` MCP entry.
+- Change: Company → AgentBridge (`/company/agent-bridge`) is the settings, readiness, two-prompt (Codex/Claude) and connected-client screen. Inbox flags move off Purchase Settings. `/purchase/inbox/connections` redirects. Opening or copying does not change flags. VERSION 2.11.0. CoreGuard `ab-08`. Schema stays `ab-06.1`.
+- Checks: `@bookone/agent-bridge` 22 files / 104 passed (includes connection-prompts 10 and oauth-codex-login 6). `@bookone/auth` permissions + ui-nav-01 13 passed. Playwright connect 5 passed, inbox 4 passed / 1 skipped, ui-nav-01 6 passed. AgentBridge `tsc --noEmit` passed. Screenshots in `docs/qa/ab08/`.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent `codex mcp login bookone` retry pending. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Codex MCP login discovery (v2.10.2)
 
 - Record: [CHG-20261118-agentbridge-07-codex-login](changes/CHG-20261118-agentbridge-07-codex-login.md). Baseline product `a12c182` / v2.10.1. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AgentBridge generate-once signing and connection screen. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks. Do not recreate the saved Codex `bookone` MCP entry.

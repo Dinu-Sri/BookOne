@@ -13,4 +13,5 @@ export * from './jobs';
 export * from './coreguard';
 export * from './schemas';
 export * from './oauth';
+export * from './connection-prompts';
 export * from './operations';

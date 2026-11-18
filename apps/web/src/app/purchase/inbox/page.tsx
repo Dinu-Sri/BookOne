@@ -52,7 +52,7 @@ export default async function DocumentInboxPage({
               </p>
             ) : null}
             {flags.draftOnly ? (
-              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Draft-only mode is on. Posting stays off until you change Purchase settings.</p>
+              <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Draft-only mode is on. Posting stays off until you change Company → AgentBridge.</p>
             ) : null}
             {flags.postingDisabled ? (
               <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Agent posting is stopped for this company.</p>
@@ -60,7 +60,7 @@ export default async function DocumentInboxPage({
             {canWrite ? (
               <form action={uploadInboxDocument} style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
                 <div className="party-form-top" style={{ padding: 0, marginBottom: 8 }}>
-                  <Link href="/purchase/inbox/connections" className="party-back-btn" style={{ marginLeft: 'auto' }}>
+                  <Link href="/company/agent-bridge" className="party-back-btn" style={{ marginLeft: 'auto' }}>
                     <span>
                       <strong>Connections</strong>
                       <small>Agents</small>

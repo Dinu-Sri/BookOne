@@ -1,3 +1,7 @@
+## 2026-11-18 — Company AgentBridge connections UI (v2.11.0)
+
+Candidate **2.11.0** on `feat/v2110-agentbridge-08-company-connections` from origin/master `58eea1a` / v2.10.2. Company → AgentBridge is the place to configure AI access, copy Codex or Claude connection prompts, and manage connected clients. AB-07 login discovery stays. Keep Inbox OFF, draft-only ON, posting-stop ON. Owner deploys after the Docker web image is green, then retries the saved Codex login. Independent staging QA pending. Real Codex/Claude stay unverified until that retry. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Codex MCP login discovery (v2.10.2)
 
 Candidate **2.10.2** on `fix/v2102-agentbridge-07-codex-login` from origin/master `a12c182` / v2.10.1. Real Codex CLI opened `{issuer}/authorize` and got a 404 because unauthenticated discovery 307'd to `/login`. This candidate publishes OAuth/MCP metadata without a session and aliases `/authorize` to the implemented consent handler. Keep Inbox OFF, draft-only ON, posting-stop ON. Owner deploys after the Docker web image is green, then retries the saved Codex login. Independent staging QA pending. Real Codex/Claude stay unverified until that retry. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

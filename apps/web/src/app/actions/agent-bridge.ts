@@ -76,9 +76,12 @@ export async function revokeAgentConnection(formData: FormData) {
   const user = await requireTenantContext();
   const id = String(formData.get('connectionId') ?? '');
   const { revokeAgentBridgeConnection } = await import('@/lib/agent-bridge-runtime');
-  await withTenantContext(user.tenantId, () => revokeAgentBridgeConnection(user.tenantId, user.id, id));
+  await withTenantContext(user.tenantId, () =>
+    revokeAgentBridgeConnection(user.tenantId, user.id, id, { companyWide: true }),
+  );
+  revalidatePath('/company/agent-bridge');
   revalidatePath('/purchase/inbox/connections');
-  redirect('/purchase/inbox/connections');
+  redirect('/company/agent-bridge');
 }
 
 export async function uploadInboxDocument(formData: FormData) {
@@ -171,8 +174,10 @@ export async function saveAgentBridgeSettingsFromForm(formData: FormData) {
         formData.get('agentBridgePostingDisabled') === 'on' || formData.get('agentBridgePostingDisabled') === '1',
     }),
   );
+  revalidatePath('/company/agent-bridge');
   revalidatePath('/company/purchase');
   revalidatePath('/purchase/inbox');
+  redirect('/company/agent-bridge?saved=1');
 }
 
 export async function mintInboxToken(): Promise<{ token?: string; error?: string }> {

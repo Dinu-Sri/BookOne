@@ -23,7 +23,7 @@ Claude custom connectors are reached from **Anthropic’s cloud**, not from the 
 1. Deploy this candidate. Do **not** enable Inbox or posting on the existing live company.
 2. Create or select a **fresh synthetic** company. Turn Document Inbox on there. Leave draft-only and posting-disable on until independent QA authorizes a posting check.
 3. Set `AGENT_BRIDGE_PUBLIC_URL` to that HTTPS origin (port 443).
-4. Production tokens: usual Portainer Re-pull. BookOne generates a persistent PKCS8 key on first use (see `docs/AGENT_BRIDGE_SIGNING_STAGING.md`). Copy the MCP URL and `bookone-claude` from `/purchase/inbox/connections`. **Do not** set `AGENT_BRIDGE_ALLOW_HMAC=1` on staging as a substitute.
+4. Production tokens: usual Portainer Re-pull. BookOne generates a persistent PKCS8 key on first use (see `docs/AGENT_BRIDGE_SIGNING_STAGING.md`). Copy **Connect with Claude** from Company → AgentBridge (`/company/agent-bridge`). **Do not** set `AGENT_BRIDGE_ALLOW_HMAC=1` on staging as a substitute.
 5. Tenant is encoded in the authorization code. `AGENT_BRIDGE_OAUTH_TENANT_HINT` / `tenant_id` are optional fallbacks for legacy codes.
 6. Allow Anthropic IP ranges if a firewall sits in front of BookOne.
 7. A human BookOne user with Inbox write signs in during the browser consent step. Consent grants read/upload/draft only.
@@ -42,6 +42,16 @@ BookOne does not implement Dynamic Client Registration. In Claude choose **Use y
 8. Enable the connector for the conversation from **+ → Connectors**.
 
 Team/Enterprise owners add the connector under Organization settings first; members then Connect with their own BookOne login.
+
+## Claude Code (not live-verified)
+
+If the user is already in Claude Code, they may add the same public MCP URL from a terminal, then sign in from the session:
+
+```bash
+claude mcp add --transport http bookone https://<public-host>/api/agent-bridge/mcp
+```
+
+Then type `/mcp` and authenticate. Use public client id `bookone-claude` and no secret. Do not use Codex CLI flags. This route is documented from vendor CLI help; it is **not** a live BookOne session pass.
 
 ## Claude Desktop / Cowork
 
@@ -64,7 +74,7 @@ Claude chat attachments are **not** forwarded to BookOne MCP. Always use `create
 
 ## Disconnect
 
-- Claude: Remove or disconnect the connector in Customize → Connectors **and** Revoke on `/purchase/inbox/connections`.
+- Claude: Remove or disconnect the connector in Customize → Connectors **and** Revoke access on Company → AgentBridge.
 - Revoke in BookOne immediately invalidates the connection.
 
 ## What this session verified vs what it did not

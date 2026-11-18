@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { CATALOG_VERSION, PERMISSION_KEYS, SCREEN_DEFS } from '../src/permissions/catalog';
+import { CATALOG_VERSION, PERMISSION_KEYS, SCREEN_DEFS, screenKeyFromHref } from '../src/permissions/catalog';
 import { JOB_TEMPLATES, templateByKey } from '../src/permissions/templates';
 
 describe('AgentBridge permission catalog v2', () => {
@@ -12,6 +12,8 @@ describe('AgentBridge permission catalog v2', () => {
     expect(PERMISSION_KEYS).toContain('agent_bridge.approve');
     expect(PERMISSION_KEYS).toContain('agent_bridge.post');
     expect(SCREEN_DEFS.some((s) => s.href === '/purchase/inbox' && s.label === 'Document Inbox')).toBe(true);
+    expect(screenKeyFromHref('/company/agent-bridge')).toBe('company.purchase_settings');
+    expect(screenKeyFromHref('/purchase/inbox/connections')).toBe('company.purchase_settings');
   });
 
   it('grants purchasing write, accountant approve/post, viewer read-only inbox', () => {

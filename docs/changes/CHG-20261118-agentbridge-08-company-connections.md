@@ -1,0 +1,34 @@
+# CHG-20261118-agentbridge-08-company-connections — Company AgentBridge settings and two-prompt connection
+
+Status: ready-for-QA.
+
+- Author/agent and date: coding agent, 2026-11-18
+- Product version (`VERSION` file) and base SHA / branch/PR: 2.11.0 on `feat/v2110-agentbridge-08-company-connections` from origin/master `58eea1aee9a56bb049497e0f63ace0585e47d989` (v2.10.2)
+- QA repository revision and companion PR/change ID: independent live Codex/Claude pending after owner deploy. Handoff CODING-AGENTBRIDGE-08-COMPANY-CONNECTIONS-UI.md. No bookone-qa companion opened in this change. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. AB-07 login discovery is already on master (v2.10.2) and is retained; a new screen does not close live-client qualification.
+- Intended before/after behaviour with a concrete example: a settings user opens **Company → AgentBridge** (`/company/agent-bridge`) even when Document Inbox is off. The page shows server/company/client readiness, the three existing flags with **Save AgentBridge settings**, and exactly two copyable prompts (Connect with Codex, Connect with Claude) populated from the trusted public origin. Copying does not create a connection. `/purchase/inbox/connections` redirects here. Purchase Settings keeps a secondary link and no longer hosts the Inbox flags form.
+- Existing behaviour that must remain correct: AB-07 public OAuth/MCP discovery, `/authorize` alias, loopback `/callback/<id>`, RFC 9207 `iss`; generate-once signing volume; FILE-wins PEM; HMAC unset; Inbox/posting flags unchanged by opening the page; UI-NAV-01 list clipping; tiles removed; dashboard DB-01; consent still never grants post; upload-session URLs stay on `/purchase/inbox`
+- Actual changed paths/symbols/routes: `packages/agent-bridge/src/connection-prompts.ts`; `/company/agent-bridge`; Company nav AgentBridge; Purchase Settings secondary link; legacy `/purchase/inbox/connections` redirect; `accessByLabel.AgentBridge` aliases `company.purchase_settings`; CoreGuard `ab-08`
+- Business rule/profile/scenario IDs: AgentBridge AB-08 company connections UI. Companion AB-07 already shipped in v2.10.2
+- Accounting, stock/rental, tenant/access and customer-data effects: none. No new posting. Existing company flags unchanged by navigation or copy. Settings save still requires `company.purchase_settings.write`. Revoke still requires `purchase.inbox.write`
+- Migrations, schema/history compatibility and recovery implications: none. Schema stays `ab-06.1`. CoreGuard version `ab-08`
+- Dependencies, settings/flags, deployment and external-service changes: none. Owner Portainer Re-pull ON after Docker web image green. Do not set `AGENT_BRIDGE_ALLOW_HMAC`. Do not paste the private key. Do not enable Inbox/posting on the existing live company
+- Independent diff/impact review and uncertainties: Medium review still applies. This change does not claim a live Codex or Claude session connected. Static UI, public-key availability and prompt text are not a connection pass
+- Checks executed: `@bookone/agent-bridge` 22 files / 104 passed (connection-prompts 10, oauth-codex-login 6, oauth-pkce 5, connect workflow 4, coreguard 2). `@bookone/auth` agent-bridge-permissions + ui-nav-01 13 passed. Playwright `e2e/agent-bridge-connect.spec.ts` 5 passed; `e2e/agent-bridge-01.spec.ts` 4 passed / 1 skipped; `e2e/ui-nav-01.spec.ts` 6 passed. AgentBridge `tsc --noEmit` passed. Screenshots `docs/qa/ab08/agent-bridge-375.png` and `agent-bridge-1440.png`. Web `tsc --noEmit` leftover `.next/types` cashbook PageProps mismatches pre-existed and are not in this diff.
+- Failed/skipped/flaky/blocked/not-run checks and reasons: live Codex/Claude, OCR, production IdP, GitHub branch protection stay BLOCKED. Claude Code CLI route is documented as not live-verified. Isolated Next+seed browser against a live tenant is not this gate
+- New QA assertions or outstanding work; changed expectations and owner decision: Company → AgentBridge is the connection home. Exactly two prompts. Opening/copying changes no flags. After deploy, independent `codex mcp login bookone` retry on the saved entry remains outstanding (AB-07)
+- Created staging records/cleanup, if any: none
+- Documentation updated: `docs/AGENT_BRIDGE.md`, `docs/AGENT_BRIDGE_CODEX.md`, `docs/AGENT_BRIDGE_CLAUDE.md`, `docs/AGENT_BRIDGE_SIGNING_STAGING.md`, this CHG, TASK_LOG, PROJECT_STATUS
+- Next exact action and responsible role: reviewable PR, then fast-forward origin/master. Owner deploys. Independent Codex login retry on the saved entry. Do not enable AgentBridge posting
+
+## UI/UX impact and existing-design compatibility
+
+- Existing design guide/component/CSS references; reason for reusing/extending them: BookOneShell, party-form-shell, party-check, Button, data-table, existing `--ink`/`--line` tokens. Extends `.ab-connect*` rather than a new kit. UX companion pointers remain https://github.com/Dinu-Sri/bookone-qa/blob/024f8c35223a28c0662d469b71cd96579d4ee24d/docs/ux/README.md
+- Exact external QA commit and ux/workbook.json SHA256; UX/UXW/WB IDs/revisions: not bound in this change; design inventory commit `024f8c35223a28c0662d469b71cd96579d4ee24d`
+- Before/after behaviour; independent expected/unchanged example: Inbox flags previously lived on Purchase Settings with field-by-field MCP copy on `/purchase/inbox/connections`. After this change, Company → AgentBridge is one settings + two-prompt + connected-client screen. Existing flag values survive. Legacy URL redirects
+- Direct screens and transitive shared consumers; applicable states/roles/entities/settings: `/company/agent-bridge`, `/company/purchase`, `/purchase/inbox`, `/purchase/inbox/connections`, Company suite nav, Jobs still uses `company.purchase_settings`
+- Preserved field/line/source identity, money/stock/history/print and server permissions: posting and documents unchanged. Flag field names `agentBridgeEnabled` / `agentBridgeDraftOnly` / `agentBridgePostingDisabled` preserved
+- Desktop/narrow/keyboard/reader evidence; baseline/after sanitized screenshots: Playwright 375 stacked / 1440 side-by-side; copy status `aria-live`; Save and Revoke are real buttons
+- Exact and adjacent regressions; actual engineering checks and missing layers: AgentBridge CoreGuard suites retained plus `connection-prompts.test.ts`. Dashboard DB-01 retained. AB-07 oauth-codex-login retained
+- Conflict/exception owner, rationale, mitigation, expiry and acceptance impact: Claude live connector remains LIVE-UNVERIFIED. Claude Code is a separated unverified route
+- Small rollout batch/revert plan; any schema/data implications explicitly reviewed: revert the VERSION 2.11.0 commit. No schema change
+- QA companion change/run and independent review link (or pending): pending live Codex login after deploy and independent UI review

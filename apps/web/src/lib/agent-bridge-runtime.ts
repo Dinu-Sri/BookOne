@@ -989,19 +989,27 @@ export async function getAgentBridgeServiceForActor(actor: Actor): Promise<Agent
   return withTenantContext(actor.tenantId, async () => makeAgentBridgeService());
 }
 
-export async function listAgentBridgeConnections(tenantId: string, userId: string) {
+export async function listAgentBridgeConnections(tenantId: string, userId?: string) {
   const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
   if (!store.listConnections) return [];
   return store.listConnections(tenantId, userId);
 }
 
-export async function revokeAgentBridgeConnection(tenantId: string, userId: string, connectionId: string) {
+export async function revokeAgentBridgeConnection(
+  tenantId: string,
+  userId: string,
+  connectionId: string,
+  opts?: { companyWide?: boolean },
+) {
   const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
   if (!store.getConnection || !store.saveConnection) {
     throw new Error('Connections are not available on this store.');
   }
   const row = await store.getConnection(tenantId, connectionId);
-  if (!row || row.userId !== userId) {
+  if (!row || row.tenantId !== tenantId) {
+    throw Object.assign(new Error('Connection was not found.'), { code: 'CONNECTION_REVOKED' });
+  }
+  if (!opts?.companyWide && row.userId !== userId) {
     throw Object.assign(new Error('Connection was not found.'), { code: 'CONNECTION_REVOKED' });
   }
   row.revokedAt = new Date().toISOString();

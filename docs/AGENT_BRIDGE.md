@@ -4,12 +4,12 @@ Unpaid domestic local-currency supplier **service/expense** invoices: connect an
 
 Feature flags default **off**. Draft-only and posting-disable default **on**. Keep posting disabled until independent QA accepts this candidate and the owner deploys. Existing purchase screens stay usable when AgentBridge is off.
 
-Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.10.2**.
+Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.11.0**.
 
 ## Supported in this build
 
 - Document Inbox at `/purchase/inbox` (hidden until the company flag is on and the job has `purchase.inbox.read`).
-- Agent connections at `/purchase/inbox/connections` (also linked from Purchase settings). The screen shows public MCP/OAuth copy fields for Codex and Claude. It stays reachable when Document Inbox is off. New connections start with `read`, `upload`, `draft`. Post is explicit. Agents cannot mint human approval.
+- Company → AgentBridge at `/company/agent-bridge` (Company nav, reachable when Document Inbox is off). Company flags, readiness, connected clients, and exactly two copyable prompts (Codex and Claude) live here. Settings use `company.purchase_settings`. `/purchase/inbox/connections` redirects here. Purchase Settings keeps a secondary link. New connections start with `read`, `upload`, `draft`. Post is explicit. Agents cannot mint human approval. Copying a prompt does not create a connection.
 - Shared service in `@bookone/agent-bridge` used by the UI, `/api/agent-bridge/v1/*`, and `/api/agent-bridge/mcp`.
 - Posting goes through `createCommercialDocumentWithUser` (the existing unpaid purchase bill path). One bill per approved proposal.
 - Agent-first facts: a valid upload without server OCR becomes `awaiting_facts`, not a dead-end failure. `submit_extracted_facts` binds document id, content hash and expected revision. Facts can be edited on draft/validated/awaiting_approval; a new proposal replaces the current one and revokes prior approval. Category label is taken from the selected authorized mapping. Amounts use exact decimals (never Number-invalid→0).
@@ -42,7 +42,7 @@ Failed documents can resume through the same facts form. Download the original f
 ## Owner configuration
 
 1. Apply migrations through startup `db:init` (`044`, `045`, `046`). Additive; do not drop prior AgentBridge tables.
-2. On **Purchase settings**, enable Document Inbox only on the intended synthetic company. Leave draft-only and posting-disable on until independent QA says otherwise. Do not enable posting on the existing live company in this candidate.
+2. On **Company → AgentBridge**, enable Document Inbox only on the intended synthetic company. Leave draft-only and posting-disable on until independent QA says otherwise. Do not enable posting on the existing live company in this candidate. Copy the Codex or Claude connection prompt from that page.
 3. Grant `purchase.inbox.*`, `agent_bridge.approve`, and `agent_bridge.post` on Jobs if the tenant was seeded before catalog v2. `allows(key, 'write')` matches those exact catalog action keys (and a persisted `*.write` alias). Viewer stays read-only. Purchase module ceiling still applies.
 4. Set `AGENT_BRIDGE_PUBLIC_URL` (or `AUTH_URL`) to the public HTTPS origin so review URLs and OAuth metadata are absolute.
 5. MCP signing: `AGENT_BRIDGE_TOKEN_SECRET` or `AUTH_SECRET` is required (no development fallback).

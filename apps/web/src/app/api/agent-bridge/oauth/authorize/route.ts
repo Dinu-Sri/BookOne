@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     return html('<p>Sign in to BookOne first.</p>', 401);
   }
   const flags = await loadAgentBridgeFlags(user.tenantId);
-  if (!flags.enabled) return html('<p>Turn on Document Inbox in Purchase settings before connecting an agent.</p>', 403);
+  if (!flags.enabled) return html('<p>Turn on Document Inbox in Company → AgentBridge before connecting an agent.</p>', 403);
   const form = await req.formData();
   const clientId = String(form.get('client_id') ?? '');
   const redirectUri = String(form.get('redirect_uri') ?? '');

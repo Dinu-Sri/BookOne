@@ -97,7 +97,7 @@ export default async function InboxDocumentPage({
               <p>
                 <Link href={`/purchase/inbox/${id}/file`}>Download original</Link>
                 {' · '}
-                <Link href="/purchase/inbox/connections">Connections</Link>
+                <Link href="/company/agent-bridge">Connections</Link>
               </p>
             </section>
             {canEditFacts ? (

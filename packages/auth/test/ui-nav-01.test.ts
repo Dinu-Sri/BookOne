@@ -216,4 +216,30 @@ describe('UI-NAV-01 permission model', () => {
     expect(hrefs).toContain('/docs');
     expect(hrefs).toContain('/control-room');
   });
+
+  it('Company AgentBridge stays visible when Document Inbox is off', () => {
+    const navSource = readRepo('apps/web/src/lib/nav-suites.ts');
+    expect(navSource).toMatch(/label: 'AgentBridge'/);
+    expect(navSource).toMatch(/href: '\/company\/agent-bridge'/);
+    const suites = [
+      suite('purchase', [item('Purchases', '/purchase/purchases'), item('Document Inbox', '/purchase/inbox')]),
+      suite('company', [
+        item('Purchase Settings', '/company/purchase'),
+        item('AgentBridge', '/company/agent-bridge'),
+      ]),
+    ];
+    const visible = filterVisibleSuites({
+      suites,
+      isSuperAdmin: false,
+      modules: fullModules,
+      entityKind: 'company',
+      soleNeedsCashbook: false,
+      cashbookItem,
+      agentBridgeEnabled: false,
+    });
+    const companySuite = visible.find((s) => s.id === 'company')!;
+    const purchaseSuite = visible.find((s) => s.id === 'purchase')!;
+    expect(companySuite.items.some((i) => i.label === 'AgentBridge')).toBe(true);
+    expect(purchaseSuite.items.some((i) => i.label === 'Document Inbox')).toBe(false);
+  });
 });

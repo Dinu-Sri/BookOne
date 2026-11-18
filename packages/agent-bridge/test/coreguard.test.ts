@@ -39,6 +39,7 @@ describe('scoped CoreGuard registry', () => {
     expect(yaml).toMatch(/e2e\/agent-bridge-connect\.spec\.ts/);
     expect(yaml).toMatch(/oauth-connect-workflow\.test\.ts/);
     expect(yaml).toMatch(/oauth-codex-login\.test\.ts/);
+    expect(yaml).toMatch(/connection-prompts\.test\.ts/);
     expect(yaml).not.toMatch(/^\s+if: always\(/m);
     expect(yaml).not.toMatch(/^\s+if: failure\(/m);
   });

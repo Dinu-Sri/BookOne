@@ -24,7 +24,7 @@ Vendor docs used while writing (2026-11-17): [Codex MCP](https://learn.chatgpt.c
 1. Deploy this candidate. Do **not** enable Inbox or posting on the existing live company.
 2. Create or select a **fresh synthetic** company. Turn Document Inbox on there. Leave draft-only and posting-disable on until independent QA authorizes a posting check.
 3. Set `AGENT_BRIDGE_PUBLIC_URL` to that HTTPS origin.
-4. Production tokens: usual Portainer Re-pull. BookOne generates a persistent PKCS8 key on first use (see `docs/AGENT_BRIDGE_SIGNING_STAGING.md`). Copy the MCP URL and `bookone-codex` from `/purchase/inbox/connections`. **Do not** set `AGENT_BRIDGE_ALLOW_HMAC=1` on staging as a substitute.
+4. Production tokens: usual Portainer Re-pull. BookOne generates a persistent PKCS8 key on first use (see `docs/AGENT_BRIDGE_SIGNING_STAGING.md`). Copy **Connect with Codex** from Company → AgentBridge (`/company/agent-bridge`). **Do not** set `AGENT_BRIDGE_ALLOW_HMAC=1` on staging as a substitute.
 5. Tenant is encoded in the authorization code. `AGENT_BRIDGE_OAUTH_TENANT_HINT` / `tenant_id` are optional fallbacks for legacy codes.
 6. A human BookOne user with Inbox write signs in during the browser consent step. Consent grants read/upload/draft only.
 
@@ -77,7 +77,7 @@ Codex may have the bytes on disk. If the client can read them, use `submit_docum
 
 ## Disconnect
 
-- Codex: `codex mcp logout bookone` (or remove the server) **and** Revoke on `/purchase/inbox/connections`.
+- Codex: `codex mcp logout bookone` (or remove the server) **and** Revoke access on Company → AgentBridge.
 - Revoke in BookOne immediately invalidates the connection even if the client still holds a token.
 
 ## What this session verified vs what it did not

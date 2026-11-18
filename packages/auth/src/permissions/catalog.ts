@@ -172,6 +172,8 @@ export const SCREEN_DEFS: {
 
 const HREF_ALIASES: Record<string, string> = {
   '/company/team/groups': 'team.people',
+  '/company/agent-bridge': 'company.purchase_settings',
+  '/purchase/inbox/connections': 'company.purchase_settings',
   '/purchase/suppliers': 'parties.vendors',
   '/journal/audit': 'accounting.journal',
   '/cashbook/summary': 'accounting.cashbook',

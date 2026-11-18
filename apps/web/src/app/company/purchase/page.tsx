@@ -3,8 +3,6 @@ import Link from 'next/link';
 import { getPurchaseSettings, savePurchaseSettingsFromForm } from '@/app/actions/purchase-settings';
 import { getDocumentFormOptions } from '@/app/actions/documents';
 import { getTenantInfo } from '@/app/actions/workspace';
-import { loadAgentBridgeFlags } from '@/lib/agent-bridge-runtime';
-import { saveAgentBridgeSettingsFromForm } from '@/app/actions/agent-bridge';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Button } from '@/components/ui/bookone-ui';
 
@@ -12,14 +10,12 @@ export default async function CompanyPurchaseSettingsPage() {
   let tenant;
   let settings;
   let options;
-  let abFlags = { enabled: false, draftOnly: true, postingDisabled: true };
   try {
     [tenant, settings, options] = await Promise.all([
       getTenantInfo(),
       getPurchaseSettings(),
       getDocumentFormOptions(),
     ]);
-    abFlags = await loadAgentBridgeFlags(tenant.id);
   } catch {
     redirect('/login');
   }
@@ -146,50 +142,12 @@ export default async function CompanyPurchaseSettingsPage() {
               </Button>
             </div>
           </form>
-          <form action={saveAgentBridgeSettingsFromForm} className="party-form-body" style={{ borderTop: '1px solid var(--line, #e5e7eb)', marginTop: 16 }}>
-            <div className="party-tab-panel">
-              <div className="party-tab-grid">
-                <div className="field field-full">
-                  <strong>Document Inbox (AgentBridge)</strong>
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    Off by default. Draft-only and posting-disable stay on until you turn them off. No autonomous posting.
-                  </p>
-                  <p style={{ fontSize: 12, marginTop: 8 }}>
-                    <Link href="/purchase/inbox/connections">Connect Codex or Claude</Link>
-                    {' — copy the public MCP and client details from BookOne.'}
-                  </p>
-                </div>
-                <div className="field field-full">
-                  <label className="party-check">
-                    <input type="checkbox" name="agentBridgeEnabled" value="on" defaultChecked={abFlags.enabled} />
-                    Enable Document Inbox for this company
-                  </label>
-                </div>
-                <div className="field field-full">
-                  <label className="party-check">
-                    <input type="checkbox" name="agentBridgeDraftOnly" value="on" defaultChecked={abFlags.draftOnly} />
-                    Draft-only (agents cannot post)
-                  </label>
-                </div>
-                <div className="field field-full">
-                  <label className="party-check">
-                    <input
-                      type="checkbox"
-                      name="agentBridgePostingDisabled"
-                      value="on"
-                      defaultChecked={abFlags.postingDisabled}
-                    />
-                    Stop AgentBridge posting (server-side)
-                  </label>
-                </div>
-              </div>
-            </div>
-            <div className="party-form-footer">
-              <Button variant="secondary" type="submit">
-                Save Document Inbox flags
-              </Button>
-            </div>
-          </form>
+          <div className="party-form-body" style={{ borderTop: '1px solid var(--line, #e5e7eb)', marginTop: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+              Document Inbox and AI client connections moved to{' '}
+              <Link href="/company/agent-bridge">Company → AgentBridge</Link>.
+            </p>
+          </div>
         </div>
       </div>
     </BookOneShell>

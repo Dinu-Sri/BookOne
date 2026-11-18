@@ -188,6 +188,10 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
     accessByLabel.Groups = accessByLabel.Team ?? 'none';
     accessByLabel.Activity = accessByLabel.Journal ?? 'none';
+    accessByLabel.AgentBridge = accessByLabel['Purchase Settings'] ?? 'none';
+    if (accessByLabel.AgentBridge === 'none' && (accessByLabel['Document Inbox'] ?? 'none') !== 'none') {
+      accessByLabel.AgentBridge = 'read';
+    }
     const { landingHrefForAccess } = await import('@/lib/access');
     const { CONTROL_ROOM_NAV_LABELS } = await import('@/lib/nav-visibility');
     if (user.platformRole === 'super_admin') {

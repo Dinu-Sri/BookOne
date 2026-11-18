@@ -10,7 +10,7 @@ Owner deploys through the usual Portainer update (Re-pull ON after the Docker we
 - A named volume `agent_bridge_signing` is mounted at `/var/lib/bookone/secrets` (web runs as UID **1001**).
 - On first JWKS or token request, BookOne generates a PKCS8 RSA key once into `AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE` and reuses that file across container restarts. FILE still wins. A missing FILE path does **not** fall back to the env PEM body.
 - HMAC stays off. Do not set `AGENT_BRIDGE_ALLOW_HMAC`. Do not change `AUTH_SECRET`. Do not enable company Inbox/posting flags. Do not delete volumes. Do not replace the entrypoint.
-- Connection details for Codex and Claude are copied from `/purchase/inbox/connections` (also linked from Purchase settings). That screen stays reachable when Document Inbox is off.
+- Connection details for Codex and Claude are copied from **Company → AgentBridge** (`/company/agent-bridge`). That screen stays reachable when Document Inbox is off. `/purchase/inbox/connections` redirects there.
 
 ## 1. Usual Portainer update
 
@@ -47,7 +47,7 @@ Success: HTTP 200 JSON with a nonempty `keys` array. Each key has `kty: RSA`, `u
 
 Same document is also at https://bookone.clossyan.com/.well-known/jwks.json
 
-Inside BookOne, open **Purchase settings → Connect Codex or Claude** (`/purchase/inbox/connections`). Copy the public URL, issuer, JWKS, MCP URL, and client ids. There is no client secret.
+Inside BookOne, open **Company → AgentBridge** (`/company/agent-bridge`). Copy **Connect with Codex** or **Connect with Claude**. Technical details (issuer, JWKS, client ids) are collapsed on that page. There is no client secret.
 
 Then tell QA the live sidebar stamp (`vMAJOR.MINOR.PATCH · sha7`) and that JWKS is ready. Independent QA verifies metadata and OAuth/PKCE/refresh/revocation with an authorized synthetic company. Real Codex/Claude sessions are a separate acceptance, not this setup.
 

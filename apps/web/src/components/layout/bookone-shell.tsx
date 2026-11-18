@@ -140,6 +140,8 @@ export interface TenantLite {
   /** First screen this job can open; used when a typed URL is denied. */
   landingHref?: string;
   agentBridgeEnabled?: boolean;
+  timezone?: string;
+  baseCurrency?: string;
 }
 
 export interface PeriodLite {
@@ -271,7 +273,12 @@ export function BookOneShell({
               <StatusToast />
             </Suspense>
             {period ? (
-              <PeriodSelector selected={period.selected} available={period.available} compact />
+              <PeriodSelector
+                selected={period.selected}
+                available={period.available}
+                compact
+                timeZone={tenant?.timezone}
+              />
             ) : (
               <DateQuickAccess />
             )}

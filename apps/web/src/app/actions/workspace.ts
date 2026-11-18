@@ -69,6 +69,8 @@ export interface TenantInfo {
   landingHref?: string;
   /** Document Inbox is hidden until the company AgentBridge flag is on. */
   agentBridgeEnabled?: boolean;
+  timezone?: string;
+  baseCurrency?: string;
 }
 
 export interface AccountBalance {
@@ -152,6 +154,15 @@ export async function getTenantInfo(): Promise<TenantInfo> {
       .where(eq(tenants.id, user.tenantId))
       .limit(1);
     if (!t) throw new Error('Tenant not found.');
+    const { companyProfiles } = await import('@bookone/db');
+    const [profile] = await db()
+      .select({
+        timezone: companyProfiles.timezone,
+        baseCurrency: companyProfiles.baseCurrency,
+      })
+      .from(companyProfiles)
+      .where(eq(companyProfiles.tenantId, user.tenantId))
+      .limit(1);
     const { loadAccessForUser, SCREEN_DEFS, isReadOnlyJob } = await import('@bookone/auth');
     let access = null as Awaited<ReturnType<typeof loadAccessForUser>>;
     try {
@@ -199,6 +210,8 @@ export async function getTenantInfo(): Promise<TenantInfo> {
       accessByLabel,
       landingHref: landingHrefForAccess(access),
       agentBridgeEnabled: await loadAgentBridgeEnabled(user.tenantId),
+      timezone: profile?.timezone || 'Asia/Colombo',
+      baseCurrency: profile?.baseCurrency || 'LKR',
     };
   });
 }

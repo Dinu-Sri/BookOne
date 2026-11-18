@@ -120,6 +120,21 @@ jobs:
     permissions:
       contents: read
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bookone
+          POSTGRES_PASSWORD: bookone
+          POSTGRES_DB: bookone_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,13 +165,25 @@ jobs:
           NODE_ENV: test
 
       - name: AgentBridge permissions archive and publication gate
-        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/tenant-archive.test.ts test/ab06-postgres-claim.test.ts test/agent-bridge-signing-compose.test.ts
+        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/tenant-archive.test.ts test/ab06-postgres-claim.test.ts test/agent-bridge-signing-compose.test.ts test/dashboard-db01-gate.test.ts
+        env:
+          DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
+          DB01_REQUIRE_POSTGRES: '1'
+
+      - name: Dashboard DB-01
+        run: |
+          pnpm --filter @bookone/accounting exec vitest run test/dashboard-metrics.test.ts
+          pnpm --filter @bookone/auth exec vitest run test/dashboard-db01-postgres.test.ts test/dashboard-db01-gate.test.ts
+        env:
+          DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
+          DB01_REQUIRE_POSTGRES: '1'
+          NODE_ENV: test
 
       - name: Install Playwright Chromium
         run: pnpm --dir apps/web exec playwright install --with-deps chromium
 
-      - name: Browser inbox and UI-NAV-01 clipping
-        run: pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/ui-nav-01.spec.ts
+      - name: Browser inbox UI-NAV-01 and Dashboard DB-01
+        run: pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts
 
   build-and-push:
     name: Build & push web image

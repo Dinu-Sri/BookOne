@@ -1,3 +1,7 @@
+## 2026-11-18 — Business overview dashboard DB-01 (v2.9.0)
+
+Candidate **2.9.0** on `feat/v290-dashboard-db01` from origin/master `9a719dc` / v2.8.3. `/dashboard` is a labelled business overview with metric contracts in [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md). CoreGuard Dashboard DB-01 is a Docker web image publication prerequisite. AgentBridge signing PEM_FILE stays. Keep Inbox OFF, draft-only ON, posting-stop ON. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Staging AgentBridge signing file + compose forwarding (v2.8.3)
 
 Candidate **2.8.3** on `fix/v283-agentbridge-signing` from origin/master `e9160f3` / v2.8.2. Compose now forwards AgentBridge public URL, issuer, kid, and a read-only signing-key file. `oauthSigningPem` loads `AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE`. Feature-branch PR only — owner deploys; do not silently redeploy. Operator steps: [AGENT_BRIDGE_SIGNING_STAGING.md](AGENT_BRIDGE_SIGNING_STAGING.md). Keep Inbox OFF, draft-only ON, posting-stop ON. After owner deploy, public JWKS must be a nonempty RSA list. Real Codex/Claude stay unverified until independent client sessions pass. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

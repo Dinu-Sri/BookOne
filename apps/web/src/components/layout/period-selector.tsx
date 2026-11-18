@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DateField } from '@/components/ui/date-field';
 import {
+  NAMED_PERIOD_TOKENS,
   PERIOD_PRESETS,
   encodeCustomRange,
   isoDate,
@@ -24,12 +25,14 @@ export function PeriodSelector({
   selected,
   available,
   compact = false,
+  timeZone,
   /** If set, call instead of router navigation (cashbook local state). */
   onApply,
 }: {
   selected: string | null;
   available?: string[];
   compact?: boolean;
+  timeZone?: string;
   onApply?: (token: string) => void;
 }) {
   const router = useRouter();
@@ -39,7 +42,7 @@ export function PeriodSelector({
   const [open, setOpen] = useState(false);
 
   const token = normalizePeriodToken(selected ?? 'all');
-  const bounds = useMemo(() => resolvePeriodBounds(token), [token]);
+  const bounds = useMemo(() => resolvePeriodBounds(token, { timeZone }), [token, timeZone]);
 
   const [draftFrom, setDraftFrom] = useState(bounds.from ?? isoDate(new Date()));
   const [draftTo, setDraftTo] = useState(bounds.to ?? isoDate(new Date()));
@@ -47,11 +50,11 @@ export function PeriodSelector({
 
   useEffect(() => {
     if (!open) return;
-    const b = resolvePeriodBounds(token);
+    const b = resolvePeriodBounds(token, { timeZone });
     setDraftFrom(b.from ?? isoDate(new Date()));
     setDraftTo(b.to ?? isoDate(new Date()));
     setDraftPreset(token);
-  }, [open, token]);
+  }, [open, token, timeZone]);
 
   useEffect(() => {
     if (!open) return;
@@ -93,15 +96,9 @@ export function PeriodSelector({
 
   function applyDraft() {
     // If preset is a named mode, use it; if custom dates differ from preset bounds → custom
-    const presetBounds = resolvePeriodBounds(draftPreset);
+    const presetBounds = resolvePeriodBounds(draftPreset, { timeZone });
     const isNamed =
-      draftPreset === 'all' ||
-      draftPreset === 'last_7d' ||
-      draftPreset === 'last_30d' ||
-      draftPreset === 'this_month' ||
-      draftPreset === 'last_month' ||
-      draftPreset === 'this_fy' ||
-      draftPreset === 'last_fy' ||
+      (NAMED_PERIOD_TOKENS as readonly string[]).includes(draftPreset) ||
       isValidMonth(draftPreset);
 
     if (draftPreset === 'all') {
@@ -132,7 +129,7 @@ export function PeriodSelector({
 
   function selectPreset(p: string) {
     setDraftPreset(p);
-    const b = resolvePeriodBounds(p);
+    const b = resolvePeriodBounds(p, { timeZone });
     if (b.from && b.to) {
       setDraftFrom(b.from);
       setDraftTo(b.to);

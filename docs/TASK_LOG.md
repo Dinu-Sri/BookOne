@@ -1,3 +1,10 @@
+## 2026-11-18 — Business overview dashboard DB-01 (v2.9.0)
+
+- Record: [CHG-20261118-dashboard-db01](changes/CHG-20261118-dashboard-db01.md). Metric dictionary [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md). Baseline product `9a719dc` / v2.8.3. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AgentBridge signing PEM_FILE and Compose forwarding. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks.
+- Change: `/dashboard` becomes a labelled business overview (period vs as-of headlines, card clearing split, common-scale cash chart, sales series, AR/AP aging, attention, expenses). Period presets add Today/Yesterday/MTD/QTD/YTD. CoreGuard Dashboard DB-01 is a publication prerequisite. VERSION 2.9.0.
+- Checks: `@bookone/accounting` 19 files / 255 passed (includes dashboard-metrics 18). `@bookone/agent-bridge` 19 files / 79 passed (signing JWKS included). `@bookone/auth` dashboard-db01-gate 5 passed; dashboard-db01-postgres 1 passed source / 1 skipped without DATABASE_URL (CI sets DB01_REQUIRE_POSTGRES). Playwright `e2e/dashboard-db01.spec.ts` 4 passed; `e2e/ui-nav-01.spec.ts` + `e2e/agent-bridge-01.spec.ts` 10 passed / 1 skipped. Accounting `tsc --noEmit` passed. Web tsc leftover `.next/types` cashbook PageProps mismatches pre-existed and are not in this diff.
+- Next: Reviewable PR, then fast-forward origin/master per owner overlay. Owner Portainer Re-pull ON after Docker web image green. Independent staging QA pending. AgentBridge client qualification pending. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Staging AgentBridge signing file + compose forwarding (v2.8.3)
 
 - Record: [CHG-20261118-agentbridge-signing](changes/CHG-20261118-agentbridge-signing.md). Operator runbook [AGENT_BRIDGE_SIGNING_STAGING.md](AGENT_BRIDGE_SIGNING_STAGING.md). Baseline product `e9160f3` / v2.8.2. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission2, or consumed v2.7.3/v2.7.4/v2.8.0 clocks.

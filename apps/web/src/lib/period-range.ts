@@ -3,20 +3,46 @@
  * Encoded in URL ?period=… and cookie bookone_period for cross-module continuity.
  *
  * Tokens:
- *   all | last_7d | last_30d | this_month | last_month | this_fy | last_fy
+ *   all | today | yesterday | last_7d | last_30d | mtd | qtd | ytd
+ *   this_month | last_month | this_fy | last_fy
  *   YYYY-MM (calendar month)
  *   YYYY-MM-DD_YYYY-MM-DD (custom inclusive range)
+ *
+ * Dashboard presets prefer today / mtd / qtd / ytd. `this_month` remains the
+ * full calendar month (including future days) for existing links.
  */
 
 export type PeriodToken =
   | 'all'
+  | 'today'
+  | 'yesterday'
   | 'last_7d'
   | 'last_30d'
+  | 'mtd'
+  | 'qtd'
+  | 'ytd'
   | 'this_month'
   | 'last_month'
   | 'this_fy'
   | 'last_fy'
   | string; // month or custom
+
+export const NAMED_PERIOD_TOKENS = [
+  'all',
+  'today',
+  'yesterday',
+  'last_7d',
+  'last_30d',
+  'mtd',
+  'qtd',
+  'ytd',
+  'this_month',
+  'last_month',
+  'this_fy',
+  'last_fy',
+] as const;
+
+export const MAX_PERIOD_DAYS = 1826;
 
 export type PeriodBounds = {
   /** URL/cookie token */
@@ -43,18 +69,38 @@ export function isoDate(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+export function calendarDateInZone(now: Date, timeZone?: string): string {
+  if (!timeZone) return isoDate(now);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const m = parts.find((p) => p.type === 'month')?.value;
+  const d = parts.find((p) => p.type === 'day')?.value;
+  if (!y || !m || !d) return isoDate(now);
+  return `${y}-${m}-${d}`;
+}
+
+function addDaysIso(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y!, (m ?? 1) - 1, (d ?? 1) + n));
+  return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+}
+
+function fromIso(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y!, (m ?? 1) - 1, d ?? 1);
+}
+
 function startOfMonth(y: number, m0: number): Date {
   return new Date(y, m0, 1);
 }
 
 function endOfMonth(y: number, m0: number): Date {
   return new Date(y, m0 + 1, 0);
-}
-
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
 }
 
 /** Financial year containing `now` with start month (1–12). */
@@ -99,16 +145,7 @@ export function parseCustomToken(token: string): { from: string; to: string } | 
  */
 export function normalizePeriodToken(raw?: string | null): string {
   if (!raw || raw === 'all') return 'all';
-  if (
-    raw === 'last_7d' ||
-    raw === 'last_30d' ||
-    raw === 'this_month' ||
-    raw === 'last_month' ||
-    raw === 'this_fy' ||
-    raw === 'last_fy'
-  ) {
-    return raw;
-  }
+  if ((NAMED_PERIOD_TOKENS as readonly string[]).includes(raw)) return raw;
   if (isValidMonth(raw)) return raw;
   if (isCustomToken(raw)) return raw;
   return 'this_month';
@@ -116,43 +153,100 @@ export function normalizePeriodToken(raw?: string | null): string {
 
 export function resolvePeriodBounds(
   raw?: string | null,
-  opts?: { now?: Date; fyStartMonth?: number },
+  opts?: { now?: Date; fyStartMonth?: number; timeZone?: string; todayIso?: string },
 ): PeriodBounds {
   const now = opts?.now ?? new Date();
   const fyStart = opts?.fyStartMonth ?? DEFAULT_FY_START_MONTH;
+  const todayIso = opts?.todayIso ?? calendarDateInZone(now, opts?.timeZone);
+  const today = fromIso(todayIso);
   const token = normalizePeriodToken(raw);
 
   if (token === 'all') {
     return { token: 'all', from: null, to: null, label: 'All time', hint: 'No date filter' };
   }
 
-  if (token === 'last_7d') {
-    const to = now;
-    const from = addDays(now, -6);
+  if (token === 'today') {
     return {
       token,
-      from: isoDate(from),
-      to: isoDate(to),
+      from: todayIso,
+      to: todayIso,
+      label: 'Today',
+      hint: todayIso,
+    };
+  }
+
+  if (token === 'yesterday') {
+    const y = addDaysIso(todayIso, -1);
+    return {
+      token,
+      from: y,
+      to: y,
+      label: 'Yesterday',
+      hint: y,
+    };
+  }
+
+  if (token === 'last_7d') {
+    return {
+      token,
+      from: addDaysIso(todayIso, -6),
+      to: todayIso,
       label: 'Last 7 days',
       hint: 'Rolling week',
     };
   }
 
   if (token === 'last_30d') {
-    const to = now;
-    const from = addDays(now, -29);
     return {
       token,
-      from: isoDate(from),
-      to: isoDate(to),
+      from: addDaysIso(todayIso, -29),
+      to: todayIso,
       label: 'Last 30 days',
       hint: 'Rolling month',
     };
   }
 
+  if (token === 'mtd') {
+    const from = startOfMonth(today.getFullYear(), today.getMonth());
+    return {
+      token,
+      from: isoDate(from),
+      to: todayIso,
+      label: 'Month to date',
+      hint: `${isoDate(from)} → ${todayIso}`,
+    };
+  }
+
+  if (token === 'qtd') {
+    const month = today.getMonth() + 1;
+    const elapsed = ((month - fyStart) % 12 + 12) % 12;
+    const qIndex = Math.floor(elapsed / 3);
+    const qStartMonth0 = (fyStart - 1 + qIndex * 3) % 12;
+    const qStartYear = today.getMonth() >= qStartMonth0 ? today.getFullYear() : today.getFullYear() - 1;
+    const from = startOfMonth(qStartYear, qStartMonth0);
+    return {
+      token,
+      from: isoDate(from),
+      to: todayIso,
+      label: 'Quarter to date',
+      hint: `${isoDate(from)} → ${todayIso}`,
+    };
+  }
+
+  if (token === 'ytd') {
+    const { from } = fyBounds(today, fyStart);
+    return {
+      token,
+      from: isoDate(from),
+      to: todayIso,
+      label: 'Year to date',
+      hint: `${isoDate(from)} → ${todayIso}`,
+    };
+  }
+
   if (token === 'this_month') {
-    const from = startOfMonth(now.getFullYear(), now.getMonth());
-    const to = endOfMonth(now.getFullYear(), now.getMonth());
+    const from = startOfMonth(today.getFullYear(), today.getMonth());
+    const to = endOfMonth(today.getFullYear(), today.getMonth());
     return {
       token,
       from: isoDate(from),
@@ -163,7 +257,7 @@ export function resolvePeriodBounds(
   }
 
   if (token === 'last_month') {
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const from = startOfMonth(d.getFullYear(), d.getMonth());
     const to = endOfMonth(d.getFullYear(), d.getMonth());
     return {
@@ -176,7 +270,7 @@ export function resolvePeriodBounds(
   }
 
   if (token === 'this_fy') {
-    const { from, to, startYear } = fyBounds(now, fyStart);
+    const { from, to, startYear } = fyBounds(today, fyStart);
     return {
       token,
       from: isoDate(from),
@@ -187,7 +281,7 @@ export function resolvePeriodBounds(
   }
 
   if (token === 'last_fy') {
-    const cur = fyBounds(now, fyStart);
+    const cur = fyBounds(today, fyStart);
     const startYear = cur.startYear - 1;
     const from = new Date(startYear, fyStart - 1, 1);
     const to = new Date(startYear + 1, fyStart - 1, 0);
@@ -217,16 +311,18 @@ export function resolvePeriodBounds(
   if (custom) {
     const a = custom.from <= custom.to ? custom.from : custom.to;
     const b = custom.from <= custom.to ? custom.to : custom.from;
+    const days = Math.floor((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000) + 1;
+    const cappedTo = days > MAX_PERIOD_DAYS ? addDaysIso(a, MAX_PERIOD_DAYS - 1) : b;
     const label =
-      a === b
+      a === cappedTo
         ? a
-        : `${a.slice(8)}/${a.slice(5, 7)} – ${b.slice(8)}/${b.slice(5, 7)}`;
+        : `${a.slice(8)}/${a.slice(5, 7)} – ${cappedTo.slice(8)}/${cappedTo.slice(5, 7)}`;
     return {
-      token: encodeCustomRange(a, b),
+      token: encodeCustomRange(a, cappedTo),
       from: a,
-      to: b,
+      to: cappedTo,
       label,
-      hint: 'Custom range',
+      hint: days > MAX_PERIOD_DAYS ? `Custom range (capped at ${MAX_PERIOD_DAYS} days)` : 'Custom range',
     };
   }
 
@@ -240,14 +336,36 @@ export const PERIOD_PRESETS: {
   title: string;
   hint: string;
 }[] = [
-  { token: 'all', title: 'All time', hint: 'No date filter' },
+  { token: 'today', title: 'Today', hint: 'Company calendar day' },
+  { token: 'yesterday', title: 'Yesterday', hint: 'Previous company day' },
   { token: 'last_7d', title: 'Last 7 days', hint: 'Rolling week' },
+  { token: 'mtd', title: 'Month to date', hint: '1st of month → today' },
+  { token: 'qtd', title: 'Quarter to date', hint: 'Fiscal quarter → today' },
+  { token: 'ytd', title: 'Year to date', hint: 'Fiscal year start → today' },
   { token: 'last_30d', title: 'Last 30 days', hint: 'Rolling month' },
-  { token: 'this_month', title: 'This month', hint: 'Calendar month' },
+  { token: 'this_month', title: 'This month', hint: 'Full calendar month' },
   { token: 'last_month', title: 'Last month', hint: 'Previous calendar month' },
   { token: 'this_fy', title: 'This financial year', hint: 'Apr–Mar (SL default)' },
   { token: 'last_fy', title: 'Last financial year', hint: 'Previous FY' },
+  { token: 'all', title: 'All time', hint: 'No date filter' },
 ];
+
+export function previousPeriodToken(token: string, opts?: { now?: Date; fyStartMonth?: number; timeZone?: string }): PeriodBounds {
+  const current = resolvePeriodBounds(token, opts);
+  if (!current.from || !current.to) {
+    return { token: 'all', from: null, to: null, label: 'No baseline', hint: 'All-time has no previous interval' };
+  }
+  const days = Math.floor((Date.parse(`${current.to}T12:00:00Z`) - Date.parse(`${current.from}T12:00:00Z`)) / 86400000) + 1;
+  const prevTo = addDaysIso(current.from, -1);
+  const prevFrom = addDaysIso(prevTo, -(days - 1));
+  return {
+    token: encodeCustomRange(prevFrom, prevTo),
+    from: prevFrom,
+    to: prevTo,
+    label: `Previous ${days} day${days === 1 ? '' : 's'}`,
+    hint: `${prevFrom} → ${prevTo}`,
+  };
+}
 
 export function readPeriodCookie(): string | null {
   if (typeof document === 'undefined') return null;

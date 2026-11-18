@@ -20,7 +20,9 @@ describe('scoped CoreGuard registry', () => {
     expect(required).toContain('independent-acceptance');
     expect(required).toContain('archive-restore-pointers');
     expect(required).toContain('permissions-catalog');
+    expect(required).toContain('dashboard-db01');
     expect(coreGuardReport().note).toMatch(/does not certify all ERP modules/);
+    expect(coreGuardReport().note).toMatch(/Dashboard DB-01/);
   });
 
   it('adds CoreGuard as an extra publication need without masking quality', () => {
@@ -32,6 +34,8 @@ describe('scoped CoreGuard registry', () => {
     expect(yaml).toMatch(/pnpm test/);
     expect(yaml).toMatch(/needs: \[quality, coreguard\]/);
     expect(yaml).toMatch(/name: AgentBridge CoreGuard/);
+    expect(yaml).toMatch(/Dashboard DB-01/);
+    expect(yaml).toMatch(/e2e\/dashboard-db01\.spec\.ts/);
     expect(yaml).not.toMatch(/^\s+if: always\(/m);
     expect(yaml).not.toMatch(/^\s+if: failure\(/m);
   });

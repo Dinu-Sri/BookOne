@@ -1,3 +1,10 @@
+## 2026-11-18 — Staging AgentBridge signing file + compose forwarding (v2.8.3)
+
+- Record: [CHG-20261118-agentbridge-signing](changes/CHG-20261118-agentbridge-signing.md). Operator runbook [AGENT_BRIDGE_SIGNING_STAGING.md](AGENT_BRIDGE_SIGNING_STAGING.md). Baseline product `e9160f3` / v2.8.2. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission2, or consumed v2.7.3/v2.7.4/v2.8.0 clocks.
+- Repair: `oauthSigningPem` reads `AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE` (absolute PKCS8 path) and still accepts the env PEM body when `_FILE` is unset. Staging/prod Compose forward PUBLIC_URL, ISSUER, KID, and mount the host PEM read-only for UID 1001. HMAC unset. AUTH_SECRET and entrypoint unchanged. VERSION 2.8.3.
+- Checks: `@bookone/agent-bridge` 19 files / 79 passed. `@bookone/auth` 17 files / 128 passed / 1 skipped. AgentBridge `tsc --noEmit` passed.
+- Next: Reviewable feature-branch PR only. Do not fast-forward master. Owner generates the host PEM once, sets the three non-secret stack vars, deploys the reviewed image. Do not enable AgentBridge posting. Do not call this real Codex/Claude acceptance. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — Self-host Noto Serif Sinhala so Production Check can build (v2.8.2)
 
 - Record: [CHG-20261118-local-sinhala-font](changes/CHG-20261118-local-sinhala-font.md). Baseline product merge of PR #19 `756f9fb` / v2.8.1. GitHub Production Check `44234985424` failed `next/font/google` on `layout.tsx` (`Cannot read properties of null (reading '1')` at google font loader). Docker web image on the same merge succeeded. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve UI-NAV-01 list clipping. Tiles stay removed. Never replay CONT11, POS 118, Mission2, or consumed v2.7.3/v2.7.4/v2.8.0 clocks.

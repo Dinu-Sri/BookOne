@@ -150,7 +150,7 @@ jobs:
           NODE_ENV: test
 
       - name: AgentBridge permissions archive and publication gate
-        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/tenant-archive.test.ts test/ab06-postgres-claim.test.ts
+        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/tenant-archive.test.ts test/ab06-postgres-claim.test.ts test/agent-bridge-signing-compose.test.ts
 
       - name: Install Playwright Chromium
         run: pnpm --dir apps/web exec playwright install --with-deps chromium

@@ -1,10 +1,14 @@
 import { createServer, type Server } from 'node:http';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { createSign, generateKeyPairSync } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   jwksFromSigningPem,
   mintLocalFixtureToken,
   mintRs256AccessToken,
+  oauthSigningPem,
   resolveActorFromAuthorization,
   TOKEN_AUDIENCE,
   verifyOAuthAccessToken,
@@ -113,3 +117,78 @@ describe('OAuth RS256 JWKS interoperability', () => {
     expect(actor.capabilities).not.toContain('post');
   });
 });
+
+describe('OAuth signing PEM file and public JWKS', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ab-signing-'));
+  const pemPath = path.join(dir, 'agent_bridge_oauth_signing.pem');
+  const filePem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const otherKey = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
+  const envPem = otherKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+
+  beforeAll(() => {
+    writeFileSync(pemPath, filePem, 'utf8');
+  });
+
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('loads PKCS8 from AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE and ignores a different env PEM', () => {
+    const loaded = oauthSigningPem({
+      AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: pemPath,
+      AGENT_BRIDGE_OAUTH_SIGNING_PEM: envPem,
+    });
+    expect(loaded).toBe(filePem.trim());
+    expect(oauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM: envPem })).toBe(envPem.trim());
+    expect(oauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: path.join(dir, 'missing.pem') })).toBeUndefined();
+    expect(oauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: 'relative.pem' })).toBeUndefined();
+  });
+
+  it('derives a public-only JWKS that verifies a token minted from that private key', async () => {
+    const pem = oauthSigningPem({ AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE: pemPath });
+    expect(pem).toBeTruthy();
+    const kid = 'bookone-staging-agentbridge-01';
+    const jwks = jwksFromSigningPem(pem!, kid);
+    const key = jwks.keys[0]!;
+    expect(Object.keys(key).sort()).toEqual(['alg', 'e', 'kid', 'kty', 'n', 'use']);
+    expect(key).toMatchObject({ kty: 'RSA', use: 'sig', alg: 'RS256', kid });
+    expect(key).not.toHaveProperty('d');
+    expect(key).not.toHaveProperty('p');
+    expect(key).not.toHaveProperty('q');
+    expect(JSON.stringify(jwks)).not.toMatch(/BEGIN PRIVATE|PRIVATE KEY/);
+    const server = createServer((req, res) => {
+      if (req.url === '/jwks.json') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(jwks));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('JWKS server did not bind');
+      const fileIssuer = `http://127.0.0.1:${address.port}`;
+      const minted = mintRs256AccessToken({
+        privateKeyPem: pem!,
+        kid,
+        issuer: fileIssuer,
+        tenantId: 'tenant-file',
+        userId: 'user-file',
+        clientId: 'bookone-codex',
+        connectionId: 'conn-file',
+        scopes: ['read', 'upload', 'draft'],
+      });
+      const actor = await resolveActorFromAuthorization(`Bearer ${minted}`, 'hmac-unused', {
+        AGENT_BRIDGE_OAUTH_ISSUER: fileIssuer,
+        AGENT_BRIDGE_OAUTH_JWKS_URL: `${fileIssuer}/jwks.json`,
+      });
+      expect(actor).toMatchObject({ userId: 'user-file', tenantId: 'tenant-file', clientId: 'bookone-codex' });
+      expect(actor.capabilities).toEqual(['read', 'upload', 'draft']);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
+  });
+});
+

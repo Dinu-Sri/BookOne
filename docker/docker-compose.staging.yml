@@ -71,6 +71,16 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - NODE_ENV=production
+      # AgentBridge BookOne-as-AS. Set the three non-secret values in the Portainer stack env.
+      # Create the host PEM as a regular file BEFORE stack update (a missing bind path
+      # becomes a directory). web runs as UID 1001. Leave AGENT_BRIDGE_ALLOW_HMAC unset.
+      - AGENT_BRIDGE_PUBLIC_URL=${AGENT_BRIDGE_PUBLIC_URL:-}
+      - AGENT_BRIDGE_OAUTH_ISSUER=${AGENT_BRIDGE_OAUTH_ISSUER:-}
+      - AGENT_BRIDGE_OAUTH_KID=${AGENT_BRIDGE_OAUTH_KID:-}
+      - AGENT_BRIDGE_OAUTH_SIGNING_PEM=${AGENT_BRIDGE_OAUTH_SIGNING_PEM:-}
+      - AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE=${AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE:-/run/secrets/agent_bridge_oauth_signing.pem}
+    volumes:
+      - ${AGENT_BRIDGE_OAUTH_SIGNING_PEM_HOST:-/opt/bookone/secrets/agent_bridge_oauth_signing.pem}:/run/secrets/agent_bridge_oauth_signing.pem:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.bookone-web.rule=Host(`${WEB_HOST:-bookone.clossyan.com}`)"

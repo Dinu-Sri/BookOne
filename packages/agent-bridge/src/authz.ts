@@ -7,6 +7,8 @@ import {
   randomBytes,
   timingSafeEqual,
 } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { CAPABILITIES, type Actor, type Capability } from './contracts';
 
 export const TOKEN_AUDIENCE = 'bookone.agent-bridge';
@@ -204,6 +206,7 @@ export type OAuthEnv = {
   AGENT_BRIDGE_OAUTH_AUDIENCE?: string;
   AGENT_BRIDGE_OAUTH_JWKS_URL?: string;
   AGENT_BRIDGE_OAUTH_SIGNING_PEM?: string;
+  AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE?: string;
   AGENT_BRIDGE_OAUTH_KID?: string;
   AGENT_BRIDGE_ALLOW_HMAC?: string;
   NODE_ENV?: string;
@@ -211,11 +214,37 @@ export type OAuthEnv = {
 };
 
 export const OAUTH_SETUP_CHECKLIST =
-  'Set AGENT_BRIDGE_OAUTH_SIGNING_PEM to a PKCS8 RSA private key and AGENT_BRIDGE_OAUTH_ISSUER to this host origin (same as AGENT_BRIDGE_PUBLIC_URL). JWKS is derived at /api/agent-bridge/oauth/jwks and /.well-known/jwks.json. Pre-register only bookone-codex and bookone-claude. Do not set AGENT_BRIDGE_ALLOW_HMAC=1 on staging as a substitute for RS256.';
+  'Set AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE to an absolute PKCS8 RSA private-key path (recommended) or AGENT_BRIDGE_OAUTH_SIGNING_PEM to the PEM body, and AGENT_BRIDGE_OAUTH_ISSUER to this host origin (same as AGENT_BRIDGE_PUBLIC_URL). JWKS is derived at /api/agent-bridge/oauth/jwks and /.well-known/jwks.json. Pre-register only bookone-codex and bookone-claude. Do not set AGENT_BRIDGE_ALLOW_HMAC=1 on staging as a substitute for RS256.';
 
-export function oauthSigningPem(env: OAuthEnv = process.env): string | undefined {
-  const pem = env.AGENT_BRIDGE_OAUTH_SIGNING_PEM?.trim();
-  return pem || undefined;
+const PRIVATE_KEY_PEM = /-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]+-----END (?:RSA )?PRIVATE KEY-----/;
+
+export function readSigningPemFile(filePath: string): string {
+  if (!path.isAbsolute(filePath)) {
+    throw new Error('AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE must be an absolute path.');
+  }
+  return readFileSync(filePath, 'utf8');
+}
+
+function privateKeyPemBody(raw: string | undefined): string | undefined {
+  const pem = raw?.trim();
+  if (!pem || !PRIVATE_KEY_PEM.test(pem)) return undefined;
+  return pem;
+}
+
+/** FILE wins when set. Missing/unreadable file does not fall back to the env PEM body. */
+export function oauthSigningPem(
+  env: OAuthEnv = process.env,
+  readFile: (filePath: string) => string = readSigningPemFile,
+): string | undefined {
+  const filePath = env.AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE?.trim();
+  if (filePath) {
+    try {
+      return privateKeyPemBody(readFile(filePath));
+    } catch {
+      return undefined;
+    }
+  }
+  return privateKeyPemBody(env.AGENT_BRIDGE_OAUTH_SIGNING_PEM);
 }
 
 export function oauthKid(env: OAuthEnv = process.env): string {

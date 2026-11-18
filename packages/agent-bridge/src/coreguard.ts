@@ -43,7 +43,7 @@ export const COREGUARD_SUITES = [
   {
     id: 'permissions-catalog',
     layer: 'auth',
-    command: 'pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/ab06-postgres-claim.test.ts',
+    command: 'pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/ab06-postgres-claim.test.ts test/agent-bridge-signing-compose.test.ts',
     required: true,
   },
   {

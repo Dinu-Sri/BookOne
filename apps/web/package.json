@@ -9,6 +9,7 @@
     "lint": "tsc --noEmit --pretty false",
     "typecheck": "tsc --noEmit",
     "test:nav-browser": "playwright test",
+    "test:coreguard-browser": "playwright test --config playwright.coreguard.config.ts",
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {

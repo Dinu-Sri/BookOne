@@ -116,7 +116,7 @@ jobs:
   coreguard:
     name: AgentBridge CoreGuard
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     permissions:
       contents: read
 
@@ -160,7 +160,7 @@ jobs:
           AUTH_SECRET: test-secret-for-ci-only
 
       - name: Independent AgentBridge acceptance
-        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/extraction-http.test.ts test/oauth-jwks.test.ts test/schemas.test.ts test/oauth-pkce.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts test/ab10-acceptance.test.ts test/oauth-callback-preservation.test.ts test/ab11-acceptance.test.ts test/mcp-http-negotiation.test.ts
+        run: pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/coreguard-invoice-intake.test.ts test/ab06-independent.test.ts test/extraction-http.test.ts test/oauth-jwks.test.ts test/schemas.test.ts test/oauth-pkce.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts test/ab10-acceptance.test.ts test/oauth-callback-preservation.test.ts test/ab11-acceptance.test.ts test/mcp-http-negotiation.test.ts
         env:
           NODE_ENV: test
 
@@ -181,7 +181,7 @@ jobs:
 
       - name: Chart of Accounts COA-01
         run: |
-          pnpm --filter @bookone/accounting exec vitest run test/account-classification.test.ts test/coa-01-pilot.test.ts test/advances.test.ts test/coa-csv-opening.test.ts
+          pnpm --filter @bookone/accounting exec vitest run test/account-classification.test.ts test/coa-01-pilot.test.ts test/advances.test.ts test/coa-csv-opening.test.ts test/coreguard-setup-order.test.ts
           pnpm --filter @bookone/auth exec vitest run test/coa-01-gate.test.ts test/coa-01-postgres.test.ts
         env:
           DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
@@ -198,6 +198,22 @@ jobs:
 
       - name: Browser inbox UI-NAV-01 Dashboard DB-01 COA-01 and UI-02
         run: pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/agent-bridge-consent.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts e2e/coa-01.spec.ts e2e/ui-02.spec.ts
+
+      - name: Pilot custom-bank
+        run: pnpm coreguard:pilot
+        env:
+          DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
+          AUTH_SECRET: test-secret-for-ci-only
+          AUTH_URL: http://127.0.0.1:3000
+          BETTER_AUTH_URL: http://127.0.0.1:3000
+          COREGUARD_PILOT: '1'
+          COREGUARD_PILOT_BROWSER: '1'
+          COREGUARD_REQUIRE_POSTGRES: '1'
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_ACCESS_KEY: minioadmin
+          S3_SECRET_KEY: minioadmin
+          S3_BUCKET: bookone-test
+          NODE_ENV: test
 
   build-and-push:
     name: Build & push web image

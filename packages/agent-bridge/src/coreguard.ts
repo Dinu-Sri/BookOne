@@ -49,13 +49,19 @@ export const COREGUARD_SUITES = [
   {
     id: 'coa-01',
     layer: 'chart-of-accounts',
-    command: 'pnpm --filter @bookone/accounting exec vitest run test/account-classification.test.ts test/coa-01-pilot.test.ts test/advances.test.ts test/coa-csv-opening.test.ts && pnpm --filter @bookone/auth exec vitest run test/coa-01-gate.test.ts test/coa-01-postgres.test.ts && pnpm --dir apps/web exec playwright test e2e/coa-01.spec.ts',
+    command: 'pnpm --filter @bookone/accounting exec vitest run test/account-classification.test.ts test/coa-01-pilot.test.ts test/advances.test.ts test/coa-csv-opening.test.ts test/coreguard-setup-order.test.ts && pnpm --filter @bookone/auth exec vitest run test/coa-01-gate.test.ts test/coa-01-postgres.test.ts && pnpm --dir apps/web exec playwright test e2e/coa-01.spec.ts',
     required: true,
   },
   {
     id: 'ui-02',
     layer: 'ui-consistency',
     command: 'pnpm --filter @bookone/auth exec vitest run test/ui-02-lint.test.ts test/ui-02-gate.test.ts && pnpm --dir apps/web exec playwright test e2e/ui-02.spec.ts',
+    required: true,
+  },
+  {
+    id: 'pilot-custom-bank',
+    layer: 'integrated-app',
+    command: 'pnpm coreguard:pilot',
     required: true,
   },
   {
@@ -67,7 +73,7 @@ export const COREGUARD_SUITES = [
   {
     id: 'independent-acceptance',
     layer: 'acceptance',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/oauth-jwks.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts test/ab10-acceptance.test.ts test/oauth-callback-preservation.test.ts test/ab11-acceptance.test.ts test/mcp-http-negotiation.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/coreguard-invoice-intake.test.ts test/ab06-independent.test.ts test/oauth-jwks.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts test/ab10-acceptance.test.ts test/oauth-callback-preservation.test.ts test/ab11-acceptance.test.ts test/mcp-http-negotiation.test.ts',
     required: true,
   },
   {
@@ -133,6 +139,6 @@ export function coreGuardReport() {
     version: COREGUARD_VERSION,
     required: requiredCoreGuardSuites().map((s) => s.id),
     blocked: blockedCoreGuardSuites().map((s) => s.id),
-    note: 'Scoped AgentBridge foundation plus Dashboard DB-01, Chart of Accounts COA-01, and UI consistency UI-02. Existing quality job stays the publication ancestor. This registry does not certify all ERP modules.',
+    note: 'Scoped AgentBridge foundation plus Dashboard DB-01, Chart of Accounts COA-01, UI consistency UI-02, and the custom-bank integrated lane. Existing quality job stays the publication ancestor. This registry does not certify all ERP modules.',
   };
 }

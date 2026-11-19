@@ -32,6 +32,7 @@ import { getTenantInfo, type TenantInfo } from '@/app/actions/workspace';
 import { previewCategory, type CategoryPreview } from '@/app/actions/preview-category';
 import { uploadReceipt } from '@/app/actions/upload-receipt';
 import type { EntryInput } from '@/lib/entry-schema';
+import { isLiquidTenderCode } from '@bookone/accounting';
 
 type Direction = 'money_in' | 'money_out' | 'move_money' | 'invoice_bill';
 
@@ -67,6 +68,14 @@ const PAYMENT_HINT: Record<string, PaymentMethod> = {
   '1100': 'Bank',
   '1200': 'Card',
 };
+
+function paymentHintFor(code: string): PaymentMethod | undefined {
+  if (PAYMENT_HINT[code]) return PAYMENT_HINT[code];
+  if (/^10\d{2}$/.test(code)) return 'Cash';
+  if (/^11\d{2}$/.test(code)) return 'Bank';
+  if (/^12\d{2}$/.test(code)) return 'Card';
+  return undefined;
+}
 
 function todayString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -204,7 +213,10 @@ export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) 
   }, [locationList, locationId]);
 
   const liquidAccounts = useMemo(
-    () => accountList.filter((a) => a.type === 'asset' && ['1000', '1100', '1200', '1300'].includes(a.code)),
+    () =>
+      accountList.filter(
+        (a) => a.type === 'asset' && (isLiquidTenderCode(a.code) || a.code === '1300'),
+      ),
     [accountList],
   );
   const expenseAccounts = useMemo(
@@ -217,7 +229,7 @@ export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) 
   );
 
   useEffect(() => {
-    const hint = PAYMENT_HINT[paymentAccountCode];
+    const hint = paymentHintFor(paymentAccountCode);
     if (hint) setPaymentMethod(hint);
   }, [paymentAccountCode]);
 

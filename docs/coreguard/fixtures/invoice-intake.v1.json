@@ -1,0 +1,34 @@
+{
+  "id": "invoice-intake",
+  "version": 1,
+  "layer": "pilot-coreguard",
+  "operationId": "purchase.bill.unpaid-service.v1",
+  "scope": "unpaid domestic local-currency service/expense bill",
+  "currency": "LKR",
+  "originalBytes": "fixture:supported-vat-service-bytes",
+  "facts": {
+    "supplierName": "ABC Supplies",
+    "supplierInvoiceNumber": "INV-1001",
+    "issueDate": "2026-03-01",
+    "paidStatus": "unpaid",
+    "documentKind": "service_expense",
+    "netMinor": 100000,
+    "taxMinor": 18000,
+    "grossMinor": 118000,
+    "expenseAccountCode": "6800",
+    "inputVatAccountCode": "2300",
+    "payableAccountCode": "2100",
+    "categoryLabel": "Office expenses",
+    "lineDescription": "Monthly accounting support"
+  },
+  "journal": [
+    { "accountCode": "6800", "side": "debit", "minor": 100000 },
+    { "accountCode": "2300", "side": "debit", "minor": 18000 },
+    { "accountCode": "2100", "side": "credit", "minor": 118000 }
+  ],
+  "liveClients": "blocked",
+  "ocr": "optional-unconfigured",
+  "companyFlags": {
+    "note": "Live company flags stay Inbox on / draft-only off / posting-stop on. MemoryStore tests may enable posting only inside the synthetic helper."
+  }
+}

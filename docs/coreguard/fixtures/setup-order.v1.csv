@@ -1,0 +1,4 @@
+code,name,type,subtype,parent_code,description,is_group
+1101,Pilot HNB,asset,bank,,Hatton National Bank last digits 4321,0
+6801,Pilot fuel,expense,operating,,Synthetic fuel expense,0
+=HACK,Bad formula name,expense,operating,,must be formula-safed on export,0

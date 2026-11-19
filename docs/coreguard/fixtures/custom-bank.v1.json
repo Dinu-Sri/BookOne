@@ -1,0 +1,64 @@
+{
+  "id": "custom-bank",
+  "version": 1,
+  "layer": "pilot-coreguard",
+  "period": { "from": "2026-01-01", "to": "2026-01-31" },
+  "currency": "LKR",
+  "customBank": {
+    "templateId": "bank",
+    "code": "1101",
+    "name": "Pilot HNB",
+    "institution": "Hatton National Bank",
+    "lastDigits": "4321"
+  },
+  "ownedBank": { "code": "1100" },
+  "equity": { "code": "3000" },
+  "opening": {
+    "date": "2026-01-15",
+    "debitCents": 30000,
+    "creditCents": 30000,
+    "debitAccount": "1101",
+    "creditAccount": "3000",
+    "party": "Opening balances"
+  },
+  "transfer": {
+    "date": "2026-01-16",
+    "amountCents": 10000,
+    "from": "1101",
+    "to": "1100",
+    "party": "Pilot internal transfer"
+  },
+  "afterCreate": {
+    "1101": 0,
+    "1100": 0,
+    "spendableCashCents": 0,
+    "externalMoneyInCents": 0,
+    "externalMoneyOutCents": 0
+  },
+  "afterOpening": {
+    "1101": 30000,
+    "1100": 0,
+    "spendableCashCents": 30000,
+    "externalMoneyInCents": 0,
+    "externalMoneyOutCents": 0,
+    "openingEventCount": 1,
+    "transferEventCount": 0
+  },
+  "afterTransfer": {
+    "1101": 20000,
+    "1100": 10000,
+    "spendableCashCents": 30000,
+    "externalMoneyInCents": 0,
+    "externalMoneyOutCents": 0,
+    "transferInCents": 10000,
+    "transferOutCents": 10000,
+    "openingEventCount": 1,
+    "transferEventCount": 1,
+    "journalBalanced": true
+  },
+  "viewer": {
+    "accountsRead": true,
+    "accountsWrite": false,
+    "simpleEntryWrite": false
+  }
+}

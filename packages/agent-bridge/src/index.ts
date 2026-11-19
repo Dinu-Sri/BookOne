@@ -13,6 +13,7 @@ export * from './jobs';
 export * from './coreguard';
 export * from './schemas';
 export * from './oauth';
+export * from './oauth-request-url';
 export * from './oauth-redeem';
 export * from './connection-lifecycle';
 export * from './consent-page';

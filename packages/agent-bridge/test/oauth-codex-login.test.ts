@@ -238,7 +238,8 @@ describe('AB-07 Codex login discovery and callback', () => {
     const authorize = readRepo('apps/web/src/app/api/agent-bridge/oauth/authorize/route.ts');
     expect(authorize).toMatch(/authorizationCallbackUrl/);
     expect(authorize).toMatch(/resourceAllowed/);
-    expect(authorize).toMatch(/url\.pathname\}\$\{url\.search\}/);
+    expect(authorize).toMatch(/oauthSignInFromTarget/);
+    expect(authorize).toMatch(/oauthSearchParams/);
   });
 
   it('accepts the observed Codex loopback callback and rejects other hosts', () => {

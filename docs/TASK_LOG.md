@@ -1,3 +1,10 @@
+## 2026-11-19 — AgentBridge exact callback preservation (v2.11.3)
+
+- Record: [CHG-20261119-agentbridge-10-callback-preservation](changes/CHG-20261119-agentbridge-10-callback-preservation.md). Baseline product `45d1f2f` / v2.11.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including request `4b22d15c`.
+- Repair: authorize GET reads `redirect_uri` from the Fetch Request URL so Next.js NextURL cannot rewrite nested `127.0.0.1` to `localhost`. Consent form, Allow persist, `/login?from=`, and token exact match keep that original host. VERSION 2.11.3. CoreGuard `ab-10`. Schema protocol stays `ab-06.1`.
+- Checks: `@bookone/agent-bridge` 28 files / 139 passed. `@bookone/auth` tenant-archive + permissions + ui-nav-01 39 passed. Playwright connect 5 passed, consent 3 passed. AgentBridge `tsc --noEmit` passed.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent `codex mcp login bookone` retry pending with a new code. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — AgentBridge token-exchange diagnostic (v2.11.2)
 
 - Record: [CHG-20261119-agentbridge-09-token-diagnose](changes/CHG-20261119-agentbridge-09-token-diagnose.md). Baseline product `b7e7499` / v2.11.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes.

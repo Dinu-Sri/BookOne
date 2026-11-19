@@ -59,7 +59,8 @@ describe('AgentBridge login, consent, discovery and invoice workflow', () => {
     expect(authorize).toMatch(/renderConsentPage/);
     expect(authorize).toMatch(/consentConnectionScopes/);
     expect(authorize).toMatch(/decision === 'deny'/);
-    expect(login).toMatch(/searchParams\.get\('from'\) \|\| searchParams\.get\('next'\)/);
+    expect(login).toMatch(/search\.get\('from'\) \|\| search\.get\('next'\)/);
+    expect(login).toMatch(/window\.location\.search/);
   });
 
   it('consent grants only read/upload/draft for pre-registered clients', () => {

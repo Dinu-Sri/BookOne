@@ -9,8 +9,8 @@ function read(...parts: string[]) {
 }
 
 describe('AB-09 source contracts', () => {
-  it('bumps CoreGuard to ab-09 and keeps protocol schema ab-06.1', () => {
-    expect(COREGUARD_VERSION).toBe('ab-09');
+  it('keeps protocol schema ab-06.1 after AB-09 lifecycle columns', () => {
+    expect(COREGUARD_VERSION).toMatch(/^ab-1\d$/);
     expect(read('packages/agent-bridge/src/contracts.ts')).toMatch(/SCHEMA_VERSION = 'ab-06.1'/);
     expect(read('packages/db/migrations/047_agent_bridge_oauth_lifecycle.sql')).toMatch(/token_issued_at/);
     expect(read('packages/db/migrations/048_agent_bridge_oauth_redeem_diag.sql')).toMatch(/last_oauth_reason/);

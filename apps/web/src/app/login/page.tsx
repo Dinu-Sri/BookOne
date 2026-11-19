@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormEvent, ReactNode } from 'react';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createAuthClient } from 'better-auth/react';
 import { Eye, LockKeyhole, Mail, UserRound } from 'lucide-react';
@@ -22,9 +22,16 @@ export default function LoginPage() {
   );
 }
 
+function callbackURLFromSearch(search: URLSearchParams): string {
+  const from = search.get('from') || search.get('next');
+  if (search.get('invite') === '1') return from || '/invite/complete';
+  return from || '/';
+}
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [browserSearch, setBrowserSearch] = useState<string | null>(null);
   const [mode, setMode] = useState<AuthMode>('signin');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -37,11 +44,17 @@ function LoginContent() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    setBrowserSearch(window.location.search);
+  }, []);
+
   const callbackURL = useMemo(() => {
-    const from = searchParams.get('from') || searchParams.get('next');
-    if (searchParams.get('invite') === '1') return from || '/invite/complete';
-    return from || '/';
-  }, [searchParams]);
+    const search =
+      browserSearch !== null
+        ? new URLSearchParams(browserSearch.startsWith('?') ? browserSearch.slice(1) : browserSearch)
+        : searchParams;
+    return callbackURLFromSearch(search);
+  }, [browserSearch, searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -8,6 +8,9 @@ import {
   newId,
   newOauthRequestId,
   oauthIssuer,
+  oauthRequestUrl,
+  oauthSearchParams,
+  oauthSignInFromTarget,
   publicOrigin,
   redirectUriAllowed,
   renderConsentPage,
@@ -42,20 +45,20 @@ async function companyNameFor(tenantId: string): Promise<string> {
 }
 
 export async function GET(req: NextRequest) {
-  const url = req.nextUrl;
+  const params = oauthSearchParams(req);
   let user;
   try {
     user = await requireTenantContext();
   } catch {
-    const next = encodeURIComponent(`${url.pathname}${url.search}`);
-    return NextResponse.redirect(new URL(`/login?from=${next}`, req.url));
+    const next = encodeURIComponent(oauthSignInFromTarget(req));
+    return NextResponse.redirect(new URL(`/login?from=${next}`, oauthRequestUrl(req)));
   }
-  const clientId = url.searchParams.get('client_id') ?? '';
-  const redirectUri = url.searchParams.get('redirect_uri') ?? '';
-  const state = url.searchParams.get('state') ?? '';
-  const challenge = url.searchParams.get('code_challenge') ?? '';
-  const method = url.searchParams.get('code_challenge_method') ?? '';
-  const resource = url.searchParams.get('resource') ?? '';
+  const clientId = params.get('client_id') ?? '';
+  const redirectUri = params.get('redirect_uri') ?? '';
+  const state = params.get('state') ?? '';
+  const challenge = params.get('code_challenge') ?? '';
+  const method = params.get('code_challenge_method') ?? '';
+  const resource = params.get('resource') ?? '';
   const client = findPublicClient(clientId);
   if (!client) {
     return html('invalid_request', { kind: 'invalid_request', message: 'Unknown client. Use bookone-codex or bookone-claude.' }, 400);

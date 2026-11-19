@@ -90,6 +90,7 @@ export async function createCompanyAccount(input: {
   name: string;
   description?: string;
   parentCode?: string;
+  type?: string;
   institution?: string;
   lastDigits?: string;
 }): Promise<CoaActionResult<{ id: string; code: string }>> {
@@ -103,6 +104,7 @@ export async function createCompanyAccount(input: {
         code: input.code,
         name: input.name,
         parentCode: input.parentCode,
+        type: input.templateId === 'group' ? input.type : undefined,
         existing,
       });
       if (!parsed.ok) return { ok: false, error: parsed.issues[0]?.message ?? 'Invalid account.', issues: parsed.issues };

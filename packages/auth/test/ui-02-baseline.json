@@ -1,0 +1,175 @@
+{
+  "apps/web/src/app/company/_components.tsx": {
+    "raw-select": 1
+  },
+  "apps/web/src/app/company/brand-location-forms.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/app/company/inventory/page.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/app/company/purchase/page.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/app/company/rental/page.tsx": {
+    "raw-select": 4
+  },
+  "apps/web/src/app/company/sales/page.tsx": {
+    "raw-select": 7
+  },
+  "apps/web/src/app/inventory/adjustments/new/page.tsx": {
+    "raw-date": 1,
+    "raw-select": 1
+  },
+  "apps/web/src/app/inventory/transfers/new/page.tsx": {
+    "raw-date": 1,
+    "raw-select": 1
+  },
+  "apps/web/src/app/login/page.tsx": {
+    "unstyled-field": 2
+  },
+  "apps/web/src/app/purchase/aging/page.tsx": {
+    "raw-date": 1
+  },
+  "apps/web/src/app/purchase/inbox/[id]/page.tsx": {
+    "raw-date": 1,
+    "raw-select": 4
+  },
+  "apps/web/src/app/reset-password/page.tsx": {
+    "unstyled-field": 2
+  },
+  "apps/web/src/app/sales/aging/page.tsx": {
+    "raw-date": 1
+  },
+  "apps/web/src/app/sales/invoices/[id]/edit/page.tsx": {
+    "raw-date": 2
+  },
+  "apps/web/src/app/sales/quotations/[id]/edit/page.tsx": {
+    "raw-date": 2,
+    "raw-select": 3
+  },
+  "apps/web/src/components/bank-import-studio/match-wizard.tsx": {
+    "raw-select": 2,
+    "unstyled-field": 1
+  },
+  "apps/web/src/components/bank-import-studio/studio-wizard.tsx": {
+    "unstyled-field": 2
+  },
+  "apps/web/src/components/cashbook/cashbook-home.tsx": {
+    "unstyled-field": 4
+  },
+  "apps/web/src/components/company/document-style-form.tsx": {
+    "raw-select": 5
+  },
+  "apps/web/src/components/control-room/companies-list.tsx": {
+    "raw-select": 4
+  },
+  "apps/web/src/components/control-room/company-form.tsx": {
+    "raw-select": 6
+  },
+  "apps/web/src/components/inventory/category-forms.tsx": {
+    "raw-select": 3
+  },
+  "apps/web/src/components/inventory/product-form.tsx": {
+    "raw-select": 11
+  },
+  "apps/web/src/components/inventory/rental-calendar.tsx": {
+    "raw-select": 1
+  },
+  "apps/web/src/components/inventory/rental-ops-panel.tsx": {
+    "raw-date": 1,
+    "raw-select": 2
+  },
+  "apps/web/src/components/layout/date-range-picker.tsx": {
+    "raw-date": 2
+  },
+  "apps/web/src/components/module/brand-location-fields.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/components/module/commercial-doc-screens.tsx": {
+    "raw-date": 3,
+    "raw-select": 5
+  },
+  "apps/web/src/components/module/document-lines-editor.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/components/module/party-name-fields.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/components/parties/party-form.tsx": {
+    "raw-select": 5
+  },
+  "apps/web/src/components/pos/pos-terminal.tsx": {
+    "raw-select": 5,
+    "unstyled-field": 12
+  },
+  "apps/web/src/components/purchase/commercial-document-detail.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/components/purchase/pay-vendors-form.tsx": {
+    "raw-date": 1,
+    "raw-select": 1
+  },
+  "apps/web/src/components/purchase/purchase-vat-fields.tsx": {
+    "raw-select": 1
+  },
+  "apps/web/src/components/reconciliation/reconciliation-compare.tsx": {
+    "raw-select": 1
+  },
+  "apps/web/src/components/reconciliation/reconciliation-workbench.tsx": {
+    "raw-select": 1,
+    "unstyled-field": 3
+  },
+  "apps/web/src/components/sales/discount-form.tsx": {
+    "raw-date": 2,
+    "raw-select": 1
+  },
+  "apps/web/src/components/sales/discount-picker.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/components/sales/event-hire-fields.tsx": {
+    "raw-date": 3,
+    "raw-select": 1
+  },
+  "apps/web/src/components/sales/invoice-document-form.tsx": {
+    "raw-date": 3,
+    "raw-select": 4
+  },
+  "apps/web/src/components/sales/quotation-form.tsx": {
+    "raw-date": 2,
+    "raw-select": 2
+  },
+  "apps/web/src/components/sales/receive-payments-form.tsx": {
+    "raw-date": 1,
+    "raw-select": 1
+  },
+  "apps/web/src/components/sales/sales-document-form.tsx": {
+    "raw-date": 2,
+    "raw-select": 1
+  },
+  "apps/web/src/components/sales/sales-tax-profile-fields.tsx": {
+    "raw-select": 4
+  },
+  "apps/web/src/components/simple-entry/simple-entry-screen.tsx": {
+    "raw-date": 1,
+    "raw-select": 6
+  },
+  "apps/web/src/components/statement-import/statement-import-wizard.tsx": {
+    "raw-select": 4
+  },
+  "apps/web/src/components/team/team-groups-screen.tsx": {
+    "raw-select": 2
+  },
+  "apps/web/src/components/team/team-jobs-screen.tsx": {
+    "raw-select": 1
+  },
+  "apps/web/src/components/team/team-people-screen.tsx": {
+    "raw-select": 3
+  },
+  "apps/web/src/components/team/team-person-screen.tsx": {
+    "raw-select": 3
+  },
+  "apps/web/src/components/ui/rich-text-editor.tsx": {
+    "unstyled-textarea": 1
+  }
+}

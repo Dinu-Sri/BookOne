@@ -16,7 +16,7 @@ export default async function OpeningBalancesPage() {
   if (!jobCanWrite(tenant, 'Accounts')) redirect('/accounts');
   return (
     <BookOneShell active="Accounts" tenant={tenant}>
-      <div className="workspace">
+      <div className="workspace party-workspace">
         <CoaOpening accounts={accounts} />
       </div>
     </BookOneShell>

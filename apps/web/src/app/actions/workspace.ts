@@ -91,6 +91,9 @@ export interface AccountBalance {
   controlRole?: string | null;
   parentCode?: string | null;
   version?: number;
+  description?: string | null;
+  institution?: string | null;
+  lastDigits?: string | null;
 }
 
 export interface DashboardMetric {
@@ -283,6 +286,9 @@ async function computeAccountBalances(
         controlRole: accounts.controlRole,
         parentCode: accounts.parentCode,
         version: accounts.version,
+        description: accounts.description,
+        institution: accounts.institution,
+        lastDigits: accounts.lastDigits,
         debitTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntries.id} IS NOT NULL AND ${journalLines.side} = 'debit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
         creditTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntries.id} IS NOT NULL AND ${journalLines.side} = 'credit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
       })
@@ -309,6 +315,9 @@ async function computeAccountBalances(
         controlRole: r.controlRole,
         parentCode: r.parentCode,
         version: r.version ?? 1,
+        description: r.description,
+        institution: r.institution,
+        lastDigits: r.lastDigits,
         debit: Number.isFinite(debit) ? debit : 0,
         credit: Number.isFinite(credit) ? credit : 0,
         balance: signedAccountBalance(r.type, debit, credit),
@@ -974,6 +983,9 @@ export interface AccountWithBalance {
   controlRole?: string | null;
   parentCode?: string | null;
   version?: number;
+  description?: string | null;
+  institution?: string | null;
+  lastDigits?: string | null;
 }
 
 export async function listAccountsWithBalances(): Promise<AccountWithBalance[]> {

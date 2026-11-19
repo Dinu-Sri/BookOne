@@ -1,3 +1,7 @@
+## 2026-11-19 — Accounts/Advances UI consistency and UI-02 gate (v2.13.0)
+
+Candidate **2.13.0** on `feat/v2130-ui-02-coa-consistency` from origin/master `f2bfed6` / v2.12.2. Live v2.12.2 Accounts/Advances used native selects, native dates, and raw subtype identifiers. This candidate restyles those six routes onto shared BookOne controls and adds CoreGuard UI-02 (AST lint + browser fixture) as a Docker web image publication prerequisite. COA-01 posting behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — CoA prerender login redirect (v2.12.2)
 
 Candidate **2.12.2** on `fix/v2122-coa-01-prerender` from origin/master `3efd103` / v2.12.1. Production Check on v2.12.1 passed lint then failed `next build` prerendering `/accounts/import` without a session. This candidate loads tenant first and redirects to login on CoA and Advances pages. COA-01 posting behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

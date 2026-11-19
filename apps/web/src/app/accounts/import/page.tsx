@@ -15,7 +15,7 @@ export default async function ChartImportPage() {
   if (!jobCanWrite(tenant, 'Accounts')) redirect('/accounts');
   return (
     <BookOneShell active="Accounts" tenant={tenant}>
-      <div className="workspace">
+      <div className="workspace party-workspace">
         <CoaImport />
       </div>
     </BookOneShell>

@@ -1,12 +1,27 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card } from '@/components/ui/bookone-ui';
+import { Button } from '@/components/ui/bookone-ui';
+import { DateField } from '@/components/ui/date-field';
+import { FormFooter, FormShell } from '@/components/ui/form-shell';
+import { SelectField } from '@/components/ui/select-field';
+import { AmountField } from '@/components/ui/text-field';
 import { withFormPending } from '@/components/ui/form-busy';
 import { postOpeningBalances, previewOpening } from '@/app/actions/opening-balances';
 
-type Line = { accountCode: string; debit: string; credit: string };
+type Line = { id: string; accountCode: string; debit: string; credit: string };
+
+function newId() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `line-${Date.now()}-${Math.random()}`;
+}
+
+function parseAmount(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return 0;
+  if (!/^-?\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+  return Number(trimmed);
+}
 
 export function CoaOpening({
   accounts,
@@ -16,29 +31,58 @@ export function CoaOpening({
   const router = useRouter();
   const posting = accounts.filter((row) => row.isGroup !== '1');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [lines, setLines] = useState<Line[]>([{ accountCode: posting[0]?.code ?? '1000', debit: '', credit: '' }]);
+  const [lines, setLines] = useState<Line[]>([{ id: newId(), accountCode: posting[0]?.code ?? '', debit: '', credit: '' }]);
   const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+
+  const accountOptions = posting.map((account) => ({
+    value: account.code,
+    label: `${account.code} · ${account.name}`,
+  }));
+
+  function payloadKey() {
+    return JSON.stringify({ date, lines: lines.map((line) => ({ accountCode: line.accountCode, debit: line.debit, credit: line.credit })) });
+  }
 
   function parsed() {
     return lines.map((line) => ({
       accountCode: line.accountCode,
-      debit: Number(line.debit) || 0,
-      credit: Number(line.credit) || 0,
+      debit: parseAmount(line.debit) ?? Number.NaN,
+      credit: parseAmount(line.credit) ?? Number.NaN,
     }));
   }
 
+  const totals = useMemo(() => {
+    let debit = 0;
+    let credit = 0;
+    for (const line of lines) {
+      debit += parseAmount(line.debit) ?? 0;
+      credit += parseAmount(line.credit) ?? 0;
+    }
+    return { debit, credit, diff: Math.round((debit - credit) * 100) / 100 };
+  }, [lines]);
+
+  const stale = Boolean(previewKey && previewKey !== payloadKey());
+
   function runPreview() {
     setError(null);
+    const invalid = parsed().find((line) => Number.isNaN(line.debit) || Number.isNaN(line.credit));
+    if (invalid) {
+      setError('Enter amounts as numbers with up to two decimal places. Blank is zero.');
+      return;
+    }
     start(() => {
       void (async () => {
         const result = await previewOpening({ effectiveDate: date, lines: parsed() });
         if (!result.ok) {
           setError(result.error);
           setPreviewText(null);
+          setPreviewKey(null);
           return;
         }
+        setPreviewKey(payloadKey());
         setPreviewText(
           `Balanced preview: debits ${result.data.debitTotal.toFixed(2)} / credits ${result.data.creditTotal.toFixed(2)}. One posting will be created.`,
         );
@@ -49,6 +93,10 @@ export function CoaOpening({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (stale || !previewKey) {
+      setError('Preview this exact date and these lines before posting.');
+      return;
+    }
     start(() => {
       void withFormPending(async () => {
         const preview = await previewOpening({ effectiveDate: date, lines: parsed() });
@@ -68,85 +116,97 @@ export function CoaOpening({
   }
 
   return (
-    <Card>
-      <div className="card-header">
-        <div>
-          <p className="eyebrow">Opening balances</p>
-          <h1 className="card-title" style={{ marginTop: 4 }}>
-            Post a balanced opening
-          </h1>
-          <p className="card-subtitle">
-            Creating an account does not write equity or journals. Preview must balance before posting.
+    <FormShell
+      backHref="/accounts"
+      backParent="Accounts"
+      title="Opening balances"
+      footer={
+        <FormFooter>
+          <Button type="button" onClick={() => router.push('/accounts')}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={runPreview} disabled={pending}>
+            Preview
+          </Button>
+          <Button variant="primary" type="submit" form="coa-opening" disabled={pending || !previewKey || stale}>
+            Post opening
+          </Button>
+        </FormFooter>
+      }
+    >
+      <form id="coa-opening" onSubmit={submit}>
+        {error ? (
+          <p className="form-error" role="alert">
+            {error}
           </p>
+        ) : null}
+        {previewText && !stale ? (
+          <p className="form-success" role="status">
+            {previewText}
+          </p>
+        ) : null}
+        {stale ? (
+          <p className="form-error" role="status">
+            Lines or date changed. Preview again before posting.
+          </p>
+        ) : null}
+        <p className="field-help" style={{ marginBottom: 12 }}>
+          Creating an account does not write equity or journals. Preview must balance before posting.
+        </p>
+        <DateField id="open-date" label="Effective date" value={date} onChange={setDate} required />
+        <div className="opening-line-head" aria-hidden>
+          <span>Account</span>
+          <span>Debit</span>
+          <span>Credit</span>
+          <span />
         </div>
-      </div>
-      <div className="card-body">
-        <form onSubmit={submit} className="form-grid">
-          {error ? (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {previewText ? (
-            <p className="form-success" role="status">
-              {previewText}
-            </p>
-          ) : null}
-          <div className="field">
-            <label htmlFor="open-date">Effective date</label>
-            <input id="open-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-          </div>
-          {lines.map((line, index) => (
-            <div key={index} className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
-              <div className="field">
-                <label htmlFor={`open-code-${index}`}>Account</label>
-                <select
-                  id={`open-code-${index}`}
-                  value={line.accountCode}
-                  onChange={(e) =>
-                    setLines((cur) => cur.map((row, i) => (i === index ? { ...row, accountCode: e.target.value } : row)))
-                  }
-                >
-                  {posting.map((account) => (
-                    <option key={account.code} value={account.code}>
-                      {account.code} {account.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor={`open-dr-${index}`}>Debit</label>
-                <input
-                  id={`open-dr-${index}`}
-                  inputMode="decimal"
-                  value={line.debit}
-                  onChange={(e) => setLines((cur) => cur.map((row, i) => (i === index ? { ...row, debit: e.target.value } : row)))}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor={`open-cr-${index}`}>Credit</label>
-                <input
-                  id={`open-cr-${index}`}
-                  inputMode="decimal"
-                  value={line.credit}
-                  onChange={(e) => setLines((cur) => cur.map((row, i) => (i === index ? { ...row, credit: e.target.value } : row)))}
-                />
-              </div>
+        {lines.map((line, index) => (
+          <div key={line.id} className="opening-line-grid">
+            <SelectField
+              id={`open-code-${line.id}`}
+              label={index === 0 ? 'Account' : `Account ${index + 1}`}
+              value={line.accountCode}
+              onChange={(accountCode) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, accountCode } : row)))}
+              options={accountOptions}
+              emptyReason="No posting accounts are available."
+            />
+            <AmountField
+              id={`open-dr-${line.id}`}
+              label="Debit"
+              value={line.debit}
+              onChange={(e) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, debit: e.target.value } : row)))}
+            />
+            <AmountField
+              id={`open-cr-${line.id}`}
+              label="Credit"
+              value={line.credit}
+              onChange={(e) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, credit: e.target.value } : row)))}
+            />
+            <div className="field">
+              <label htmlFor={`open-remove-${line.id}`}>&nbsp;</label>
+              <Button
+                id={`open-remove-${line.id}`}
+                type="button"
+                disabled={lines.length <= 1}
+                onClick={() => setLines((cur) => cur.filter((row) => row.id !== line.id))}
+              >
+                Remove
+              </Button>
             </div>
-          ))}
-          <div className="cluster" style={{ gap: 8 }}>
-            <Button type="button" onClick={() => setLines((cur) => [...cur, { accountCode: posting[0]?.code ?? '1000', debit: '', credit: '' }])}>
-              Add line
-            </Button>
-            <Button type="button" onClick={runPreview} disabled={pending}>
-              Preview
-            </Button>
-            <Button variant="primary" type="submit" disabled={pending}>
-              Post opening
-            </Button>
           </div>
-        </form>
-      </div>
-    </Card>
+        ))}
+        <div className="opening-totals">
+          <span>Debits {totals.debit.toFixed(2)}</span>
+          <span>Credits {totals.credit.toFixed(2)}</span>
+          <span>Difference {totals.diff.toFixed(2)}</span>
+        </div>
+        <Button
+          type="button"
+          onClick={() => setLines((cur) => [...cur, { id: newId(), accountCode: posting[0]?.code ?? '', debit: '', credit: '' }])}
+        >
+          Add line
+        </Button>
+      </form>
+    </FormShell>
   );
 }

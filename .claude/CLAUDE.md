@@ -51,5 +51,5 @@ mcp_codebase-memo_get_architecture({ "project": "<display_name>" })
 
 ## Existing UI/UX compatibility — mandatory
 
-Before UI/UX changes read docs/UI_UX_CHANGE_GUIDE.md and root AGENTS's incremental UI/UX section. Extend existing LIST_TABLE_UX_GUIDE, CSS variables and shared components; no replacement design system. CHG must identify external UX/UXW/WB refs and pinned QA revision/hash, shared consumers, preserved business/history/access behaviour and actual exact/adjacent evidence. Preserve failures; report blocked layers; do not self-close independent QA findings.
+Before UI/UX changes read docs/UI_UX_CHANGE_GUIDE.md, docs/UI_CONTROL_REGISTRY.md and root AGENTS's incremental UI/UX section. Extend existing LIST_TABLE_UX_GUIDE, CSS variables and shared components; no replacement design system. New or changed UI must use registry SelectField/DateField/TextField/FormBackLink primitives — no native select or native date input. CHG must identify external UX/UXW/WB refs and pinned QA revision/hash, shared consumers, preserved business/history/access behaviour and actual exact/adjacent evidence. Preserve failures; report blocked layers; do not self-close independent QA findings.
 

@@ -1,0 +1,34 @@
+# CHG-20261119-ui-02-coa-consistency — Accounts and Advances shared controls plus UI-02 gate
+
+Status: ready-for-QA.
+
+- Author/agent and date: coding agent, 2026-11-19
+- Product version (`VERSION` file) and base SHA / branch/PR: 2.13.0 on `feat/v2130-ui-02-coa-consistency` from origin/master `f2bfed666a6e9e29ca6fb109d59e3a6e64874fb4` (v2.12.2)
+- QA repository revision and companion PR/change ID: independent staging QA pending. Handoff CODING-UI02-COA-CONSISTENCY-AND-DESIGN-GATE.md. No bookone-qa companion opened in this change. Keep existing company flags as last observed (Inbox on / draft-only off / posting-stop on). Preserve the saved Codex `bookone` entry and original grant. Do not replay consumed authorization codes, including requests `4b22d15c` and `7bf93de1`.
+- Intended before/after behaviour with a concrete example: live v2.12.2 `/accounts` used native search/selects and showed `operating_expense`; `/accounts/new` had raw fields and no standard Back; `/accounts/opening` used a native date; `/advances` mixed native selects and date. After this change those six routes use `SearchField` / `SelectField` / `DateField` / `TextField` / `FormShell`, human-readable labels, Back to Accounts, and CoreGuard UI-02 rejects new native selects/dates on the repaired feature.
+- Existing behaviour that must remain correct: COA-01 journals, openings, advances, spendable cash 10xx+11xx, CATALOG_VERSION 2, AgentBridge AB-11, UI-NAV-01 list clipping, tiles removed, DB-01/DB-02 dashboard, company flags, DateField compact consumers, ProductAddSearch
+- Actual changed paths/symbols/routes: shared `form-shell`, `text-field`, `select-field`, `menu-position`, DateField extensions; `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/opening`, `/accounts/import`, `/advances`; `coa-labels.ts`; AST lint `packages/auth/test/ui-consistency.ts` + baseline; CoreGuard suite `ui-02`; `docs/UI_CONTROL_REGISTRY.md`
+- Business rule/profile/scenario IDs: UI-02. COA-01 posting contracts retained. UX rule 8 updated for new/changed UI. Rulebook SHA is recorded by independent QA from bookone-qa at review time
+- Accounting, stock/rental, tenant/access and customer-data effects: no new journals. Account pickers still submit server codes. Archive stays hidden on system rows and refused on the server. No change to real company flags
+- Migrations, schema/history compatibility and recovery implications: none. CoreGuard `ui-02` required. CoreGuard version stays `ab-11`. Schema protocol stays `ab-06.1` plus 049
+- Dependencies, settings/flags, deployment and external-service changes: `@bookone/auth` adds typescript as a test/dev dependency. Owner Portainer Re-pull ON after Docker web image green. Do not change AgentBridge flags or signing material. Do not recreate the saved Codex entry
+- Independent diff/impact review and uncertainties: Playwright UI-02 uses labelled fixture HTML for Back, combobox keyboard, human-readable class, blank date trigger, cash code+name. AST fail/pass fixtures demonstrate the gate. Isolated live Owner UI, WCAG 2.2 A+AA, and financial replay remain independent QA. This is not live-tenant CoA/dashboard/Codex acceptance
+- Checks executed: `@bookone/auth` ui-02-lint 6 passed, ui-02-gate 6 passed, coa-01-gate 6 passed, ui-nav-01 9 passed; `@bookone/agent-bridge` coreguard 2 passed; `@bookone/accounting` classification/pilot/advances/csv-opening 14 passed; Playwright ui-02 3 passed, coa-01 2 passed. Local web `tsc --noEmit` leftover `.next/types` PageProps noise is unchanged and absent from a clean CI checkout; UI-02 source files did not add tsc hits after typing `controlRole` on `CoaRow`
+- Failed/skipped/flaky/blocked/not-run checks: live Codex/Claude, OCR, production IdP, GitHub branch protection stay BLOCKED. Isolated Next+seed browser against a live tenant is not this gate. Restore LAST not executed. Full WCAG is not claimed from the fixture. Desktop/narrow live screenshots pending independent QA
+- New QA assertions or outstanding work; changed expectations and owner decision: owner Portainer Re-pull ON after GHCR latest is this SHA. Independent QA reviews `/accounts*`, `/advances`, keyboard/narrow, and shared DateField consumers. Do not replay CONT11/POS 118/consumed OAuth codes
+- Created staging records/cleanup, if any: none
+- Documentation updated: `docs/UI_CONTROL_REGISTRY.md`, `docs/UI_UX_CHANGE_GUIDE.md` rule 8, `docs/LIST_TABLE_UX_GUIDE.md`, AGENTS, `.claude/CLAUDE.md`, QA contract, CHG template, this CHG, TASK_LOG, PROJECT_STATUS
+- Next exact action and responsible role: reviewable PR, then fast-forward origin/master. Owner deploys. Independent QA on staging
+
+## UI/UX impact and existing-design compatibility
+
+- Existing design guide/component/CSS references; reason for reusing/extending them (new or changed UI must name [UI_CONTROL_REGISTRY](../UI_CONTROL_REGISTRY.md) primitives): `party-form-shell`, `party-back-btn`, `.input`, `DateField`, `ConfirmDialog`, `withFormPending`, list toolbar/sort/pagination/`doc-action-panel`. New `SelectField` is a working combobox; `SelectLike` stays decorative
+- Exact external QA commit and ux/workbook.json SHA256; UX/UXW/WB IDs/revisions: not bound in this change
+- Before/after behaviour; independent expected/unchanged example: Class filter is a labelled combobox showing Asset, not a native select. Opening date trigger says Select date when blank. Cash/bank options show `1000 · Cash on Hand` and submit code `1000`
+- Direct screens and transitive shared consumers; applicable states/roles/entities/settings: `/accounts*` and `/advances`. DateField compact consumers (period selector) stay in-flow. Legacy native selects remain on untouched screens and are recorded in `packages/auth/test/ui-02-baseline.json`
+- Preserved field/line/source identity, money/stock/history/print and server permissions: opening stable line ids; stale preview invalidates Post; Viewer cannot write; system Archive is hidden and still refused server-side
+- Desktop/narrow/keyboard/reader evidence; baseline/after sanitized screenshots: Playwright fixture in `e2e/ui-02.spec.ts`. Live 1920/1366/390 screenshots pending independent QA. WCAG 2.2 A+AA is the target and is not claimed from the fixture
+- Exact and adjacent regressions; actual engineering checks and missing layers: AgentBridge CoreGuard suites retained. COA-01 financial assertions retained. Signing PEM_FILE preserved
+- Conflict/exception owner, rationale, mitigation, expiry and acceptance impact: legacy native controls are a bounded baseline that cannot grow; they are not blessed as a new pattern. This change does not claim live CoA UI acceptance from source-only checks
+- Small rollout batch/revert plan; any schema/data implications explicitly reviewed: revert the VERSION 2.13.0 commit. No schema change
+- QA companion change/run and independent review link (or pending): pending independent staging review after deploy

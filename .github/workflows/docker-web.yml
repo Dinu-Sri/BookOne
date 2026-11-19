@@ -188,11 +188,16 @@ jobs:
           COA01_REQUIRE_POSTGRES: '1'
           NODE_ENV: test
 
+      - name: UI consistency UI-02
+        run: pnpm --filter @bookone/auth exec vitest run test/ui-02-lint.test.ts test/ui-02-gate.test.ts
+        env:
+          NODE_ENV: test
+
       - name: Install Playwright Chromium
         run: pnpm --dir apps/web exec playwright install --with-deps chromium
 
-      - name: Browser inbox UI-NAV-01 and Dashboard DB-01
-        run: pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/agent-bridge-consent.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts e2e/coa-01.spec.ts
+      - name: Browser inbox UI-NAV-01 Dashboard DB-01 COA-01 and UI-02
+        run: pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/agent-bridge-consent.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts e2e/coa-01.spec.ts e2e/ui-02.spec.ts
 
   build-and-push:
     name: Build & push web image

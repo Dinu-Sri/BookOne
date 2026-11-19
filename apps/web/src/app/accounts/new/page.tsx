@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getTenantInfo } from '@/app/actions/workspace';
+import { getTenantInfo, listAccountsWithBalances } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CoaWizard } from '@/components/accounts/coa-wizard';
 import { assertScreenAccess, jobCanWrite } from '@/lib/access';
@@ -12,8 +12,9 @@ export default async function NewAccountPage({
 }) {
   const params = searchParams ? await searchParams : {};
   let tenant;
+  let accounts;
   try {
-    tenant = await getTenantInfo();
+    [tenant, accounts] = await Promise.all([getTenantInfo(), listAccountsWithBalances()]);
   } catch {
     redirect('/login?from=/accounts/new');
   }
@@ -23,8 +24,8 @@ export default async function NewAccountPage({
 
   return (
     <BookOneShell active="Accounts" tenant={tenant}>
-      <div className="workspace">
-        <CoaWizard defaultTemplate={template} />
+      <div className="workspace party-workspace">
+        <CoaWizard defaultTemplate={template} accounts={accounts} />
       </div>
     </BookOneShell>
   );

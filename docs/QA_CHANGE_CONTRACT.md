@@ -51,7 +51,7 @@ Do not copy a second editable rulebook here, silently change adopted rules/setti
 
 ## Shared UI/UX acceptance and preservation —2026-10-21
 
-UI/UX tasks MUST follow [UI_UX_CHANGE_GUIDE](UI_UX_CHANGE_GUIDE.md) and extend existing design references/components. Read the external UX workbook at an exact recorded QA SHA and hash; declare applicable UX/UXW/WB refs, existing source/style choice, direct/dependent shared consumers, before/after behaviour and preserved financial/source/history/access facts.
+UI/UX tasks MUST follow [UI_UX_CHANGE_GUIDE](UI_UX_CHANGE_GUIDE.md) and [UI_CONTROL_REGISTRY](UI_CONTROL_REGISTRY.md) and extend existing design references/components. New or changed UI uses registry primitives; native select and native date inputs are not allowed on those surfaces. Read the external UX workbook at an exact recorded QA SHA and hash; declare applicable UX/UXW/WB refs, existing source/style choice, direct/dependent shared consumers, before/after behaviour and preserved financial/source/history/access facts.
 
 Use the extended CHG UX section. Require actual rendered exact/adjacent interaction, saved readback and independent business outcomes plus applicable keyboard/narrow/reader evidence; source lint/screenshots/scans alone are limited. Preserve original QA failures and keep unrun layers explicit. Maintain rules/workflows externally; no second product-side scenario catalogue. Incremental batches with scoped rollback replace blanket redesign. Product checks and independent QA acceptance remain separate.
 

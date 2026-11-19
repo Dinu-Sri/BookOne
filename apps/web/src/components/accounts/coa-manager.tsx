@@ -1,11 +1,18 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Eye } from 'lucide-react';
 import { Badge, Button, Card } from '@/components/ui/bookone-ui';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { withFormPending } from '@/components/ui/form-busy';
+import { SearchField } from '@/components/ui/text-field';
+import { SelectField } from '@/components/ui/select-field';
+import { menuPosition, type MenuPosition } from '@/components/ui/menu-position';
 import { archiveCompanyAccount, exportChartCsv, reactivateCompanyAccount } from '@/app/actions/chart-of-accounts';
+import { classLabel, statusLabel, subtypeLabel } from '@/lib/coa-labels';
 
 export type CoaRow = {
   id: string;
@@ -19,11 +26,18 @@ export type CoaRow = {
   isSystem?: string | null;
   isActive?: string | null;
   liquidity?: string | null;
+  controlRole?: string | null;
   parentCode?: string | null;
   version?: number;
+  description?: string | null;
+  institution?: string | null;
+  lastDigits?: string | null;
 };
 
+const PAGE_SIZE = 10;
 const ROOTS = ['asset', 'liability', 'equity', 'revenue', 'expense'] as const;
+type SortKey = 'code' | 'name' | 'type' | 'subtype' | 'status' | 'balance';
+type SortDir = 'asc' | 'desc';
 
 function money(value: number, currency: string) {
   const sign = value < 0 ? '-' : '';
@@ -47,6 +61,21 @@ function typeTone(type: string): 'success' | 'warning' | 'danger' | 'info' | 'ne
   }
 }
 
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <ArrowUpDown size={13} className="th-sort-icon" aria-hidden />;
+  return dir === 'asc' ? (
+    <ArrowUp size={13} className="th-sort-icon active" aria-hidden />
+  ) : (
+    <ArrowDown size={13} className="th-sort-icon active" aria-hidden />
+  );
+}
+
+function archiveBlockedReason(row: CoaRow): string | null {
+  if (row.isSystem === '1') return 'System control accounts stay on the chart. Archive is not offered here.';
+  if (row.isGroup === '1') return 'Group headings with children cannot be archived until children move.';
+  return null;
+}
+
 export function CoaManager({
   accounts,
   currency,
@@ -65,10 +94,20 @@ export function CoaManager({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [sortKey, setSortKey] = useState<SortKey>('code');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [page, setPage] = useState(1);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<MenuPosition | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [confirm, setConfirm] = useState<null | { type: 'archive' | 'reactivate'; row: CoaRow }>(null);
+  const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  useEffect(() => setMounted(true), []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return accounts.filter((row) => {
+    const rows = accounts.filter((row) => {
       const archived = row.isActive === '0';
       if (status === 'active' && archived) return false;
       if (status === 'archived' && !archived) return false;
@@ -77,11 +116,68 @@ export function CoaManager({
       return (
         row.code.toLowerCase().includes(q) ||
         row.name.toLowerCase().includes(q) ||
-        (row.subtype ?? '').toLowerCase().includes(q) ||
+        subtypeLabel(row.subtype).toLowerCase().includes(q) ||
+        classLabel(row.type).toLowerCase().includes(q) ||
         (row.liquidity ?? '').toLowerCase().includes(q)
       );
     });
-  }, [accounts, query, root, status]);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      const av =
+        sortKey === 'status'
+          ? statusLabel(a.isActive)
+          : sortKey === 'subtype'
+            ? subtypeLabel(a.subtype)
+            : sortKey === 'type'
+              ? classLabel(a.type)
+              : String(a[sortKey] ?? '');
+      const bv =
+        sortKey === 'status'
+          ? statusLabel(b.isActive)
+          : sortKey === 'subtype'
+            ? subtypeLabel(b.subtype)
+            : sortKey === 'type'
+              ? classLabel(b.type)
+              : String(b[sortKey] ?? '');
+      if (sortKey === 'balance') return (a.balance - b.balance) * dir;
+      return av.localeCompare(bv, undefined, { numeric: true }) * dir;
+    });
+    return rows;
+  }, [accounts, query, root, status, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, root, status, sortKey, sortDir]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    function onScroll() {
+      setOpenMenuId(null);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpenMenuId(null);
+    }
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [openMenuId]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir(key === 'balance' ? 'desc' : 'asc');
+    }
+  }
 
   function archive(row: CoaRow) {
     setError(null);
@@ -93,7 +189,7 @@ export function CoaManager({
           setError(result.error);
           return;
         }
-        setMessage(`Archived ${row.code}.`);
+        setMessage(`Archived ${row.code} ${row.name}.`);
         router.refresh();
       });
     });
@@ -109,7 +205,7 @@ export function CoaManager({
           setError(result.error);
           return;
         }
-        setMessage(`Reactivated ${row.code}.`);
+        setMessage(`Reactivated ${row.code} ${row.name}.`);
         router.refresh();
       });
     });
@@ -136,8 +232,116 @@ export function CoaManager({
     });
   }
 
+  const openRow = pageRows.find((row) => row.id === openMenuId) ?? filtered.find((row) => row.id === openMenuId);
+
+  const menuPortal =
+    mounted && openMenuId && menuPos && openRow
+      ? createPortal(
+          <div
+            className={`doc-action-panel doc-action-panel-fixed ${menuPos.openUp ? 'open-up' : ''}`}
+            role="menu"
+            style={{
+              position: 'fixed',
+              top: menuPos.top,
+              left: menuPos.left,
+              transform: menuPos.openUp ? 'translateY(-100%)' : 'none',
+              zIndex: 300,
+              minWidth: 220,
+            }}
+          >
+            {(() => {
+              const items = [];
+              const blocked = archiveBlockedReason(openRow);
+              if (canWrite && openRow.isActive !== '0') {
+                if (blocked) {
+                  items.push(
+                    <div key="blocked" className="doc-action-item doc-action-item-muted" role="menuitem">
+                      {blocked}
+                    </div>,
+                  );
+                } else {
+                  items.push(
+                    <button
+                      key="archive"
+                      type="button"
+                      className="doc-action-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        setConfirm({ type: 'archive', row: openRow });
+                      }}
+                    >
+                      Archive
+                    </button>,
+                  );
+                }
+              }
+              if (canWrite && openRow.isActive === '0') {
+                items.push(
+                  <button
+                    key="restore"
+                    type="button"
+                    className="doc-action-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      setConfirm({ type: 'reactivate', row: openRow });
+                    }}
+                  >
+                    Reactivate
+                  </button>,
+                );
+              }
+              if (items.length === 0) {
+                items.push(
+                  <div key="none" className="doc-action-item doc-action-item-muted" role="menuitem">
+                    {canWrite ? 'No actions available' : 'View only — archive needs Accounts write.'}
+                  </div>,
+                );
+              }
+              return items;
+            })()}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div className="workspace">
+    <div className="workspace party-workspace">
+      <div className="party-toolbar">
+        <SearchField
+          id="coa-search"
+          label="Search"
+          value={query}
+          onChange={setQuery}
+          placeholder="Search by code, name or class"
+        />
+        <SelectField
+          id="coa-root"
+          label="Class"
+          value={root}
+          onChange={setRoot}
+          className="party-toolbar-filter"
+          options={[{ value: 'all', label: 'All classes' }, ...ROOTS.map((item) => ({ value: item, label: classLabel(item) }))]}
+        />
+        <SelectField
+          id="coa-status"
+          label="Status"
+          value={status}
+          onChange={(v) => setStatus(v as typeof status)}
+          className="party-toolbar-filter"
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'archived', label: 'Archived' },
+            { value: 'all', label: 'All' },
+          ]}
+        />
+        {canWrite ? (
+          <Link href="/accounts/new" className="button primary">
+            New account
+          </Link>
+        ) : null}
+      </div>
       <Card>
         <div className="card-header">
           <div>
@@ -150,11 +354,6 @@ export function CoaManager({
             </p>
           </div>
           <div className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
-            {canWrite ? (
-              <Link href="/accounts/new" className="button primary">
-                New account
-              </Link>
-            ) : null}
             {canWrite ? (
               <Link href="/accounts/opening" className="button">
                 Opening balances
@@ -184,54 +383,54 @@ export function CoaManager({
               {message}
             </p>
           ) : null}
-          <div className="cluster" style={{ gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-            <div className="field">
-              <label htmlFor="coa-search">Search</label>
-              <input
-                id="coa-search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Code, name or bank"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="coa-root">Class</label>
-              <select id="coa-root" value={root} onChange={(e) => setRoot(e.target.value)}>
-                <option value="all">All classes</option>
-                {ROOTS.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="coa-status">Status</label>
-              <select id="coa-status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
-                <option value="active">Active</option>
-                <option value="archived">Archived</option>
-                <option value="all">All</option>
-              </select>
-            </div>
-          </div>
           {filtered.length === 0 ? (
-            <p>No accounts match these filters.</p>
+            <p>{accounts.length === 0 ? 'No accounts yet.' : 'No matches. Try another search or filter.'}</p>
           ) : (
-            <div className="table-wrap">
+            <div className="table-wrap table-wrap-actions">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Class</th>
-                    <th>Subtype</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: 'right' }}>Balance</th>
-                    <th>Actions</th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('code')}>
+                        Code
+                        <SortIcon active={sortKey === 'code'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('name')}>
+                        Name
+                        <SortIcon active={sortKey === 'name'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('type')}>
+                        Class
+                        <SortIcon active={sortKey === 'type'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('subtype')}>
+                        Subtype
+                        <SortIcon active={sortKey === 'subtype'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('status')}>
+                        Status
+                        <SortIcon active={sortKey === 'status'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('balance')}>
+                        Balance
+                        <SortIcon active={sortKey === 'balance'} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th className="th-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row) => (
+                  {pageRows.map((row) => (
                     <tr key={row.id}>
                       <td style={{ fontFamily: 'var(--font-mono)' }}>{row.code}</td>
                       <td>
@@ -240,26 +439,36 @@ export function CoaManager({
                         {row.isSystem === '1' ? ' · system' : ''}
                       </td>
                       <td>
-                        <Badge tone={typeTone(row.type)}>{row.type}</Badge>
+                        <Badge tone={typeTone(row.type)}>{classLabel(row.type)}</Badge>
                       </td>
-                      <td>{row.subtype || '—'}</td>
-                      <td>{row.isActive === '0' ? 'Archived' : 'Active'}</td>
+                      <td>{subtypeLabel(row.subtype)}</td>
+                      <td>{statusLabel(row.isActive)}</td>
                       <td style={{ textAlign: 'right' }} className={row.balance < 0 ? 'amount-negative' : 'amount-positive'}>
                         {money(row.balance, currency)}
                       </td>
-                      <td>
-                        <div className="cluster" style={{ gap: 8 }}>
-                          <Link href={`/journal?account=${row.code}`}>Ledger</Link>
-                          {canWrite && row.isActive !== '0' ? (
-                            <Button onClick={() => archive(row)} disabled={pending}>
-                              Archive
-                            </Button>
-                          ) : null}
-                          {canWrite && row.isActive === '0' ? (
-                            <Button onClick={() => reactivate(row)} disabled={pending}>
-                              Reactivate
-                            </Button>
-                          ) : null}
+                      <td className="td-actions">
+                        <div className="party-row-actions party-row-actions-inline">
+                          <Link href={`/accounts/${row.id}`} className="button ghost icon" aria-label={`View ${row.name}`}>
+                            <Eye size={16} />
+                          </Link>
+                          <button
+                            type="button"
+                            className="button ghost doc-action-trigger"
+                            aria-haspopup="menu"
+                            aria-expanded={openMenuId === row.id}
+                            ref={(node) => {
+                              if (node) triggerRefs.current.set(row.id, node);
+                              else triggerRefs.current.delete(row.id);
+                            }}
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setMenuPos(menuPosition(rect, { menuWidth: 220, menuHeight: 160 }));
+                              setOpenMenuId((cur) => (cur === row.id ? null : row.id));
+                            }}
+                          >
+                            Actions
+                            <ChevronDown size={14} aria-hidden />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -268,8 +477,50 @@ export function CoaManager({
               </table>
             </div>
           )}
+          {filtered.length > PAGE_SIZE ? (
+            <div className="party-pagination">
+              <span>
+                {filtered.length} total · page {safePage} of {totalPages}
+              </span>
+              <div className="party-pagination-actions">
+                <Button type="button" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>
+                  Previous
+                </Button>
+                <Button type="button" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          ) : filtered.length > 0 ? (
+            <div className="party-pagination">
+              <span>
+                {filtered.length} account{filtered.length === 1 ? '' : 's'}
+              </span>
+            </div>
+          ) : null}
         </div>
       </Card>
+      {menuPortal}
+      <ConfirmDialog
+        open={Boolean(confirm)}
+        title={confirm?.type === 'archive' ? `Archive ${confirm.row.code}?` : `Reactivate ${confirm?.row.code}?`}
+        message={
+          confirm?.type === 'archive'
+            ? 'The account stays in history. Journals keep their original lines. Server rules still block a nonzero balance or protected control.'
+            : 'The account returns to the active chart.'
+        }
+        confirmLabel={confirm?.type === 'archive' ? 'Archive' : 'Reactivate'}
+        tone={confirm?.type === 'archive' ? 'warning' : 'primary'}
+        busy={pending}
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => {
+          if (!confirm) return;
+          const row = confirm.row;
+          setConfirm(null);
+          if (confirm.type === 'archive') archive(row);
+          else reactivate(row);
+        }}
+      />
     </div>
   );
 }

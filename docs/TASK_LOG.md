@@ -1,3 +1,10 @@
+## 2026-11-19 — Accounts/Advances UI consistency and UI-02 gate (v2.13.0)
+
+- Record: [CHG-20261119-ui-02-coa-consistency](changes/CHG-20261119-ui-02-coa-consistency.md). Registry [UI_CONTROL_REGISTRY.md](UI_CONTROL_REGISTRY.md). Baseline product `f2bfed6` / v2.12.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/opening`, `/accounts/import`, `/advances` use shared SearchField/SelectField/DateField/TextField/FormShell. Human-readable class/subtype labels. AST lint + baseline + CoreGuard `ui-02` as an unmasked publication prerequisite. VERSION 2.13.0. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` ui-02-lint 6 passed, ui-02-gate 6 passed, coa-01-gate 6 passed, ui-nav-01 9 passed. `@bookone/agent-bridge` coreguard 2 passed. `@bookone/accounting` CoA tests 14 passed. Playwright ui-02 3 passed, coa-01 2 passed.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent live `/accounts*` and `/advances` review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — CoA prerender login redirect (v2.12.2)
 
 - Record: [CHG-20261119-coa-01-prerender](changes/CHG-20261119-coa-01-prerender.md). Baseline product `3efd103` / v2.12.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

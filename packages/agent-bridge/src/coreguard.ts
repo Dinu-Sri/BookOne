@@ -37,7 +37,7 @@ export const COREGUARD_SUITES = [
   {
     id: 'browser',
     layer: 'browser',
-    command: 'pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/agent-bridge-consent.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts e2e/coa-01.spec.ts',
+    command: 'pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/agent-bridge-consent.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts e2e/coa-01.spec.ts e2e/ui-02.spec.ts',
     required: true,
   },
   {
@@ -53,9 +53,15 @@ export const COREGUARD_SUITES = [
     required: true,
   },
   {
+    id: 'ui-02',
+    layer: 'ui-consistency',
+    command: 'pnpm --filter @bookone/auth exec vitest run test/ui-02-lint.test.ts test/ui-02-gate.test.ts && pnpm --dir apps/web exec playwright test e2e/ui-02.spec.ts',
+    required: true,
+  },
+  {
     id: 'permissions-catalog',
     layer: 'auth',
-    command: 'pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/ab06-postgres-claim.test.ts test/agent-bridge-signing-compose.test.ts',
+    command: 'pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/ab06-postgres-claim.test.ts test/agent-bridge-signing-compose.test.ts test/ui-02-lint.test.ts test/ui-02-gate.test.ts',
     required: true,
   },
   {
@@ -127,6 +133,6 @@ export function coreGuardReport() {
     version: COREGUARD_VERSION,
     required: requiredCoreGuardSuites().map((s) => s.id),
     blocked: blockedCoreGuardSuites().map((s) => s.id),
-    note: 'Scoped AgentBridge foundation plus Dashboard DB-01 and Chart of Accounts COA-01. Existing quality job stays the publication ancestor. This registry does not certify all ERP modules.',
+    note: 'Scoped AgentBridge foundation plus Dashboard DB-01, Chart of Accounts COA-01, and UI consistency UI-02. Existing quality job stays the publication ancestor. This registry does not certify all ERP modules.',
   };
 }

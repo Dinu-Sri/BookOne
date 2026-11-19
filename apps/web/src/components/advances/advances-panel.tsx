@@ -3,8 +3,13 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { DateField } from '@/components/ui/date-field';
+import { FormBackLink } from '@/components/ui/form-shell';
+import { SelectField } from '@/components/ui/select-field';
+import { AmountField } from '@/components/ui/text-field';
 import { withFormPending } from '@/components/ui/form-busy';
 import { applyPartyAdvance, issuePartyAdvance } from '@/app/actions/advances';
+import { applyKindLabel, kindLabel } from '@/lib/coa-labels';
 import type { AdvanceKind } from '@bookone/accounting';
 
 type AdvanceRow = {
@@ -27,26 +32,29 @@ type DocumentOption = {
   documentType: string;
   balanceDue: number;
 };
+type CashOption = { code: string; name: string };
 
 export function AdvancesPanel({
   advances,
   parties,
   documents,
+  cashAccounts,
   canWrite,
 }: {
   advances: AdvanceRow[];
   parties: PartyOption[];
   documents: DocumentOption[];
+  cashAccounts: CashOption[];
   canWrite: boolean;
 }) {
   const router = useRouter();
   const [kind, setKind] = useState<AdvanceKind>('customer');
-  const [partyId, setPartyId] = useState(parties[0]?.id ?? '');
-  const [amount, setAmount] = useState('1000');
+  const [partyId, setPartyId] = useState('');
+  const [amount, setAmount] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [cashCode, setCashCode] = useState('1000');
-  const [applyId, setApplyId] = useState(advances[0]?.id ?? '');
-  const [applyAmount, setApplyAmount] = useState('400');
+  const [cashCode, setCashCode] = useState(cashAccounts[0]?.code ?? '');
+  const [applyId, setApplyId] = useState('');
+  const [applyAmount, setApplyAmount] = useState('');
   const [applyKind, setApplyKind] = useState<'apply' | 'refund' | 'expense_settle' | 'return_cash'>('apply');
   const [documentId, setDocumentId] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +72,12 @@ export function AdvancesPanel({
   );
 
   const selectedAdvance = advances.find((row) => row.id === applyId);
+
+  useEffect(() => {
+    if (!filteredParties.some((p) => p.id === partyId)) {
+      setPartyId('');
+    }
+  }, [filteredParties, partyId]);
 
   useEffect(() => {
     if (selectedAdvance?.kind === 'staff' && (applyKind === 'apply' || applyKind === 'refund')) {
@@ -111,7 +125,8 @@ export function AdvancesPanel({
           setError(result.error);
           return;
         }
-        setMessage(`Advance recorded. Remaining ${result.data.remaining.toFixed(2)}.`);
+        setMessage(`${kindLabel(kind)} recorded. Remaining ${result.data.remaining.toFixed(2)}.`);
+        setAmount('');
         router.refresh();
       });
     });
@@ -134,142 +149,168 @@ export function AdvancesPanel({
           setError(result.error);
           return;
         }
-        setMessage(`${applyKind} posted. Remaining ${result.data.remaining.toFixed(2)}.`);
+        setMessage(`${applyKindLabel(applyKind)} posted. Remaining ${result.data.remaining.toFixed(2)}.`);
+        setApplyAmount('');
         router.refresh();
       });
     });
   }
 
+  const partyEmpty =
+    kind === 'customer'
+      ? 'No customer parties in this company. Add a customer before issuing an advance.'
+      : kind === 'supplier'
+        ? 'No supplier parties in this company. Add a vendor before issuing an advance.'
+        : 'No staff parties in this company. Add a staff person before issuing an advance.';
+
   return (
-    <div className="workspace">
-      <Card>
+    <div className="workspace party-workspace">
+      <div className="party-form-top" style={{ marginBottom: 12, borderRadius: 'var(--radius-lg)' }}>
+        <FormBackLink href="/accounts" parent="Accounts" />
+        <span className="form-shell-title">Advances</span>
+      </div>
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {message ? (
+        <p className="form-success" role="status">
+          {message}
+        </p>
+      ) : null}
+      {canWrite ? (
+        <Card>
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">Issue an advance</h2>
+              <p className="card-subtitle">
+                Customer receipts stay a liability until applied. Supplier and staff issues stay an asset until settled. These examples are non-VAT.
+              </p>
+            </div>
+          </div>
+          <div className="card-body">
+            <form onSubmit={issue} className="party-tab-grid">
+              <SelectField
+                id="adv-kind"
+                label="Kind"
+                value={kind}
+                onChange={(v) => setKind(v as AdvanceKind)}
+                options={[
+                  { value: 'customer', label: 'Customer advance' },
+                  { value: 'supplier', label: 'Supplier advance' },
+                  { value: 'staff', label: 'Staff advance' },
+                ]}
+              />
+              <SelectField
+                id="adv-party"
+                label="Party"
+                value={partyId}
+                onChange={setPartyId}
+                options={filteredParties.map((party) => ({ value: party.id, label: party.name }))}
+                emptyReason={partyEmpty}
+                required
+              />
+              <AmountField id="adv-amount" label="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+              <DateField id="adv-date" label="Date" value={date} onChange={setDate} required />
+              <SelectField
+                id="adv-cash"
+                label="Cash or bank"
+                className="field-full"
+                value={cashCode}
+                onChange={setCashCode}
+                options={cashAccounts.map((row) => ({ value: row.code, label: `${row.code} · ${row.name}` }))}
+                emptyReason="No spendable cash or bank accounts are available."
+                help="Uses the account code the server validates. Card clearing is not listed."
+              />
+              <div className="field field-full">
+                <Button variant="primary" type="submit" disabled={pending || filteredParties.length === 0 || cashAccounts.length === 0}>
+                  Issue advance
+                </Button>
+              </div>
+            </form>
+          </div>
+        </Card>
+      ) : (
+        <p>You can view advances. Issuing or applying needs payment or simple-entry write access.</p>
+      )}
+      {canWrite ? (
+        <Card style={{ marginTop: 16 }}>
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">Allocate or settle</h2>
+              <p className="card-subtitle">Apply a customer or supplier advance to an eligible document, or settle staff with an expense or unused cash.</p>
+            </div>
+          </div>
+          <div className="card-body">
+            <form onSubmit={apply} className="party-tab-grid">
+              <SelectField
+                id="adv-open"
+                label="Open advance"
+                className="field-full"
+                value={applyId}
+                onChange={setApplyId}
+                options={advances.map((row) => ({
+                  value: row.id,
+                  label: `${row.partyName} · ${kindLabel(row.kind)} · remaining ${row.remaining.toFixed(2)}`,
+                }))}
+                emptyReason="No open advances to allocate."
+              />
+              <SelectField
+                id="adv-apply-kind"
+                label="Action"
+                value={applyKind}
+                onChange={(v) => setApplyKind(v as typeof applyKind)}
+                options={
+                  selectedAdvance?.kind === 'staff'
+                    ? [
+                        { value: 'expense_settle', label: 'Staff expense settlement' },
+                        { value: 'return_cash', label: 'Unused cash returned' },
+                      ]
+                    : [
+                        { value: 'apply', label: 'Apply to invoice or bill' },
+                        { value: 'refund', label: 'Refund unused' },
+                      ]
+                }
+                disabled={!selectedAdvance}
+                disabledReason="Select an open advance first."
+              />
+              {applyKind === 'apply' ? (
+                <SelectField
+                  id="adv-doc"
+                  label="Invoice or bill"
+                  className="field-full"
+                  value={documentId}
+                  onChange={setDocumentId}
+                  options={eligibleDocuments.map((doc) => ({
+                    value: doc.id,
+                    label: `${doc.documentNumber} · due ${doc.balanceDue.toFixed(2)}`,
+                  }))}
+                  emptyReason={
+                    selectedAdvance
+                      ? 'No eligible open invoice or bill for this party. Staff advances cannot apply to documents.'
+                      : 'Select an open advance first.'
+                  }
+                />
+              ) : null}
+              <AmountField id="adv-apply-amt" label="Amount" value={applyAmount} onChange={(e) => setApplyAmount(e.target.value)} />
+              <div className="field field-full">
+                <Button type="submit" disabled={pending || advances.length === 0 || !applyId}>
+                  Post allocation
+                </Button>
+              </div>
+            </form>
+          </div>
+        </Card>
+      ) : null}
+      <Card style={{ marginTop: 16 }}>
         <div className="card-header">
           <div>
-            <p className="eyebrow">Advances</p>
-            <h1 className="card-title" style={{ marginTop: 4 }}>
-              Unapplied money
-            </h1>
-            <p className="card-subtitle">
-              Customer receipts stay a liability until applied. Supplier and staff issues stay an asset until settled. These examples are non-VAT.
-            </p>
+            <h2 className="card-title">Open advances</h2>
           </div>
         </div>
-        <div className="card-body">
-          {error ? (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {message ? (
-            <p className="form-success" role="status">
-              {message}
-            </p>
-          ) : null}
-          {canWrite ? (
-            <form onSubmit={issue} className="form-grid">
-              <div className="field">
-                <label htmlFor="adv-kind">Kind</label>
-                <select
-                  id="adv-kind"
-                  value={kind}
-                  onChange={(e) => {
-                    const next = e.target.value as AdvanceKind;
-                    setKind(next);
-                    const first = parties.find((p) =>
-                      next === 'customer'
-                        ? p.kind === 'customer' || p.isCustomer === '1'
-                        : next === 'supplier'
-                          ? p.kind === 'vendor' || p.isVendor === '1'
-                          : p.kind === 'staff',
-                    );
-                    if (first) setPartyId(first.id);
-                  }}
-                >
-                  <option value="customer">Customer advance</option>
-                  <option value="supplier">Supplier advance</option>
-                  <option value="staff">Staff advance</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="adv-party">Party</label>
-                <select id="adv-party" value={partyId} onChange={(e) => setPartyId(e.target.value)} required>
-                  {filteredParties.map((party) => (
-                    <option key={party.id} value={party.id}>
-                      {party.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="adv-amount">Amount</label>
-                <input id="adv-amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" required />
-              </div>
-              <div className="field">
-                <label htmlFor="adv-date">Date</label>
-                <input id="adv-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-              </div>
-              <div className="field">
-                <label htmlFor="adv-cash">Cash/bank code</label>
-                <input id="adv-cash" value={cashCode} onChange={(e) => setCashCode(e.target.value)} />
-              </div>
-              <Button variant="primary" type="submit" disabled={pending || filteredParties.length === 0}>
-                Issue advance
-              </Button>
-            </form>
-          ) : (
-            <p>You can view advances. Issuing or applying needs payment or simple-entry write access.</p>
-          )}
-          {canWrite ? (
-            <form onSubmit={apply} className="form-grid" style={{ marginTop: 24 }}>
-              <div className="field">
-                <label htmlFor="adv-open">Open advance</label>
-                <select id="adv-open" value={applyId} onChange={(e) => setApplyId(e.target.value)}>
-                  {advances.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.partyName} · {row.kind} · remaining {row.remaining.toFixed(2)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="adv-apply-kind">Action</label>
-                <select id="adv-apply-kind" value={applyKind} onChange={(e) => setApplyKind(e.target.value as typeof applyKind)}>
-                  {selectedAdvance?.kind === 'staff' ? (
-                    <>
-                      <option value="expense_settle">Staff expense settlement</option>
-                      <option value="return_cash">Staff unused cash return</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="apply">Apply to invoice or bill</option>
-                      <option value="refund">Refund unused</option>
-                    </>
-                  )}
-                </select>
-              </div>
-              {applyKind === 'apply' ? (
-                <div className="field">
-                  <label htmlFor="adv-doc">Invoice or bill</label>
-                  <select id="adv-doc" value={documentId} onChange={(e) => setDocumentId(e.target.value)} required>
-                    <option value="">Select a document</option>
-                    {eligibleDocuments.map((doc) => (
-                      <option key={doc.id} value={doc.id}>
-                        {doc.documentNumber} · due {doc.balanceDue.toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-              <div className="field">
-                <label htmlFor="adv-apply-amt">Amount</label>
-                <input id="adv-apply-amt" value={applyAmount} onChange={(e) => setApplyAmount(e.target.value)} inputMode="decimal" />
-              </div>
-              <Button type="submit" disabled={pending || advances.length === 0}>
-                Post allocation
-              </Button>
-            </form>
-          ) : null}
-          <div className="table-wrap" style={{ marginTop: 24 }}>
+        <div className="card-body" style={{ padding: 0 }}>
+          <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
@@ -290,7 +331,7 @@ export function AdvancesPanel({
                   advances.map((row) => (
                     <tr key={row.id}>
                       <td>{row.issuedOn}</td>
-                      <td>{row.kind}</td>
+                      <td>{kindLabel(row.kind)}</td>
                       <td>{row.partyName}</td>
                       <td style={{ textAlign: 'right' }}>{row.issued.toFixed(2)}</td>
                       <td style={{ textAlign: 'right' }}>{row.remaining.toFixed(2)}</td>

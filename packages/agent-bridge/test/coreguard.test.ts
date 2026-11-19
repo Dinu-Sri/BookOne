@@ -22,9 +22,11 @@ describe('scoped CoreGuard registry', () => {
     expect(required).toContain('permissions-catalog');
     expect(required).toContain('dashboard-db01');
     expect(required).toContain('coa-01');
+    expect(required).toContain('ui-02');
     expect(coreGuardReport().note).toMatch(/does not certify all ERP modules/);
     expect(coreGuardReport().note).toMatch(/Dashboard DB-01/);
     expect(coreGuardReport().note).toMatch(/COA-01/);
+    expect(coreGuardReport().note).toMatch(/UI-02/);
   });
 
   it('adds CoreGuard as an extra publication need without masking quality', () => {
@@ -40,6 +42,9 @@ describe('scoped CoreGuard registry', () => {
     expect(yaml).toMatch(/e2e\/dashboard-db01\.spec\.ts/);
     expect(yaml).toMatch(/Chart of Accounts COA-01/);
     expect(yaml).toMatch(/e2e\/coa-01\.spec\.ts/);
+    expect(yaml).toMatch(/UI consistency UI-02/);
+    expect(yaml).toMatch(/e2e\/ui-02\.spec\.ts/);
+    expect(yaml).toMatch(/ui-02-lint\.test\.ts/);
     expect(yaml).toMatch(/e2e\/agent-bridge-connect\.spec\.ts/);
     expect(yaml).toMatch(/oauth-connect-workflow\.test\.ts/);
     expect(yaml).toMatch(/oauth-codex-login\.test\.ts/);

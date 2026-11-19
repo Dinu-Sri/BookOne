@@ -11,6 +11,7 @@
 | Product typeahead | `apps/web/src/components/module/product-add-search.tsx` |
 | Parties list | `apps/web/src/components/parties/party-list.tsx` |
 | Products list | `apps/web/src/components/inventory/product-list.tsx` |
+| Chart of Accounts | `apps/web/src/components/accounts/coa-manager.tsx` (SearchField, SelectField, page size 10, action portal) |
 | Date range | `apps/web/src/components/layout/date-range-picker.tsx` |
 | Styles | `apps/web/src/app/globals.css` (`party-*`, `doc-action-*`, `th-sort-*`, `product-add-*`) |
 

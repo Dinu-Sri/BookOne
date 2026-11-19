@@ -3,16 +3,30 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ACCOUNT_WIZARD_TEMPLATES, type WizardTemplateId } from '@bookone/accounting';
-import { Button, Card } from '@/components/ui/bookone-ui';
+import { Button } from '@/components/ui/bookone-ui';
+import { FormFooter, FormShell } from '@/components/ui/form-shell';
+import { SelectField } from '@/components/ui/select-field';
+import { TextField } from '@/components/ui/text-field';
 import { withFormPending } from '@/components/ui/form-busy';
 import { createCompanyAccount, suggestAccountCode } from '@/app/actions/chart-of-accounts';
+import { ROOT_CLASS_OPTIONS, classLabel } from '@/lib/coa-labels';
 
-export function CoaWizard({ defaultTemplate = 'bank' }: { defaultTemplate?: WizardTemplateId }) {
+export function CoaWizard({
+  defaultTemplate = 'bank',
+  accounts,
+}: {
+  defaultTemplate?: WizardTemplateId;
+  accounts: Array<{ code: string; name: string; type: string; isGroup?: string | null }>;
+}) {
   const router = useRouter();
-  const [templateId, setTemplateId] = useState<WizardTemplateId>(defaultTemplate);
+  const [templateId, setTemplateId] = useState<WizardTemplateId>(
+    ACCOUNT_WIZARD_TEMPLATES.some((row) => row.id === defaultTemplate) ? defaultTemplate : 'bank',
+  );
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [parentCode, setParentCode] = useState('');
+  const [groupType, setGroupType] = useState('asset');
   const [institution, setInstitution] = useState('');
   const [lastDigits, setLastDigits] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +34,18 @@ export function CoaWizard({ defaultTemplate = 'bank' }: { defaultTemplate?: Wiza
   const template = useMemo(
     () => ACCOUNT_WIZARD_TEMPLATES.find((row) => row.id === templateId) ?? ACCOUNT_WIZARD_TEMPLATES[0]!,
     [templateId],
+  );
+  const statementType = templateId === 'group' ? groupType : template.type;
+  const parentOptions = useMemo(
+    () =>
+      accounts
+        .filter((row) => row.type === statementType && row.code !== code)
+        .map((row) => ({
+          value: row.code,
+          label: `${row.code} · ${row.name}`,
+          description: row.isGroup === '1' ? 'Group heading' : classLabel(row.type),
+        })),
+    [accounts, statementType, code],
   );
 
   function suggest() {
@@ -54,6 +80,8 @@ export function CoaWizard({ defaultTemplate = 'bank' }: { defaultTemplate?: Wiza
           code,
           name,
           description,
+          parentCode: parentCode || undefined,
+          type: templateId === 'group' ? groupType : undefined,
           institution: templateId === 'bank' ? institution : undefined,
           lastDigits: templateId === 'bank' ? lastDigits : undefined,
         });
@@ -68,85 +96,96 @@ export function CoaWizard({ defaultTemplate = 'bank' }: { defaultTemplate?: Wiza
   }
 
   return (
-    <Card>
-      <div className="card-header">
-        <div>
-          <p className="eyebrow">New account</p>
-          <h1 className="card-title" style={{ marginTop: 4 }}>
-            {template.label}
-          </h1>
-          <p className="card-subtitle">{template.help}</p>
+    <FormShell
+      backHref="/accounts"
+      backParent="Accounts"
+      title="New account"
+      footer={
+        <FormFooter>
+          <Button type="button" onClick={() => router.push('/accounts')}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form="coa-create" disabled={pending}>
+            Create account
+          </Button>
+        </FormFooter>
+      }
+    >
+      <form id="coa-create" onSubmit={onSubmit} className="party-tab-grid">
+        {error ? (
+          <p className="form-error field-full" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <SelectField
+          id="coa-template"
+          label="What are you adding?"
+          className="field-full"
+          value={templateId}
+          onChange={(next) => {
+            setTemplateId(next as WizardTemplateId);
+            setCode('');
+            setParentCode('');
+          }}
+          options={ACCOUNT_WIZARD_TEMPLATES.map((row) => ({ value: row.id, label: row.label, description: row.help }))}
+          help={`Shows on ${template.statement}. Normal side is set from the class.`}
+        />
+        {templateId === 'group' ? (
+          <SelectField
+            id="coa-group-type"
+            label="Statement class"
+            value={groupType}
+            onChange={setGroupType}
+            options={ROOT_CLASS_OPTIONS}
+            help="Group headings do not accept journals. Children must share this class."
+          />
+        ) : null}
+        <TextField id="coa-code" label="Code" value={code} onChange={(e) => setCode(e.target.value)} required />
+        <div className="field">
+          <label htmlFor="coa-suggest">&nbsp;</label>
+          <Button type="button" id="coa-suggest" onClick={suggest} disabled={pending}>
+            Suggest code
+          </Button>
         </div>
-      </div>
-      <div className="card-body">
-        <form onSubmit={onSubmit} className="form-grid">
-          {error ? (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <div className="field field-full">
-            <label htmlFor="coa-template">What are you adding?</label>
-            <select
-              id="coa-template"
-              value={templateId}
-              onChange={(e) => {
-                setTemplateId(e.target.value as WizardTemplateId);
-                setCode('');
-              }}
-            >
-              {ACCOUNT_WIZARD_TEMPLATES.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.label}
-                </option>
-              ))}
-            </select>
-            <p className="field-help">Shows on {template.statement}. Normal side is set from the class.</p>
-          </div>
-          <div className="field">
-            <label htmlFor="coa-code">Code</label>
-            <input id="coa-code" value={code} onChange={(e) => setCode(e.target.value)} required />
-            <Button type="button" onClick={suggest} disabled={pending}>
-              Suggest code
-            </Button>
-          </div>
-          <div className="field">
-            <label htmlFor="coa-name">Name</label>
-            <input id="coa-name" value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-          <div className="field field-full">
-            <label htmlFor="coa-desc">Description</label>
-            <input id="coa-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
-          {templateId === 'bank' ? (
-            <>
-              <div className="field">
-                <label htmlFor="coa-bank">Institution (optional)</label>
-                <input id="coa-bank" value={institution} onChange={(e) => setInstitution(e.target.value)} />
-                <p className="field-help">Display only. This does not open a real bank account or store a login.</p>
-              </div>
-              <div className="field">
-                <label htmlFor="coa-digits">Last digits (optional)</label>
-                <input
-                  id="coa-digits"
-                  value={lastDigits}
-                  onChange={(e) => setLastDigits(e.target.value.replace(/\D/g, '').slice(-4))}
-                  inputMode="numeric"
-                  autoComplete="off"
-                />
-              </div>
-            </>
-          ) : null}
-          <div className="cluster" style={{ gap: 8 }}>
-            <Button variant="primary" type="submit" disabled={pending}>
-              Create account
-            </Button>
-            <Button type="button" onClick={() => router.push('/accounts')}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </div>
-    </Card>
+        <TextField id="coa-name" label="Name" value={name} onChange={(e) => setName(e.target.value)} required className="field-full" />
+        <TextField
+          id="coa-desc"
+          label="Description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="field-full"
+        />
+        <SelectField
+          id="coa-parent"
+          label="Parent (optional)"
+          className="field-full"
+          value={parentCode}
+          onChange={setParentCode}
+          placeholder="No parent"
+          options={[{ value: '', label: 'No parent' }, ...parentOptions]}
+          emptyReason="No other accounts in this class yet."
+          help="Parent must be the same statement class. Leave empty for a root account."
+        />
+        {templateId === 'bank' ? (
+          <>
+            <TextField
+              id="coa-bank"
+              label="Institution (optional)"
+              value={institution}
+              onChange={(e) => setInstitution(e.target.value)}
+              help="Display only. This does not open a real bank account or store a login."
+            />
+            <TextField
+              id="coa-digits"
+              label="Last digits (optional)"
+              value={lastDigits}
+              onChange={(e) => setLastDigits(e.target.value.replace(/\D/g, '').slice(-4))}
+              inputMode="numeric"
+              autoComplete="off"
+            />
+          </>
+        ) : null}
+      </form>
+    </FormShell>
   );
 }

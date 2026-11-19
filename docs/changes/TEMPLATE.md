@@ -25,7 +25,7 @@ Final product/QA SHAs belong in PR metadata and external run manifests after com
 
 ## UI/UX impact and existing-design compatibility (required when applicable)
 
-- Existing design guide/component/CSS references; reason for reusing/extending them:
+- Existing design guide/component/CSS references; reason for reusing/extending them (new or changed UI must name [UI_CONTROL_REGISTRY](../UI_CONTROL_REGISTRY.md) primitives):
 - Exact external QA commit and ux/workbook.json SHA256; UX/UXW/WB IDs/revisions:
 - Before/after behaviour; independent expected/unchanged example:
 - Direct screens and transitive shared consumers; applicable states/roles/entities/settings:

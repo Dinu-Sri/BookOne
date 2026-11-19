@@ -1,3 +1,10 @@
+## 2026-11-19 — AgentBridge MCP protocol negotiation (v2.11.4)
+
+- Record: [CHG-20261119-agentbridge-11-mcp-negotiation](changes/CHG-20261119-agentbridge-11-mcp-negotiation.md). Baseline product `2edf473` / v2.11.3. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: MCP initialize accepts Codex `2025-06-18`, keeps `2025-03-26` / `2024-11-05`, and negotiates unknown versions to the latest supported. Streamable HTTP `MCP-Protocol-Version` and notification HTTP 202 land on `/api/agent-bridge/mcp`. Capabilities stay tools-only. VERSION 2.11.4. CoreGuard `ab-11`. Schema protocol stays `ab-06.1`.
+- Checks: `@bookone/agent-bridge` 30 files / 152 passed. `@bookone/auth` tenant-archive + permissions + ui-nav-01 52 passed. Playwright connect 5 passed, consent 3 passed, inbox 4 passed / 1 skipped, ui-nav-01 6 passed. AgentBridge `tsc --noEmit` passed.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent Codex initialize retry on the existing authorized connector. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — AgentBridge exact callback preservation (v2.11.3)
 
 - Record: [CHG-20261119-agentbridge-10-callback-preservation](changes/CHG-20261119-agentbridge-10-callback-preservation.md). Baseline product `45d1f2f` / v2.11.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including request `4b22d15c`.

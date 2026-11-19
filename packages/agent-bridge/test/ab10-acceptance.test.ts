@@ -10,8 +10,8 @@ function read(...parts: string[]) {
 }
 
 describe('AB-10 source contracts', () => {
-  it('bumps CoreGuard to ab-10 and keeps protocol schema ab-06.1', () => {
-    expect(COREGUARD_VERSION).toBe('ab-10');
+  it('keeps CoreGuard at ab-10 or later and protocol schema ab-06.1', () => {
+    expect(COREGUARD_VERSION).toMatch(/^ab-1\d$/);
     expect(SCHEMA_VERSION).toBe('ab-06.1');
     expect(read('packages/db/src/schema/agent-bridge.ts')).toMatch(/redirectUri: text\('redirect_uri'\)/);
   });

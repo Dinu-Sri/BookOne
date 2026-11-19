@@ -44,6 +44,8 @@ describe('scoped CoreGuard registry', () => {
     expect(yaml).toMatch(/ab09-acceptance\.test\.ts/);
     expect(yaml).toMatch(/ab10-acceptance\.test\.ts/);
     expect(yaml).toMatch(/oauth-callback-preservation\.test\.ts/);
+    expect(yaml).toMatch(/ab11-acceptance\.test\.ts/);
+    expect(yaml).toMatch(/mcp-http-negotiation\.test\.ts/);
     expect(yaml).toMatch(/e2e\/agent-bridge-consent\.spec\.ts/);
     expect(yaml).not.toMatch(/^\s+if: always\(/m);
     expect(yaml).not.toMatch(/^\s+if: failure\(/m);

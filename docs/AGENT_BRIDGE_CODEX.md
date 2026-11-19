@@ -15,7 +15,7 @@ Vendor docs used while writing (2026-11-17): [Codex MCP](https://learn.chatgpt.c
 | Pre-registered client id | `bookone-codex` (public, PKCE S256, no secret) |
 | Default scopes | `read upload draft` |
 | Callback | `http://127.0.0.1/callback` or `http://127.0.0.1:<port>/callback/<id>` |
-| Protocol | MCP `2025-03-26` (also accepts `2024-11-05`) |
+| Protocol | MCP `2025-06-18` (also accepts `2025-03-26` and `2024-11-05`) |
 
 `<public-host>` is the deployed origin (`https://bookone.clossyan.com` after the owner deploys this candidate). Local `pnpm dev` is not staging acceptance.
 

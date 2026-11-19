@@ -279,14 +279,15 @@ describe('AB-05 agent-first facts without OCR', () => {
     expect(hmacFixturesAllowed({ NODE_ENV: 'production', AGENT_BRIDGE_ALLOW_HMAC: '1' })).toBe(true);
   });
 
-  it('rejects an incompatible MCP protocol version', async () => {
+  it('negotiates an unknown MCP protocol version to the latest supported', async () => {
     const { svc } = await factsService();
     const res = await handleMcpJsonRpc({
       body: { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '1999-01-01' } },
       service: svc,
       actor: actor(),
     });
-    expect(res.error?.data).toMatchObject({ code: 'UNSUPPORTED_PROTOCOL' });
+    expect(res.error).toBeUndefined();
+    expect(res.result).toMatchObject({ protocolVersion: '2025-06-18' });
   });
 
   it('rejects unknown privileged MCP fields', async () => {

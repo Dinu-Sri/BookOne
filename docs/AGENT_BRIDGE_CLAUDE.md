@@ -14,7 +14,7 @@ Vendor docs used while writing (2026-11-17): [Custom connectors using remote MCP
 | Pre-registered client id | `bookone-claude` (public, PKCE S256, no client secret) |
 | Default scopes | `read upload draft` |
 | Hosted callback | `https://claude.ai/api/mcp/auth_callback` |
-| Protocol | MCP `2025-03-26` (also accepts `2024-11-05`) |
+| Protocol | MCP `2025-06-18` (also accepts `2025-03-26` and `2024-11-05`) |
 
 Claude custom connectors are reached from **Anthropic’s cloud**, not from the user’s laptop. The BookOne host must be public HTTPS on port **443**. Private/VPN origins will not connect. Local MCP via `claude_desktop_config.json` is a different mechanism and is not this remote connector.
 

@@ -1,5 +1,7 @@
 import {
   MCP_PROTOCOL_VERSION,
+  MCP_PROTOCOL_VERSION_HEADER,
+  MCP_PROTOCOL_VERSION_WHEN_HEADER_MISSING,
   MCP_SUPPORTED_PROTOCOL_VERSIONS,
   SCHEMA_VERSION,
   type Actor,
@@ -213,19 +215,124 @@ export async function dispatchTool(
   }
 }
 
-function negotiateProtocolVersion(requested: unknown): { ok: true; version: string } | { ok: false; error: string } {
+function isSupportedProtocolVersion(value: string): boolean {
+  return (MCP_SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(value);
+}
+
+/**
+ * MCP 2025-06-18 lifecycle: echo a supported requested version; otherwise return
+ * the latest version this server actually implements. Unknown versions are not
+ * Invalid params. Malformed (non-string) protocolVersion stays Invalid params.
+ */
+export function negotiateProtocolVersion(
+  requested: unknown,
+): { ok: true; version: string } | { ok: false; error: string } {
   if (requested === undefined || requested === null || requested === '') {
     return { ok: true, version: MCP_PROTOCOL_VERSION };
   }
   if (typeof requested !== 'string') {
     return { ok: false, error: 'protocolVersion must be a string.' };
   }
-  if ((MCP_SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested)) {
+  if (isSupportedProtocolVersion(requested)) {
     return { ok: true, version: requested };
+  }
+  return { ok: true, version: MCP_PROTOCOL_VERSION };
+}
+
+export function readMcpProtocolVersionHeader(
+  header: string | null | undefined,
+): { ok: true; version: string; assumed: boolean } | { ok: false; error: string } {
+  if (header === undefined || header === null || header.trim() === '') {
+    return { ok: true, version: MCP_PROTOCOL_VERSION_WHEN_HEADER_MISSING, assumed: true };
+  }
+  const value = header.trim();
+  if (isSupportedProtocolVersion(value)) {
+    return { ok: true, version: value, assumed: false };
   }
   return {
     ok: false,
-    error: `Unsupported MCP protocol version ${requested}. Supported: ${MCP_SUPPORTED_PROTOCOL_VERSIONS.join(', ')}.`,
+    error: `Unsupported MCP-Protocol-Version ${value}. Supported: ${MCP_SUPPORTED_PROTOCOL_VERSIONS.join(', ')}.`,
+  };
+}
+
+export function isJsonRpcNotification(body: JsonRpcRequest): boolean {
+  return !Object.prototype.hasOwnProperty.call(body, 'id') || body.id === undefined;
+}
+
+export type McpHttpResult = {
+  status: number;
+  headers: Record<string, string>;
+  json: JsonRpcResponse | null;
+};
+
+function jsonHeaders(protocolVersion?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    'cache-control': 'no-store',
+  };
+  if (protocolVersion) headers[MCP_PROTOCOL_VERSION_HEADER] = protocolVersion;
+  return headers;
+}
+
+function emptyAcceptedHeaders(): Record<string, string> {
+  return { 'cache-control': 'no-store' };
+}
+
+/**
+ * Streamable HTTP POST: JSON-RPC requests return application/json;
+ * notifications return HTTP 202 with no body; JSON-RPC batches are refused;
+ * an unsupported MCP-Protocol-Version header is HTTP 400.
+ */
+export async function handleMcpHttpPost(input: {
+  protocolVersionHeader?: string | null;
+  body: unknown;
+  service: AgentBridgeService;
+  actor: Actor;
+}): Promise<McpHttpResult> {
+  if (Array.isArray(input.body)) {
+    return {
+      status: 400,
+      headers: jsonHeaders(),
+      json: {
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: 'JSON-RPC batching is not supported.' },
+      },
+    };
+  }
+  if (input.body === null || typeof input.body !== 'object') {
+    return {
+      status: 400,
+      headers: jsonHeaders(),
+      json: { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid JSON-RPC request.' } },
+    };
+  }
+  const rpc = input.body as JsonRpcRequest;
+  const method = typeof rpc.method === 'string' ? rpc.method : '';
+  const headerCheck = readMcpProtocolVersionHeader(input.protocolVersionHeader);
+  if (!headerCheck.ok) {
+    return {
+      status: 400,
+      headers: jsonHeaders(),
+      json: {
+        jsonrpc: '2.0',
+        id: rpc.id ?? null,
+        error: { code: -32602, message: headerCheck.error, data: { code: 'UNSUPPORTED_PROTOCOL' } },
+      },
+    };
+  }
+  if (isJsonRpcNotification(rpc)) {
+    return { status: 202, headers: emptyAcceptedHeaders(), json: null };
+  }
+  const result = await handleMcpJsonRpc({ body: rpc, service: input.service, actor: input.actor });
+  const negotiated =
+    method === 'initialize' && result.result && typeof result.result === 'object'
+      ? String((result.result as { protocolVersion?: string }).protocolVersion ?? headerCheck.version)
+      : headerCheck.version;
+  return {
+    status: 200,
+    headers: jsonHeaders(negotiated),
+    json: result,
   };
 }
 
@@ -243,7 +350,7 @@ export async function handleMcpJsonRpc(input: {
         return {
           jsonrpc: '2.0',
           id,
-          error: { code: -32602, message: negotiated.error, data: { code: 'UNSUPPORTED_PROTOCOL' } },
+          error: { code: -32602, message: negotiated.error, data: { code: 'INVALID_PARAMS' } },
         };
       }
       return {

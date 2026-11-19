@@ -34,7 +34,13 @@ describe('MCP JSON-RPC adapter', () => {
       service: await svc(),
       actor: actor(),
     });
-    expect(res.result).toMatchObject({ protocolVersion: MCP_PROTOCOL_VERSION });
+    expect(res.result).toMatchObject({
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      capabilities: { tools: { listChanged: false } },
+      serverInfo: { name: 'bookone-agent-bridge' },
+    });
+    expect(MCP_PROTOCOL_VERSION).toBe('2025-06-18');
+    expect(Object.keys((res.result as { capabilities: object }).capabilities)).toEqual(['tools']);
     const tools = await handleMcpJsonRpc({
       body: { jsonrpc: '2.0', id: 2, method: 'tools/list' },
       service: await svc(),

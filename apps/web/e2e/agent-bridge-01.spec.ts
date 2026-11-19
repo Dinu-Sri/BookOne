@@ -28,7 +28,7 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
   expect(inbox).toMatch(/Connections/);
   expect(api).toMatch(/commit_approved_proposal/);
   expect(api).toMatch(/resolveActorFromAuthorization/);
-  expect(mcp).toMatch(/handleMcpJsonRpc/);
+  expect(mcp).toMatch(/handleMcpHttpPost/);
   expect(mcp).toMatch(/resolveActorFromAuthorization/);
   expect(posting).toMatch(/createCommercialDocumentWithUser/);
   expect(posting).toMatch(/withTenantContext/);

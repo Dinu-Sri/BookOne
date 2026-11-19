@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  handleMcpJsonRpc,
+  handleMcpHttpPost,
   rateLimit,
   resolveActorFromAuthorization,
   wwwAuthenticateChallenge,
-  type JsonRpcRequest,
 } from '@bookone/agent-bridge';
 import { agentBridgeTokenSecret, getAgentBridgeServiceForActor } from '@/lib/agent-bridge-runtime';
 
@@ -30,7 +29,21 @@ function unauthorized(req: NextRequest, message: string, error = 'invalid_token'
 }
 
 export async function GET(req: NextRequest) {
-  return unauthorized(req, 'Missing Bearer token.', 'invalid_request');
+  try {
+    await resolveActorFromAuthorization(
+      req.headers.get('authorization'),
+      agentBridgeTokenSecret(),
+      process.env,
+    );
+  } catch (e) {
+    const err = e as Error;
+    const missing = !req.headers.get('authorization');
+    return unauthorized(req, err.message || 'Missing Bearer token.', missing ? 'invalid_request' : 'invalid_token');
+  }
+  return new NextResponse(null, {
+    status: 405,
+    headers: { allow: 'POST', 'cache-control': 'no-store' },
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -47,9 +60,25 @@ export async function POST(req: NextRequest) {
       );
     }
     const service = await getAgentBridgeServiceForActor(actor);
-    const body = (await req.json()) as JsonRpcRequest;
-    const result = await handleMcpJsonRpc({ body, service, actor });
-    return NextResponse.json(result);
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error.' } },
+        { status: 400, headers: { 'cache-control': 'no-store' } },
+      );
+    }
+    const outcome = await handleMcpHttpPost({
+      protocolVersionHeader: req.headers.get('mcp-protocol-version'),
+      body,
+      service,
+      actor,
+    });
+    if (outcome.json === null) {
+      return new NextResponse(null, { status: outcome.status, headers: outcome.headers });
+    }
+    return NextResponse.json(outcome.json, { status: outcome.status, headers: outcome.headers });
   } catch (e) {
     const err = e as Error & { code?: string };
     if (

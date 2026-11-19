@@ -2,8 +2,11 @@ import { DEFAULT_CURRENCY, type Money } from './money';
 
 export const SCHEMA_VERSION = 'ab-06.1';
 export const POLICY_VERSION = 'ab-01.purchase-bill.unpaid-service.v1';
-export const MCP_PROTOCOL_VERSION = '2025-03-26';
-export const MCP_SUPPORTED_PROTOCOL_VERSIONS = ['2025-03-26', '2024-11-05'] as const;
+export const MCP_PROTOCOL_VERSION = '2025-06-18';
+export const MCP_SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
+/** Streamable HTTP missing-header fallback (MCP 2025-06-18 transports). */
+export const MCP_PROTOCOL_VERSION_WHEN_HEADER_MISSING = '2025-03-26';
+export const MCP_PROTOCOL_VERSION_HEADER = 'mcp-protocol-version';
 export const API_VERSION = 'v1';
 
 export const DOCUMENT_STATES = [

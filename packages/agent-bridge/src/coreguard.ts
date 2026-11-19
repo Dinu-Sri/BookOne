@@ -1,7 +1,7 @@
 /** Scoped AgentBridge CoreGuard registry (not all-module CG-01). */
 
 export const COREGUARD_MODULE = 'agent-bridge';
-export const COREGUARD_VERSION = 'ab-10';
+export const COREGUARD_VERSION = 'ab-11';
 
 export const COREGUARD_SUITES = [
   {
@@ -55,13 +55,13 @@ export const COREGUARD_SUITES = [
   {
     id: 'independent-acceptance',
     layer: 'acceptance',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/oauth-jwks.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts test/ab10-acceptance.test.ts test/oauth-callback-preservation.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab02-acceptance.test.ts test/ab03-acceptance.test.ts test/ab04-acceptance.test.ts test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/oauth-jwks.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts test/ab10-acceptance.test.ts test/oauth-callback-preservation.test.ts test/ab11-acceptance.test.ts test/mcp-http-negotiation.test.ts',
     required: true,
   },
   {
     id: 'full-workflow',
     layer: 'application-service',
-    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/service.test.ts test/schemas.test.ts test/oauth-pkce.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts test/ab10-acceptance.test.ts test/oauth-callback-preservation.test.ts',
+    command: 'pnpm --filter @bookone/agent-bridge exec vitest run test/ab05-acceptance.test.ts test/ab06-independent.test.ts test/service.test.ts test/schemas.test.ts test/oauth-pkce.test.ts test/oauth-connect-workflow.test.ts test/oauth-codex-login.test.ts test/connection-prompts.test.ts test/oauth-redeem.test.ts test/connection-lifecycle.test.ts test/consent-page.test.ts test/ab09-acceptance.test.ts test/ab10-acceptance.test.ts test/oauth-callback-preservation.test.ts test/ab11-acceptance.test.ts test/mcp-http-negotiation.test.ts',
     required: true,
   },
   {

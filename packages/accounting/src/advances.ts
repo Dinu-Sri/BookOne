@@ -60,7 +60,7 @@ export const DEFAULT_ADVANCE_ACCOUNTS = {
   expense: '6800',
 } as const;
 
-export function customerAdvanceIssueLines(amount: number, cashCode = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
+export function customerAdvanceIssueLines(amount: number, cashCode: string = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
   const n = moneyAmount(amount);
   return [
     { accountCode: cashCode, side: 'debit', amount: n, memo: 'Customer advance received' },
@@ -76,7 +76,7 @@ export function customerAdvanceApplyLines(amount: number): JournalLineDraft[] {
   ];
 }
 
-export function customerAdvanceRefundLines(amount: number, cashCode = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
+export function customerAdvanceRefundLines(amount: number, cashCode: string = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
   const n = moneyAmount(amount);
   return [
     { accountCode: DEFAULT_ADVANCE_ACCOUNTS.customer, side: 'debit', amount: n, memo: 'Refund customer advance' },
@@ -84,7 +84,7 @@ export function customerAdvanceRefundLines(amount: number, cashCode = DEFAULT_AD
   ];
 }
 
-export function supplierAdvanceIssueLines(amount: number, cashCode = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
+export function supplierAdvanceIssueLines(amount: number, cashCode: string = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
   const n = moneyAmount(amount);
   return [
     { accountCode: DEFAULT_ADVANCE_ACCOUNTS.supplier, side: 'debit', amount: n, memo: 'Supplier advance paid' },
@@ -100,7 +100,7 @@ export function supplierAdvanceApplyLines(amount: number): JournalLineDraft[] {
   ];
 }
 
-export function supplierAdvanceRefundLines(amount: number, cashCode = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
+export function supplierAdvanceRefundLines(amount: number, cashCode: string = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
   const n = moneyAmount(amount);
   return [
     { accountCode: cashCode, side: 'debit', amount: n, memo: 'Supplier advance returned' },
@@ -108,7 +108,7 @@ export function supplierAdvanceRefundLines(amount: number, cashCode = DEFAULT_AD
   ];
 }
 
-export function staffAdvanceIssueLines(amount: number, cashCode = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
+export function staffAdvanceIssueLines(amount: number, cashCode: string = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
   const n = moneyAmount(amount);
   return [
     { accountCode: DEFAULT_ADVANCE_ACCOUNTS.staff, side: 'debit', amount: n, memo: 'Staff advance issued' },
@@ -118,7 +118,7 @@ export function staffAdvanceIssueLines(amount: number, cashCode = DEFAULT_ADVANC
 
 export function staffAdvanceExpenseLines(
   amount: number,
-  expenseCode = DEFAULT_ADVANCE_ACCOUNTS.expense,
+  expenseCode: string = DEFAULT_ADVANCE_ACCOUNTS.expense,
 ): JournalLineDraft[] {
   const n = moneyAmount(amount);
   return [
@@ -127,7 +127,7 @@ export function staffAdvanceExpenseLines(
   ];
 }
 
-export function staffAdvanceReturnLines(amount: number, cashCode = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
+export function staffAdvanceReturnLines(amount: number, cashCode: string = DEFAULT_ADVANCE_ACCOUNTS.cash): JournalLineDraft[] {
   const n = moneyAmount(amount);
   return [
     { accountCode: cashCode, side: 'debit', amount: n, memo: 'Unused staff advance returned' },

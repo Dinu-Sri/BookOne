@@ -1,3 +1,7 @@
+## 2026-11-19 — Company Chart of Accounts COA-01 (v2.12.0)
+
+Candidate **2.12.0** on `feat/v2120-coa-01-chart-of-accounts` from origin/master `b35762d` / v2.11.5. Business companies maintain a full chart of accounts, add banks and advances, post a balanced opening separately from account create, and see custom 11xx banks in cash/dashboard/cash-flow. Permission catalog stays v2. AgentBridge scopes are unchanged. Taxable advances are refused. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Compact desktop dashboard overview (v2.11.5)
 
 Candidate **2.11.5** on `fix/v2115-dashboard-db02-compact` from origin/master `9ed27aa` / v2.11.4. Live v2.11.4 `/dashboard` required scrolling through duplicate company heading, tall metric cards and always-visible daily tables. This candidate keeps DB-01 metric definitions and makes the default desktop overview fit one viewport. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { DEFAULT_CHART_OF_ACCOUNTS } from '@bookone/accounting';
+import { DEFAULT_CHART_OF_ACCOUNTS, classifiedSeedValues } from '@bookone/accounting';
 import { requireTenantContext, seedJobsForTenant } from '@bookone/auth';
 import {
   accounts,
@@ -954,10 +954,7 @@ export async function createCompany(formData: FormData): Promise<void> {
     await tx.insert(accounts).values(
       DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
         tenantId: createdTenant.id,
-        code: account.code,
-        name: account.name,
-        type: account.type,
-        normalSide: account.normalSide,
+        ...classifiedSeedValues(account),
       })),
     );
 

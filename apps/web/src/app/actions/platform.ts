@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { DEFAULT_CHART_OF_ACCOUNTS } from '@bookone/accounting';
+import { DEFAULT_CHART_OF_ACCOUNTS, classifiedSeedValues } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -466,10 +466,7 @@ export async function createPlatformCompanyFromForm(formData: FormData): Promise
       await tx.insert(accounts).values(
         DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
           tenantId: tenant.id,
-          code: account.code,
-          name: account.name,
-          type: account.type,
-          normalSide: account.normalSide,
+          ...classifiedSeedValues(account),
         })),
       );
 
@@ -759,10 +756,7 @@ export async function adminSetTenantEntityTierFromForm(formData: FormData): Prom
         await db().insert(accounts).values(
           missing.map((account) => ({
             tenantId: id,
-            code: account.code,
-            name: account.name,
-            type: account.type,
-            normalSide: account.normalSide,
+            ...classifiedSeedValues(account),
           })),
         );
       }

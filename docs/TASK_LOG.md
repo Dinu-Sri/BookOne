@@ -1,3 +1,10 @@
+## 2026-11-19 — Company Chart of Accounts COA-01 (v2.12.0)
+
+- Record: [CHG-20261119-coa-01-chart-of-accounts](changes/CHG-20261119-coa-01-chart-of-accounts.md). Operator guide [CHART_OF_ACCOUNTS.md](CHART_OF_ACCOUNTS.md). Baseline product `b35762d` / v2.11.5. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: additive 049 classification on `accounts`; wizard/create/edit/archive/reactivate; business bank route `/accounts`; spendable cash and internal transfers include custom 11xx; customer/supplier/staff advances with journals and allocations; opening preview-then-post; formula-safe CSV; CoreGuard `coa-01`. VERSION 2.12.0. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/accounting` 23 files / 269 passed (includes classification, Pilot-01 1101 cash, advances, CSV/opening, dashboard-metrics, liquid-tender). `@bookone/auth` coa-01-gate 6 passed; coa-01-postgres 1 passed source / 1 skipped without local DATABASE_URL; tenant-archive 26 passed; ui-nav-01 9 passed. `@bookone/agent-bridge` coreguard 2 passed. Playwright `e2e/coa-01.spec.ts` 2 passed; `e2e/ui-nav-01.spec.ts` 6 passed. Accounting and db `tsc --noEmit` passed.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent live `/accounts` and `/advances` review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Compact desktop dashboard overview (v2.11.5)
 
 - Record: [CHG-20261119-dashboard-db02-compact](changes/CHG-20261119-dashboard-db02-compact.md). Metric dictionary [DASHBOARD_METRICS.md](DASHBOARD_METRICS.md). Baseline product `9ed27aa` / v2.11.4. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

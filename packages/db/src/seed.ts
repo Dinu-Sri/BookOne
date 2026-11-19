@@ -98,11 +98,14 @@ async function seed() {
       { code: '1100', name: 'Commercial Bank', type: 'asset', normalSide: 'debit' },
       { code: '1200', name: 'Card Clearing', type: 'asset', normalSide: 'debit' },
       { code: '1300', name: 'Accounts Receivable', type: 'asset', normalSide: 'debit' },
+      { code: '1350', name: 'Supplier Advances', type: 'asset', normalSide: 'debit' },
+      { code: '1360', name: 'Staff Advances', type: 'asset', normalSide: 'debit' },
       { code: '2100', name: 'Accounts Payable', type: 'liability', normalSide: 'credit' },
       { code: '2150', name: 'Goods Received Not Invoiced', type: 'liability', normalSide: 'credit' },
       { code: '2200', name: 'Output VAT', type: 'liability', normalSide: 'credit' },
       { code: '2300', name: 'Input VAT', type: 'asset', normalSide: 'debit' },
       { code: '2400', name: 'Customer deposits', type: 'liability', normalSide: 'credit' },
+      { code: '2410', name: 'Customer Advances', type: 'liability', normalSide: 'credit' },
       { code: '3000', name: 'Owner Equity', type: 'equity', normalSide: 'credit' },
       { code: '3100', name: 'Owner Drawings', type: 'equity', normalSide: 'debit' },
       { code: '4000', name: 'Sales Revenue', type: 'revenue', normalSide: 'credit' },
@@ -130,6 +133,36 @@ async function seed() {
         name: row.name,
         type: row.type,
         normalSide: row.normalSide,
+        subtype:
+          row.code === '1000'
+            ? 'cash'
+            : row.code === '1100'
+              ? 'bank'
+              : row.code === '1200'
+                ? 'card_clearing'
+                : row.code === '1350'
+                  ? 'supplier_advance'
+                  : row.code === '1360'
+                    ? 'staff_advance'
+                    : row.code === '2410'
+                      ? 'customer_advance'
+                      : null,
+        liquidity: row.code === '1000' ? 'cash' : row.code === '1100' ? 'bank' : row.code === '1200' ? 'card_clearing' : 'none',
+        reconcilable: row.code === '1000' || row.code === '1100' || row.code === '1200' ? '1' : '0',
+        controlRole:
+          row.code === '1000'
+            ? 'cash'
+            : row.code === '1100'
+              ? 'bank'
+              : row.code === '1200'
+                ? 'card_clearing'
+                : row.code === '1350'
+                  ? 'supplier_advance'
+                  : row.code === '1360'
+                    ? 'staff_advance'
+                    : row.code === '2410'
+                      ? 'customer_advance'
+                      : 'none',
       })),
     );
     console.log(`${chartRows.length} chart of accounts rows added.`);

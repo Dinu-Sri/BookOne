@@ -12,6 +12,8 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Account[] = [
   { code: '1100', name: 'Commercial Bank', type: 'asset', normalSide: 'debit' },
   { code: '1200', name: 'Card Clearing', type: 'asset', normalSide: 'debit' },
   { code: '1300', name: 'Accounts Receivable', type: 'asset', normalSide: 'debit' },
+  { code: '1350', name: 'Supplier Advances', type: 'asset', normalSide: 'debit' },
+  { code: '1360', name: 'Staff Advances', type: 'asset', normalSide: 'debit' },
   /** Personal / household loans receivable */
   { code: '1400', name: 'Personal Loans Receivable', type: 'asset', normalSide: 'debit' },
   { code: '2100', name: 'Accounts Payable', type: 'liability', normalSide: 'credit' },
@@ -20,6 +22,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Account[] = [
   { code: '2200', name: 'Output VAT', type: 'liability', normalSide: 'credit' },
   { code: '2300', name: 'Input VAT', type: 'asset', normalSide: 'debit' },
   { code: '2400', name: 'Customer deposits', type: 'liability', normalSide: 'credit' },
+  { code: '2410', name: 'Customer Advances', type: 'liability', normalSide: 'credit' },
   /** Personal / household loans payable (took a loan) */
   { code: '2500', name: 'Personal Loans Payable', type: 'liability', normalSide: 'credit' },
   { code: '3000', name: 'Owner Equity', type: 'equity', normalSide: 'credit' },

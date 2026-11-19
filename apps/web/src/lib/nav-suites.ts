@@ -65,6 +65,7 @@ export const NAV_SUITES: NavSuite[] = [
       { label: 'Activity', icon: History, href: '/journal/audit' },
       { label: 'Reports', icon: LineChart, href: '/reports' },
       { label: 'Accounts', icon: Landmark, href: '/accounts' },
+      { label: 'Advances', icon: ReceiptText, href: '/advances' },
       { label: 'Reconciliation', icon: ShieldCheck, href: '/reconciliation' },
       { label: 'Documentation', icon: BookOpen, href: DOCS_HREF },
     ],

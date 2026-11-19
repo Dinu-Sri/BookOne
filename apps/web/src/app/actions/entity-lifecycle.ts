@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { chartOfAccountsForEntity } from '@bookone/accounting';
+import { chartOfAccountsForEntity, classifiedSeedValues } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -70,10 +70,7 @@ async function mergeCoaForEntity(tenantId: string, entityKind: EntityKind) {
     await db().insert(accounts).values(
       missing.map((account) => ({
         tenantId,
-        code: account.code,
-        name: account.name,
-        type: account.type,
-        normalSide: account.normalSide,
+        ...classifiedSeedValues(account),
       })),
     );
   }
@@ -460,10 +457,7 @@ export async function incorporateSoleToCompany(input?: {
       await db().insert(accounts).values(
         coa.map((account) => ({
           tenantId: newTenantId,
-          code: account.code,
-          name: account.name,
-          type: account.type,
-          normalSide: account.normalSide,
+          ...classifiedSeedValues(account),
         })),
       );
 

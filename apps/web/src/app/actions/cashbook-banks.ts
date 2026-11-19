@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { isLiquidTenderCode } from '@bookone/accounting';
+import { classifiedSeedValues, isLiquidTenderCode, nextSuggestedCode } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -11,8 +11,11 @@ import {
   isNull,
   asc,
   sql,
+  tenants,
   withTenantContext,
 } from '@bookone/db';
+import { assertPermission } from '@/lib/access';
+import { parseEntityKind, usesPersonalShell } from '@/lib/entity-kind';
 
 export type LiquidAccount = {
   id: string;
@@ -24,9 +27,31 @@ export type LiquidAccount = {
 };
 
 function classify(code: string): 'cash' | 'bank' | 'card' {
-  if (code === '1000') return 'cash';
-  if (code === '1200' || code.startsWith('12')) return 'card';
+  if (/^10\d{2}$/.test(code)) return 'cash';
+  if (/^12\d{2}$/.test(code)) return 'card';
   return 'bank';
+}
+
+async function assertBankWrite(): Promise<void> {
+  const user = await requireTenantContext();
+  const [row] = await withTenantContext(user.tenantId, async () =>
+    db()
+      .select({ entityKind: tenants.entityKind })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1),
+  );
+  const personal = usesPersonalShell(parseEntityKind(row?.entityKind));
+  await assertPermission(personal ? 'accounting.cashbook.write' : 'accounting.accounts.write', 'write');
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let i = 0; i < 5 && current && typeof current === 'object'; i += 1) {
+    if ((current as { code?: unknown }).code === '23505') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 /** Cash + bank (and card) liquid accounts for payment / move tiles. */
@@ -78,29 +103,31 @@ export async function createCashbookBank(shortName: string): Promise<
     if (!name) return { ok: false, error: 'Enter a short bank name.' };
     if (name.length < 2) return { ok: false, error: 'Name is too short.' };
 
+    await assertBankWrite();
     const user = await requireTenantContext();
     const account = await withTenantContext(user.tenantId, async () => {
       const existing = await db()
-        .select({ code: accounts.code, name: accounts.name })
+        .select({ code: accounts.code, name: accounts.name, isActive: accounts.isActive, voidedAt: accounts.voidedAt })
         .from(accounts)
-        .where(and(eq(accounts.tenantId, user.tenantId), isNull(accounts.voidedAt)));
+        .where(eq(accounts.tenantId, user.tenantId));
 
-      const used = new Set(existing.map((e) => e.code));
-      let nextCode: string | null = null;
-      for (let n = 1101; n <= 1199; n++) {
-        const c = String(n);
-        if (!used.has(c)) {
-          nextCode = c;
-          break;
-        }
-      }
+      const nextCode = nextSuggestedCode({ from: 1101, to: 1199 }, existing.map((e) => e.code));
       if (!nextCode) {
         throw new Error('Maximum number of bank accounts reached (1101–1199).');
       }
 
-      const dup = existing.find((e) => e.name.toLowerCase() === name.toLowerCase());
-      if (dup) throw new Error('A bank with this name already exists.');
+      const nameTaken = existing.some(
+        (e) => e.name.toLowerCase() === name.toLowerCase() && e.isActive === '1' && !e.voidedAt,
+      );
+      if (nameTaken) throw new Error('A bank with this name already exists.');
 
+      const seed = classifiedSeedValues({
+        code: nextCode,
+        name,
+        type: 'asset',
+        normalSide: 'debit',
+      });
+      try {
       const [row] = await db()
         .insert(accounts)
         .values({
@@ -110,6 +137,15 @@ export async function createCashbookBank(shortName: string): Promise<
           type: 'asset',
           normalSide: 'debit',
           isActive: '1',
+          subtype: seed.subtype,
+          purpose: seed.purpose,
+          isGroup: '0',
+          isSystem: '0',
+          isContra: '0',
+          cashFlowClass: seed.cashFlowClass,
+          liquidity: 'bank',
+          reconcilable: '1',
+          controlRole: 'bank',
         })
         .returning({ id: accounts.id, code: accounts.code, name: accounts.name });
 
@@ -121,10 +157,17 @@ export async function createCashbookBank(shortName: string): Promise<
         shortName: row.name,
         kind: 'bank' as const,
       };
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new Error('That bank code was just used. Try again.');
+        }
+        throw error;
+      }
     });
 
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/settings');
+    revalidatePath('/accounts');
     return { ok: true, account };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not add bank' };
@@ -138,6 +181,7 @@ export async function renameCashbookBank(
   try {
     const name = shortName.trim().slice(0, 40);
     if (!name) return { ok: false, error: 'Enter a name.' };
+    await assertBankWrite();
     const user = await requireTenantContext();
     await withTenantContext(user.tenantId, async () => {
       const [row] = await db()
@@ -160,6 +204,7 @@ export async function renameCashbookBank(
     });
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/settings');
+    revalidatePath('/accounts');
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Rename failed' };
@@ -171,6 +216,7 @@ export async function archiveCashbookBank(
   accountId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
+    await assertBankWrite();
     const user = await requireTenantContext();
     await withTenantContext(user.tenantId, async () => {
       const [row] = await db()
@@ -193,6 +239,7 @@ export async function archiveCashbookBank(
     });
     revalidatePath('/cashbook');
     revalidatePath('/cashbook/settings');
+    revalidatePath('/accounts');
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Remove failed' };

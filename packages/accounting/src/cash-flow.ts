@@ -1,4 +1,6 @@
-/** Cash / bank / card-clearing accounts used for cash-flow reporting. */
+import { isCashUniverseCode } from './account-classification';
+
+/** Default seeded cash / bank / card-clearing codes. Custom 11xx/12xx use isCashUniverseCode. */
 export const CASH_ACCOUNT_CODES = ['1000', '1100', '1200'] as const;
 
 export type CashFlowLine = {
@@ -26,14 +28,15 @@ function roundMoney(value: number): number {
  */
 export function signedCashFlow(
   lines: CashFlowLine[],
-  cashCodes: readonly string[] = CASH_ACCOUNT_CODES,
+  cashCodes?: readonly string[],
 ): SignedCashFlow {
-  const cash = new Set(cashCodes);
+  const cash = cashCodes ? new Set(cashCodes) : null;
+  const isCash = (code: string) => (cash ? cash.has(code) : isCashUniverseCode(code));
   let moneyIn = 0;
   let moneyOut = 0;
   let lineCount = 0;
   for (const line of lines) {
-    if (!cash.has(line.accountCode)) continue;
+    if (!isCash(line.accountCode)) continue;
     const amount = Number(line.amount);
     if (!Number.isFinite(amount) || amount === 0) continue;
     lineCount += 1;

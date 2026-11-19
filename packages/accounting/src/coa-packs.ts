@@ -26,10 +26,13 @@ export const PERSONAL_CHART_OF_ACCOUNTS: Account[] = [
 export const SOLE_BUSINESS_ADDON_ACCOUNTS: Account[] = [
   { code: '1200', name: 'Card Clearing', type: 'asset', normalSide: 'debit' },
   { code: '1300', name: 'Accounts Receivable', type: 'asset', normalSide: 'debit' },
+  { code: '1350', name: 'Supplier Advances', type: 'asset', normalSide: 'debit' },
+  { code: '1360', name: 'Staff Advances', type: 'asset', normalSide: 'debit' },
   { code: '2100', name: 'Accounts Payable', type: 'liability', normalSide: 'credit' },
   { code: '2150', name: 'Goods Received Not Invoiced', type: 'liability', normalSide: 'credit' },
   { code: '2200', name: 'Output VAT', type: 'liability', normalSide: 'credit' },
   { code: '2300', name: 'Input VAT', type: 'asset', normalSide: 'debit' },
+  { code: '2410', name: 'Customer Advances', type: 'liability', normalSide: 'credit' },
   { code: '4000', name: 'Sales Revenue', type: 'revenue', normalSide: 'credit' },
   { code: '4100', name: 'Sales Returns', type: 'revenue', normalSide: 'debit' },
   { code: '5000', name: 'Cost of Goods Sold', type: 'expense', normalSide: 'debit' },

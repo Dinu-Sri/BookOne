@@ -1,3 +1,4 @@
+import { isCashUniverseCode } from '../account-classification';
 import { ACCOUNTS_BY_CODE, DEFAULT_CHART_OF_ACCOUNTS, type Account, type AccountType } from '../chart-of-accounts';
 import type { AccountRef, PaymentMethod } from './types';
 
@@ -10,11 +11,11 @@ const PAYMENT_ACCOUNT_BY_METHOD: Record<PaymentMethod, string> = {
 };
 
 /**
- * Cash 1000 plus cashbook bank/card codes 11xx / 12xx (including 1100 and 1200).
- * Payment tenders and cashbook tiles share this family so custom banks stay valid.
+ * Cash 10xx plus cashbook bank/card codes 11xx / 12xx.
+ * Payment tenders and cashbook tiles share this family so custom cash/banks stay valid.
  */
 export function isLiquidTenderCode(code: string): boolean {
-  return code === '1000' || /^11\d{2}$/.test(code) || /^12\d{2}$/.test(code);
+  return isCashUniverseCode(code);
 }
 
 /**
@@ -32,8 +33,13 @@ function dynamicLiquidAccount(code: string): Account | null {
       normalSide: 'debit',
     };
   }
-  if (code === '1000') {
-    return { code: '1000', name: 'Cash on Hand', type: 'asset', normalSide: 'debit' };
+  if (/^10\d{2}$/.test(code)) {
+    return {
+      code,
+      name: code === '1000' ? 'Cash on Hand' : `Cash ${code}`,
+      type: 'asset',
+      normalSide: 'debit',
+    };
   }
   return {
     code,

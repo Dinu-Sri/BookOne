@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { chartOfAccountsForEntity } from '@bookone/accounting';
+import { chartOfAccountsForEntity, classifiedSeedValues } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -86,10 +86,7 @@ export async function completeEntityOnboarding(input: {
         await db().insert(accounts).values(
           missing.map((account) => ({
             tenantId: user.tenantId,
-            code: account.code,
-            name: account.name,
-            type: account.type,
-            normalSide: account.normalSide,
+            ...classifiedSeedValues(account),
           })),
         );
       }

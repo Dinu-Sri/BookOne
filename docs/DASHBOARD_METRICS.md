@@ -1,6 +1,6 @@
 # Dashboard metric dictionary (DB-01 / DB-02)
 
-Product version: 2.11.5. Reporting engine: `packages/accounting/src/dashboard-metrics.ts` plus existing `composeFinancialStatements` / `netIncomeFromRows` / `signedCashFlow`. The dashboard does not post, reverse, or rewrite journals. DB-02 is a presentation correction: metric IDs, formulas, date/currency rules and permissions are unchanged from DB-01.
+Product version: 2.12.0. Reporting engine: `packages/accounting/src/dashboard-metrics.ts` plus existing `composeFinancialStatements` / `netIncomeFromRows` / `signedCashFlow`. The dashboard does not post, reverse, or rewrite journals. DB-02 is a presentation correction: metric IDs, formulas, date/currency rules and permissions stay. COA-01 includes custom 10xx cash and 11xx banks in spendable cash and the cash universe.
 
 Date basis: period flows use the selected inclusive interval. Position balances use the interval end (`asOf`). Historic selection never substitutes today's balances. Company calendar day uses `company_profiles.timezone` (default `Asia/Colombo`). Fiscal year start month defaults to April. Maximum custom range is 1,826 days.
 
@@ -16,15 +16,15 @@ Historical policy: figures are recomputed as-of from current ledger knowledge. T
 | --- | --- | --- | --- | --- | --- |
 | DB01-NS | Net sales | Signed balances of 4000 Sales Revenue + 4100 Sales Returns | Period journal lines | Selected interval | Sales revenue on the named P&L. VAT on 2200 is excluded. Discounts that reduced 4000 at posting are already in the ledger. |
 | DB01-OR | Operating result | `netIncomeFromRows` = all revenue − all expense (including 5000 COGS) | Period statement rows | Selected interval | `composeFinancialStatements.income.netIncome` on `/reports` |
-| DB01-NCM | Net cash movement | Signed cash-universe flow (1000+1100+1200), debit in / credit out, including transfers which net to zero | Period cash lines | Selected interval | Opening cash-universe + movement = closing cash-universe. Difference is shown, never hidden. |
-| DB01-CB | Cash and bank | Signed 1000 + 1100 | As of range end | Cutoff | Spendable cash. Does not include 1200, 1300, or other assets. |
-| DB01-CC | Card clearing | Signed 1200 | As of range end | Cutoff | Shown separately under position. Unsettled card receipts are not spendable. |
+| DB01-NCM | Net cash movement | Signed cash-universe flow (10xx+11xx+12xx), debit in / credit out, including transfers which net to zero | Period cash lines | Selected interval | Opening cash-universe + movement = closing cash-universe. Difference is shown, never hidden. |
+| DB01-CB | Cash and bank | Signed spendable cash/bank (10xx + 11xx, including custom 1101) | As of range end | Cutoff | Spendable cash. Does not include 12xx card clearing, 1300, or other assets. |
+| DB01-CC | Card clearing | Signed 12xx (seeded 1200 plus custom clearing) | As of range end | Cutoff | Shown separately under position. Unsettled card receipts are not spendable. |
 | DB01-AR | Receivables | Signed 1300 | As of range end | Cutoff | AR control. Document aging may differ; the difference is displayed. |
 | DB01-AP | Payables | Signed 2100 | As of range end | Cutoff | AP control. Same recon rule as AR. |
 | DB01-ECI | External cash received | Cash-universe debits excluding internal transfers | Period | Selected interval | Sum of cash series received bars |
 | DB01-ECO | External cash paid | Cash-universe credits excluding internal transfers | Period | Selected interval | Sum of cash series paid bars |
 
-Internal transfer: a journal whose non-zero lines are only among 1000/1100/1200 and that has both a cash debit and a cash credit. Those amounts are excluded from DB01-ECI/ECO and identified in the cash panel. Funding/owner/loan journals involve 3000, 3100, 2500, or 1400.
+Internal transfer: a journal whose non-zero lines are only among the cash universe (10xx/11xx/12xx, including custom banks) and that has both a cash debit and a cash credit. Those amounts are excluded from DB01-ECI/ECO and identified in the cash panel. Funding/owner/loan journals involve 3000, 3100, 2500, or 1400.
 
 Comparison: previous equivalent elapsed interval immediately before the selection. Zero, missing, and new (non-zero vs a zero baseline) are distinct labels. Percentages are never NaN or Infinity.
 

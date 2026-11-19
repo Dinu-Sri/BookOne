@@ -37,13 +37,19 @@ export const COREGUARD_SUITES = [
   {
     id: 'browser',
     layer: 'browser',
-    command: 'pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/agent-bridge-consent.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts',
+    command: 'pnpm --dir apps/web exec playwright test e2e/agent-bridge-01.spec.ts e2e/agent-bridge-connect.spec.ts e2e/agent-bridge-consent.spec.ts e2e/ui-nav-01.spec.ts e2e/dashboard-db01.spec.ts e2e/coa-01.spec.ts',
     required: true,
   },
   {
     id: 'dashboard-db01',
     layer: 'dashboard',
     command: 'pnpm --filter @bookone/accounting exec vitest run test/dashboard-metrics.test.ts && pnpm --filter @bookone/auth exec vitest run test/dashboard-db01-postgres.test.ts test/dashboard-db01-gate.test.ts && pnpm --dir apps/web exec playwright test e2e/dashboard-db01.spec.ts',
+    required: true,
+  },
+  {
+    id: 'coa-01',
+    layer: 'chart-of-accounts',
+    command: 'pnpm --filter @bookone/accounting exec vitest run test/account-classification.test.ts test/coa-01-pilot.test.ts test/advances.test.ts test/coa-csv-opening.test.ts && pnpm --filter @bookone/auth exec vitest run test/coa-01-gate.test.ts test/coa-01-postgres.test.ts && pnpm --dir apps/web exec playwright test e2e/coa-01.spec.ts',
     required: true,
   },
   {
@@ -121,6 +127,6 @@ export function coreGuardReport() {
     version: COREGUARD_VERSION,
     required: requiredCoreGuardSuites().map((s) => s.id),
     blocked: blockedCoreGuardSuites().map((s) => s.id),
-    note: 'Scoped AgentBridge foundation plus Dashboard DB-01. Existing quality job stays the publication ancestor. This registry does not certify all ERP modules.',
+    note: 'Scoped AgentBridge foundation plus Dashboard DB-01 and Chart of Accounts COA-01. Existing quality job stays the publication ancestor. This registry does not certify all ERP modules.',
   };
 }

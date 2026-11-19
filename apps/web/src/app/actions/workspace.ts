@@ -20,9 +20,9 @@ import {
   sql,
 } from '@bookone/db';
 import {
-  CASH_ACCOUNT_CODES,
   composeFinancialStatements,
   composeVatSummary,
+  isCashUniverseCode,
   journalDateWindow,
   signedAccountBalance,
   signedCashFlow,
@@ -83,6 +83,14 @@ export interface AccountBalance {
   credit: number;
   /** Assets/expenses: debit−credit. Liabilities/equity/revenue: credit−debit (contra revenue is negative). */
   balance: number;
+  subtype?: string | null;
+  isGroup?: string | null;
+  isSystem?: string | null;
+  isActive?: string | null;
+  liquidity?: string | null;
+  controlRole?: string | null;
+  parentCode?: string | null;
+  version?: number;
 }
 
 export interface DashboardMetric {
@@ -188,6 +196,7 @@ export async function getTenantInfo(): Promise<TenantInfo> {
     accessByLabel.Suppliers = accessByLabel.Vendors ?? 'none';
     accessByLabel.Groups = accessByLabel.Team ?? 'none';
     accessByLabel.Activity = accessByLabel.Journal ?? 'none';
+    accessByLabel.Advances = accessByLabel.Accounts ?? 'none';
     accessByLabel.AgentBridge = accessByLabel['Purchase Settings'] ?? 'none';
     if (accessByLabel.AgentBridge === 'none' && (accessByLabel['Document Inbox'] ?? 'none') !== 'none') {
       accessByLabel.AgentBridge = 'read';
@@ -266,6 +275,14 @@ async function computeAccountBalances(
         name: accounts.name,
         type: accounts.type,
         normalSide: accounts.normalSide,
+        subtype: accounts.subtype,
+        isGroup: accounts.isGroup,
+        isSystem: accounts.isSystem,
+        isActive: accounts.isActive,
+        liquidity: accounts.liquidity,
+        controlRole: accounts.controlRole,
+        parentCode: accounts.parentCode,
+        version: accounts.version,
         debitTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntries.id} IS NOT NULL AND ${journalLines.side} = 'debit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
         creditTotal: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntries.id} IS NOT NULL AND ${journalLines.side} = 'credit' THEN ${journalLines.amount}::numeric ELSE 0 END), 0)`,
       })
@@ -284,6 +301,14 @@ async function computeAccountBalances(
         name: r.name,
         type: r.type,
         normalSide: r.normalSide,
+        subtype: r.subtype,
+        isGroup: r.isGroup,
+        isSystem: r.isSystem,
+        isActive: r.isActive,
+        liquidity: r.liquidity,
+        controlRole: r.controlRole,
+        parentCode: r.parentCode,
+        version: r.version ?? 1,
         debit: Number.isFinite(debit) ? debit : 0,
         credit: Number.isFinite(credit) ? credit : 0,
         balance: signedAccountBalance(r.type, debit, credit),
@@ -316,7 +341,6 @@ async function cashFlowForPeriod(
     isNull(journalLines.voidedAt),
     isNull(journalEntries.voidedAt),
     isNull(accounts.voidedAt),
-    inArray(accounts.code, [...CASH_ACCOUNT_CODES]),
   ];
   if (bounds.from && bounds.to) {
     conditions.push(gte(journalEntries.entryDate, bounds.from));

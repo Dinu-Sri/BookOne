@@ -1,6 +1,78 @@
 export * from './chart-of-accounts';
 export * from './coa-packs';
 export * from './account-lookup';
+export {
+  ACCOUNT_WIZARD_TEMPLATES,
+  BUSINESS_ADVANCE_SEED_ACCOUNTS,
+  PROTECTED_CONTROL_ROLES,
+  classifiedSeedValues,
+  classifyAccount,
+  classifyFromCode,
+  isCardClearingCode,
+  isCashUniverseClassified,
+  isCashUniverseCode,
+  isCustomBankCode,
+  isLiquidTenderClassified,
+  isLiquidTenderFamily,
+  isProtectedControl,
+  isRootClass,
+  isSpendableCashCode,
+  isSpendableClassified,
+  nextSuggestedCode,
+  normalSideFor,
+  wizardTemplate,
+} from './account-classification';
+export type {
+  AccountClassificationInput,
+  AccountRootClass,
+  AccountSubtype,
+  CashFlowClass,
+  ClassifiedAccount,
+  ControlRole,
+  Liquidity,
+  WizardTemplate,
+  WizardTemplateId,
+} from './account-classification';
+export {
+  cosmeticRenameKeepsHistory,
+  derivedNormalSide,
+  duplicateActiveNameIssue,
+  duplicateCodeIssue,
+  normalizeAccountCode,
+  normalizeAccountName,
+  parentIssues,
+  templateIdFromSubtype,
+  validateAccountCode,
+  validateAccountName,
+  validateArchiveAccount,
+  validateCreateAccount,
+  validateEditAccount,
+} from './account-lifecycle';
+export type { ExistingAccountLite, LifecycleAccount, LifecycleIssue } from './account-lifecycle';
+export {
+  COA01_ADVANCE_EXAMPLES,
+  DEFAULT_ADVANCE_ACCOUNTS,
+  TAXABLE_ADVANCE_REFUSAL,
+  advanceOutstanding,
+  canApplyAdvance,
+  cashNetFromLines,
+  customerAdvanceApplyLines,
+  customerAdvanceIssueLines,
+  customerAdvanceRefundLines,
+  linesBalance,
+  moneyAmount,
+  staffAdvanceExpenseLines,
+  staffAdvanceIssueLines,
+  staffAdvanceReturnLines,
+  supplierAdvanceApplyLines,
+  supplierAdvanceIssueLines,
+  supplierAdvanceRefundLines,
+} from './advances';
+export type { AdvanceAllocationKind, AdvanceKind, AdvanceState, JournalLineDraft } from './advances';
+export { dryRunCoaImport, exportCoaCsv, formulaSafeCell, parseCoaCsv, parseCsvRecords } from './coa-csv';
+export type { CoaCsvIssue, CoaCsvRow, CoaImportPlan } from './coa-csv';
+export { openingAlreadyPosted, previewOpeningBalances } from './opening-balances';
+export type { OpeningLineInput, OpeningPreview } from './opening-balances';
 export * from './inference/types';
 export { inferCategory, listKnownAccounts, CATEGORY_RULES } from './inference/category-inferrer';
 export { resolveAccount, accountForPaymentMethod, isLiquidTenderCode } from './inference/account-resolver';

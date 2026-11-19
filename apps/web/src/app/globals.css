@@ -2033,6 +2033,12 @@ textarea.input {
   font-size: 13px;
 }
 
+.form-success {
+  margin-top: 10px;
+  color: var(--success, #0f7b4c);
+  font-size: 13px;
+}
+
 .form-refusal-banner {
   margin: 0 0 12px;
   padding: 10px 12px;

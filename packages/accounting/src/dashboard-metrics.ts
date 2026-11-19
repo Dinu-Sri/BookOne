@@ -1,7 +1,8 @@
+import { isCardClearingCode, isCashUniverseCode, isSpendableCashCode } from './account-classification';
 import { CASH_ACCOUNT_CODES, signedCashFlow } from './cash-flow';
 import { signedAccountBalance, type StatementRow } from './statement-sign';
 
-/** Spendable cash and bank. Card clearing (1200) is reported separately. */
+/** Seeded spendable cash and bank. Custom 11xx banks classify through isSpendableCashCode. */
 export const SPENDABLE_CASH_CODES = ['1000', '1100'] as const;
 export const CARD_CLEARING_CODE = '1200';
 export const CASH_UNIVERSE_CODES = CASH_ACCOUNT_CODES;
@@ -232,25 +233,31 @@ export function operatingResultFromRows(rows: StatementRow[]): number {
 }
 
 export function spendableCashFromRows(rows: StatementRow[]): number {
-  return roundMoney(SPENDABLE_CASH_CODES.reduce((sum, code) => sum + balanceFor(rows, code), 0));
+  return roundMoney(
+    rows.filter((row) => isSpendableCashCode(row.accountCode)).reduce((sum, row) => sum + row.balance, 0),
+  );
 }
 
 export function cardClearingFromRows(rows: StatementRow[]): number {
-  return balanceFor(rows, CARD_CLEARING_CODE);
+  return roundMoney(
+    rows.filter((row) => isCardClearingCode(row.accountCode)).reduce((sum, row) => sum + row.balance, 0),
+  );
 }
 
 export function cashUniverseFromRows(rows: StatementRow[]): number {
-  return roundMoney(CASH_UNIVERSE_CODES.reduce((sum, code) => sum + balanceFor(rows, code), 0));
+  return roundMoney(
+    rows.filter((row) => isCashUniverseCode(row.accountCode)).reduce((sum, row) => sum + row.balance, 0),
+  );
 }
 
 export function classifyCashJournal(
   lines: Array<{ accountCode: string; side: string; amount: number }>,
 ): CashClassification {
-  const cash = new Set<string>(CASH_UNIVERSE_CODES);
+  const cashHas = (code: string) => isCashUniverseCode(code);
   const funding = new Set<string>(FUNDING_ACCOUNT_CODES);
   const nonZero = lines.filter((line) => Number(line.amount) !== 0);
-  const cashLines = nonZero.filter((line) => cash.has(line.accountCode));
-  const other = nonZero.filter((line) => !cash.has(line.accountCode));
+  const cashLines = nonZero.filter((line) => cashHas(line.accountCode));
+  const other = nonZero.filter((line) => !cashHas(line.accountCode));
   if (cashLines.length >= 2 && other.length === 0) {
     const hasDebit = cashLines.some((line) => line.side === 'debit');
     const hasCredit = cashLines.some((line) => line.side === 'credit');
@@ -274,7 +281,7 @@ export type ExternalCashFlow = {
 };
 
 export function externalCashFlow(lines: DashboardJournalLine[]): ExternalCashFlow {
-  const cash = new Set<string>(CASH_UNIVERSE_CODES);
+  const cashHas = (code: string) => isCashUniverseCode(code);
   const byJournal = new Map<string, DashboardJournalLine[]>();
   for (const line of activeLines(lines)) {
     const list = byJournal.get(line.journalId) ?? [];
@@ -293,7 +300,7 @@ export function externalCashFlow(lines: DashboardJournalLine[]): ExternalCashFlo
   for (const journalLines of byJournal.values()) {
     const kind = classifyCashJournal(journalLines);
     for (const line of journalLines) {
-      if (!cash.has(line.accountCode)) continue;
+      if (!cashHas(line.accountCode)) continue;
       const amount = Number(line.amount);
       if (!Number.isFinite(amount) || amount === 0) continue;
       lineCount += 1;
@@ -481,7 +488,6 @@ export function cashSeries(
     list.push(line);
     byJournal.set(line.journalId, list);
   }
-  const cash = new Set<string>(CASH_UNIVERSE_CODES);
   const totals = new Map<string, { moneyIn: number; moneyOut: number }>();
   for (const journalLines of byJournal.values()) {
     const kind = classifyCashJournal(journalLines);
@@ -491,7 +497,7 @@ export function cashSeries(
     const bucket = bucketKey(date, grain);
     const cur = totals.get(bucket.key) ?? { moneyIn: 0, moneyOut: 0 };
     for (const line of journalLines) {
-      if (!cash.has(line.accountCode)) continue;
+      if (!isCashUniverseCode(line.accountCode)) continue;
       const amount = Number(line.amount);
       if (!Number.isFinite(amount) || amount === 0) continue;
       if (line.side === 'debit') cur.moneyIn += amount;

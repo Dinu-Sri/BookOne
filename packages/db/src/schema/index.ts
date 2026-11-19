@@ -3,6 +3,8 @@ export { users } from './users';
 export { platformAuditEvents } from './platform';
 export { accounts } from './accounts';
 export { parties } from './parties';
+export { partyAdvances, partyAdvanceAllocations } from './party-advances';
+export { openingBalanceRuns, openingBalanceLines } from './opening-balances';
 export { transactions } from './transactions';
 export { journalEntries } from './journal-entries';
 export { journalLines } from './journal-lines';

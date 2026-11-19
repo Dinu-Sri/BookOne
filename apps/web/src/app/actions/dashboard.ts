@@ -329,7 +329,7 @@ export async function getBusinessOverview(input?: {
           amount: snapshot.cashAndBank,
           display: money(snapshot.cashAndBank),
           exact: exact(snapshot.cashAndBank),
-          note: 'Spendable 1000 + 1100 as of range end. Card clearing excluded.',
+          note: 'Spendable cash and classified banks as of range end. Card clearing excluded.',
           href: '/accounts',
           comparison: undefined,
           tone: snapshot.cashAndBank < 0 ? 'danger' : 'neutral',

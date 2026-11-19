@@ -12,7 +12,7 @@ export default async function CashbookSettingsPage() {
   }
 
   if (needsOnboarding(options.entityKind)) redirect('/onboarding');
-  if (!usesPersonalShell(options.entityKind)) redirect('/');
+  if (!usesPersonalShell(options.entityKind)) redirect('/accounts?focus=bank');
 
   return (
     <CashbookSettingsClient

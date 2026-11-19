@@ -2,7 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
-import { chartOfAccountsForEntity } from '@bookone/accounting';
+import { chartOfAccountsForEntity, classifiedSeedValues } from '@bookone/accounting';
 import {
   accounts,
   and,
@@ -241,10 +241,7 @@ async function ensureBookOneUser(email: string, name: string): Promise<SessionUs
     await tx.insert(accounts).values(
       coa.map((account) => ({
         tenantId: tenant.id,
-        code: account.code,
-        name: account.name,
-        type: account.type,
-        normalSide: account.normalSide,
+        ...classifiedSeedValues(account),
       })),
     );
 

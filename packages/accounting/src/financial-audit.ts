@@ -12,6 +12,10 @@ export const FINANCIAL_AUDIT_TABLES = [
   'inventory_product_categories',
   'sales_discounts',
   'parties',
+  'accounts',
+  'party_advances',
+  'party_advance_allocations',
+  'opening_balance_runs',
   'bank_statement_imports',
   'period_locks',
   'rental_booking_lines',
@@ -46,6 +50,14 @@ export function financialAuditSourceLabel(tableName: string): string {
       return 'Discount';
     case 'parties':
       return 'Party';
+    case 'accounts':
+      return 'Account';
+    case 'party_advances':
+      return 'Advance';
+    case 'party_advance_allocations':
+      return 'Advance allocation';
+    case 'opening_balance_runs':
+      return 'Opening balance';
     case 'bank_statement_imports':
       return 'Bank import';
     case 'period_locks':

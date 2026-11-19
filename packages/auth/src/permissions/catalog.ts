@@ -176,6 +176,10 @@ const HREF_ALIASES: Record<string, string> = {
   '/purchase/inbox/connections': 'company.purchase_settings',
   '/purchase/suppliers': 'parties.vendors',
   '/journal/audit': 'accounting.journal',
+  '/advances': 'accounting.accounts',
+  '/accounts/new': 'accounting.accounts',
+  '/accounts/opening': 'accounting.accounts',
+  '/accounts/import': 'accounting.accounts',
   '/cashbook/summary': 'accounting.cashbook',
   '/cashbook/settings': 'accounting.cashbook',
   '/cashbook/import': 'accounting.cashbook',
@@ -255,6 +259,7 @@ export function navHrefToPermissionPrefix(href: string, label?: string): string 
   if (label === 'Jobs') return 'team.jobs';
   if (label === 'Groups') return 'team.people';
   if (label === 'Activity') return 'accounting.journal';
+  if (label === 'Advances') return 'accounting.accounts';
   return screenKeyFromHref(href);
 }
 

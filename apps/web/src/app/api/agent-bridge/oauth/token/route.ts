@@ -12,6 +12,7 @@ import {
   parseRequestedScopes,
   TOKEN_AUDIENCE,
   encodeTenantBoundCode,
+  newOauthRequestId,
   type Capability,
 } from '@bookone/agent-bridge';
 import {
@@ -26,8 +27,16 @@ export const runtime = 'nodejs';
 const ACCESS_TTL_HOURS = 8;
 const REFRESH_TTL_MS = 30 * 24 * 3600 * 1000;
 
-function jsonError(error: string, status: number, description?: string) {
-  return NextResponse.json(description ? { error, error_description: description } : { error }, { status });
+function jsonError(error: string, status: number, description?: string, requestId?: string) {
+  const res = NextResponse.json(description ? { error, error_description: description } : { error }, { status });
+  if (requestId) res.headers.set('X-BookOne-OAuth-Request-Id', requestId);
+  return res;
+}
+
+function withRequestId(res: NextResponse | undefined, requestId?: string) {
+  const out = res ?? jsonError('temporarily_unavailable', 503, OAUTH_SETUP_CHECKLIST, requestId);
+  if (requestId) out.headers.set('X-BookOne-OAuth-Request-Id', requestId);
+  return out;
 }
 
 function mintIsReady(): boolean {
@@ -104,6 +113,7 @@ async function mintTokens(row: {
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = newOauthRequestId();
   const body = await req.formData().catch(async () => {
     const json = (await req.json().catch(() => ({}))) as Record<string, string>;
     const fd = new FormData();
@@ -111,24 +121,30 @@ export async function POST(req: NextRequest) {
     return fd;
   });
   const grant = String(body.get('grant_type') ?? '');
-  const clientId = String(body.get('client_id') ?? '');
-  if (!clientId) return jsonError('invalid_request', 400);
+  const clientId = String(body.get('client_id') ?? '').trim();
+  if (!clientId) return jsonError('invalid_request', 400, undefined, requestId);
 
   if (grant === 'refresh_token') {
-    const refresh = String(body.get('refresh_token') ?? '');
-    if (!refresh || !isRefreshTokenValue(refresh)) return jsonError('invalid_request', 400);
-    if (!mintIsReady()) return jsonError('temporarily_unavailable', 503, OAUTH_SETUP_CHECKLIST);
+    const refresh = String(body.get('refresh_token') ?? '').trim();
+    if (!refresh || !isRefreshTokenValue(refresh)) return jsonError('invalid_request', 400, undefined, requestId);
+    if (!mintIsReady()) return jsonError('temporarily_unavailable', 503, OAUTH_SETUP_CHECKLIST, requestId);
     const redeemed = await redeemOauthCode({
       code: refresh,
       clientId,
       kind: 'refresh_token',
       mintReady: true,
+      requestId,
     });
     if (!redeemed.ok) {
       if (redeemed.error === 'temporarily_unavailable') {
-        return jsonError('temporarily_unavailable', 503, redeemed.description || OAUTH_SETUP_CHECKLIST);
+        return jsonError(
+          'temporarily_unavailable',
+          503,
+          redeemed.description || OAUTH_SETUP_CHECKLIST,
+          redeemed.diagnostic.requestId,
+        );
       }
-      return jsonError('invalid_grant', 400, redeemed.description);
+      return jsonError('invalid_grant', 400, undefined, redeemed.diagnostic.requestId);
     }
     const minted = await mintTokens({
       tenantId: redeemed.row.tenantId,
@@ -138,21 +154,21 @@ export async function POST(req: NextRequest) {
       scopes: redeemed.row.scopes,
       redirectUri: redeemed.row.redirectUri,
     });
-    if ('error' in minted) return minted.error;
-    return NextResponse.json(minted.body);
+    if ('error' in minted) return withRequestId(minted.error, redeemed.diagnostic.requestId);
+    return withRequestId(NextResponse.json(minted.body), redeemed.diagnostic.requestId);
   }
 
   if (grant !== 'authorization_code') {
-    return jsonError('unsupported_grant_type', 400);
+    return jsonError('unsupported_grant_type', 400, undefined, requestId);
   }
-  const code = String(body.get('code') ?? '');
-  const verifier = String(body.get('code_verifier') ?? '');
-  const redirectUri = String(body.get('redirect_uri') ?? '');
-  const tenantHint = String(body.get('tenant_id') ?? process.env.AGENT_BRIDGE_OAUTH_TENANT_HINT ?? '');
+  const code = String(body.get('code') ?? '').trim();
+  const verifier = String(body.get('code_verifier') ?? '').trim();
+  const redirectUri = String(body.get('redirect_uri') ?? '').trim();
+  const tenantHint = String(body.get('tenant_id') ?? process.env.AGENT_BRIDGE_OAUTH_TENANT_HINT ?? '').trim();
   if (!code || !verifier || !clientId || !redirectUri) {
-    return jsonError('invalid_request', 400);
+    return jsonError('invalid_request', 400, undefined, requestId);
   }
-  if (!mintIsReady()) return jsonError('temporarily_unavailable', 503, OAUTH_SETUP_CHECKLIST);
+  if (!mintIsReady()) return jsonError('temporarily_unavailable', 503, OAUTH_SETUP_CHECKLIST, requestId);
   const redeemed = await redeemOauthCode({
     code,
     clientId,
@@ -161,12 +177,18 @@ export async function POST(req: NextRequest) {
     tenantHint: tenantHint || undefined,
     kind: 'authorization_code',
     mintReady: true,
+    requestId,
   });
   if (!redeemed.ok) {
     if (redeemed.error === 'temporarily_unavailable') {
-      return jsonError('temporarily_unavailable', 503, redeemed.description || OAUTH_SETUP_CHECKLIST);
+      return jsonError(
+        'temporarily_unavailable',
+        503,
+        redeemed.description || OAUTH_SETUP_CHECKLIST,
+        redeemed.diagnostic.requestId,
+      );
     }
-    return jsonError('invalid_grant', 400, redeemed.description);
+    return jsonError('invalid_grant', 400, undefined, redeemed.diagnostic.requestId);
   }
   const minted = await mintTokens({
     tenantId: redeemed.row.tenantId,
@@ -176,6 +198,6 @@ export async function POST(req: NextRequest) {
     scopes: redeemed.row.scopes,
     redirectUri: redeemed.row.redirectUri,
   });
-  if ('error' in minted) return minted.error;
-  return NextResponse.json(minted.body);
+  if ('error' in minted) return withRequestId(minted.error, redeemed.diagnostic.requestId);
+  return withRequestId(NextResponse.json(minted.body), redeemed.diagnostic.requestId);
 }

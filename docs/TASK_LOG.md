@@ -1,3 +1,10 @@
+## 2026-11-19 — AgentBridge token-exchange diagnostic (v2.11.2)
+
+- Record: [CHG-20261119-agentbridge-09-token-diagnose](changes/CHG-20261119-agentbridge-09-token-diagnose.md). Baseline product `b7e7499` / v2.11.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes.
+- Change: sanitized request-id + reason-enum diagnostics on authorize/token; tenant-bound codes win over a tenant hint; exact redirect matching unchanged. VERSION 2.11.2. CoreGuard `ab-09`. Schema protocol stays `ab-06.1`. Additive `048`.
+- Checks: `@bookone/agent-bridge` 26 files / 128 passed. `@bookone/auth` tenant-archive + permissions + ui-nav-01 39 passed. Playwright connect 5 passed, consent 3 passed. AgentBridge and db `tsc --noEmit` passed.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent `codex mcp login bookone` retry pending. Read the Company AgentBridge last-attempt reason. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-18 — AgentBridge login repair and consent UX (v2.11.1)
 
 - Record: [CHG-20261118-agentbridge-09-login-consent](changes/CHG-20261118-agentbridge-09-login-consent.md). Baseline product `514e51b` / v2.11.0. Keep existing company Inbox OFF, draft-only ON, posting-stop ON. Preserve AB-07 public discovery and AB-08 Company AgentBridge. Preserve the saved Codex `bookone` entry. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge clocks including the 18 Nov 2026 authorization code.

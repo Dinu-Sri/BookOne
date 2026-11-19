@@ -86,6 +86,12 @@ export type StoredConnection = {
   label?: string;
   lastUsedAt?: string;
   tokenIssuedAt?: string;
+  lastOauth?: {
+    requestId: string;
+    reason: string;
+    at: string;
+    flags: Record<string, boolean | string | number | null>;
+  };
   revokedAt?: string;
   createdAt: string;
 };

@@ -6,14 +6,22 @@ import {
   extractorFor,
   intersectCapabilities,
   pendingGrantForReuse,
-  tenantIdFromBoundToken,
+  resolveOauthRedemptionTenant,
+  compareRedirectUris,
+  buildOauthRedeemDiagnostic,
+  emptyOauthRedeemFlags,
+  flagsFromTenantResolution,
+  newOauthRequestId,
+  oauthRedeemLogLine,
   type Actor,
   type AgentBridgeStore,
   type Capability,
   type CompanyPolicy,
   type FeatureFlags,
+  type OauthRedeemReason,
   type OperationReceipt,
   type PostingPort,
+  type SanitizedOauthRedeemDiagnostic,
   parseScopes,
 } from '@bookone/agent-bridge';
 import { loadAccessForUser, requireTenantContext } from '@bookone/auth';
@@ -34,9 +42,11 @@ import {
   and,
   companyProfiles,
   db,
+  desc,
   eq,
   isNull,
   opsIdempotency,
+  pgClient,
   parties,
   purchaseSettings,
   salesSettings,
@@ -659,6 +669,7 @@ class PostgresStore implements AgentBridgeStore {
             label: r.label ?? undefined,
             lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : undefined,
             tokenIssuedAt: r.tokenIssuedAt ? r.tokenIssuedAt.toISOString() : undefined,
+            lastOauth: mapLastOauth(r),
             revokedAt: r.revokedAt ? r.revokedAt.toISOString() : undefined,
             createdAt: r.createdAt.toISOString(),
           }),
@@ -704,11 +715,31 @@ class PostgresStore implements AgentBridgeStore {
         label: row.label ?? undefined,
         lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : undefined,
         tokenIssuedAt: row.tokenIssuedAt ? row.tokenIssuedAt.toISOString() : undefined,
+        lastOauth: mapLastOauth(row),
         revokedAt: row.revokedAt ? row.revokedAt.toISOString() : undefined,
         createdAt: row.createdAt.toISOString(),
       };
     });
   }
+}
+
+function mapLastOauth(row: {
+  lastOauthRequestId?: string | null;
+  lastOauthReason?: string | null;
+  lastOauthAt?: Date | null;
+  lastOauthFlags?: unknown;
+}): StoredConnection['lastOauth'] {
+  if (!row.lastOauthRequestId || !row.lastOauthReason || !row.lastOauthAt) return undefined;
+  const flags =
+    row.lastOauthFlags && typeof row.lastOauthFlags === 'object' && !Array.isArray(row.lastOauthFlags)
+      ? (row.lastOauthFlags as Record<string, boolean | string | null>)
+      : {};
+  return {
+    requestId: row.lastOauthRequestId,
+    reason: row.lastOauthReason,
+    at: row.lastOauthAt.toISOString(),
+    flags,
+  };
 }
 
 export async function saveOauthCode(row: {
@@ -721,10 +752,49 @@ export async function saveOauthCode(row: {
   codeChallengeMethod: string;
   scopes: string;
   connectionId?: string;
+  requestId?: string;
   expiresAt: Date;
 }) {
   await withTenantContext(row.tenantId, async () => {
     await db().insert(agentBridgeOauthCodes).values(row);
+  });
+}
+
+export async function recordOauthRedeemDiagnostic(args: {
+  tenantId: string;
+  connectionId?: string | null;
+  clientId?: string;
+  diagnostic: SanitizedOauthRedeemDiagnostic;
+}) {
+  await withTenantContext(args.tenantId, async () => {
+    let connectionId = args.connectionId ?? null;
+    if (!connectionId && args.clientId) {
+      const [pending] = await db()
+        .select({ id: agentBridgeConnections.id })
+        .from(agentBridgeConnections)
+        .where(
+          and(
+            eq(agentBridgeConnections.tenantId, args.tenantId),
+            eq(agentBridgeConnections.clientId, args.clientId),
+            isNull(agentBridgeConnections.revokedAt),
+            isNull(agentBridgeConnections.tokenIssuedAt),
+            isNull(agentBridgeConnections.lastUsedAt),
+          ),
+        )
+        .orderBy(desc(agentBridgeConnections.createdAt))
+        .limit(1);
+      connectionId = pending?.id ?? null;
+    }
+    if (!connectionId) return;
+    await db()
+      .update(agentBridgeConnections)
+      .set({
+        lastOauthRequestId: args.diagnostic.requestId,
+        lastOauthReason: args.diagnostic.reason,
+        lastOauthAt: new Date(args.diagnostic.at),
+        lastOauthFlags: args.diagnostic.flags,
+      })
+      .where(and(eq(agentBridgeConnections.tenantId, args.tenantId), eq(agentBridgeConnections.id, connectionId)));
   });
 }
 
@@ -738,11 +808,17 @@ export type RedeemOauthCodeArgs = {
   tenantHint?: string;
   kind?: 'authorization_code' | 'refresh_token';
   mintReady: boolean;
+  requestId?: string;
 };
 
 export type RedeemOauthCodeResult =
-  | { ok: true; row: OauthCodeRow }
-  | { ok: false; error: 'invalid_grant' | 'temporarily_unavailable'; description?: string };
+  | { ok: true; row: OauthCodeRow; diagnostic: SanitizedOauthRedeemDiagnostic }
+  | {
+      ok: false;
+      error: 'invalid_grant' | 'temporarily_unavailable';
+      description?: string;
+      diagnostic: SanitizedOauthRedeemDiagnostic;
+    };
 
 function mapCodeForDecision(row: OauthCodeRow) {
   return {
@@ -757,34 +833,133 @@ function mapCodeForDecision(row: OauthCodeRow) {
     connectionId: row.connectionId,
     expiresAt: row.expiresAt.getTime(),
     usedAt: row.usedAt ? row.usedAt.getTime() : null,
+    requestId: row.requestId,
   };
+}
+
+async function pinTenantGuc(tenantId: string): Promise<{
+  present: boolean;
+  matches: boolean;
+  resetInTransaction: boolean;
+}> {
+  const before = await pgClient()`select current_setting('app.current_tenant_id', true) as tenant`;
+  const current = String(before[0]?.tenant ?? '');
+  const present = current.length > 0;
+  const matches = current === tenantId;
+  if (!matches) {
+    await pgClient()`select set_config('app.current_tenant_id', ${tenantId}, true)`;
+  }
+  return { present, matches, resetInTransaction: !matches };
+}
+
+async function finishRedeemDiagnostic(args: {
+  requestId: string;
+  reason: OauthRedeemReason;
+  flags: SanitizedOauthRedeemDiagnostic['flags'];
+  tenantId?: string | null;
+  connectionId?: string | null;
+  clientId?: string;
+}): Promise<SanitizedOauthRedeemDiagnostic> {
+  const diagnostic = buildOauthRedeemDiagnostic({
+    requestId: args.requestId,
+    reason: args.reason,
+    flags: args.flags,
+  });
+  console.info(oauthRedeemLogLine(diagnostic));
+  if (args.tenantId) {
+    try {
+      await recordOauthRedeemDiagnostic({
+        tenantId: args.tenantId,
+        connectionId: args.connectionId,
+        clientId: args.clientId,
+        diagnostic,
+      });
+    } catch {
+      // Diagnostic persistence must not change the OAuth decision.
+    }
+  }
+  return diagnostic;
 }
 
 /**
  * Atomic single-use redemption. Binding mismatches do not burn the code.
  * Expiry and PKCE failures consume it. Mint-not-ready leaves the code unused.
  * Concurrent winners are serialized with SELECT FOR UPDATE and used_at IS NULL.
+ * Tenant-bound codes win over AGENT_BRIDGE_OAUTH_TENANT_HINT / tenant_id.
  */
 export async function redeemOauthCode(args: RedeemOauthCodeArgs): Promise<RedeemOauthCodeResult> {
-  const tenantId = args.tenantHint?.trim() || tenantIdFromBoundToken(args.code);
-  if (!tenantId) return { ok: false, error: 'invalid_grant' };
-  if (!args.mintReady) {
-    return { ok: false, error: 'temporarily_unavailable' };
+  const code = args.code.trim();
+  const clientId = args.clientId.trim();
+  const redirectUri = (args.redirectUri ?? '').trim();
+  const tenant = resolveOauthRedemptionTenant({ code, tenantHint: args.tenantHint });
+  const redirectCmp = compareRedirectUris('', redirectUri);
+  const baseFlags = emptyOauthRedeemFlags({
+    ...flagsFromTenantResolution(tenant),
+    codeLength: code.length,
+    verifierPresent: Boolean(args.codeVerifier),
+    presentedHost: redirectCmp.presentedHost,
+    presentedPort: redirectCmp.presentedPort,
+  });
+
+  if (!tenant.tenantId) {
+    const diagnostic = await finishRedeemDiagnostic({
+      requestId: args.requestId || newOauthRequestId(),
+      reason: 'missing_tenant_binding',
+      flags: baseFlags,
+      clientId,
+    });
+    return { ok: false, error: 'invalid_grant', diagnostic };
   }
+  if (!args.mintReady) {
+    return {
+      ok: false,
+      error: 'temporarily_unavailable',
+      diagnostic: buildOauthRedeemDiagnostic({
+        requestId: args.requestId || newOauthRequestId(),
+        reason: 'code_issued',
+        flags: baseFlags,
+      }),
+    };
+  }
+
+  const tenantId = tenant.tenantId;
   return withTenantContext(tenantId, async () => {
-    return db().transaction(async (tx) => {
+    const outcome = await db().transaction(async (tx) => {
+      const guc = await pinTenantGuc(tenantId);
       const [row] = await tx
         .select()
         .from(agentBridgeOauthCodes)
-        .where(and(eq(agentBridgeOauthCodes.tenantId, tenantId), eq(agentBridgeOauthCodes.code, args.code)))
+        .where(and(eq(agentBridgeOauthCodes.tenantId, tenantId), eq(agentBridgeOauthCodes.code, code)))
         .limit(1)
         .for('update');
       const decision = decideOauthCodeRedemption(row ? mapCodeForDecision(row) : null, {
-        clientId: args.clientId,
-        redirectUri: args.redirectUri ?? '',
+        clientId,
+        redirectUri,
         codeVerifier: args.codeVerifier,
         kind: args.kind,
       });
+      const cmp = compareRedirectUris(row?.redirectUri ?? '', redirectUri);
+      const requestId = row?.requestId || args.requestId || newOauthRequestId();
+      const flags = emptyOauthRedeemFlags({
+        ...baseFlags,
+        rowFound: Boolean(row),
+        consumed: decision.consume && Boolean(row) && !row?.usedAt,
+        clientMatches: row ? row.clientId === clientId : null,
+        tenantGucPresent: guc.present,
+        tenantGucMatches: guc.matches,
+        tenantGucResetInTransaction: guc.resetInTransaction,
+        hostsEqual: row ? cmp.hostsEqual : null,
+        portsEqual: row ? cmp.portsEqual : null,
+        pathsEqual: row ? cmp.pathsEqual : null,
+        schemesEqual: row ? cmp.schemesEqual : null,
+        exactRedirectEqual: row ? cmp.exactEqual : null,
+        storedHost: cmp.storedHost,
+        presentedHost: cmp.presentedHost,
+        storedPort: cmp.storedPort,
+        presentedPort: cmp.presentedPort,
+        challengeMethod: row?.codeChallengeMethod ?? null,
+      });
+
       if (decision.action !== 'issue') {
         if (decision.consume && row && !row.usedAt) {
           await tx
@@ -793,12 +968,20 @@ export async function redeemOauthCode(args: RedeemOauthCodeArgs): Promise<Redeem
             .where(
               and(
                 eq(agentBridgeOauthCodes.tenantId, tenantId),
-                eq(agentBridgeOauthCodes.code, args.code),
+                eq(agentBridgeOauthCodes.code, code),
                 isNull(agentBridgeOauthCodes.usedAt),
               ),
             );
         }
-        return { ok: false as const, error: 'invalid_grant' as const, description: decision.description };
+        return {
+          ok: false as const,
+          error: 'invalid_grant' as const,
+          description: decision.description,
+          requestId,
+          reason: decision.reason,
+          flags,
+          connectionId: row?.connectionId ?? null,
+        };
       }
       const consumed = await tx
         .update(agentBridgeOauthCodes)
@@ -806,14 +989,46 @@ export async function redeemOauthCode(args: RedeemOauthCodeArgs): Promise<Redeem
         .where(
           and(
             eq(agentBridgeOauthCodes.tenantId, tenantId),
-            eq(agentBridgeOauthCodes.code, args.code),
+            eq(agentBridgeOauthCodes.code, code),
             isNull(agentBridgeOauthCodes.usedAt),
           ),
         )
         .returning();
-      if (!consumed[0]) return { ok: false as const, error: 'invalid_grant' as const };
-      return { ok: true as const, row: consumed[0] };
+      if (!consumed[0]) {
+        return {
+          ok: false as const,
+          error: 'invalid_grant' as const,
+          requestId,
+          reason: 'concurrent_consume' as const,
+          flags: { ...flags, consumed: false },
+          connectionId: row?.connectionId ?? null,
+        };
+      }
+      return {
+        ok: true as const,
+        row: consumed[0],
+        requestId,
+        reason: 'issued' as const,
+        flags: { ...flags, consumed: true, rowFound: true },
+        connectionId: consumed[0].connectionId,
+      };
     });
+
+    const diagnostic = await finishRedeemDiagnostic({
+      requestId: outcome.requestId,
+      reason: outcome.reason,
+      flags: outcome.flags,
+      tenantId,
+      connectionId: outcome.connectionId,
+      clientId,
+    });
+    if (outcome.ok) return { ok: true as const, row: outcome.row, diagnostic };
+    return {
+      ok: false as const,
+      error: outcome.error,
+      description: 'description' in outcome ? outcome.description : undefined,
+      diagnostic,
+    };
   });
 }
 

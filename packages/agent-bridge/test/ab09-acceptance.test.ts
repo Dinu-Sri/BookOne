@@ -13,6 +13,7 @@ describe('AB-09 source contracts', () => {
     expect(COREGUARD_VERSION).toBe('ab-09');
     expect(read('packages/agent-bridge/src/contracts.ts')).toMatch(/SCHEMA_VERSION = 'ab-06.1'/);
     expect(read('packages/db/migrations/047_agent_bridge_oauth_lifecycle.sql')).toMatch(/token_issued_at/);
+    expect(read('packages/db/migrations/048_agent_bridge_oauth_redeem_diag.sql')).toMatch(/last_oauth_reason/);
   });
 
   it('redeems codes atomically with binding checks before consume', () => {
@@ -27,6 +28,12 @@ describe('AB-09 source contracts', () => {
     expect(runtime).toMatch(/isNull\(agentBridgeOauthCodes\.usedAt\)/);
     expect(runtime).toMatch(/markAgentBridgeTokenIssued/);
     expect(runtime).toMatch(/pendingGrantForReuse/);
+    expect(runtime).toMatch(/resolveOauthRedemptionTenant/);
+    expect(runtime).not.toMatch(/tenantHint\?\.trim\(\) \|\| tenantIdFromBoundToken/);
+    expect(runtime).toMatch(/recordOauthRedeemDiagnostic/);
+    expect(runtime).toMatch(/pinTenantGuc/);
+    expect(token).toMatch(/X-BookOne-OAuth-Request-Id/);
+    expect(token).toMatch(/newOauthRequestId/);
   });
 
   it('consent Allow records a grant, Cancel denies without a connection, untrusted redirect stays local', () => {
@@ -36,6 +43,8 @@ describe('AB-09 source contracts', () => {
     expect(authorize).toMatch(/decision === 'deny'/);
     expect(authorize).toMatch(/untrusted_redirect/);
     expect(authorize).toMatch(/recordAgentBridgeConnection/);
+    expect(authorize).toMatch(/recordOauthRedeemDiagnostic/);
+    expect(authorize).toMatch(/newOauthRequestId/);
     expect(authorize).toMatch(/authorizationCallbackUrl/);
     expect(authorize).toMatch(/\/login\?from=\$\{next\}/);
     expect(authorize).not.toMatch(/status: c\.revokedAt \? 'Revoked' : 'Active'/);
@@ -45,6 +54,7 @@ describe('AB-09 source contracts', () => {
     const page = read('apps/web/src/app/company/agent-bridge/page.tsx');
     expect(page).toMatch(/connectionLifecycle/);
     expect(page).toMatch(/summarizeConnectionLifecycle/);
+    expect(page).toMatch(/formatStoredOauthDiagnostic/);
     expect(page).not.toMatch(/status: c\.revokedAt \? 'Revoked' : 'Active'/);
     expect(page).not.toMatch(/connections\.filter\(\(c\) => !c\.revokedAt\)\.length/);
   });

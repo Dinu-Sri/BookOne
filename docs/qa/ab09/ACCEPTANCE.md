@@ -1,6 +1,6 @@
 # AB-09 acceptance matrix
 
-Product **2.11.1**. Base `514e51b` (v2.11.0). Schema `ab-06.1`. CoreGuard `ab-09`.
+Product **2.11.2**. Base `b7e7499` (v2.11.1). Schema `ab-06.1`. CoreGuard `ab-09`.
 
 | Area | Result | Evidence |
 |------|--------|----------|
@@ -14,6 +14,6 @@ Product **2.11.1**. Base `514e51b` (v2.11.0). Schema `ab-06.1`. CoreGuard `ab-09
 | Codex loopback page | DOCUMENTED | Client-owned; BookOne does not theme it |
 | Prompts | PASS (unit) | Codex CLI commands on their own lines; Claude `Name: BookOne AgentBridge` once |
 | AB-07/AB-08 retained | PASS (source) | discovery, `/authorize` alias, two prompts, Company AgentBridge |
-| Live Codex login | LIVE-UNVERIFIED | Independent retry after owner Portainer Re-pull. Do not replay the 18 Nov 2026 consumed code |
+| Live Codex login | LIVE-UNVERIFIED | v2.11.1 retest still `invalid_grant`. This candidate adds a sanitized request-id/reason-enum diagnostic and makes tenant-bound codes win over a hint. It is not a live-tested Codex fix. Independent retry after owner Portainer Re-pull. Do not replay consumed codes. Preserve the saved Codex entry and original grant |
 
 Do not treat this matrix as customer-ready or as a live Codex/Claude connection.

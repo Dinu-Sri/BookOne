@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { createPkcePair, MemoryAuthorizationCodeStore, type AuthorizationCode } from '../src/oauth';
 import {
+  createPkcePair,
+  encodeTenantBoundCode,
+  MemoryAuthorizationCodeStore,
+  type AuthorizationCode,
+} from '../src/oauth';
+import {
+  compareRedirectUris,
   decideOauthCodeRedemption,
+  formatOauthRedeemDiagnostic,
+  oauthRedeemLogLine,
   redeemStoredCode,
   redirectUrisMatch,
+  resolveOauthRedemptionTenant,
   type MutableCodeStore,
 } from '../src/oauth-redeem';
 
@@ -145,5 +154,96 @@ describe('AB-09 OAuth code redemption', () => {
       },
     );
     expect(decision.action).toBe('issue');
+  });
+
+  it('classifies rejection reasons without consuming on binding mismatch', () => {
+    const pkce = createPkcePair();
+    const row = codeRow({ codeChallenge: pkce.challenge });
+    expect(decideOauthCodeRedemption(null, { clientId: row.clientId, redirectUri: row.redirectUri }).reason).toBe(
+      'row_missing_or_rls_hidden',
+    );
+    expect(
+      decideOauthCodeRedemption({ ...row, usedAt: Date.now() }, { clientId: row.clientId, redirectUri: row.redirectUri })
+        .reason,
+    ).toBe('used_code');
+    expect(
+      decideOauthCodeRedemption(row, { clientId: 'bookone-claude', redirectUri: row.redirectUri, codeVerifier: pkce.verifier })
+        .reason,
+    ).toBe('client_mismatch');
+    expect(
+      decideOauthCodeRedemption(row, {
+        clientId: row.clientId,
+        redirectUri: 'http://localhost:43111/callback/989kWVAG9tcl',
+        codeVerifier: pkce.verifier,
+      }).reason,
+    ).toBe('redirect_mismatch');
+  });
+
+  it('lets a tenant-bound code win over a different tenant hint', () => {
+    const tenant = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+    const other = 'ffffffff-0000-4000-8000-999999999999';
+    const code = encodeTenantBoundCode(tenant);
+    const bound = resolveOauthRedemptionTenant({ code, tenantHint: other });
+    expect(bound.tenantId).toBe(tenant);
+    expect(bound.usedBoundTenant).toBe(true);
+    expect(bound.usedHint).toBe(false);
+    expect(bound.hintMatchesBound).toBe(false);
+    const fallback = resolveOauthRedemptionTenant({ code: 'not-a-bound-code', tenantHint: other });
+    expect(fallback.tenantId).toBe(other);
+    expect(fallback.usedHint).toBe(true);
+    expect(resolveOauthRedemptionTenant({ code: 'not-a-bound-code' }).tenantId).toBeNull();
+  });
+
+  it('records redirect host comparison as booleans and does not alias localhost', () => {
+    const stored = 'http://127.0.0.1:43111/callback/989kWVAG9tcl';
+    const presented = 'http://localhost:43111/callback/989kWVAG9tcl';
+    const cmp = compareRedirectUris(stored, presented);
+    expect(cmp.exactEqual).toBe(false);
+    expect(cmp.hostsEqual).toBe(false);
+    expect(cmp.portsEqual).toBe(true);
+    expect(cmp.pathsEqual).toBe(true);
+    expect(cmp.storedHost).toBe('127.0.0.1');
+    expect(cmp.presentedHost).toBe('localhost');
+  });
+
+  it('formats and logs diagnostics without secrets', () => {
+    const diagnostic = {
+      requestId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      reason: 'redirect_mismatch' as const,
+      at: '2026-11-19T12:00:00.000Z',
+      flags: {
+        boundPresent: true,
+        hintPresent: false,
+        usedBoundTenant: true,
+        usedHint: false,
+        hintMatchesBound: null,
+        rowFound: true,
+        consumed: false,
+        clientMatches: true,
+        tenantGucPresent: true,
+        tenantGucMatches: true,
+        tenantGucResetInTransaction: false,
+        hostsEqual: false,
+        portsEqual: true,
+        pathsEqual: true,
+        schemesEqual: true,
+        exactRedirectEqual: false,
+        storedHost: '127.0.0.1',
+        presentedHost: 'localhost',
+        storedPort: '43111',
+        presentedPort: '43111',
+        codeLength: 81,
+        verifierPresent: true,
+        challengeMethod: 'S256',
+      },
+    };
+    const text = formatOauthRedeemDiagnostic(diagnostic);
+    const log = oauthRedeemLogLine(diagnostic);
+    expect(text).toMatch(/redirect_mismatch/);
+    expect(text).toMatch(/Hosts equal: no \(127\.0\.0\.1 vs localhost\)/);
+    expect(text).toMatch(/Request aaaaaaaa/);
+    expect(log).toMatch(/"reason":"redirect_mismatch"/);
+    expect(text).not.toMatch(/code_verifier|refresh_token|access_token|BEGIN /i);
+    expect(log).not.toMatch(/code_verifier|refresh_token|access_token|BEGIN /i);
   });
 });

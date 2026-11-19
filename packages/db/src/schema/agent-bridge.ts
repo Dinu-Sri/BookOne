@@ -115,6 +115,10 @@ export const agentBridgeConnections = pgTable('agent_bridge_connections', {
   label: text('label'),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   tokenIssuedAt: timestamp('token_issued_at', { withTimezone: true }),
+  lastOauthRequestId: uuid('last_oauth_request_id'),
+  lastOauthReason: varchar('last_oauth_reason', { length: 80 }),
+  lastOauthAt: timestamp('last_oauth_at', { withTimezone: true }),
+  lastOauthFlags: jsonb('last_oauth_flags'),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -175,6 +179,7 @@ export const agentBridgeOauthCodes = pgTable('agent_bridge_oauth_codes', {
   codeChallengeMethod: varchar('code_challenge_method', { length: 10 }).notNull().default('S256'),
   scopes: text('scopes').notNull(),
   connectionId: uuid('connection_id'),
+  requestId: uuid('request_id').notNull().defaultRandom(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   usedAt: timestamp('used_at', { withTimezone: true }),
 });

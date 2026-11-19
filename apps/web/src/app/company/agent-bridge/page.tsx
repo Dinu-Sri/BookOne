@@ -13,6 +13,7 @@ import {
   companyAccessReadiness,
   connectedClientsReadiness,
   connectionLifecycle,
+  formatStoredOauthDiagnostic,
   effectiveFlagsExplanation,
   ensureOauthSigningPem,
   publicOrigin,
@@ -127,6 +128,7 @@ export default async function CompanyAgentBridgePage({
             status: life.label,
             lastUsed: life.lastUsedLabel,
             created: formatStamp(c.createdAt),
+            lastOauth: c.lastOauth ? formatStoredOauthDiagnostic(c.lastOauth) : null,
             canRevoke: canRevoke && !c.revokedAt,
           };
         })}

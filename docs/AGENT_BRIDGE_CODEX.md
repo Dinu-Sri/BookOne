@@ -25,7 +25,7 @@ Vendor docs used while writing (2026-11-17): [Codex MCP](https://learn.chatgpt.c
 2. Create or select a **fresh synthetic** company. Turn Document Inbox on there. Leave draft-only and posting-disable on until independent QA authorizes a posting check.
 3. Set `AGENT_BRIDGE_PUBLIC_URL` to that HTTPS origin.
 4. Production tokens: usual Portainer Re-pull. BookOne generates a persistent PKCS8 key on first use (see `docs/AGENT_BRIDGE_SIGNING_STAGING.md`). Copy **Connect with Codex** from Company → AgentBridge (`/company/agent-bridge`). **Do not** set `AGENT_BRIDGE_ALLOW_HMAC=1` on staging as a substitute.
-5. Tenant is encoded in the authorization code. `AGENT_BRIDGE_OAUTH_TENANT_HINT` / `tenant_id` are optional fallbacks for legacy codes.
+5. Tenant is encoded in the authorization code. `AGENT_BRIDGE_OAUTH_TENANT_HINT` / `tenant_id` are optional fallbacks only for legacy unbound codes. A tenant-bound code wins over a hint. Token exchange keeps exact `redirect_uri` matching. After a failed login, Company → AgentBridge shows a sanitized last-attempt reason and request id (never the code, verifier, or tokens).
 6. A human BookOne user with Inbox write signs in during the browser consent step. Consent grants read/upload/draft only.
 
 BookOne does not implement Dynamic Client Registration. Always pass `--oauth-client-id bookone-codex`.

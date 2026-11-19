@@ -24,7 +24,7 @@ Claude custom connectors are reached from **Anthropic’s cloud**, not from the 
 2. Create or select a **fresh synthetic** company. Turn Document Inbox on there. Leave draft-only and posting-disable on until independent QA authorizes a posting check.
 3. Set `AGENT_BRIDGE_PUBLIC_URL` to that HTTPS origin (port 443).
 4. Production tokens: usual Portainer Re-pull. BookOne generates a persistent PKCS8 key on first use (see `docs/AGENT_BRIDGE_SIGNING_STAGING.md`). Copy **Connect with Claude** from Company → AgentBridge (`/company/agent-bridge`). **Do not** set `AGENT_BRIDGE_ALLOW_HMAC=1` on staging as a substitute.
-5. Tenant is encoded in the authorization code. `AGENT_BRIDGE_OAUTH_TENANT_HINT` / `tenant_id` are optional fallbacks for legacy codes.
+5. Tenant is encoded in the authorization code. `AGENT_BRIDGE_OAUTH_TENANT_HINT` / `tenant_id` are optional fallbacks only for legacy unbound codes. A tenant-bound code wins over a hint.
 6. Allow Anthropic IP ranges if a firewall sits in front of BookOne.
 7. A human BookOne user with Inbox write signs in during the browser consent step. Consent grants read/upload/draft only.
 

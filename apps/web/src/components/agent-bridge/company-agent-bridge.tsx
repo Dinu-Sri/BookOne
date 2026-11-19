@@ -33,6 +33,7 @@ export type AgentBridgeClientRow = {
   status: string;
   lastUsed: string;
   created: string;
+  lastOauth?: string | null;
   canRevoke: boolean;
 };
 
@@ -350,7 +351,10 @@ export function CompanyAgentBridge({
                       <td>{row.label}</td>
                       <td>{row.companyName}</td>
                       <td>{row.scopes}</td>
-                      <td>{row.status}</td>
+                      <td>
+                        <div>{row.status}</div>
+                        {row.lastOauth ? <p className="ab-oauth-diag">{row.lastOauth}</p> : null}
+                      </td>
                       <td>{row.lastUsed}</td>
                       <td>{row.created}</td>
                       <td>{row.canRevoke ? <RevokeAccess connectionId={row.id} label={row.label} /> : null}</td>

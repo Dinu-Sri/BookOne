@@ -6,16 +6,19 @@ import {
   encodeTenantBoundCode,
   findPublicClient,
   newId,
+  newOauthRequestId,
   oauthIssuer,
   publicOrigin,
   redirectUriAllowed,
   renderConsentPage,
   resourceAllowed,
   safeOAuthDenialUrl,
+  buildOauthRedeemDiagnostic,
+  emptyOauthRedeemFlags,
 } from '@bookone/agent-bridge';
 import { requireTenantContext } from '@bookone/auth';
 import { db, eq, tenants, withTenantContext } from '@bookone/db';
-import { recordAgentBridgeConnection, saveOauthCode } from '@/lib/agent-bridge-runtime';
+import { recordAgentBridgeConnection, recordOauthRedeemDiagnostic, saveOauthCode } from '@/lib/agent-bridge-runtime';
 import { loadAgentBridgeFlags } from '@/lib/agent-bridge-runtime';
 
 export const runtime = 'nodejs';
@@ -186,6 +189,7 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     });
     const code = encodeTenantBoundCode(user.tenantId);
+    const requestId = newOauthRequestId();
     await saveOauthCode({
       code,
       tenantId: user.tenantId,
@@ -196,9 +200,35 @@ export async function POST(req: NextRequest) {
       codeChallengeMethod: 'S256',
       scopes: scopes.join(','),
       connectionId,
+      requestId,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
-    return NextResponse.redirect(authorizationCallbackUrl(redirectUri, { code, state, issuer }));
+    await recordOauthRedeemDiagnostic({
+      tenantId: user.tenantId,
+      connectionId,
+      clientId,
+      diagnostic: buildOauthRedeemDiagnostic({
+        requestId,
+        reason: 'code_issued',
+        flags: emptyOauthRedeemFlags({
+          boundPresent: true,
+          usedBoundTenant: true,
+          rowFound: true,
+          codeLength: code.length,
+          storedHost: (() => {
+            try {
+              return new URL(redirectUri).hostname;
+            } catch {
+              return null;
+            }
+          })(),
+          challengeMethod: 'S256',
+        }),
+      }),
+    });
+    const redirect = NextResponse.redirect(authorizationCallbackUrl(redirectUri, { code, state, issuer }));
+    redirect.headers.set('X-BookOne-OAuth-Request-Id', requestId);
+    return redirect;
   } catch {
     return html(
       'server_error',

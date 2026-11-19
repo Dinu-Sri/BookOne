@@ -4,7 +4,7 @@ Unpaid domestic local-currency supplier **service/expense** invoices: connect an
 
 Feature flags default **off**. Draft-only and posting-disable default **on**. Keep posting disabled until independent QA accepts this candidate and the owner deploys. Existing purchase screens stay usable when AgentBridge is off.
 
-Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.11.1**.
+Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Product version **2.11.2**.
 
 ## Supported in this build
 
@@ -19,9 +19,9 @@ Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Produ
 - Batch manifest: one item per file, per-item status, no implicit batch approval.
 - Lookups: approved suppliers, expense accounts, own proposals. Ambiguous matches become issues; new suppliers/accounts are not created.
 - Strict MCP/API schemas (`additionalProperties: false`). MCP protocol negotiate `2025-03-26` and `2024-11-05`; incompatible versions are rejected.
-- OAuth discovery is public (no session 307). `/.well-known/oauth-protected-resource`, path-appended `/.well-known/oauth-protected-resource/api/agent-bridge/mcp`, `/.well-known/oauth-authorization-server`, `/.well-known/jwks.json`. MCP unauthenticated initialize returns 401 with `WWW-Authenticate` `resource_metadata`. Authorization code + PKCE S256 + refresh_token for public clients `bookone-codex` and `bookone-claude`. Consent always grants `read upload draft` (never post). Tenant is encoded in the authorization code. Authorization responses include RFC 9207 `iss`. Issuer `/authorize` aliases `/api/agent-bridge/oauth/authorize`. Loopback callbacks allow `/callback` and `/callback/<id>` on 127.0.0.1/localhost. Token exchange matches the stored `redirect_uri` exactly (`127.0.0.1` is not `localhost`). Codes are redeemed atomically: binding mismatches do not burn the code; PKCE/expiry failures do; mint-not-ready leaves the code unused. The BookOne consent page is branded; Cancel is `access_denied` only for a validated redirect. The local “Authentication complete” page after Allow is served by Codex on loopback, not by BookOne.
+- OAuth discovery is public (no session 307). `/.well-known/oauth-protected-resource`, path-appended `/.well-known/oauth-protected-resource/api/agent-bridge/mcp`, `/.well-known/oauth-authorization-server`, `/.well-known/jwks.json`. MCP unauthenticated initialize returns 401 with `WWW-Authenticate` `resource_metadata`. Authorization code + PKCE S256 + refresh_token for public clients `bookone-codex` and `bookone-claude`. Consent always grants `read upload draft` (never post). Tenant is encoded in the authorization code; a tenant hint is a fallback only for unbound legacy codes. Authorization responses include RFC 9207 `iss`. Issuer `/authorize` aliases `/api/agent-bridge/oauth/authorize`. Loopback callbacks allow `/callback` and `/callback/<id>` on 127.0.0.1/localhost. Token exchange matches the stored `redirect_uri` exactly (`127.0.0.1` is not `localhost`). Codes are redeemed atomically: binding mismatches do not burn the code; PKCE/expiry failures do; mint-not-ready leaves the code unused. Each authorize/token attempt records a non-secret request id and an internal reason enum (missing tenant binding, row missing/RLS-hidden, used code, client mismatch, redirect mismatch, expiry, PKCE mismatch) with boolean comparisons. Public token errors stay generic `invalid_grant`. The BookOne consent page is branded; Cancel is `access_denied` only for a validated redirect. The local “Authentication complete” page after Allow is served by Codex on loopback, not by BookOne. This diagnostic path does not claim a live Codex login.
 - Effective scopes are token scopes INTERSECT current grants for the token subject. Human approval stays session-only.
-- Additive migration `046_agent_bridge_facts.sql` (last error/intake mode, upload sessions, batches, facts keys, oauth codes, connection scopes/last used). Additive `047_agent_bridge_oauth_lifecycle.sql` adds `token_issued_at` so consent is not labelled authenticated.
+- Additive migration `046_agent_bridge_facts.sql` (last error/intake mode, upload sessions, batches, facts keys, oauth codes, connection scopes/last used). Additive `047_agent_bridge_oauth_lifecycle.sql` adds `token_issued_at` so consent is not labelled authenticated. Additive `048_agent_bridge_oauth_redeem_diag.sql` stores a sanitized last-redemption diagnostic on the connection.
 - AB-02/AB-03/AB-04 gates retained: fail-closed approval, unique claim, token∩live grants, lost-response reconcile, blob storage-pointer remap, explicit `agent_bridge.approve` / `agent_bridge.post` keys.
 
 ## Out of this build
@@ -41,7 +41,7 @@ Failed documents can resume through the same facts form. Download the original f
 
 ## Owner configuration
 
-1. Apply migrations through startup `db:init` (`044`, `045`, `046`, `047`). Additive; do not drop prior AgentBridge tables.
+1. Apply migrations through startup `db:init` (`044`, `045`, `046`, `047`, `048`). Additive; do not drop prior AgentBridge tables.
 2. On **Company → AgentBridge**, enable Document Inbox only on the intended synthetic company. Leave draft-only and posting-disable on until independent QA says otherwise. Do not enable posting on the existing live company in this candidate. Copy the Codex or Claude connection prompt from that page.
 3. Grant `purchase.inbox.*`, `agent_bridge.approve`, and `agent_bridge.post` on Jobs if the tenant was seeded before catalog v2. `allows(key, 'write')` matches those exact catalog action keys (and a persisted `*.write` alias). Viewer stays read-only. Purchase module ceiling still applies.
 4. Set `AGENT_BRIDGE_PUBLIC_URL` (or `AUTH_URL`) to the public HTTPS origin so review URLs and OAuth metadata are absolute.
@@ -64,7 +64,7 @@ Failed documents can resume through the same facts form. Download the original f
 | `AGENT_BRIDGE_OAUTH_SIGNING_PEM_FILE` | Absolute path to a PKCS8 RSA private key. BookOne generates a key there once when the file is missing. When set, a missing file does not fall back to the env PEM body |
 | `AGENT_BRIDGE_OAUTH_SIGNING_PEM` | Optional PEM body if no `_FILE` path is set. Do not store this in Git |
 | `AGENT_BRIDGE_OAUTH_KID` | JWKS key id (default `bookone-agent-bridge`) |
-| `AGENT_BRIDGE_OAUTH_TENANT_HINT` | Optional tenant fallback when a legacy code is not tenant-bound |
+| `AGENT_BRIDGE_OAUTH_TENANT_HINT` | Optional tenant fallback only when a legacy code is not tenant-bound. Bound codes win. |
 | `AGENT_BRIDGE_ALLOW_HMAC` | Labelled production HMAC fixtures (`1`). Off by default in production. Not a live-client pass |
 | `AGENT_BRIDGE_OCR_ENDPOINT` / `AGENT_BRIDGE_OCR_KEY` / `AGENT_BRIDGE_OCR_LIVE` | Optional server OCR |
 | `AGENT_BRIDGE_STORE` | `memory` only for isolated tests |

@@ -25,10 +25,10 @@ async function pickSelect(page: Page, label: string, query: string) {
   if (await search.count()) {
     await search.fill(query);
   }
-  const option = page.getByRole('option', { name: new RegExp(query, 'i') }).first();
+  const option = page.getByRole('option').filter({ hasText: new RegExp(`^${query}\\b`) }).first();
   await expect(option).toBeVisible();
-  await option.click({ force: true });
-  await expect(combo).toContainText(new RegExp(query, 'i'));
+  await option.evaluate((el) => (el as HTMLButtonElement).click());
+  await expect(combo).toContainText(new RegExp(`^${query}\\b`));
 }
 
 async function pickOpeningDate(page: Page, iso: string) {

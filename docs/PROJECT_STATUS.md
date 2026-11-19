@@ -1,3 +1,7 @@
+## 2026-11-19 — Pilot CoreGuard Linux SelectField pick (v2.13.4)
+
+Candidate **2.13.4** on `fix/v2134-pilot-coreguard-linux-select` from origin/master `1c0b008` / v2.13.3. Docker web image `44563210797` failed the unmasked **Pilot custom-bank** step: opening Account line 2 stayed on 2500 after a Playwright force-click of 3000. This candidate picks the filtered option with a native click. Custom-bank amounts and Viewer read-only stay. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Pilot CoreGuard custom-bank integrated lane (v2.13.3)
 
 Candidate **2.13.3** on `feat/v2133-pilot-coreguard-custom-bank` from origin/master `5a96baf` / v2.13.2. Adds the integrated CoreGuard lane `pnpm coreguard:pilot` that drives actual BookOne against a disposable `bookone_test` database: custom bank 1101, opening 300, internal transfer 100, Viewer read-only, company isolation. Simple Entry From/To includes custom 11xx banks. Setup-order CSV/opening rehearsal and AgentBridge unpaid domestic bill fixture are included. Encrypted restore stays LAST. Live Codex/Claude stay blocked. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

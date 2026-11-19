@@ -1,3 +1,10 @@
+## 2026-11-19 — Pilot CoreGuard Linux SelectField pick (v2.13.4)
+
+- Record: [CHG-20261119-pilot-coreguard-linux-select](changes/CHG-20261119-pilot-coreguard-linux-select.md). Baseline product `1c0b008` / v2.13.3. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: opening Account line 2 pick uses a native option click after filtering by code so Linux Chromium applies 3000. Docker web image `44563210797` failed CoreGuard **Pilot custom-bank** with combobox still showing 2500. VERSION 2.13.4. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `pnpm coreguard:pilot` with `COREGUARD_PILOT_BROWSER=1` PASS after native option click: Playwright 2 passed (Owner 11.7s, Viewer 2.3s); oracle 3; auth 8 including postgres. Docker web image `44563210797` first failure preserved (line 2 stayed on 2500). CI evidence is the unmasked CoreGuard **Pilot custom-bank** step.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent disposable-company custom-bank review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Pilot CoreGuard custom-bank integrated lane (v2.13.3)
 
 - Record: [CHG-20261119-pilot-coreguard-custom-bank](changes/CHG-20261119-pilot-coreguard-custom-bank.md). Evidence [qa/coreguard/ACCEPTANCE.md](qa/coreguard/ACCEPTANCE.md). Baseline product `5a96baf` / v2.13.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

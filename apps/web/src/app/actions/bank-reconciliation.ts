@@ -8,7 +8,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { matchAll, type BookCandidate, type CanonicalStatementLine } from '@bookone/statement-import';
+import {
+  finishEligibility,
+  matchAll,
+  type BookCandidate,
+  type CanonicalStatementLine,
+} from '@bookone/statement-import';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -358,8 +363,24 @@ async function bookBalanceThrough(
 }
 
 async function refreshSessionCounts(tenantId: string, sessionId: string) {
+  const [session] = await db()
+    .select({
+      bankAccountId: bankReconciliationSessions.bankAccountId,
+      periodTo: bankReconciliationSessions.periodTo,
+      statementClosingBalance: bankReconciliationSessions.statementClosingBalance,
+    })
+    .from(bankReconciliationSessions)
+    .where(
+      and(
+        eq(bankReconciliationSessions.id, sessionId),
+        eq(bankReconciliationSessions.tenantId, tenantId),
+      ),
+    )
+    .limit(1);
+
   const cases = await db()
     .select({
+      id: bankReconciliationCases.id,
       state: bankReconciliationCases.state,
       caseType: bankReconciliationCases.caseType,
     })
@@ -382,9 +403,53 @@ async function refreshSessionCounts(tenantId: string, sessionId: string) {
     .from(bankReconciliationSessionImports)
     .where(eq(bankReconciliationSessionImports.sessionId, sessionId));
 
+  let outstandingNet = 0;
+  if (session) {
+    const waitingIds = cases
+      .filter((c) => c.caseType === 'outstanding_book' && c.state === 'confirmed')
+      .map((c) => c.id);
+    if (waitingIds.length > 0) {
+      const books = await db()
+        .select({
+          amount: transactions.amount,
+          direction: transactions.direction,
+          paymentAccountId: transactions.paymentAccountId,
+          transferSourceAccountId: transactions.transferSourceAccountId,
+        })
+        .from(bankReconciliationCaseBookTransactions)
+        .innerJoin(transactions, eq(transactions.id, bankReconciliationCaseBookTransactions.transactionId))
+        .where(
+          and(
+            inArray(bankReconciliationCaseBookTransactions.caseId, waitingIds),
+            isNull(bankReconciliationCaseBookTransactions.voidedAt),
+          ),
+        );
+      for (const row of books) {
+        const signed =
+          bookSignedAmount(
+            row.direction,
+            Number(row.amount),
+            row.paymentAccountId,
+            row.transferSourceAccountId,
+            session.bankAccountId,
+          ) ?? Number(row.amount);
+        outstandingNet += signed;
+      }
+    }
+  }
+  outstandingNet = Math.round(outstandingNet * 100) / 100;
+  const bookClose = session
+    ? await bookBalanceThrough(tenantId, session.bankAccountId, session.periodTo)
+    : null;
+  const bankClose = session?.statementClosingBalance != null ? Number(session.statementClosingBalance) : null;
+  const diff =
+    bankClose != null && bookClose != null
+      ? Math.round((bankClose - bookClose + outstandingNet) * 100) / 100
+      : 0;
+
   let status = 'ready';
   if (resolved > 0 && open > 0) status = 'in_progress';
-  if (cases.length > 0 && open === 0) status = 'in_progress'; // finish later sets reconciled
+  if (cases.length > 0 && open === 0) status = 'in_progress';
 
   await db()
     .update(bankReconciliationSessions)
@@ -392,6 +457,9 @@ async function refreshSessionCounts(tenantId: string, sessionId: string) {
       resolvedCaseCount: resolved,
       openCaseCount: open,
       sourceFileCount: files.length,
+      outstandingNet: outstandingNet.toFixed(2),
+      bookClosingBalanceSnapshot: bookClose != null ? bookClose.toFixed(2) : null,
+      differenceAmount: diff.toFixed(2),
       status,
       updatedAt: new Date(),
     })
@@ -1676,25 +1744,16 @@ export async function openReconciliationSession(
       const revBankClose = listItem.statementClosingBalance;
       const revBookClose = listItem.bookClosingBalance;
       const revOutstanding = listItem.outstandingNet;
-      const revDiff =
-        revBankClose != null && revBookClose != null
-          ? Math.round((revBankClose - revBookClose - revOutstanding) * 100) / 100
-          : listItem.differenceAmount;
-      const finishBlockers: string[] = [];
-      if ((tabCounts.decision ?? 0) > 0)
-        finishBlockers.push(`${tabCounts.decision} need decision`);
-      if ((tabCounts.transfers ?? 0) > 0)
-        finishBlockers.push(
-          `${tabCounts.transfers} possible transfer${(tabCounts.transfers ?? 0) === 1 ? '' : 's'}`,
-        );
-      if ((tabCounts.add ?? 0) > 0) finishBlockers.push(`${tabCounts.add} to add`);
-      if ((tabCounts.waiting ?? 0) > 0)
-        finishBlockers.push(`${tabCounts.waiting} waiting (mark still waiting)`);
-      if ((tabCounts.ready ?? 0) > 0)
-        finishBlockers.push(`${tabCounts.ready} ready to confirm`);
-      const tol = Number(session.toleranceAmount ?? 0.01);
-      if (Math.abs(revDiff) > tol)
-        finishBlockers.push(`Difference Rs. ${revDiff.toFixed(2)}`);
+      const finishEval = finishEligibility({
+        openCases: allCases.map((c) => ({ caseType: c.caseType, state: c.state })),
+        bankClose: revBankClose,
+        bookClose: revBookClose,
+        outstandingNet: revOutstanding,
+        differenceAmount: listItem.differenceAmount,
+        tolerance: Number(session.toleranceAmount ?? 0.01),
+      });
+      const revDiff = finishEval.difference;
+      const finishBlockers = finishEval.blockers;
 
       const review: ReconReviewSummary = {
         bankLines: session.bankLineCount,
@@ -2011,8 +2070,8 @@ export async function createCaseEntry(input: {
 }): Promise<{ ok: true; transactionId: string } | { ok: false; error: string }> {
   try {
     const caseId = z.string().uuid().parse(input.caseId);
-    const expenseCode = (input.expenseCode ?? '6000').slice(0, 20);
-    const incomeCode = (input.incomeCode ?? '4000').slice(0, 20);
+    const expenseCode = (input.expenseCode ?? '6800').slice(0, 20);
+    const incomeCode = (input.incomeCode ?? '4300').slice(0, 20);
     const user = await requireTenantContext();
 
     const prepared = await withTenantContext(user.tenantId, async () => {
@@ -2212,57 +2271,40 @@ export async function finishReconciliationSession(
         .limit(1);
       if (!session) throw new Error('Session not found.');
 
-      const openCases = await db()
-        .select({ id: bankReconciliationCases.id, caseType: bankReconciliationCases.caseType })
+      await refreshSessionCounts(user.tenantId, id);
+      const [fresh] = await db()
+        .select()
+        .from(bankReconciliationSessions)
+        .where(eq(bankReconciliationSessions.id, id))
+        .limit(1);
+      if (!fresh) throw new Error('Session not found.');
+
+      const allOpen = await db()
+        .select({ caseType: bankReconciliationCases.caseType, state: bankReconciliationCases.state })
         .from(bankReconciliationCases)
         .where(
           and(
             eq(bankReconciliationCases.sessionId, id),
             isNull(bankReconciliationCases.voidedAt),
-            inArray(bankReconciliationCases.state, [
-              'suggested',
-              'needs_review',
-              'deferred',
-              'reopened',
-            ]),
           ),
         );
-
-      // Allow outstanding_book to remain only if already confirmed as waiting
-      const blocking = openCases.filter((c) => c.caseType !== 'outstanding_book');
-      // Any open non-waiting work blocks finish
-      if (blocking.length > 0) {
-        throw new Error(
-          `${blocking.length} item${blocking.length === 1 ? '' : 's'} still need a decision. Finish those first.`,
-        );
-      }
-      // Open waiting items must be marked Still waiting first
-      const openWait = openCases.filter((c) => c.caseType === 'outstanding_book');
-      if (openWait.length > 0) {
-        throw new Error(
-          `${openWait.length} waiting item${openWait.length === 1 ? '' : 's'} still open — mark them as still waiting, or match them.`,
-        );
-      }
-
       const bankClose =
-        session.statementClosingBalance != null
-          ? Number(session.statementClosingBalance)
-          : null;
+        fresh.statementClosingBalance != null ? Number(fresh.statementClosingBalance) : null;
       const bookClose =
-        session.bookClosingBalanceSnapshot != null
-          ? Number(session.bookClosingBalanceSnapshot)
-          : null;
-      const outstandingNet = Number(session.outstandingNet);
-      const diff =
-        bankClose != null && bookClose != null
-          ? Math.round((bankClose - bookClose - outstandingNet) * 100) / 100
-          : Number(session.differenceAmount);
-      const tol = Number(session.toleranceAmount ?? 0.01);
-      if (Math.abs(diff) > tol) {
-        throw new Error(
-          `Difference left is Rs. ${diff.toFixed(2)}. It must be near zero (within ${tol}) before finish.`,
-        );
+        fresh.bookClosingBalanceSnapshot != null ? Number(fresh.bookClosingBalanceSnapshot) : null;
+      const outstandingNet = Number(fresh.outstandingNet);
+      const close = finishEligibility({
+        openCases: allOpen,
+        bankClose,
+        bookClose,
+        outstandingNet,
+        differenceAmount: Number(fresh.differenceAmount),
+        tolerance: Number(fresh.toleranceAmount ?? 0.01),
+      });
+      if (!close.ok) {
+        throw new Error(close.blockers.join(' · ') || 'This reconciliation is not ready to finish.');
       }
+      const diff = close.difference;
 
       const cases = await db()
         .select({
@@ -3084,6 +3126,14 @@ export async function exportReconciliationSummary(
 
 // ─── Simple two-pane compare ─────────────────────────────────────────
 
+export type CompareRowStatus =
+  | 'possible_match'
+  | 'bank_only'
+  | 'book_only'
+  | 'waiting'
+  | 'matched'
+  | 'needs_decision';
+
 export type CompareSideRow = {
   caseId: string;
   bankLineId: string | null;
@@ -3091,9 +3141,12 @@ export type CompareSideRow = {
   date: string;
   description: string;
   amount: number;
-  kind: 'suggested' | 'open';
+  reference: string | null;
+  kind: 'suggested' | 'open' | 'waiting' | 'matched';
+  status: CompareRowStatus;
   hint: string | null;
   pairCaseId: string | null;
+  selectable: boolean;
 };
 
 export type CompareBoard = {
@@ -3126,6 +3179,7 @@ export async function getCompareBoard(
           date: bankStatementLines.transactionDate,
           description: bankStatementLines.description,
           amount: bankStatementLines.amount,
+          reference: bankStatementLines.externalRef,
         })
         .from(bankReconciliationCases)
         .innerJoin(
@@ -3142,7 +3196,10 @@ export async function getCompareBoard(
             eq(bankReconciliationCases.tenantId, user.tenantId),
             isNull(bankReconciliationCases.voidedAt),
             inArray(bankReconciliationCases.caseType, ['match_1_1', 'create_entry', 'transfer', 'group_match']),
-            inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+            or(
+              inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+              eq(bankReconciliationCases.state, 'confirmed'),
+            ),
           ),
         )
         .orderBy(desc(bankStatementLines.transactionDate));
@@ -3158,6 +3215,7 @@ export async function getCompareBoard(
           date: transactions.date,
           description: transactions.description,
           amount: transactions.amount,
+          reference: transactions.receiptRef,
           direction: transactions.direction,
           paymentAccountId: transactions.paymentAccountId,
           transferSourceAccountId: transactions.transferSourceAccountId,
@@ -3177,13 +3235,24 @@ export async function getCompareBoard(
             eq(bankReconciliationCases.tenantId, user.tenantId),
             isNull(bankReconciliationCases.voidedAt),
             inArray(bankReconciliationCases.caseType, ['outstanding_book', 'match_1_1']),
-            inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+            or(
+              inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+              eq(bankReconciliationCases.state, 'confirmed'),
+            ),
           ),
         )
         .orderBy(desc(transactions.date));
 
       const bank: CompareSideRow[] = bankRows.map((r) => {
-        const suggested = r.caseType === 'match_1_1';
+        const confirmed = r.state === 'confirmed';
+        const suggested = r.caseType === 'match_1_1' && !confirmed;
+        const status: CompareRowStatus = confirmed
+          ? 'matched'
+          : r.caseType === 'match_1_1'
+            ? 'possible_match'
+            : r.caseType === 'transfer'
+              ? 'needs_decision'
+              : 'bank_only';
         return {
           caseId: r.caseId,
           bankLineId: r.bankLineId,
@@ -3191,13 +3260,18 @@ export async function getCompareBoard(
           date: r.date,
           description: r.description || 'Bank line',
           amount: Number(r.amount),
-          kind: suggested ? 'suggested' : 'open',
-          hint: suggested
-            ? r.explanation || 'Looks like a BookOne entry'
-            : r.caseType === 'transfer'
-              ? 'May be a transfer — match it or add to BookOne'
-              : 'Not in BookOne yet',
-          pairCaseId: suggested ? r.caseId : null,
+          reference: r.reference ?? null,
+          kind: confirmed ? 'matched' : suggested ? 'suggested' : 'open',
+          status,
+          hint: confirmed
+            ? 'Matched — links two existing records'
+            : suggested
+              ? r.explanation || 'Same amount and a nearby date'
+              : r.caseType === 'transfer'
+                ? 'May be a transfer — match it or add to BookOne'
+                : 'Not in BookOne yet — search first, then create if needed',
+          pairCaseId: r.caseType === 'match_1_1' ? r.caseId : null,
+          selectable: !confirmed,
         };
       });
 
@@ -3211,7 +3285,16 @@ export async function getCompareBoard(
             r.transferSourceAccountId,
             bankAccountId,
           ) ?? Number(r.amount);
-        const suggested = r.caseType === 'match_1_1';
+        const confirmed = r.state === 'confirmed';
+        const suggested = r.caseType === 'match_1_1' && !confirmed;
+        const waiting = r.caseType === 'outstanding_book' && confirmed;
+        const status: CompareRowStatus = waiting
+          ? 'waiting'
+          : confirmed && r.caseType === 'match_1_1'
+            ? 'matched'
+            : r.caseType === 'match_1_1'
+              ? 'possible_match'
+              : 'book_only';
         return {
           caseId: r.caseId,
           bankLineId: null,
@@ -3219,11 +3302,18 @@ export async function getCompareBoard(
           date: r.date,
           description: r.description || 'BookOne entry',
           amount: signed,
-          kind: suggested ? 'suggested' : 'open',
-          hint: suggested
-            ? r.explanation || 'Looks like a bank line'
-            : 'On the books, not on this statement',
-          pairCaseId: suggested ? r.caseId : null,
+          reference: r.reference ?? null,
+          kind: waiting ? 'waiting' : confirmed ? 'matched' : suggested ? 'suggested' : 'open',
+          status,
+          hint: waiting
+            ? 'Waiting to clear the bank'
+            : confirmed
+              ? 'Matched — links two existing records'
+              : suggested
+                ? r.explanation || 'Same amount and a nearby date'
+                : 'On the books, not on this statement',
+          pairCaseId: r.caseType === 'match_1_1' ? r.caseId : null,
+          selectable: !confirmed,
         };
       });
 

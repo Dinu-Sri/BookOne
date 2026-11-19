@@ -25,11 +25,25 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-export type DateParseResult = { iso: string; confidence: number };
+export type DateFormatHint = 'iso' | 'dmy' | 'mdy' | 'excel-serial' | 'auto';
+
+export type DateParseResult = { iso: string; confidence: number; original: string };
+
+export type DateParseOptions = {
+  format?: DateFormatHint;
+  dayFirst?: boolean;
+};
 
 /**
- * Ordered strategies: ISO → DD/MM/YYYY → DD-MM-YYYY → Mon DD YYYY / DD Mon YYYY
+ * Ordered strategies: ISO → explicit format → DD/MM/YYYY → Excel serial → named months.
+ * Two-digit years need an explicit format, or one part greater than 12.
  */
+
+function expandYear(year: number): number {
+  if (year >= 1000) return year;
+  if (year >= 100) return year;
+  return year >= 70 ? 1900 + year : 2000 + year;
+}
 function isValidCalendarDate(year: number, month: number, day: number): boolean {
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
   if (year < 1000 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return false;
@@ -37,76 +51,132 @@ function isValidCalendarDate(year: number, month: number, day: number): boolean 
   return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
 }
 
-function calendarDate(year: number, month: number, day: number, confidence: number): DateParseResult {
-  if (!isValidCalendarDate(year, month, day)) return { iso: '', confidence: 0 };
-  return { iso: ymd(year, month, day), confidence };
+function calendarDate(
+  year: number,
+  month: number,
+  day: number,
+  confidence: number,
+  original: string,
+): DateParseResult {
+  if (!isValidCalendarDate(year, month, day)) return { iso: '', confidence: 0, original };
+  return { iso: ymd(year, month, day), confidence, original };
 }
 
-export function parseStatementDate(value: unknown): DateParseResult {
+function slashParts(
+  a: number,
+  b: number,
+  year: number,
+  original: string,
+  format: DateFormatHint,
+  dayFirst: boolean,
+): DateParseResult {
+  const y = expandYear(year);
+  if (format === 'mdy' || (!dayFirst && format === 'auto')) {
+    return calendarDate(y, a, b, a > 12 || b > 12 ? 0.9 : 0.7, original);
+  }
+  if (format === 'dmy' || dayFirst) {
+    if (a > 12) return calendarDate(y, b, a, 0.95, original);
+    if (b > 12) return calendarDate(y, a, b, 0.9, original);
+    return calendarDate(y, b, a, format === 'dmy' ? 0.9 : 0.7, original);
+  }
+  if (a > 12) return calendarDate(y, b, a, 0.95, original);
+  if (b > 12) return calendarDate(y, a, b, 0.9, original);
+  return { iso: '', confidence: 0, original };
+}
+
+export function parseStatementDate(value: unknown, opts?: DateParseOptions): DateParseResult {
+  const format = opts?.format ?? 'auto';
+  const dayFirst = opts?.dayFirst !== false;
+  const original =
+    value instanceof Date && !Number.isNaN(value.getTime())
+      ? ymd(value.getFullYear(), value.getMonth() + 1, value.getDate())
+      : String(value ?? '').trim();
+
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    const y = value.getFullYear();
-    const m = value.getMonth() + 1;
-    const d = value.getDate();
-    return calendarDate(y, m, d, 0.95);
+    return calendarDate(value.getFullYear(), value.getMonth() + 1, value.getDate(), 0.95, original);
   }
 
-  const trimmed = String(value ?? '').trim();
-  if (!trimmed) return { iso: '', confidence: 0 };
+  const trimmed = original;
+  if (!trimmed) return { iso: '', confidence: 0, original: '' };
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const y = Number(trimmed.slice(0, 4));
-    const m = Number(trimmed.slice(5, 7));
-    const d = Number(trimmed.slice(8, 10));
-    // Impossible calendar values must not fall through to Date.parse rollover.
-    return calendarDate(y, m, d, 1);
-  }
-
-  // DD/MM/YYYY or D/M/YYYY (also DD-MM-YYYY)
-  const slash = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-  if (slash) {
-    const a = Number(slash[1]);
-    const b = Number(slash[2]);
-    const y = Number(slash[3]);
-    if (a > 12) {
-      return calendarDate(y, b, a, 0.95);
-    }
-    if (b > 12) {
-      return calendarDate(y, a, b, 0.9);
-    }
-    // Ambiguous: prefer DD/MM (Sri Lanka)
-    return calendarDate(y, b, a, 0.7);
-  }
-
-  // Excel serial date (days since 1899-12-30)
-  if (/^\d+(\.\d+)?$/.test(trimmed)) {
-    const serial = Number(trimmed);
-    if (serial > 20000 && serial < 80000) {
-      const epoch = new Date(Date.UTC(1899, 11, 30));
-      epoch.setUTCDate(epoch.getUTCDate() + Math.floor(serial));
-      return {
-        iso: epoch.toISOString().slice(0, 10),
-        confidence: 0.85,
-      };
+  if (format === 'iso' || format === 'auto') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const y = Number(trimmed.slice(0, 4));
+      const m = Number(trimmed.slice(5, 7));
+      const d = Number(trimmed.slice(8, 10));
+      return calendarDate(y, m, d, 1, original);
     }
   }
 
-  // "30 Feb 2026" / "28 February 2026"
+  if (format === 'excel-serial' || format === 'auto') {
+    if (/^\d+(\.\d+)?$/.test(trimmed)) {
+      const serial = Number(trimmed);
+      if (serial > 20000 && serial < 80000) {
+        const epoch = new Date(Date.UTC(1899, 11, 30));
+        epoch.setUTCDate(epoch.getUTCDate() + Math.floor(serial));
+        return {
+          iso: epoch.toISOString().slice(0, 10),
+          confidence: 0.85,
+          original,
+        };
+      }
+    }
+  }
+
+  const slash4 = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (slash4 && format !== 'iso' && format !== 'excel-serial') {
+    return slashParts(Number(slash4[1]), Number(slash4[2]), Number(slash4[3]), original, format, dayFirst);
+  }
+
+  const slash2 = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+  if (slash2 && format !== 'iso' && format !== 'excel-serial') {
+    const a = Number(slash2[1]);
+    const b = Number(slash2[2]);
+    const y = Number(slash2[3]);
+    const explicit = format === 'dmy' || format === 'mdy';
+    const unambiguous = a > 12 || b > 12;
+    if (explicit || unambiguous) {
+      return slashParts(a, b, y, original, format, dayFirst);
+    }
+    return { iso: '', confidence: 0, original };
+  }
+
+  if (format === 'iso' || format === 'excel-serial') {
+    return { iso: '', confidence: 0, original };
+  }
+
   const dmyNamed = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})$/);
   if (dmyNamed) {
     const month = monthNumber(dmyNamed[2]!);
-    if (!month) return { iso: '', confidence: 0 };
-    return calendarDate(Number(dmyNamed[3]), month, Number(dmyNamed[1]), 0.8);
+    if (!month) return { iso: '', confidence: 0, original };
+    return calendarDate(Number(dmyNamed[3]), month, Number(dmyNamed[1]), 0.8, original);
   }
 
-  // "Feb 30, 2026" / "July 28 2026"
   const mdyNamed = trimmed.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
   if (mdyNamed) {
     const month = monthNumber(mdyNamed[1]!);
-    if (!month) return { iso: '', confidence: 0 };
-    return calendarDate(Number(mdyNamed[3]), month, Number(mdyNamed[2]), 0.75);
+    if (!month) return { iso: '', confidence: 0, original };
+    return calendarDate(Number(mdyNamed[3]), month, Number(mdyNamed[2]), 0.75, original);
   }
 
-  return { iso: '', confidence: 0 };
+  return { iso: '', confidence: 0, original };
+}
+
+export function detectDateFormat(samples: unknown[]): DateFormatHint {
+  let iso = 0;
+  let serial = 0;
+  let slash = 0;
+  for (const sample of samples) {
+    const t = String(sample ?? '').trim();
+    if (!t) continue;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) iso += 1;
+    else if (/^\d+(\.\d+)?$/.test(t) && Number(t) > 20000 && Number(t) < 80000) serial += 1;
+    else if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(t)) slash += 1;
+  }
+  if (iso > 0 && iso >= serial && iso >= slash) return 'iso';
+  if (serial > 0 && serial >= iso && serial >= slash) return 'excel-serial';
+  if (slash > 0) return 'dmy';
+  return 'auto';
 }
 
 const MONTH_INDEX: Record<string, number> = {

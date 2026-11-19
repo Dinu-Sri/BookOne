@@ -20,12 +20,17 @@ describe('parseStatementDate SL bias', () => {
   });
 
   it('accepts a real February date', () => {
-    expect(parseStatementDate('2026-02-28')).toEqual({ iso: '2026-02-28', confidence: 1 });
+    expect(parseStatementDate('2026-02-28')).toEqual({
+      iso: '2026-02-28',
+      confidence: 1,
+      original: '2026-02-28',
+    });
   });
 
   it('rejects impossible calendar dates instead of rolling them over', () => {
     for (const value of ['2026-02-30', '2026-13-01', '31/04/2026']) {
-      expect(parseStatementDate(value)).toEqual({ iso: '', confidence: 0 });
+      expect(parseStatementDate(value).iso).toBe('');
+      expect(parseStatementDate(value).confidence).toBe(0);
     }
   });
 
@@ -38,8 +43,8 @@ describe('parseStatementDate SL bias', () => {
 
   it('accepts named 28 Feb and rejects named 30 Feb without Date.parse rollover', () => {
     expect(parseStatementDate('28 Feb 2026').iso).toBe('2026-02-28');
-    expect(parseStatementDate('30 Feb 2026')).toEqual({ iso: '', confidence: 0 });
-    expect(parseStatementDate('Feb 30, 2026')).toEqual({ iso: '', confidence: 0 });
+    expect(parseStatementDate('30 Feb 2026').iso).toBe('');
+    expect(parseStatementDate('Feb 30, 2026').iso).toBe('');
   });
 });
 

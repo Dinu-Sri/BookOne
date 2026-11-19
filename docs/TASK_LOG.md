@@ -1,3 +1,10 @@
+## 2026-11-19 — Bank reconciliation simple compare (v2.14.0)
+
+- Record: [CHG-20261119-bank-recon-simple-compare](changes/CHG-20261119-bank-recon-simple-compare.md). Baseline product `274050f` / v2.13.4. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: ISO/serial CSV dates stay canonical through preview and save. Studio always confirms the bank, skips a one-sheet file with a Change reason, shows Date · Description · Bank reference · Money · Running balance, and shows the statement equation 1,000 + 625 − 225 = 1,400 before save. Compare is Bank left / BookOne right with Confirm match, Search BookOne before create, and Review & finish only when eligible. Matching existing records does not create journals. Finish uses `bankClose − bookClose + outstandingNet`. Seeded CoreGuard `bank-recon.v1` (1102, opening 1,000, +500/−200/+125, BookOne-only +60, fee created in the run) lives inside `pnpm coreguard:pilot`. VERSION 2.14.0. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/statement-import` 41 passed including ISO/serial/invalid and finish eligibility. `@bookone/accounting` bank-recon oracle 3 passed. `@bookone/auth` custom-bank contract 3 and UI-02 lint 6 passed. CoreGuard browser evidence is CI `pnpm coreguard:pilot`.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent disposable-company bank-recon review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Pilot CoreGuard Linux SelectField pick (v2.13.4)
 
 - Record: [CHG-20261119-pilot-coreguard-linux-select](changes/CHG-20261119-pilot-coreguard-linux-select.md). Baseline product `1c0b008` / v2.13.3. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

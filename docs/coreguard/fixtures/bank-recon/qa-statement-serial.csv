@@ -1,0 +1,5 @@
+Date,Description,Reference,Debit,Credit,Balance
+46329,QA customer receipt,QA-REC-001,,500.00,1500.00
+46332,QA supplier payment,QA-PAY-001,200.00,,1300.00
+46337,QA second receipt,QA-REC-002,,125.00,1425.00
+46344,QA bank service fee,QA-FEE-001,25.00,,1400.00

@@ -28,6 +28,7 @@ import type { LiquidAccount } from '@/app/actions/cashbook-banks';
 // Client-safe entry only — main package pulls node:crypto (breaks next build)
 import {
   collectUnknownMoneyLabels,
+  mappingIsConfident,
   type AmountMode,
   type AmountRules,
   type StudioLine,
@@ -47,6 +48,7 @@ type Phase =
   | 'date'
   | 'description'
   | 'money'
+  | 'map'
   | 'resolve'
   | 'review'
   | 'done';
@@ -61,6 +63,26 @@ function formatRs(n: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function formatLkr(n: number) {
+  return n.toLocaleString('en-LK', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function moneyLabel(mapping: StudioMapping): string {
+  const ar = mapping.amountRules;
+  if (ar.mode === 'debit_credit') return 'Money out / Money in';
+  if (ar.mode === 'amount_with_type') return 'Amount + direction';
+  if (ar.mode === 'signed_amount') return 'Signed amount';
+  return 'Money';
+}
+
+function dateFormatExample(format: StudioMapping['dateFormat']): string {
+  if (format === 'iso') return '2026-11-03 stays 2026-11-03';
+  if (format === 'excel-serial') return 'Excel serial → 2026-11-03';
+  if (format === 'dmy') return '31/12/26 → 2026-12-31';
+  if (format === 'mdy') return '12/31/26 → 2026-12-31';
+  return 'Use the date column as shown';
 }
 
 /** Clear fix guidance for the review problems modal */
@@ -151,6 +173,7 @@ const STEP_META: Record<Phase, { step: StudioStepId; index: number }> = {
   date: { step: 'date', index: 5 },
   description: { step: 'description', index: 6 },
   money: { step: 'money', index: 7 },
+  map: { step: 'review', index: 8 },
   resolve: { step: 'review', index: 8 },
   review: { step: 'review', index: 8 },
   done: { step: 'import', index: 9 },
@@ -214,6 +237,7 @@ export function BankImportStudioWizard({
   const [commitConfirm, setCommitConfirm] = useState<null | { skipErrorLines?: boolean; message: string }>(
     null,
   );
+  const [skippedSheetReason, setSkippedSheetReason] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const idempotencyRef = useRef(`studio-${Date.now()}`);
@@ -324,7 +348,7 @@ export function BankImportStudioWizard({
       };
     }
 
-    if (phase === 'money' || phase === 'review' || phase === 'resolve') {
+    if (phase === 'money' || phase === 'map' || phase === 'review' || phase === 'resolve') {
       const ar = mapping.amountRules;
       if (ar.mode === 'debit_credit') {
         if (ar.moneyOutCol != null) {
@@ -411,12 +435,9 @@ export function BankImportStudioWizard({
         setDraft(res.draft);
         setSheetName(res.draft.inspection?.bestSheetName ?? null);
         idempotencyRef.current = `studio-${res.draft.id}`;
-        if (res.draft.bankAccountId) {
-          setBankId(res.draft.bankAccountId);
-          setPhase('sheet');
-        } else {
-          setPhase('account');
-        }
+        if (res.draft.bankAccountId) setBankId(res.draft.bankAccountId);
+        setSkippedSheetReason(null);
+        setPhase('account');
       });
     });
   }
@@ -438,12 +459,22 @@ export function BankImportStudioWizard({
           setError(res.error);
           return;
         }
-        setDraft({
+        const nextDraft = {
           ...draft,
           bankAccountId: bankId,
           draftVersion: res.draftVersion,
           wizardStep: 'sheet',
-        });
+        };
+        setDraft(nextDraft);
+        const sheets = nextDraft.inspection?.sheets ?? [];
+        if (sheets.length <= 1) {
+          const name = sheets[0]?.name ?? sheetName ?? 'Sheet1';
+          setSheetName(name);
+          setSkippedSheetReason(`This file has one sheet (${name}).`);
+          continueSheetWith(nextDraft, name);
+          return;
+        }
+        setSkippedSheetReason(null);
         setPhase('sheet');
       });
     });
@@ -454,20 +485,35 @@ export function BankImportStudioWizard({
       setError('Select a sheet');
       return;
     }
+    continueSheetWith(draft, sheetName);
+  }
+
+  function continueSheetWith(
+    current: StudioDraftView,
+    name: string,
+  ) {
+    if (!file || !bankId) {
+      setError('Select a sheet');
+      return;
+    }
     setError(null);
     startTransition(() => {
-      runPreview(file, bankId, sheetName, null).then((res) => {
+      runPreview(file, bankId, name, null).then((res) => {
         if (!res.ok) {
           setError(res.error);
           return;
         }
         setPreview(res.preview);
         setMapping(res.preview.suggested);
+        const inferredOpen = res.preview.transform.inferredOpening;
+        const inferredClose = res.preview.transform.inferredClosing;
+        if (!openingBalance && inferredOpen != null) setOpeningBalance(String(inferredOpen));
+        if (!closingBalance && inferredClose != null) setClosingBalance(String(inferredClose));
         saveStudioDraftStep({
-          importId: draft.id,
-          expectedDraftVersion: draft.draftVersion,
+          importId: current.id,
+          expectedDraftVersion: current.draftVersion,
           wizardStep: 'table',
-          patch: { sheetName, mapping: res.preview.suggested },
+          patch: { sheetName: name, mapping: res.preview.suggested },
         }).then((s) => {
           if (!s.ok) {
             setError(s.error);
@@ -479,11 +525,11 @@ export function BankImportStudioWizard({
                   ...d,
                   draftVersion: s.draftVersion,
                   wizardStep: 'table',
-                  draftPayload: { ...d.draftPayload, sheetName },
+                  draftPayload: { ...d.draftPayload, sheetName: name },
                 }
               : d,
           );
-          setPhase('table');
+          setPhase(mappingIsConfident(res.preview.suggested) ? 'map' : 'table');
         });
       });
     });
@@ -670,10 +716,16 @@ export function BankImportStudioWizard({
     const t = preview?.transform;
     const good = t ? t.readyCount + t.warningCount : 0;
     const bad = t?.errorCount ?? 0;
+    const selected = bankOnly.find((b) => b.id === bankId);
+    const period =
+      t?.totals.periodFrom && t.totals.periodTo
+        ? `${t.totals.periodFrom} – ${t.totals.periodTo}`
+        : 'this statement period';
+    const account = selected ? `${selected.code} ${selected.shortName}` : 'the selected bank';
     const message =
       opts?.skipErrorLines && bad > 0
-        ? `Save ${good} good line(s) and skip ${bad} problem line(s)? Cashbook stays unchanged.`
-        : 'Save bank lines only? Your cashbook stays the same until you match later.';
+        ? `Save ${good} good line(s) for ${account}, ${period}, and skip ${bad} problem line(s)? Cashbook stays unchanged.`
+        : `Save ${good} bank line(s) for ${account}, ${period}? Opening ${openingBalance || t?.inferredOpening ?? '—'} · closing ${closingBalance || t?.inferredClosing ?? '—'} · ${t?.inputRowCount ?? 0} input rows. Cashbook stays the same until you match later.`;
     setCommitConfirm({ skipErrorLines: opts?.skipErrorLines, message });
   }
 
@@ -809,6 +861,9 @@ export function BankImportStudioWizard({
         onContinue={continueAccount}
         continueDisabled={!bankId}
       >
+        <p className="bis-money-label">
+          Confirm the named account for this file. The first eligible bank may already be selected.
+        </p>
         <div className="bis-cards">
           {bankOnly.map((b) => (
             <button
@@ -1089,6 +1144,152 @@ export function BankImportStudioWizard({
     );
   }
 
+  // ─── COMBINED MAPPING ───
+  if (phase === 'map' && mapping && preview) {
+    const grid = preview.sheetGrid ?? [];
+    const headerAbs = mapping.headerRowIndex;
+    const sampleAbs = headerAbs + 1;
+    const header = (i: number | null | undefined) =>
+      i == null || i < 0 ? '—' : grid[headerAbs]?.[i] || `Column ${i + 1}`;
+    const original = (i: number | null | undefined) =>
+      i == null || i < 0 ? '—' : grid[sampleAbs]?.[i] || '—';
+    const first = preview.transform.lines[0];
+    const ar = mapping.amountRules;
+    const moneyOriginal =
+      ar.mode === 'debit_credit'
+        ? `${original(ar.moneyOutCol)} / ${original(ar.moneyInCol)}`
+        : ar.mode === 'amount_with_type'
+          ? `${original(ar.amountCol)} ${original(ar.typeCol)}`
+          : original(ar.amountCol);
+    const moneyHeader =
+      ar.mode === 'debit_credit'
+        ? `${header(ar.moneyOutCol)} / ${header(ar.moneyInCol)}`
+        : ar.mode === 'amount_with_type'
+          ? `${header(ar.amountCol)} + ${header(ar.typeCol)}`
+          : header(ar.amountCol);
+    const selected = bankOnly.find((b) => b.id === bankId);
+    return (
+      <StudioShell
+        step={meta.step}
+        stepIndex={meta.index}
+        stepTotal={9}
+        title="Check the columns"
+        tone="blue"
+        icon={<Columns3 size={18} />}
+        sheet={sheetPane}
+        pending={pending}
+        onBack={() => setPhase('account')}
+        onContinue={() => {
+          const unknowns = collectUnknownMoneyLabels(preview.transform.lines);
+          if (unknowns.length > 0) {
+            setResolveQueue(unknowns);
+            setResolveIdx(0);
+            setPhase('resolve');
+            return;
+          }
+          setPhase('review');
+        }}
+        continueLabel="Review totals"
+      >
+        {selected ? (
+          <p className="bis-account-chip" data-testid="bis-account-chip">
+            {selected.code} · {selected.shortName}
+            {preview.transform.totals.periodFrom
+              ? ` · ${preview.transform.totals.periodFrom} – ${preview.transform.totals.periodTo}`
+              : ''}
+          </p>
+        ) : null}
+        {skippedSheetReason ? (
+          <p className="bis-skip-note" data-testid="bis-skip-sheet">
+            {skippedSheetReason}{' '}
+            <button type="button" className="bis-link" onClick={() => setPhase('sheet')}>
+              Change
+            </button>
+          </p>
+        ) : null}
+        <p className="bis-money-label">{dateFormatExample(mapping.dateFormat)}</p>
+        <table className="bis-map-table" data-testid="bis-mapping-table">
+          <thead>
+            <tr>
+              <th>Meaning</th>
+              <th>Source column</th>
+              <th>Original</th>
+              <th>As BookOne will store it</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Date</td>
+              <td>{header(mapping.dateCol)}</td>
+              <td>{original(mapping.dateCol)}</td>
+              <td>{first?.date || '—'}</td>
+              <td>
+                <button type="button" className="bis-link" onClick={() => setPhase('date')}>
+                  Edit
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>Description</td>
+              <td>{header(mapping.descriptionCol)}</td>
+              <td>{original(mapping.descriptionCol)}</td>
+              <td>{first?.description || '—'}</td>
+              <td>
+                <button type="button" className="bis-link" onClick={() => setPhase('description')}>
+                  Edit
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>Bank reference</td>
+              <td>{header(mapping.refCol)}</td>
+              <td>{original(mapping.refCol)}</td>
+              <td>{first?.externalRef || '—'}</td>
+              <td>
+                <button type="button" className="bis-link" onClick={() => setPhase('table')}>
+                  Edit
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>{moneyLabel(mapping)}</td>
+              <td>{moneyHeader}</td>
+              <td>{moneyOriginal}</td>
+              <td>{first ? formatRs(first.signedAmount) : '—'}</td>
+              <td>
+                <button type="button" className="bis-link" onClick={() => setPhase('money')}>
+                  Edit
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>Running balance</td>
+              <td>{header(mapping.balanceCol)}</td>
+              <td>{original(mapping.balanceCol)}</td>
+              <td>
+                {first?.balanceAfter != null ? formatRs(first.balanceAfter) : '—'}
+              </td>
+              <td>
+                <button
+                  type="button"
+                  className="bis-link"
+                  onClick={() => {
+                    setMoneyPick('balance');
+                    setPhase('money');
+                  }}
+                >
+                  Edit
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        {error ? <p className="bis-error">{error}</p> : null}
+      </StudioShell>
+    );
+  }
+
   // ─── RESOLVE (one label at a time) ───
   if (phase === 'resolve' && mapping && preview?.transform) {
     const issue = currentResolveIssue;
@@ -1242,6 +1443,8 @@ export function BankImportStudioWizard({
               setResolveQueue(unknowns);
               setResolveIdx(0);
               setPhase('resolve');
+            } else if (mappingIsConfident(mapping)) {
+              setPhase('map');
             } else {
               setPhase('money');
             }
@@ -1265,6 +1468,51 @@ export function BankImportStudioWizard({
               <strong>{formatRs(t.totals.totalMoneyOut)}</strong>
             </div>
           </div>
+
+          {(() => {
+            const selected = bankOnly.find((b) => b.id === bankId);
+            const openN = Number(openingBalance || t.inferredOpening || 0);
+            const closeN = Number(closingBalance || t.inferredClosing || 0);
+            const counted =
+              t.readyCount + t.warningCount + t.errorCount + t.skippedCount + t.excludedCount;
+            return (
+              <>
+                {selected ? (
+                  <p className="bis-account-chip" data-testid="bis-account-chip">
+                    {selected.code} · {selected.shortName}
+                    {t.totals.periodFrom ? ` · ${t.totals.periodFrom} – ${t.totals.periodTo}` : ''}
+                  </p>
+                ) : null}
+                {skippedSheetReason ? (
+                  <p className="bis-skip-note" data-testid="bis-skip-sheet">
+                    {skippedSheetReason}{' '}
+                    <button type="button" className="bis-link" onClick={() => setPhase('sheet')}>
+                      Change
+                    </button>
+                  </p>
+                ) : null}
+                <div className="bis-equation" data-testid="bis-equation">
+                  <strong>Statement equation</strong>
+                  <p>
+                    {formatLkr(openN)} opening + {formatLkr(t.totals.totalMoneyIn)} deposits −{' '}
+                    {formatLkr(t.totals.totalMoneyOut)} withdrawals = {formatLkr(closeN)} closing
+                  </p>
+                  <p>
+                    Statement arithmetic difference {formatRs(t.balanceCheck.difference)}
+                    {t.balanceCheck.ok ? ' · balances' : ' · does not balance'}
+                  </p>
+                  <p className="bis-money-label">
+                    This is the bank file arithmetic. Bank vs BookOne is compared after you save.
+                  </p>
+                </div>
+                <p className="bis-row-counts" data-testid="bis-row-counts">
+                  {t.inputRowCount} input · {t.readyCount} ready · {t.warningCount} warning · {t.errorCount}{' '}
+                  invalid · {t.skippedCount} skipped · {t.excludedCount} excluded
+                  {counted === t.inputRowCount ? '' : ` · counted ${counted}`}
+                </p>
+              </>
+            );
+          })()}
 
           {t.errorCount > 0 ? (
             <div className="bis-fix-panel">
@@ -1559,6 +1807,9 @@ export function BankImportStudioWizard({
         <div className="bis-done-card">
           <strong>{importedCount} lines saved</strong>
           <p>
+            {bankOnly.find((b) => b.id === bankId)
+              ? `${bankOnly.find((b) => b.id === bankId)?.code} · ${bankOnly.find((b) => b.id === bankId)?.shortName}. `
+              : ''}
             Stored as bank statement data only. Next: match to existing cashbook entries (no new
             journals yet).
           </p>

@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import type {
   ColumnMap,
   ParseProfile,
@@ -17,16 +16,7 @@ import {
 import { lineFingerprint } from './fingerprint';
 import { detectHeaderAndMap, GENERIC_PROFILES } from './templates';
 
-function cellStr(v: unknown): string {
-  if (v == null) return '';
-  if (v instanceof Date) {
-    const y = v.getFullYear();
-    const m = String(v.getMonth() + 1).padStart(2, '0');
-    const d = String(v.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-  return String(v).trim();
-}
+import { cellStr, loadWorkbookMatrix } from './workbook';
 
 function resolveCol(map: ColumnMap, key: keyof ColumnMap, headers: string[]): number {
   const v = map[key];
@@ -47,31 +37,7 @@ function readMatrix(
   fileName: string,
   sheetName?: string,
 ): { matrix: unknown[][]; sheetNames: string[]; sheetName: string } {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith('.csv') || lower.endsWith('.txt')) {
-    const text = Buffer.from(bytes).toString('utf8').replace(/^\uFEFF/, '');
-    const workbook = XLSX.read(text, { type: 'string', raw: false });
-    const name = workbook.SheetNames[0] ?? 'Sheet1';
-    const sheet = workbook.Sheets[name];
-    const matrix = sheet
-      ? (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false }) as unknown[][])
-      : [];
-    return { matrix, sheetNames: workbook.SheetNames, sheetName: name };
-  }
-
-  const workbook = XLSX.read(bytes, { type: 'buffer', cellDates: true, raw: false });
-  const name =
-    sheetName && workbook.SheetNames.includes(sheetName)
-      ? sheetName
-      : workbook.SheetNames[0] ?? '';
-  if (!name) return { matrix: [], sheetNames: workbook.SheetNames, sheetName: '' };
-  const sheet = workbook.Sheets[name]!;
-  const matrix = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: '',
-    raw: false,
-  }) as unknown[][];
-  return { matrix, sheetNames: workbook.SheetNames, sheetName: name };
+  return loadWorkbookMatrix(bytes, fileName, sheetName);
 }
 
 /**

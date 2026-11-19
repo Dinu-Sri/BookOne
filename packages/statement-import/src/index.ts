@@ -18,6 +18,9 @@ export {
   signedFromDebitCredit,
   signedFromAmountAndType,
   directionFromSigned,
+  detectDateFormat,
+  type DateFormatHint,
+  type DateParseOptions,
 } from './normalize';
 export { lineFingerprint, fileSha256, normalizeDescription } from './fingerprint';
 export { matchLine, matchAll } from './match';
@@ -59,6 +62,8 @@ export {
   type StudioLine,
   type StudioTransformResult,
 } from './studio-transform';
+export { mappingIsConfident } from './studio-mapping';
+export { finishEligibility, type FinishCase, type FinishEligibility } from './finish-eligibility';
 export {
   collectUnknownMoneyLabels,
   type UnknownLabelIssue,

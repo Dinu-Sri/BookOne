@@ -14,6 +14,8 @@ export type {
   StudioTransformResult,
 } from './studio-transform-types';
 
+export type { DateFormatHint } from './normalize';
+
 export type {
   ColumnMap,
   ParseProfile,
@@ -31,3 +33,6 @@ export {
   type UnknownLabelIssue,
   type UnknownLabelLine,
 } from './unknown-labels';
+
+export { mappingIsConfident } from './studio-mapping';
+export { finishEligibility, type FinishCase, type FinishEligibility } from './finish-eligibility';

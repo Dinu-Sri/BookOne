@@ -2,6 +2,7 @@
  * Studio types only — safe for client bundles (no node:crypto / xlsx).
  */
 import type { AmountRules } from './amount-rules';
+import type { DateFormatHint } from './normalize';
 import type { BalanceCheckResult } from './validate-balance';
 
 export type StudioMapping = {
@@ -11,6 +12,7 @@ export type StudioMapping = {
   descriptionCol: number;
   /** Optional second description columns joined with " | " */
   descriptionExtraCols?: number[];
+  refCol?: number | null;
   balanceCol?: number | null;
   amountRules: AmountRules;
   /** Opening/closing if user/system set */
@@ -18,13 +20,16 @@ export type StudioMapping = {
   closingBalance?: number | null;
   /** Prefer DD/MM when ambiguous */
   dayFirst?: boolean;
+  dateFormat?: DateFormatHint;
 };
 
 export type StudioLine = {
   rowNumber: number;
   date: string;
   dateConfidence: number;
+  originalDateText: string;
   description: string;
+  externalRef?: string;
   signedAmount: number;
   debitAmount: number;
   creditAmount: number;
@@ -61,5 +66,11 @@ export type StudioTransformResult = {
   errorCount: number;
   warningCount: number;
   excludedCount: number;
+  skippedCount: number;
+  duplicateCount: number;
+  inputRowCount: number;
+  inferredOpening: number | null;
+  inferredClosing: number | null;
+  dateFormat: DateFormatHint;
   samplePreview: StudioLine[];
 };

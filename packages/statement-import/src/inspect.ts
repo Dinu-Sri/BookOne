@@ -2,10 +2,10 @@
  * File inspection for Smart Bank Import Studio.
  * Lists sheets, samples rows, detects probable table/header, sniffs account numbers.
  */
-import * as XLSX from 'xlsx';
 import { detectHeaderAndMap } from './templates';
 import { parseAmountCell, parseStatementDate } from './normalize';
 import { assertWorkbookReadable, friendlyWorkbookError } from './file-safety';
+import { cellStr, loadWorkbookMatrix } from './workbook';
 
 export type InspectSheet = {
   name: string;
@@ -29,14 +29,6 @@ export type FileInspection = {
   detectedCurrency: string | null;
   warnings: string[];
 };
-
-function cellStr(v: unknown): string {
-  if (v == null) return '';
-  if (v instanceof Date && !Number.isNaN(v.getTime())) {
-    return v.toISOString().slice(0, 10);
-  }
-  return String(v).trim();
-}
 
 function detectFormat(fileName: string): FileInspection['format'] {
   const l = fileName.toLowerCase();
@@ -174,18 +166,9 @@ export function inspectStatementFile(
     };
   }
 
-  let workbook: XLSX.WorkBook;
+  let sheetNames: string[] = [];
   try {
-    if (format === 'csv' || format === 'tsv') {
-      const text = Buffer.from(buf).toString('utf8').replace(/^\uFEFF/, '');
-      workbook = XLSX.read(text, {
-        type: 'string',
-        raw: false,
-        FS: format === 'tsv' ? '\t' : undefined,
-      });
-    } else {
-      workbook = XLSX.read(buf, { type: 'buffer', cellDates: true, raw: false });
-    }
+    sheetNames = loadWorkbookMatrix(buf, fileName).sheetNames;
   } catch (e) {
     const friendly = friendlyWorkbookError(e, fileName);
     return {
@@ -203,21 +186,16 @@ export function inspectStatementFile(
     };
   }
 
-  const sheetNames = workbook.SheetNames ?? [];
   if (sheetNames.length === 0) {
     warnings.push('This workbook has no sheets.');
   }
 
   const sheets: InspectSheet[] = [];
+  const matrices = new Map<string, unknown[][]>();
   for (const name of sheetNames) {
-    const sheet = workbook.Sheets[name];
-    if (!sheet) continue;
-    let matrix = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      defval: '',
-      raw: false,
-    }) as unknown[][];
-    matrix = matrix.filter((row) => row.some((c) => cellStr(c) !== ''));
+    const loaded = loadWorkbookMatrix(buf, fileName, name);
+    const matrix = loaded.matrix;
+    matrices.set(name, matrix);
     const scored = scoreSheet(matrix);
     const maxCols = matrix.reduce((m, r) => Math.max(m, (r as unknown[]).length), 0);
     const sampleRows = matrix.slice(0, 12).map((row) =>
@@ -249,13 +227,7 @@ export function inspectStatementFile(
     warnings.push('We are not sure this file is a bank transaction statement. Please check the sheet.');
   }
 
-  const firstMatrix = best
-    ? (XLSX.utils.sheet_to_json(workbook.Sheets[best.name]!, {
-        header: 1,
-        defval: '',
-        raw: false,
-      }) as unknown[][])
-    : [];
+  const firstMatrix = best ? matrices.get(best.name) ?? [] : [];
 
   return {
     fileName,

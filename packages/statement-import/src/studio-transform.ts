@@ -2,15 +2,20 @@
  * Studio transform: matrix + mapping → normalized bank lines + validation.
  * Server-only (uses node:crypto + xlsx). UI should import from `./studio-client`.
  */
-import * as XLSX from 'xlsx';
 import { createHash } from 'node:crypto';
-import { parseStatementDate, directionFromSigned, parseAmountCell } from './normalize';
+import {
+  detectDateFormat,
+  directionFromSigned,
+  parseAmountCell,
+  parseStatementDate,
+  type DateFormatHint,
+} from './normalize';
 import { interpretAmount, type AmountRules, suggestAmountModeFromHeaders } from './amount-rules';
 import { checkStatementBalance, totalsFromSignedAmounts } from './validate-balance';
 import { detectHeaderAndMap } from './templates';
 import { lineFingerprint } from './fingerprint';
 import { annotateBalanceContinuity } from './balance';
-import { assertWorkbookReadable, friendlyWorkbookError } from './file-safety';
+import { cellStr, loadWorkbookMatrix } from './workbook';
 import type { StudioLine, StudioMapping, StudioTransformResult } from './studio-transform-types';
 
 export type {
@@ -19,52 +24,7 @@ export type {
   StudioTransformResult,
 } from './studio-transform-types';
 
-function cellStr(v: unknown): string {
-  if (v == null) return '';
-  if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString().slice(0, 10);
-  return String(v).trim();
-}
-
-export function loadWorkbookMatrix(
-  bytes: Uint8Array | Buffer,
-  fileName: string,
-  sheetName?: string,
-): { matrix: unknown[][]; sheetNames: string[]; sheetName: string } {
-  const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  try {
-    assertWorkbookReadable(buf, fileName);
-  } catch (e) {
-    throw e instanceof Error ? e : new Error(String(e));
-  }
-  const lower = fileName.toLowerCase();
-  let workbook: XLSX.WorkBook;
-  try {
-    if (lower.endsWith('.csv') || lower.endsWith('.txt') || lower.endsWith('.tsv')) {
-      const text = Buffer.from(buf).toString('utf8').replace(/^\uFEFF/, '');
-      workbook = XLSX.read(text, {
-        type: 'string',
-        raw: false,
-        FS: lower.endsWith('.tsv') ? '\t' : undefined,
-      });
-    } else {
-      workbook = XLSX.read(buf, { type: 'buffer', cellDates: true, raw: false });
-    }
-  } catch (e) {
-    const friendly = friendlyWorkbookError(e, fileName);
-    throw new Error(friendly ?? (e instanceof Error ? e.message : 'Could not read file.'));
-  }
-  const names = workbook.SheetNames ?? [];
-  const name =
-    sheetName && names.includes(sheetName) ? sheetName : names[0] ?? '';
-  if (!name) return { matrix: [], sheetNames: names, sheetName: '' };
-  let matrix = XLSX.utils.sheet_to_json(workbook.Sheets[name]!, {
-    header: 1,
-    defval: '',
-    raw: false,
-  }) as unknown[][];
-  matrix = matrix.filter((row) => row.some((c) => cellStr(c) !== ''));
-  return { matrix, sheetNames: names, sheetName: name };
-}
+export { cellStr, loadWorkbookMatrix } from './workbook';
 
 function rowHash(cells: unknown[]): string {
   return createHash('sha256')
@@ -117,13 +77,19 @@ export function suggestStudioMapping(matrix: unknown[][]): StudioMapping {
     drMeansOut: true,
   };
 
+  const refCol = typeof map.ref === 'number' ? map.ref : null;
+  const dateSamples = columnSamples(matrix, headerRowIndex, dateCol, 8);
+  const dateFormat = detectDateFormat(dateSamples);
+
   return {
     headerRowIndex,
     dateCol,
     descriptionCol,
+    refCol,
     balanceCol,
     amountRules,
     dayFirst: true,
+    dateFormat,
   };
 }
 
@@ -136,7 +102,11 @@ export function transformStudioMatrix(
   const headers = (matrix[headerRowIndex] ?? []).map((c) => cellStr(c).toLowerCase());
   const dataRows = matrix.slice(headerRowIndex + 1);
 
+  const dateFormat: DateFormatHint = mapping.dateFormat ?? 'auto';
   const lines: StudioLine[] = [];
+  let inputRowCount = 0;
+  let skippedCount = 0;
+  let excludedCount = 0;
   const issueMap = new Map<string, { type: string; severity: 'error' | 'warning'; title: string; count: number; sample?: string }>();
 
   const bump = (
@@ -165,6 +135,7 @@ export function transformStudioMatrix(
 
     // Skip empty rows
     if (!cells.some((c) => cellStr(c) !== '')) return;
+    inputRowCount += 1;
 
     // Skip repeated header
     const firstCells = cells
@@ -173,19 +144,28 @@ export function transformStudioMatrix(
       .join('|');
     const headerSig = headers.slice(0, 4).join('|');
     if (firstCells && headerSig && firstCells === headerSig) {
+      excludedCount += 1;
       bump('repeated_header', 'warning', 'Repeated header rows skipped');
       return;
     }
 
     const dateRaw = mapping.dateCol >= 0 ? cells[mapping.dateCol] : cells[0];
-    const { iso, confidence } = parseStatementDate(dateRaw);
+    const parsedDate = parseStatementDate(dateRaw, {
+      format: dateFormat,
+      dayFirst: mapping.dayFirst !== false,
+    });
+    const iso = parsedDate.iso;
+    const confidence = parsedDate.confidence;
+    const originalDateText = parsedDate.original || cellStr(dateRaw);
     if (!iso) {
-      // not a transaction row if no date and no amount
       const amtProbe = interpretAmount(cells, mapping.amountRules);
-      if (Math.abs(amtProbe.signedAmount) < 0.001) return;
+      if (Math.abs(amtProbe.signedAmount) < 0.001 && !amtProbe.unknownLabel) {
+        skippedCount += 1;
+        return;
+      }
       messages.push('Invalid or missing date');
       validationStatus = 'error';
-      bump('invalid_date', 'error', 'Rows with invalid dates', cellStr(dateRaw));
+      bump('invalid_date', 'error', 'Rows with invalid dates', originalDateText);
     }
 
     let description = '';
@@ -203,16 +183,22 @@ export function transformStudioMatrix(
     if (!description) description = 'Bank line';
 
     if (shouldExcludeDescription(description)) {
+      excludedCount += 1;
       bump('excluded_summary', 'warning', 'Summary / balance rows excluded', description);
       return;
     }
 
     const money = interpretAmount(cells, mapping.amountRules);
+    if (money.error === 'empty_amount' && !iso) {
+      skippedCount += 1;
+      return;
+    }
     if (money.error === 'empty_amount') {
-      // skip zero noise
+      skippedCount += 1;
       return;
     }
     if (money.error === 'ignored_money_label') {
+      skippedCount += 1;
       bump(
         'ignored_label',
         'warning',
@@ -231,7 +217,7 @@ export function transformStudioMatrix(
       bump(
         'unknown_label',
         'error',
-        'Unknown Money In/Out labels',
+        `Unknown money direction “${money.unknownLabel}”`,
         money.unknownLabel,
       );
     } else if (money.error === 'money_columns_missing') {
@@ -265,12 +251,16 @@ export function transformStudioMatrix(
       if (!periodTo || iso > periodTo) periodTo = iso;
     }
 
+    const externalRef =
+      mapping.refCol != null && mapping.refCol >= 0 ? cellStr(cells[mapping.refCol]) || undefined : undefined;
+
     const fingerprint = lineFingerprint({
       tenantId: opts.tenantId,
       bankAccountId: opts.bankAccountId,
       date,
       amountSigned: signedAmount,
       description,
+      externalRef,
     });
 
     const raw: Record<string, unknown> = {};
@@ -282,7 +272,9 @@ export function transformStudioMatrix(
       rowNumber,
       date,
       dateConfidence: confidence,
+      originalDateText,
       description: description.slice(0, 1000),
+      externalRef,
       signedAmount,
       debitAmount: money.debitAmount,
       creditAmount: money.creditAmount,
@@ -350,21 +342,39 @@ export function transformStudioMatrix(
     }
   }
 
-  // Include error rows in totals only if they have amount? Spec: ready rows for equation
+  const usable = lines.filter((l) => l.validationStatus === 'valid' || l.validationStatus === 'warning');
+  let inferredOpening: number | null = null;
+  let inferredClosing: number | null = null;
+  if (usable.length > 0 && mapping.balanceCol != null && mapping.balanceCol >= 0) {
+    const first = usable[0]!;
+    const last = usable[usable.length - 1]!;
+    if (first.balanceAfter != null) {
+      inferredOpening = Math.round((first.balanceAfter - first.signedAmount) * 100) / 100;
+    }
+    if (last.balanceAfter != null) {
+      inferredClosing = last.balanceAfter;
+    }
+  }
+  const opening = mapping.openingBalance ?? inferredOpening;
+  const closing = mapping.closingBalance ?? inferredClosing;
+
   const totalsBase = totalsFromSignedAmounts(
-    lines.filter((l) => l.validationStatus === 'valid' || l.validationStatus === 'warning').map((l) => l.signedAmount),
-    mapping.openingBalance ?? null,
-    mapping.closingBalance ?? null,
+    usable.map((l) => l.signedAmount),
+    opening,
+    closing,
   );
 
   const balanceCheck = checkStatementBalance(totalsBase);
-  if (!balanceCheck.ok) {
+  if (!balanceCheck.ok && !issueMap.has('balance_mismatch')) {
     bump('balance_mismatch', 'error', balanceCheck.message);
   }
 
   const readyCount = lines.filter((l) => l.validationStatus === 'valid').length;
   const errorCount = lines.filter((l) => l.validationStatus === 'error').length;
   const warningCount = lines.filter((l) => l.validationStatus === 'warning').length;
+  const duplicateCount = lines.filter((l) =>
+    l.validationMessages.some((m) => m.toLowerCase().includes('duplicate')),
+  ).length;
 
   return {
     lines,
@@ -382,7 +392,13 @@ export function transformStudioMatrix(
     readyCount,
     errorCount,
     warningCount,
-    excludedCount: 0,
+    excludedCount,
+    skippedCount,
+    duplicateCount,
+    inputRowCount,
+    inferredOpening,
+    inferredClosing,
+    dateFormat,
     samplePreview: lines.filter((l) => l.validationStatus === 'valid').slice(0, 12),
   };
 }

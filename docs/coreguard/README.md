@@ -6,7 +6,7 @@ Single local and CI command for the integrated BookOne lane:
 pnpm coreguard:pilot
 ```
 
-The runner pushes the Drizzle schema, applies SQL migrations, seeds disposable companies, runs fixture/service tests, optionally drives the real app in Chromium, then deletes the seed. It pins the product `VERSION`, git SHA, latest SQL migration, and fixture `custom-bank.v1`. This matches the web image startup (`drizzle-kit push --force` then `scripts/init-db.ts`) and never uses the Clossyan demo seed.
+The runner pushes the Drizzle schema, applies SQL migrations, seeds disposable companies, runs fixture/service tests, optionally drives the real app in Chromium, then deletes the seed. It pins the product `VERSION`, git SHA, latest SQL migration, and fixtures `custom-bank.v1` plus `bank-recon.v1`. This matches the web image startup (`drizzle-kit push --force` then `scripts/init-db.ts`) and never uses the Clossyan demo seed.
 
 ## Disposable targets
 
@@ -36,8 +36,8 @@ Seed passwords live only in gitignored `.local/coreguard-run.json`.
 | --- | --- | --- |
 | Fixture oracle | always | Independent integer-cent expected values |
 | Permission/isolation contracts | always | Owner write, Viewer read-only, 11xx Simple Entry tenders, CI wiring |
-| Service/database | `COREGUARD_PILOT=1` | Create 1101, opening 300, transfer 100, journal class, company isolation |
-| Browser | `COREGUARD_PILOT_BROWSER=1` | Same slice through the real app |
+| Service/database | `COREGUARD_PILOT=1` | Create 1101, opening 300, transfer 100, journal class, company isolation; bank-recon 1102 seed 1485 |
+| Browser | `COREGUARD_PILOT_BROWSER=1` | Custom-bank slice plus ISO bank-recon import, match-without-journals, explained finish |
 
 A required missing result is **blocked**. First failures are kept. This lane does not certify live tenant CoA, live Codex/Claude, or encrypted restore.
 

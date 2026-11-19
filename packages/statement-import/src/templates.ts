@@ -32,7 +32,16 @@ const BALANCE_KEYS = [
 ];
 const REF_KEYS = ['ref', 'reference', 'cheque', 'chq', 'serial no', 'serial', 'txn id', 'transaction id'];
 /** Combined DR/CR flag — must NOT be treated as separate debit/credit amount columns */
-const TYPE_KEYS = ['dr/cr', 'dr cr', 'd/c', 'txn type', 'transaction type', 'type', 'cd'];
+const TYPE_KEYS = [
+  'dr/cr',
+  'dr cr',
+  'd/c',
+  'txn type',
+  'transaction type',
+  'direction',
+  'type',
+  'cd',
+];
 
 function normHeader(cell: string): string {
   return cell.toLowerCase().replace(/\s+/g, ' ').trim();

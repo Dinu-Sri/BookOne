@@ -1,0 +1,5 @@
+Date,Description,Reference,Amount,Direction,Balance
+2026-11-03,QA customer receipt,QA-REC-001,500.00,CR,1500.00
+2026-11-06,QA supplier payment,QA-PAY-001,200.00,DR,1300.00
+2026-11-11,QA unknown direction,QA-UNK-001,125.00,UNKNOWN,1425.00
+2026-11-18,QA broken running balance,QA-FEE-001,25.00,DR,1390.00

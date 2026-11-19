@@ -309,7 +309,7 @@ export function suggestAmountModeFromHeaders(headers: string[]): {
   const find = (keys: string[]) =>
     h.findIndex((cell) => keys.some((k) => cell === k || cell.includes(k)));
 
-  const typeCol = find(['dr/cr', 'dr cr', 'd/c', 'type']);
+  const typeCol = find(['dr/cr', 'dr cr', 'd/c', 'direction', 'txn type', 'transaction type', 'type']);
   const debitCol = find(['debit', 'withdrawal', 'money out', 'paid out']);
   const creditCol = find(['credit', 'deposit', 'money in', 'paid in']);
   const amountCol = find(['amount', 'txn amount', 'transaction amount', 'value']);

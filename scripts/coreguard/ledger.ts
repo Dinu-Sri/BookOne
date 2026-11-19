@@ -7,7 +7,14 @@ import {
   validateCreateAccount,
   wizardTemplate,
 } from '../../packages/accounting/src/index';
-import { centsToAmount, loadCustomBankFixture, type CustomBankFixture } from './fixture';
+import {
+  centsToAmount,
+  loadBankReconFixture,
+  loadCustomBankFixture,
+  type BankReconCashLine,
+  type BankReconFixture,
+  type CustomBankFixture,
+} from './fixture';
 
 export type LedgerSql = postgres.Sql;
 
@@ -347,4 +354,107 @@ export function independentSpendableCents(balances: BalanceMap): number {
     }
   }
   return cents;
+}
+
+export async function journalCount(sql: LedgerSql, tenantId: string): Promise<number> {
+  return withTenant(sql, tenantId, async () => {
+    const [row] = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n
+      FROM journal_entries
+      WHERE tenant_id = ${tenantId} AND voided_at IS NULL
+    `;
+    return row?.n ?? 0;
+  });
+}
+
+async function postCashLine(
+  sql: LedgerSql,
+  tenantId: string,
+  userId: string,
+  paymentCode: string,
+  line: BankReconCashLine,
+): Promise<{ journalId: string }> {
+  const amount = centsToAmount(line.amountCents);
+  const isIn = line.direction === 'in';
+  const posted = await insertBalancedJournal(sql, {
+    tenantId,
+    userId,
+    date: line.date,
+    party: line.description,
+    description: line.description,
+    accountingType: isIn ? 'income' : 'expense',
+    direction: isIn ? 'money_in' : 'money_out',
+    paymentMethod: 'Bank',
+    paymentAccountCode: paymentCode,
+    lines: isIn
+      ? [
+          { accountCode: paymentCode, side: 'debit', amount, memo: line.ref },
+          { accountCode: line.category, side: 'credit', amount, memo: line.ref },
+        ]
+      : [
+          { accountCode: line.category, side: 'debit', amount, memo: line.ref },
+          { accountCode: paymentCode, side: 'credit', amount, memo: line.ref },
+        ],
+  });
+  await sql`
+    UPDATE transactions
+    SET receipt_ref = ${line.ref}
+    WHERE id = ${posted.transactionId}
+  `;
+  return { journalId: posted.journalId };
+}
+
+export async function seedBankReconLedger(
+  sql: LedgerSql,
+  tenantId: string,
+  userId: string,
+  fixture: BankReconFixture = loadBankReconFixture(),
+): Promise<{ bankId: string; journalCount: number }> {
+  const asCustom: CustomBankFixture = {
+    ...loadCustomBankFixture(),
+    customBank: {
+      templateId: 'bank',
+      code: fixture.bank.code,
+      name: fixture.bank.name,
+      institution: fixture.bank.institution,
+      lastDigits: fixture.bank.lastDigits,
+    },
+    equity: fixture.equity,
+    opening: fixture.opening,
+  };
+  const created = await createCustomBank(sql, tenantId, userId, asCustom);
+  return withTenant(sql, tenantId, async () => {
+    const openingAmount = centsToAmount(fixture.opening.debitCents);
+    await insertBalancedJournal(sql, {
+      tenantId,
+      userId,
+      date: fixture.opening.date,
+      party: fixture.opening.party,
+      description: `Opening balances ${fixture.opening.date}`,
+      accountingType: 'transfer',
+      direction: 'money_in',
+      paymentMethod: 'Bank',
+      paymentAccountCode: fixture.bank.code,
+      lines: [
+        {
+          accountCode: fixture.opening.debitAccount,
+          side: 'debit',
+          amount: openingAmount,
+          memo: 'Opening balance',
+        },
+        {
+          accountCode: fixture.opening.creditAccount,
+          side: 'credit',
+          amount: openingAmount,
+          memo: 'Opening balance',
+        },
+      ],
+    });
+    for (const line of fixture.matching) {
+      await postCashLine(sql, tenantId, userId, fixture.bank.code, line);
+    }
+    await postCashLine(sql, tenantId, userId, fixture.bank.code, fixture.bookOnly);
+    const count = await journalCount(sql, tenantId);
+    return { bankId: created.id, journalCount: count };
+  });
 }

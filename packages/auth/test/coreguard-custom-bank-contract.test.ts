@@ -50,6 +50,10 @@ describe('custom-bank permission and isolation contracts', () => {
     expect(yaml).toMatch(/needs: \[quality, coreguard\]/);
     expect(yaml).toMatch(/coreguard-setup-order\.test\.ts/);
     expect(yaml).toMatch(/coreguard-invoice-intake\.test\.ts/);
+    expect(runner).toMatch(/coreguard-bank-recon-oracle\.test\.ts/);
+    expect(runner).toMatch(/coreguard-bank-recon-postgres\.test\.ts/);
+    const pw = readFileSync(path.join(root, 'apps/web/playwright.coreguard.config.ts'), 'utf8');
+    expect(pw).toMatch(/coreguard-\(custom-bank\|bank-recon\)/);
     expect(core).toMatch(/id: 'pilot-custom-bank'/);
     expect(core).toMatch(/pnpm coreguard:pilot/);
     const readme = readFileSync(path.join(root, 'docs/coreguard/README.md'), 'utf8');

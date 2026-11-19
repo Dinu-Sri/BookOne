@@ -1,3 +1,7 @@
+## 2026-11-19 — Bank reconciliation simple compare (v2.14.0)
+
+Candidate **2.14.0** on `feat/v2140-bank-recon-simple-compare` from origin/master `274050f` / v2.13.4. ISO bank files stage with canonical dates. The default compare workbench is Bank statement on the left and BookOne on the right, with Confirm match for existing records and Review & finish only after the difference is explained. Seeded CoreGuard proves import+match create no journals, then fee create + waiting 60 lets Finish succeed at BookOne 1,460 − 60 = bank 1,400. Custom-bank CoreGuard stays. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Pilot CoreGuard Linux SelectField pick (v2.13.4)
 
 Candidate **2.13.4** on `fix/v2134-pilot-coreguard-linux-select` from origin/master `1c0b008` / v2.13.3. Docker web image `44563210797` failed the unmasked **Pilot custom-bank** step: opening Account line 2 stayed on 2500 after a Playwright force-click of 3000. This candidate picks the filtered option with a native click. Custom-bank amounts and Viewer read-only stay. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

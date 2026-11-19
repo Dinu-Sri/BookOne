@@ -90,7 +90,15 @@ async function main() {
   try {
     run(
       'pnpm',
-      ['--filter', '@bookone/accounting', 'exec', 'vitest', 'run', 'test/coreguard-custom-bank-oracle.test.ts'],
+      [
+        '--filter',
+        '@bookone/accounting',
+        'exec',
+        'vitest',
+        'run',
+        'test/coreguard-custom-bank-oracle.test.ts',
+        'test/coreguard-bank-recon-oracle.test.ts',
+      ],
       extraEnv,
     );
     run(
@@ -104,6 +112,7 @@ async function main() {
         'test/coreguard-allowlist.test.ts',
         'test/coreguard-custom-bank-contract.test.ts',
         'test/coreguard-custom-bank-postgres.test.ts',
+        'test/coreguard-bank-recon-postgres.test.ts',
       ],
       extraEnv,
     );
@@ -136,7 +145,7 @@ async function main() {
     console.error(`FAILED: ${failed}`);
     process.exit(1);
   }
-  console.log('PASS: custom-bank CoreGuard lane');
+  console.log('PASS: custom-bank and bank-recon CoreGuard lane');
 }
 
 main().catch((error) => {

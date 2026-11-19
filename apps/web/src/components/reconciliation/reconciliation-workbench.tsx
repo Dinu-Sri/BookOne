@@ -80,7 +80,7 @@ function formatDate(iso: string | null | undefined) {
 const TABS: { id: string; label: string; short: string }[] = [
   { id: 'decision', label: 'Needs decision', short: 'Decide' },
   { id: 'transfers', label: 'Transfers', short: 'Xfer' },
-  { id: 'add', label: 'Add to BookOne', short: 'Add' },
+  { id: 'add', label: 'Bank lines to review', short: 'Review' },
   { id: 'ready', label: 'Ready to confirm', short: 'Ready' },
   { id: 'waiting', label: 'Waiting to clear', short: 'Waiting' },
   { id: 'duplicates', label: 'Duplicates', short: 'Dupes' },
@@ -140,12 +140,14 @@ export function ReconciliationWorkbench({
   const [manyQ, setManyQ] = useState('');
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [excludeReason, setExcludeReason] = useState('not_relevant');
+  const [ready, setReady] = useState(false);
 
   const load = useCallback(
     (t = tab, p = page, query = q) => {
       startTransition(() => {
         openReconciliationSession(sessionId, { tab: t, page: p, pageSize: 20, q: query })
           .then((res) => {
+            setReady(true);
             if (!res.ok) {
               setError(res.error);
               pushStatusToast({ kind: 'error', message: res.error });
@@ -158,6 +160,7 @@ export function ReconciliationWorkbench({
             setError(null);
           })
           .catch((e) => {
+            setReady(true);
             const msg = e instanceof Error ? e.message : 'Could not load reconciliation.';
             setError(msg);
             pushStatusToast({ kind: 'error', message: msg });
@@ -539,9 +542,9 @@ export function ReconciliationWorkbench({
     }
   }
 
-  if (!detail && pending) {
+  if (!ready || (!detail && pending)) {
     return (
-      <div className="brw-loading">
+      <div className="brw-loading" role="status">
         <Loader2 className="spin" size={22} />
         Loading reconciliation...
       </div>
@@ -550,7 +553,7 @@ export function ReconciliationWorkbench({
   if (!detail) {
     return (
       <div className="brw-loading">
-        {error ?? 'Session not found.'}
+        {error ?? 'This reconciliation is still opening.'}
         <Link href={inboxHref} className="button secondary" style={{ marginTop: 12 }}>
           Back
         </Link>
@@ -565,7 +568,7 @@ export function ReconciliationWorkbench({
   const bookClose = s.bookClosingBalance;
   const diff =
     bankClose != null && bookClose != null
-      ? Math.round((bankClose - bookClose - s.outstandingNet) * 100) / 100
+      ? Math.round((bankClose - bookClose + s.outstandingNet) * 100) / 100
       : s.differenceAmount;
   const workLeft =
     (counts.decision ?? 0) +
@@ -811,7 +814,7 @@ export function ReconciliationWorkbench({
           className={`brw-chip add ${tab === 'add' ? 'active' : ''}`}
           onClick={() => changeTab('add')}
         >
-          Add to BookOne <em>{counts.add ?? 0}</em>
+          Bank lines to review <em>{counts.add ?? 0}</em>
         </button>
         <button
           type="button"

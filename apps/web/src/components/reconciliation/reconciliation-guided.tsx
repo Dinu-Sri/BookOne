@@ -65,10 +65,12 @@ export function ReconciliationGuided({
   const [info, setInfo] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [createConfirmId, setCreateConfirmId] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
   const reload = useCallback(() => {
     startTransition(() => {
       listGuidedQueue(sessionId).then((res) => {
+        setReady(true);
         if (!res.ok) {
           setError(res.error);
           return;
@@ -121,9 +123,9 @@ export function ReconciliationGuided({
     });
   }
 
-  if (!session && pending) {
+  if (!ready || (!session && pending)) {
     return (
-      <div className="brw-loading">
+      <div className="brw-loading" role="status">
         <Loader2 className="spin" size={22} />
         Loading guided queue...
       </div>
@@ -133,7 +135,7 @@ export function ReconciliationGuided({
   if (!session) {
     return (
       <div className="brw-loading">
-        {error ?? 'Session not found.'}
+        {error ?? 'This reconciliation is still opening.'}
         <Link href={inboxHref} className="bis-btn secondary" style={{ marginTop: 12 }}>
           Back
         </Link>

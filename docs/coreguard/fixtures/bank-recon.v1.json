@@ -1,0 +1,97 @@
+{
+  "id": "bank-recon",
+  "version": 1,
+  "layer": "pilot-coreguard",
+  "period": { "from": "2026-11-03", "to": "2026-11-18" },
+  "currency": "LKR",
+  "bank": {
+    "templateId": "bank",
+    "code": "1102",
+    "name": "Pilot statement",
+    "institution": "Hatton National Bank",
+    "lastDigits": "1102"
+  },
+  "equity": { "code": "3000" },
+  "income": { "code": "4300" },
+  "expense": { "code": "6800" },
+  "opening": {
+    "date": "2026-10-15",
+    "debitCents": 100000,
+    "creditCents": 100000,
+    "debitAccount": "1102",
+    "creditAccount": "3000",
+    "party": "Opening balances"
+  },
+  "matching": [
+    {
+      "date": "2026-11-03",
+      "amountCents": 50000,
+      "direction": "in",
+      "description": "QA customer receipt",
+      "ref": "QA-REC-001",
+      "category": "4300"
+    },
+    {
+      "date": "2026-11-06",
+      "amountCents": 20000,
+      "direction": "out",
+      "description": "QA supplier payment",
+      "ref": "QA-PAY-001",
+      "category": "6000"
+    },
+    {
+      "date": "2026-11-11",
+      "amountCents": 12500,
+      "direction": "in",
+      "description": "QA second receipt",
+      "ref": "QA-REC-002",
+      "category": "4300"
+    }
+  ],
+  "bookOnly": {
+    "date": "2026-11-12",
+    "amountCents": 6000,
+    "direction": "in",
+    "description": "QA outstanding deposit",
+    "ref": "QA-BOOK-060",
+    "category": "4300"
+  },
+  "fee": {
+    "date": "2026-11-18",
+    "amountCents": 2500,
+    "direction": "out",
+    "description": "QA bank service fee",
+    "ref": "QA-FEE-001",
+    "category": "6800"
+  },
+  "statement": {
+    "openingCents": 100000,
+    "moneyInCents": 62500,
+    "moneyOutCents": 22500,
+    "closingCents": 140000,
+    "rowCount": 4,
+    "isoFile": "qa-statement-clean.csv",
+    "serialFile": "qa-statement-serial.csv",
+    "invalidFile": "qa-statement-invalid.csv"
+  },
+  "afterSeed": {
+    "1102": 148500,
+    "journalCount": 5,
+    "bookCloseCents": 148500
+  },
+  "afterImportMatch": {
+    "1102": 148500,
+    "journalCount": 5,
+    "suggestedMatches": 3,
+    "bankOnly": 1,
+    "bookOnly": 1
+  },
+  "afterFeeAndWaiting": {
+    "1102": 146000,
+    "journalCount": 6,
+    "outstandingCents": 6000,
+    "bankClosingCents": 140000,
+    "bookCloseCents": 146000,
+    "differenceCents": 0
+  }
+}

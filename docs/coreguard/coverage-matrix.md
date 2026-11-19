@@ -1,6 +1,6 @@
 # Pilot CoreGuard coverage matrix
 
-Identity is pinned per run: product `VERSION`, git SHA, latest `packages/db/migrations/*.sql`, fixture `custom-bank.v1`. Report browser, service/database, and fixture-only results separately. Required missing results are **blocked**.
+Identity is pinned per run: product `VERSION`, git SHA, latest `packages/db/migrations/*.sql`, fixtures `custom-bank.v1` and `bank-recon.v1`. Report browser, service/database, and fixture-only results separately. Required missing results are **blocked**.
 
 | Module / journey | Layer | Status | Evidence |
 | --- | --- | --- | --- |
@@ -15,7 +15,7 @@ Identity is pinned per run: product `VERSION`, git SHA, latest `packages/db/migr
 | Purchase settlement | — | not-run | later increment |
 | Sales / purchase returns | — | not-run | later increment |
 | Stock valuation | — | not-run | later increment |
-| Bank reconciliations | — | not-run | later increment |
+| Bank reconciliations | browser + service/database + fixture | required | `pnpm coreguard:pilot`; fixture `bank-recon.v1`; ISO CSV match-without-journals then finish after explained difference |
 | Partial payment / refusal | — | not-run | later increment |
 | Customer / supplier / staff advances | fixture (COA-01) | partial | COA-01 advance unit tests; full pilot journeys later |
 | POS | — | not-run | kept visible; not in this pilot slice |

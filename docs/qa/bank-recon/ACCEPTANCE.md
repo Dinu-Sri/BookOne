@@ -1,6 +1,6 @@
 # Bank reconciliation simple compare — candidate evidence
 
-Product **2.14.0**. Fixture `docs/coreguard/fixtures/bank-recon.v1.json` plus ISO/serial/invalid CSVs.
+Product **2.14.1**. Fixture `docs/coreguard/fixtures/bank-recon.v1.json` plus ISO/serial/invalid CSVs. v2.14.0 Production Check `44571222338` failed web `tsc`; this candidate types the Studio save confirmation and statement-equation difference.
 
 ## Implemented
 

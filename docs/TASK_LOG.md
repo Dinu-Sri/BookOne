@@ -1,3 +1,10 @@
+## 2026-11-19 — Bank recon Studio web lint (v2.14.1)
+
+- Record: [CHG-20261119-bank-recon-web-lint](changes/CHG-20261119-bank-recon-web-lint.md). Baseline product `2b4be31` / v2.14.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Studio save confirmation no longer mixes `||` with `??`. Statement arithmetic difference formats only when the value is a number. Production Check `44571222338` and Docker web image `44571222119` failed web `tsc` on `studio-wizard.tsx`. VERSION 2.14.1. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: local `@bookone/web` `tsc` no longer reports `studio-wizard.tsx` (remaining hits are local `.next/types` PageProps noise absent from a clean CI checkout). Docker web image `44571222119` CoreGuard **Pilot custom-bank** on v2.14.0: oracle 6 passed, auth 9 passed including bank-recon postgres; `next build` failed on the same wizard mix so Playwright did not run.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent disposable-company bank-recon review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Bank reconciliation simple compare (v2.14.0)
 
 - Record: [CHG-20261119-bank-recon-simple-compare](changes/CHG-20261119-bank-recon-simple-compare.md). Baseline product `274050f` / v2.13.4. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

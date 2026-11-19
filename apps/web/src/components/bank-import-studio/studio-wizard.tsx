@@ -725,7 +725,7 @@ export function BankImportStudioWizard({
     const message =
       opts?.skipErrorLines && bad > 0
         ? `Save ${good} good line(s) for ${account}, ${period}, and skip ${bad} problem line(s)? Cashbook stays unchanged.`
-        : `Save ${good} bank line(s) for ${account}, ${period}? Opening ${openingBalance || t?.inferredOpening ?? '—'} · closing ${closingBalance || t?.inferredClosing ?? '—'} · ${t?.inputRowCount ?? 0} input rows. Cashbook stays the same until you match later.`;
+        : `Save ${good} bank line(s) for ${account}, ${period}? Opening ${openingBalance || t?.inferredOpening || '—'} · closing ${closingBalance || t?.inferredClosing || '—'} · ${t?.inputRowCount ?? 0} input rows. Cashbook stays the same until you match later.`;
     setCommitConfirm({ skipErrorLines: opts?.skipErrorLines, message });
   }
 
@@ -1498,7 +1498,8 @@ export function BankImportStudioWizard({
                     {formatLkr(t.totals.totalMoneyOut)} withdrawals = {formatLkr(closeN)} closing
                   </p>
                   <p>
-                    Statement arithmetic difference {formatRs(t.balanceCheck.difference)}
+                    Statement arithmetic difference{' '}
+                    {t.balanceCheck.difference == null ? '—' : formatRs(t.balanceCheck.difference)}
                     {t.balanceCheck.ok ? ' · balances' : ' · does not balance'}
                   </p>
                   <p className="bis-money-label">

@@ -1,3 +1,7 @@
+## 2026-11-19 — Bank recon Studio web lint (v2.14.1)
+
+Candidate **2.14.1** on `fix/v2141-bank-recon-web-lint` from origin/master `2b4be31` / v2.14.0. Production Check `44571222338` failed web `tsc`. Docker web image `44571222119` CoreGuard oracle/postgres passed, then `next build` failed on the same Studio `||` / `??` mix. This candidate types those two expressions. Bank-recon import/match/finish behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Bank reconciliation simple compare (v2.14.0)
 
 Candidate **2.14.0** on `feat/v2140-bank-recon-simple-compare` from origin/master `274050f` / v2.13.4. ISO bank files stage with canonical dates. The default compare workbench is Bank statement on the left and BookOne on the right, with Confirm match for existing records and Review & finish only after the difference is explained. Seeded CoreGuard proves import+match create no journals, then fee create + waiting 60 lets Finish succeed at BookOne 1,460 − 60 = bank 1,400. Custom-bank CoreGuard stays. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -29,15 +29,17 @@ export function FormShell({
   title,
   children,
   footer,
+  size = 'form',
 }: {
   backHref: string;
   backParent: string;
   title?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  size?: 'form' | 'wide';
 }) {
   return (
-    <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
+    <div className={`party-form-shell form-shell form-shell-${size}`} style={{ maxHeight: 'none', minHeight: 0 }}>
       <div className="party-form-top">
         <FormBackLink href={backHref} parent={backParent} />
         {title ? <span className="form-shell-title">{title}</span> : null}

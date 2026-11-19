@@ -65,6 +65,11 @@ export function CoaOpening({
   }, [lines]);
 
   const stale = Boolean(previewKey && previewKey !== payloadKey());
+  const postReason = !previewKey
+    ? 'Preview this exact date and these lines before posting.'
+    : stale
+      ? 'Lines or date changed. Preview again before posting.'
+      : null;
 
   function runPreview() {
     setError(null);
@@ -120,15 +125,27 @@ export function CoaOpening({
       backHref="/accounts"
       backParent="Accounts"
       title="Opening balances"
+      size="wide"
       footer={
         <FormFooter>
+          {postReason ? (
+            <p className="field-help" id="open-post-reason">
+              {postReason}
+            </p>
+          ) : null}
           <Button type="button" onClick={() => router.push('/accounts')}>
             Cancel
           </Button>
           <Button type="button" onClick={runPreview} disabled={pending}>
             Preview
           </Button>
-          <Button variant="primary" type="submit" form="coa-opening" disabled={pending || !previewKey || stale}>
+          <Button
+            variant="primary"
+            type="submit"
+            form="coa-opening"
+            disabled={pending || !previewKey || stale}
+            aria-describedby={postReason ? 'open-post-reason' : undefined}
+          >
             Post opening
           </Button>
         </FormFooter>
@@ -140,11 +157,6 @@ export function CoaOpening({
             {error}
           </p>
         ) : null}
-        {previewText && !stale ? (
-          <p className="form-success" role="status">
-            {previewText}
-          </p>
-        ) : null}
         {stale ? (
           <p className="form-error" role="status">
             Lines or date changed. Preview again before posting.
@@ -153,59 +165,72 @@ export function CoaOpening({
         <p className="field-help" style={{ marginBottom: 12 }}>
           Creating an account does not write equity or journals. Preview must balance before posting.
         </p>
-        <DateField id="open-date" label="Effective date" value={date} onChange={setDate} required />
-        <div className="opening-line-head" aria-hidden>
-          <span>Account</span>
-          <span>Debit</span>
-          <span>Credit</span>
-          <span />
-        </div>
-        {lines.map((line, index) => (
-          <div key={line.id} className="opening-line-grid">
-            <SelectField
-              id={`open-code-${line.id}`}
-              label={index === 0 ? 'Account' : `Account ${index + 1}`}
-              value={line.accountCode}
-              onChange={(accountCode) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, accountCode } : row)))}
-              options={accountOptions}
-              emptyReason="No posting accounts are available."
-            />
-            <AmountField
-              id={`open-dr-${line.id}`}
-              label="Debit"
-              value={line.debit}
-              onChange={(e) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, debit: e.target.value } : row)))}
-            />
-            <AmountField
-              id={`open-cr-${line.id}`}
-              label="Credit"
-              value={line.credit}
-              onChange={(e) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, credit: e.target.value } : row)))}
-            />
-            <div className="field">
-              <label htmlFor={`open-remove-${line.id}`}>&nbsp;</label>
-              <Button
-                id={`open-remove-${line.id}`}
-                type="button"
-                disabled={lines.length <= 1}
-                onClick={() => setLines((cur) => cur.filter((row) => row.id !== line.id))}
-              >
-                Remove
-              </Button>
-            </div>
+        <DateField id="open-date" label="Effective date" value={date} onChange={setDate} required className="opening-date" />
+        <div className="opening-editor">
+          <div className="opening-line-head" aria-hidden>
+            <span>Account</span>
+            <span className="num">Debit</span>
+            <span className="num">Credit</span>
+            <span />
           </div>
-        ))}
-        <div className="opening-totals">
-          <span>Debits {totals.debit.toFixed(2)}</span>
-          <span>Credits {totals.credit.toFixed(2)}</span>
-          <span>Difference {totals.diff.toFixed(2)}</span>
+          {lines.map((line, index) => (
+            <div key={line.id} className="opening-line-grid" data-line={index + 1}>
+              <SelectField
+                id={`open-code-${line.id}`}
+                label={`Account, line ${index + 1}`}
+                value={line.accountCode}
+                onChange={(accountCode) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, accountCode } : row)))}
+                options={accountOptions}
+                emptyReason="No posting accounts are available."
+              />
+              <AmountField
+                id={`open-dr-${line.id}`}
+                label={`Debit, line ${index + 1}`}
+                value={line.debit}
+                onChange={(e) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, debit: e.target.value } : row)))}
+              />
+              <AmountField
+                id={`open-cr-${line.id}`}
+                label={`Credit, line ${index + 1}`}
+                value={line.credit}
+                onChange={(e) => setLines((cur) => cur.map((row) => (row.id === line.id ? { ...row, credit: e.target.value } : row)))}
+              />
+              <div className="opening-action">
+                <Button
+                  id={`open-remove-${line.id}`}
+                  className="opening-remove"
+                  type="button"
+                  disabled={lines.length <= 1}
+                  aria-label={`Remove line ${index + 1}`}
+                  onClick={() => setLines((cur) => cur.filter((row) => row.id !== line.id))}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+          <div className="opening-review">
+            <span>Totals</span>
+            <span className="num">Debits {totals.debit.toFixed(2)}</span>
+            <span className="num">Credits {totals.credit.toFixed(2)}</span>
+            <span>Diff {totals.diff.toFixed(2)}</span>
+          </div>
+          {previewText && !stale ? (
+            <p className="form-success" role="status">
+              {previewText}
+            </p>
+          ) : null}
+          <div className="opening-editor-actions">
+            <Button
+              type="button"
+              onClick={() =>
+                setLines((cur) => [...cur, { id: newId(), accountCode: posting[0]?.code ?? '', debit: '', credit: '' }])
+              }
+            >
+              Add line
+            </Button>
+          </div>
         </div>
-        <Button
-          type="button"
-          onClick={() => setLines((cur) => [...cur, { id: newId(), accountCode: posting[0]?.code ?? '', debit: '', credit: '' }])}
-        >
-          Add line
-        </Button>
       </form>
     </FormShell>
   );

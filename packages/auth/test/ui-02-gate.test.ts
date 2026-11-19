@@ -92,4 +92,23 @@ describe('CoreGuard UI-02 source contracts', () => {
     expect(registry).toMatch(/SelectLike/);
     expect(registry).toMatch(/UI-02/);
   });
+
+  it('scopes calendar DateField to date-quick and bounds FormShell sizes', () => {
+    const styles = read('apps/web/src/app/globals.css');
+    const dateField = read('apps/web/src/components/ui/date-field.tsx');
+    const shell = read('apps/web/src/components/ui/form-shell.tsx');
+    const opening = read('apps/web/src/components/accounts/coa-opening.tsx');
+    const detail = read('apps/web/src/components/accounts/coa-account-detail.tsx');
+    expect(styles).toMatch(/\.date-field:not\(\.date-quick\)/);
+    expect(styles).toMatch(/\.date-field\.date-quick/);
+    expect(styles).toMatch(/\.form-shell > \.party-form-footer/);
+    expect(styles).toMatch(/--opening-tracks: minmax\(0, 2\.2fr\) minmax\(7\.5rem, 1fr\) minmax\(7\.5rem, 1fr\) 6\.5rem/);
+    expect(dateField).toMatch(/date-field date-quick/);
+    expect(shell).toMatch(/size = 'form'/);
+    expect(shell).toMatch(/form-shell-\$\{size\}/);
+    expect(opening).toMatch(/size="wide"/);
+    expect(opening).toMatch(/className="opening-date"/);
+    expect(detail).toMatch(/Save details/);
+    expect(detail).not.toMatch(/Save name/);
+  });
 });

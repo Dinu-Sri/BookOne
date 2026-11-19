@@ -114,21 +114,40 @@ export const TextAreaField = forwardRef<
 
 export const SearchField = forwardRef<
   HTMLInputElement,
-  { id: string; label: string; value: string; onChange: (value: string) => void; placeholder?: string }
->(function SearchField({ id, label, value, onChange, placeholder }, ref) {
+  {
+    id: string;
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    showLabel?: boolean;
+    className?: string;
+  }
+>(function SearchField({ id, label, value, onChange, placeholder, showLabel = false, className }, ref) {
+  const input = (
+    <input
+      ref={ref}
+      id={id}
+      className="input party-search"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+    />
+  );
+  if (showLabel) {
+    return (
+      <div className={`field ${className ?? ''}`.trim()}>
+        <label htmlFor={id}>{label}</label>
+        {input}
+      </div>
+    );
+  }
   return (
-    <div className="party-search-form">
+    <div className={`party-search-form ${className ?? ''}`.trim()}>
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
-      <input
-        ref={ref}
-        id={id}
-        className="input party-search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-      />
+      {input}
     </div>
   );
 });

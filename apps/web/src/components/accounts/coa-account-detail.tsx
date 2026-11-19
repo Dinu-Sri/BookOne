@@ -78,107 +78,118 @@ export function CoaAccountDetail({
       backParent="Accounts"
       title={account.code}
       footer={
-        <FormFooter>
-          <Button type="button" onClick={() => router.push('/accounts')}>
-            Back
-          </Button>
-          <a className="button" href={`/journal?account=${account.code}`}>
-            Open ledger
-          </a>
-          {canWrite ? (
-            <Button variant="primary" type="submit" form="coa-edit" disabled={pending}>
-              Save name
+        canWrite ? (
+          <FormFooter>
+            <Button type="button" onClick={() => router.push('/accounts')}>
+              Cancel
             </Button>
-          ) : null}
-        </FormFooter>
+            <Button variant="primary" type="submit" form="coa-edit" disabled={pending}>
+              Save details
+            </Button>
+          </FormFooter>
+        ) : undefined
       }
     >
-      <div className="coa-detail-header">
-        <div>
+      <div className="coa-identity">
+        <div className="coa-identity-row">
           <h1 className="card-title">{account.name}</h1>
-          <p className="card-subtitle">
-            Balance {money}. Creating an account starts at zero; opening balances are a separate posting.
-          </p>
+          <Badge tone={account.isActive === '0' ? 'warning' : 'success'}>{statusLabel(account.isActive)}</Badge>
         </div>
-        <Badge tone={account.isActive === '0' ? 'warning' : 'success'}>{statusLabel(account.isActive)}</Badge>
+        <p className="coa-code-line">{account.code}</p>
+        <p className="coa-balance">{money}</p>
+        <p className="field-help">Creating an account starts at zero; opening balances are a separate posting.</p>
+        <div className="coa-secondary">
+          <a className="button secondary" href={`/journal?account=${account.code}`}>
+            Open ledger
+          </a>
+        </div>
       </div>
-      <dl className="coa-meta-grid">
-        <div>
-          <dt>Class</dt>
-          <dd>{classLabel(account.type)}</dd>
-        </div>
-        <div>
-          <dt>Subtype</dt>
-          <dd>{subtypeLabel(account.subtype)}</dd>
-        </div>
-        <div>
-          <dt>Normal side</dt>
-          <dd>{sideLabel(account.normalSide)}</dd>
-        </div>
-        <div>
-          <dt>Liquidity</dt>
-          <dd>{liquidityLabel(account.liquidity)}</dd>
-        </div>
-        <div>
-          <dt>Control role</dt>
-          <dd>{controlLabel(account.controlRole)}</dd>
-        </div>
-        <div>
-          <dt>Posting</dt>
-          <dd>
-            {account.isGroup === '1' ? 'Group heading (no postings)' : 'Posting account'}
-            {account.isSystem === '1' ? ' · system control' : ''}
-          </dd>
-        </div>
-        <div>
-          <dt>Currency</dt>
-          <dd>{currency}</dd>
-        </div>
-      </dl>
+      <section className="coa-section">
+        <h2>Account facts</h2>
+        <dl className="coa-meta-grid">
+          <div>
+            <dt>Class</dt>
+            <dd>{classLabel(account.type)}</dd>
+          </div>
+          <div>
+            <dt>Subtype</dt>
+            <dd>{subtypeLabel(account.subtype)}</dd>
+          </div>
+          <div>
+            <dt>Normal side</dt>
+            <dd>{sideLabel(account.normalSide)}</dd>
+          </div>
+          <div>
+            <dt>Liquidity</dt>
+            <dd>{liquidityLabel(account.liquidity)}</dd>
+          </div>
+          <div>
+            <dt>Control role</dt>
+            <dd>{controlLabel(account.controlRole)}</dd>
+          </div>
+          <div>
+            <dt>Posting</dt>
+            <dd>
+              {account.isGroup === '1' ? 'Group heading (no postings)' : 'Posting account'}
+              {account.isSystem === '1' ? ' · system control' : ''}
+            </dd>
+          </div>
+          <div>
+            <dt>Currency</dt>
+            <dd>{currency}</dd>
+          </div>
+        </dl>
+      </section>
       {canWrite ? (
-        <form id="coa-edit" onSubmit={save} className="party-tab-grid" style={{ marginTop: 16 }}>
-          {error ? (
-            <p className="form-error field-full" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {message ? (
-            <p className="form-success field-full" role="status">
-              {message}
-            </p>
-          ) : null}
-          <TextField id="coa-edit-name" label="Name" value={name} onChange={(e) => setName(e.target.value)} required className="field-full" />
-          <TextField
-            id="coa-edit-desc"
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="field-full"
-          />
-          <SelectField
-            id="coa-edit-parent"
-            label="Parent"
-            className="field-full"
-            value={parentCode}
-            onChange={setParentCode}
-            options={[{ value: '', label: 'No parent' }, ...parentOptions]}
-          />
-          {account.subtype === 'bank' ? (
-            <>
-              <TextField id="coa-edit-bank" label="Institution" value={institution} onChange={(e) => setInstitution(e.target.value)} />
-              <TextField
-                id="coa-edit-digits"
-                label="Last digits"
-                value={lastDigits}
-                onChange={(e) => setLastDigits(e.target.value.replace(/\D/g, '').slice(-4))}
-                inputMode="numeric"
-                autoComplete="off"
-              />
-            </>
-          ) : null}
-        </form>
+        <section className="coa-section">
+          <h2>Edit details</h2>
+          <form id="coa-edit" onSubmit={save} className="coa-form">
+            {error ? (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {message ? (
+              <p className="form-success" role="status">
+                {message}
+              </p>
+            ) : null}
+            <TextField id="coa-edit-name" label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <TextField
+              id="coa-edit-desc"
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <SelectField
+              id="coa-edit-parent"
+              label="Parent"
+              value={parentCode}
+              onChange={setParentCode}
+              options={[{ value: '', label: 'No parent' }, ...parentOptions]}
+            />
+            {account.subtype === 'bank' ? (
+              <div className="coa-bank-row">
+                <TextField
+                  id="coa-edit-bank"
+                  label="Institution"
+                  value={institution}
+                  onChange={(e) => setInstitution(e.target.value)}
+                />
+                <TextField
+                  id="coa-edit-digits"
+                  label="Last digits"
+                  value={lastDigits}
+                  onChange={(e) => setLastDigits(e.target.value.replace(/\D/g, '').slice(-4))}
+                  inputMode="numeric"
+                  autoComplete="off"
+                />
+              </div>
+            ) : null}
+          </form>
+        </section>
       ) : (
-        <p className="field-help">You can view this account. Renaming needs Accounts write.</p>
+        <p className="field-help">You can view this account. Editing needs Accounts write.</p>
       )}
     </FormShell>
   );

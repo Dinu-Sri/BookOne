@@ -111,79 +111,82 @@ export function CoaWizard({
         </FormFooter>
       }
     >
-      <form id="coa-create" onSubmit={onSubmit} className="party-tab-grid">
+      <form id="coa-create" onSubmit={onSubmit} className="coa-form">
         {error ? (
-          <p className="form-error field-full" role="alert">
+          <p className="form-error" role="alert">
             {error}
           </p>
         ) : null}
-        <SelectField
-          id="coa-template"
-          label="What are you adding?"
-          className="field-full"
-          value={templateId}
-          onChange={(next) => {
-            setTemplateId(next as WizardTemplateId);
-            setCode('');
-            setParentCode('');
-          }}
-          options={ACCOUNT_WIZARD_TEMPLATES.map((row) => ({ value: row.id, label: row.label, description: row.help }))}
-          help={`Shows on ${template.statement}. Normal side is set from the class.`}
-        />
-        {templateId === 'group' ? (
+        <section className="coa-section">
+          <h2>Account type</h2>
           <SelectField
-            id="coa-group-type"
-            label="Statement class"
-            value={groupType}
-            onChange={setGroupType}
-            options={ROOT_CLASS_OPTIONS}
-            help="Group headings do not accept journals. Children must share this class."
+            id="coa-template"
+            label="What are you adding?"
+            value={templateId}
+            onChange={(next) => {
+              setTemplateId(next as WizardTemplateId);
+              setCode('');
+              setParentCode('');
+            }}
+            options={ACCOUNT_WIZARD_TEMPLATES.map((row) => ({ value: row.id, label: row.label, description: row.help }))}
+            help={`Shows on ${template.statement}. Normal side is set from the class.`}
           />
-        ) : null}
-        <TextField id="coa-code" label="Code" value={code} onChange={(e) => setCode(e.target.value)} required />
-        <div className="field">
-          <label htmlFor="coa-suggest">&nbsp;</label>
-          <Button type="button" id="coa-suggest" onClick={suggest} disabled={pending}>
-            Suggest code
-          </Button>
-        </div>
-        <TextField id="coa-name" label="Name" value={name} onChange={(e) => setName(e.target.value)} required className="field-full" />
-        <TextField
-          id="coa-desc"
-          label="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="field-full"
-        />
-        <SelectField
-          id="coa-parent"
-          label="Parent (optional)"
-          className="field-full"
-          value={parentCode}
-          onChange={setParentCode}
-          placeholder="No parent"
-          options={[{ value: '', label: 'No parent' }, ...parentOptions]}
-          emptyReason="No other accounts in this class yet."
-          help="Parent must be the same statement class. Leave empty for a root account."
-        />
+          {templateId === 'group' ? (
+            <SelectField
+              id="coa-group-type"
+              label="Statement class"
+              value={groupType}
+              onChange={setGroupType}
+              options={ROOT_CLASS_OPTIONS}
+              help="Group headings do not accept journals. Children must share this class."
+            />
+          ) : null}
+        </section>
+        <section className="coa-section">
+          <h2>Account identity</h2>
+          <div className="coa-code-row">
+            <TextField id="coa-code" label="Code" value={code} onChange={(e) => setCode(e.target.value)} required />
+            <Button type="button" id="coa-suggest" onClick={suggest} disabled={pending}>
+              Suggest code
+            </Button>
+          </div>
+          <TextField id="coa-name" label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+          <TextField id="coa-desc" label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </section>
+        <section className="coa-section">
+          <h2>Hierarchy</h2>
+          <SelectField
+            id="coa-parent"
+            label="Parent (optional)"
+            value={parentCode}
+            onChange={setParentCode}
+            placeholder="No parent"
+            options={[{ value: '', label: 'No parent' }, ...parentOptions]}
+            emptyReason="No other accounts in this class yet."
+            help="Parent must be the same statement class. Leave empty for a root account."
+          />
+        </section>
         {templateId === 'bank' ? (
-          <>
-            <TextField
-              id="coa-bank"
-              label="Institution (optional)"
-              value={institution}
-              onChange={(e) => setInstitution(e.target.value)}
-              help="Display only. This does not open a real bank account or store a login."
-            />
-            <TextField
-              id="coa-digits"
-              label="Last digits (optional)"
-              value={lastDigits}
-              onChange={(e) => setLastDigits(e.target.value.replace(/\D/g, '').slice(-4))}
-              inputMode="numeric"
-              autoComplete="off"
-            />
-          </>
+          <section className="coa-section">
+            <h2>Bank details</h2>
+            <div className="coa-bank-row">
+              <TextField
+                id="coa-bank"
+                label="Institution"
+                value={institution}
+                onChange={(e) => setInstitution(e.target.value)}
+                help="Display only. This does not open a real bank account or store a login."
+              />
+              <TextField
+                id="coa-digits"
+                label="Last digits"
+                value={lastDigits}
+                onChange={(e) => setLastDigits(e.target.value.replace(/\D/g, '').slice(-4))}
+                inputMode="numeric"
+                autoComplete="off"
+              />
+            </div>
+          </section>
         ) : null}
       </form>
     </FormShell>

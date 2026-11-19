@@ -42,6 +42,7 @@ export function DateField({
   error,
   help,
   allowBlank,
+  className,
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -57,6 +58,7 @@ export function DateField({
   error?: string;
   help?: string;
   allowBlank?: boolean;
+  className?: string;
 }) {
   const autoId = useId();
   const fieldId = id ?? autoId;
@@ -216,7 +218,10 @@ export function DateField({
   ) : null;
 
   return (
-    <div ref={rootRef} className={`${compact ? '' : 'field '}date-field date-quick ${compact ? 'compact' : ''}`.trim()}>
+    <div
+      ref={rootRef}
+      className={`${compact ? '' : 'field '}date-field date-quick ${compact ? 'compact' : ''} ${className ?? ''}`.trim()}
+    >
       {label ? (
         <label htmlFor={fieldId} className="date-field-label">
           {label}

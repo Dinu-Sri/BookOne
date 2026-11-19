@@ -33,7 +33,6 @@ export function CoaImport() {
         setSummary(
           `Dry-run: ${result.data.creates} to create, ${result.data.skipped} already present, ${(result.data.issues ?? []).length} issues.`,
         );
-        if (result.data.issues[0]) setError(result.data.issues[0].message);
       })();
     });
   }
@@ -60,6 +59,7 @@ export function CoaImport() {
       backHref="/accounts"
       backParent="Accounts"
       title="Import chart CSV"
+      size="wide"
       footer={
         <FormFooter>
           <Button type="button" onClick={() => router.push('/accounts')}>
@@ -80,33 +80,39 @@ export function CoaImport() {
             {error}
           </p>
         ) : null}
-        {summary ? (
-          <p className="form-success" role="status">
-            {summary}
-          </p>
-        ) : null}
-        <p className="field-help" style={{ marginBottom: 12 }}>
-          Metadata only — codes, names, classes and groups. Monetary openings use Opening balances. This does not post journals.
+        <p className="import-guide">
+          Metadata only — codes, names, classes and groups. Monetary openings use Opening balances. This does not post
+          journals. Columns: <code>code,name,type,subtype,parent_code,description,is_group</code>
         </p>
-        <TextAreaField
-          id="coa-csv"
-          label="CSV"
-          className="field-full"
-          rows={12}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          help="Columns: code, name, type, subtype, parent_code, description, is_group. Formula-safe export matches this template."
-        />
-        {issues.length > 0 ? (
-          <ul className="import-issue-list">
-            {issues.map((issue, index) => (
-              <li key={`${issue.field ?? 'row'}-${index}`}>
-                {issue.line ? `Line ${issue.line}` : ''}
-                {issue.field ? `${issue.line ? ' · ' : ''}${issue.field}: ` : issue.line ? ': ' : ''}
-                {issue.message}
-              </li>
-            ))}
-          </ul>
+        <div className="import-editor">
+          <TextAreaField
+            id="coa-csv"
+            label="CSV"
+            rows={12}
+            spellCheck={false}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </div>
+        {summary || issues.length > 0 ? (
+          <div className="import-review" role="region" aria-label="Import review">
+            {summary ? (
+              <p className={issues.length > 0 ? 'field-help' : 'form-success'} role="status">
+                {summary}
+              </p>
+            ) : null}
+            {issues.length > 0 ? (
+              <ul className="import-issue-list">
+                {issues.map((issue, index) => (
+                  <li key={`${issue.field ?? 'row'}-${index}`}>
+                    {issue.line ? `Line ${issue.line}` : ''}
+                    {issue.field ? `${issue.line ? ' · ' : ''}${issue.field}: ` : issue.line ? ': ' : ''}
+                    {issue.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         ) : null}
       </form>
     </FormShell>

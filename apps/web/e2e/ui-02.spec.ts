@@ -1,4 +1,38 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { LAYOUT_ROUTES, layoutHtml, type LayoutRoute } from './ui-02-layout-fixture';
+
+const css = readFileSync(path.resolve(__dirname, '../src/app/globals.css'), 'utf8');
+const shotDir = path.resolve(__dirname, '../../../docs/qa/ui02-layout');
+
+const VIEWPORTS = [
+  { width: 1920, height: 1080, name: '1920x1080' },
+  { width: 1366, height: 768, name: '1366x768' },
+  { width: 768, height: 1024, name: '768x1024' },
+  { width: 390, height: 844, name: '390x844' },
+] as const;
+
+async function openLayout(
+  page: Page,
+  route: LayoutRoute,
+  opts?: { variant?: 'before' | 'after'; width?: number; height?: number; sidebar?: 'expanded' | 'collapsed' },
+) {
+  await page.setViewportSize({ width: opts?.width ?? 1366, height: opts?.height ?? 768 });
+  await page.setContent(
+    layoutHtml({
+      css,
+      route,
+      variant: opts?.variant ?? 'after',
+      sidebar: opts?.sidebar ?? 'expanded',
+    }),
+    { waitUntil: 'domcontentloaded' },
+  );
+}
+
+function within2(a: number, b: number) {
+  expect(Math.abs(a - b), `${a} vs ${b}`).toBeLessThanOrEqual(2);
+}
 
 const html = `<!doctype html>
 <html lang="en">
@@ -112,4 +146,93 @@ test('UI-02 shows human-readable class labels and a blank date trigger', async (
   await expect(page.getByText('operating_expense')).toHaveCount(0);
   await expect(page.locator('#open-date')).toHaveText('Select date');
   await expect(page.getByRole('combobox', { name: 'Cash or bank' })).toHaveText('1000 · Cash on Hand');
+});
+
+test('UI-02 desktop filters share a control baseline and Balance is end-aligned', async ({ page }) => {
+  await openLayout(page, 'accounts', { width: 1366, height: 768 });
+  const search = await page.locator('#coa-search').boundingBox();
+  const klass = await page.locator('#coa-root').boundingBox();
+  const status = await page.locator('#coa-status').boundingBox();
+  expect(search && klass && status).toBeTruthy();
+  within2(search!.y + search!.height, klass!.y + klass!.height);
+  within2(klass!.y + klass!.height, status!.y + status!.height);
+  const balanceHead = await page.locator('.th-num').first().boundingBox();
+  const balanceCell = await page.locator('.td-num').first().boundingBox();
+  expect(balanceHead && balanceCell).toBeTruthy();
+  expect(balanceHead!.x + balanceHead!.width).toBeGreaterThan(balanceHead!.x + 40);
+  within2(balanceHead!.x + balanceHead!.width, balanceCell!.x + balanceCell!.width);
+});
+
+test('UI-02 date label and trigger share a leading edge', async ({ page }) => {
+  await openLayout(page, 'opening', { width: 1366, height: 768 });
+  const label = await page.locator('label[for="open-date"]').boundingBox();
+  const trigger = await page.locator('#open-date').boundingBox();
+  expect(label && trigger).toBeTruthy();
+  within2(label!.x, trigger!.x);
+  await openLayout(page, 'advances', { width: 1366, height: 768 });
+  const amount = await page.locator('#adv-amount').boundingBox();
+  const date = await page.locator('#adv-date').boundingBox();
+  expect(amount && date).toBeTruthy();
+  within2(amount!.y, date!.y);
+});
+
+test('UI-02 opening header tracks match row tracks', async ({ page }) => {
+  await openLayout(page, 'opening', { width: 1366, height: 768 });
+  const head = page.locator('.opening-line-head > *');
+  const row = page.locator('.opening-line-grid').first().locator(':scope > *');
+  await expect(head).toHaveCount(4);
+  await expect(row).toHaveCount(4);
+  for (let i = 0; i < 4; i += 1) {
+    const h = await head.nth(i).boundingBox();
+    const r = await row.nth(i).boundingBox();
+    expect(h && r).toBeTruthy();
+    within2(h!.x, r!.x);
+    within2(h!.width, r!.width);
+  }
+});
+
+test('UI-02 narrow and zoomed layouts keep controls reachable', async ({ page }) => {
+  await openLayout(page, 'new', { width: 390, height: 844, sidebar: 'collapsed' });
+  await expect(page.getByRole('link', { name: /Back/ })).toBeVisible();
+  await expect(page.locator('#coa-code')).toBeVisible();
+  await expect(page.locator('#coa-suggest')).toBeVisible();
+  const overflow = await page.evaluate(() => ({
+    scrollW: document.documentElement.scrollWidth,
+    clientW: document.documentElement.clientWidth,
+  }));
+  expect(overflow.scrollW).toBeLessThanOrEqual(overflow.clientW + 2);
+  await openLayout(page, 'accounts', { width: 390, height: 844, sidebar: 'collapsed' });
+  await expect(page.locator('#coa-search')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'New account' })).toBeVisible();
+  const wrap = page.locator('.table-wrap').first();
+  await expect(wrap).toBeVisible();
+  await openLayout(page, 'opening', { width: 1366, height: 768 });
+  await page.evaluate(() => {
+    document.body.style.zoom = '2';
+  });
+  await expect(page.locator('#open-date')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add line' })).toBeVisible();
+});
+
+test('UI-02 layout screenshots before and after required widths', async ({ page }) => {
+  test.setTimeout(120_000);
+  for (const route of LAYOUT_ROUTES) {
+    await openLayout(page, route, { variant: 'before', width: 1366, height: 768 });
+    await page.screenshot({ path: path.join(shotDir, `before-${route}-1366x768.png`), fullPage: true });
+    for (const vp of VIEWPORTS) {
+      await openLayout(page, route, {
+        width: vp.width,
+        height: vp.height,
+        sidebar: vp.width <= 768 ? 'collapsed' : 'expanded',
+      });
+      await page.screenshot({ path: path.join(shotDir, `after-${route}-${vp.name}.png`), fullPage: true });
+    }
+  }
+  await openLayout(page, 'accounts', { width: 1366, height: 768, sidebar: 'collapsed' });
+  await page.screenshot({ path: path.join(shotDir, 'after-accounts-1366-collapsed.png'), fullPage: true });
+  await openLayout(page, 'opening', { width: 1366, height: 768 });
+  await page.evaluate(() => {
+    document.body.style.zoom = '2';
+  });
+  await page.screenshot({ path: path.join(shotDir, 'after-opening-zoom200.png'), fullPage: true });
 });

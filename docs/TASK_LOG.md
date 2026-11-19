@@ -1,3 +1,10 @@
+## 2026-11-19 — Accounts/Advances layout follow-up (v2.13.1)
+
+- Record: [CHG-20261119-ui-02-accounting-layout](changes/CHG-20261119-ui-02-accounting-layout.md). Evidence [qa/ui02-layout/ACCEPTANCE.md](qa/ui02-layout/ACCEPTANCE.md). Baseline product `870ccfa` / v2.13.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: six Accounts/Advances routes keep shared controls and gain aligned filters/dates/opening tracks, bounded FormShell sizes, grouped identity vs facts vs edit, compact empty allocate. DateField calendar scoped to `.date-field.date-quick`. VERSION 2.13.1. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` ui-02-lint 6 passed, ui-02-gate 7 passed, coa-01-gate 6 passed, ui-nav-01 9 passed. `@bookone/agent-bridge` coreguard 2 passed. `@bookone/accounting` classification 4, coa-01-pilot 3, advances 4, csv-opening 3 passed. Playwright ui-02 8 passed, coa-01 2 passed. Screenshots in `docs/qa/ui02-layout/`.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent live `/accounts*` and `/advances` review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Accounts/Advances UI consistency and UI-02 gate (v2.13.0)
 
 - Record: [CHG-20261119-ui-02-coa-consistency](changes/CHG-20261119-ui-02-coa-consistency.md). Registry [UI_CONTROL_REGISTRY.md](UI_CONTROL_REGISTRY.md). Baseline product `f2bfed6` / v2.12.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

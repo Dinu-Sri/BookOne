@@ -8,10 +8,10 @@ UI-02 CoreGuard enforces this registry with an AST lint (`packages/auth/test/ui-
 
 | File | Export | Use for |
 |---|---|---|
-| `apps/web/src/components/ui/text-field.tsx` | `TextField`, `AmountField`, `TextAreaField`, `SearchField` | Visible text, money, multiline, list search |
+| `apps/web/src/components/ui/text-field.tsx` | `TextField`, `AmountField`, `TextAreaField`, `SearchField` | Visible text, money, multiline, list search. `SearchField showLabel` for CoA filter groups that sit next to labelled selects |
 | `apps/web/src/components/ui/select-field.tsx` | `SelectField` | Real labelled combobox (portal, keyboard, search from 8 options, hidden `name` input) |
-| `apps/web/src/components/ui/date-field.tsx` | `DateField` | Single calendar date, ISO `YYYY-MM-DD` |
-| `apps/web/src/components/ui/form-shell.tsx` | `FormBackLink`, `FormShell`, `FormFooter` | Create/detail/opening/import top Back and footer |
+| `apps/web/src/components/ui/date-field.tsx` | `DateField` | Single calendar date, ISO `YYYY-MM-DD`. Labelled calendar uses `.date-field.date-quick`; compact keeps the calendar in-flow |
+| `apps/web/src/components/ui/form-shell.tsx` | `FormBackLink`, `FormShell`, `FormFooter` | Create/detail/opening/import top Back and footer. `size="form"` (42rem) or `size="wide"` (56rem) |
 
 Existing production primitives that stay in use:
 
@@ -29,7 +29,7 @@ Existing production primitives that stay in use:
 
 - Visible text/amount/textarea controls use class token `.input` inside `.field`, with a persistent `<label htmlFor>`.
 - Amounts keep server decimal validation. Do not coerce blank, invalid, or negative values into money.
-- Search on list screens uses `SearchField` (`input party-search`) in `party-toolbar`.
+- Search on list screens uses `SearchField` (`input party-search`) in `party-toolbar`. Chart of Accounts uses labelled `SearchField` (`showLabel`) in `.coa-toolbar` / `.coa-filters` so Search, Class and Status share a control baseline.
 - Help and errors sit next to the control (`.field-help`, `.form-error`).
 - Hidden, checkbox, radio, file, submit, button, reset, and image inputs remain allowed HTML. They are exempt from the unstyled-field rule.
 

@@ -308,70 +308,73 @@ export function CoaManager({
 
   return (
     <div className="workspace party-workspace">
-      <div className="party-toolbar">
-        <SearchField
-          id="coa-search"
-          label="Search"
-          value={query}
-          onChange={setQuery}
-          placeholder="Search by code, name or class"
-        />
-        <SelectField
-          id="coa-root"
-          label="Class"
-          value={root}
-          onChange={setRoot}
-          className="party-toolbar-filter"
-          options={[{ value: 'all', label: 'All classes' }, ...ROOTS.map((item) => ({ value: item, label: classLabel(item) }))]}
-        />
-        <SelectField
-          id="coa-status"
-          label="Status"
-          value={status}
-          onChange={(v) => setStatus(v as typeof status)}
-          className="party-toolbar-filter"
-          options={[
-            { value: 'active', label: 'Active' },
-            { value: 'archived', label: 'Archived' },
-            { value: 'all', label: 'All' },
-          ]}
-        />
+      <div className="coa-page-head">
+        <div>
+          <p className="eyebrow">Accounting</p>
+          <h1 className="card-title">Chart of Accounts</h1>
+          <p className="card-subtitle">
+            Company accounts, banks, advances and opening balances. Reports use the current name; posted journals keep
+            their original lines.
+          </p>
+        </div>
         {canWrite ? (
           <Link href="/accounts/new" className="button primary">
             New account
           </Link>
         ) : null}
       </div>
-      <Card>
-        <div className="card-header">
-          <div>
-            <p className="eyebrow">Accounting</p>
-            <h1 className="card-title" style={{ marginTop: 4 }}>
-              Chart of Accounts
-            </h1>
-            <p className="card-subtitle">
-              Company accounts, banks, advances and opening balances. Reports use the current name; posted journals keep their original lines.
-            </p>
-          </div>
-          <div className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
-            {canWrite ? (
-              <Link href="/accounts/opening" className="button">
-                Opening balances
-              </Link>
-            ) : null}
-            {canWrite ? (
-              <Link href="/accounts/import" className="button">
-                Import CSV
-              </Link>
-            ) : null}
-            <Button onClick={exportCsv} disabled={pending}>
-              Export CSV
-            </Button>
-            <Link href="/advances" className="button">
-              Advances
-            </Link>
-          </div>
+      <div className="coa-toolbar">
+        <div className="coa-filters">
+          <SearchField
+            id="coa-search"
+            label="Search"
+            value={query}
+            onChange={setQuery}
+            placeholder="Search by code, name or class"
+            showLabel
+            className="coa-search-field"
+          />
+          <SelectField
+            id="coa-root"
+            label="Class"
+            value={root}
+            onChange={setRoot}
+            className="party-toolbar-filter"
+            options={[{ value: 'all', label: 'All classes' }, ...ROOTS.map((item) => ({ value: item, label: classLabel(item) }))]}
+          />
+          <SelectField
+            id="coa-status"
+            label="Status"
+            value={status}
+            onChange={(v) => setStatus(v as typeof status)}
+            className="party-toolbar-filter"
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'archived', label: 'Archived' },
+              { value: 'all', label: 'All' },
+            ]}
+          />
         </div>
+        <div className="coa-secondary">
+          {canWrite ? (
+            <Link href="/accounts/opening" className="button secondary">
+              Opening balances
+            </Link>
+          ) : null}
+          {canWrite ? (
+            <Link href="/accounts/import" className="button secondary">
+              Import CSV
+            </Link>
+          ) : null}
+          <Button onClick={exportCsv} disabled={pending}>
+            Export CSV
+          </Button>
+          <Link href="/advances" className="button secondary">
+            Advances
+          </Link>
+        </div>
+      </div>
+      <Card>
         <div className="card-body">
           {error ? (
             <p className="form-error" role="alert">
@@ -420,8 +423,8 @@ export function CoaManager({
                         <SortIcon active={sortKey === 'status'} dir={sortDir} />
                       </button>
                     </th>
-                    <th>
-                      <button type="button" className="th-sort-btn" onClick={() => toggleSort('balance')}>
+                    <th className="th-num">
+                      <button type="button" className="th-sort-btn th-sort-btn-end" onClick={() => toggleSort('balance')}>
                         Balance
                         <SortIcon active={sortKey === 'balance'} dir={sortDir} />
                       </button>
@@ -443,7 +446,7 @@ export function CoaManager({
                       </td>
                       <td>{subtypeLabel(row.subtype)}</td>
                       <td>{statusLabel(row.isActive)}</td>
-                      <td style={{ textAlign: 'right' }} className={row.balance < 0 ? 'amount-negative' : 'amount-positive'}>
+                      <td className={`td-num ${row.balance < 0 ? 'amount-negative' : 'amount-positive'}`}>
                         {money(row.balance, currency)}
                       </td>
                       <td className="td-actions">

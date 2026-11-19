@@ -2549,13 +2549,14 @@ textarea.input {
    category preview, chip picker, receipt
    ============================================ */
 
-.date-field {
+/* Legacy Simple Entry native date: icon overlay on input[type=date]. */
+.date-field:not(.date-quick) {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.date-field > svg {
+.date-field:not(.date-quick) > svg {
   position: absolute;
   left: 12px;
   color: var(--ink-soft);
@@ -2563,7 +2564,7 @@ textarea.input {
   z-index: 1;
 }
 
-.date-field > .input {
+.date-field:not(.date-quick) > .input {
   padding-left: 36px;
 }
 
@@ -6367,9 +6368,26 @@ textarea.input {
   }
 }
 
-/* Date field (global ERP-style calendar) */
-.date-field { position: relative; display: flex; flex-direction: column; gap: 6px; }
-.date-field-label { font-size: 13px; font-weight: 700; color: #3a4a5c; }
+/* DateField calendar: column so the label shares the trigger's leading edge. */
+.date-field.date-quick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.date-field.date-quick.compact {
+  gap: 0;
+}
+.date-field.date-quick > .date-field-label,
+.date-field.date-quick > label {
+  display: block;
+  margin-bottom: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-muted);
+  text-align: left;
+}
 .date-menu-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .date-nav-btn {
   width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent;
@@ -10193,6 +10211,25 @@ a.bih-card:hover {
   font-weight: 700;
   color: var(--ink-soft);
 }
+.form-shell {
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+}
+.form-shell.form-shell-form {
+  max-width: 42rem;
+}
+.form-shell.form-shell-wide {
+  max-width: 56rem;
+}
+.form-shell > .party-form-footer {
+  padding: 12px 18px 16px;
+  flex-wrap: wrap;
+}
+.form-shell > .party-form-footer .field-help {
+  margin: 0 auto 0 0;
+  align-self: center;
+}
 .party-toolbar-filter {
   flex: 0 1 180px;
   min-width: 150px;
@@ -10269,13 +10306,104 @@ a.bih-card:hover {
 .date-menu.open-up {
   right: auto;
 }
-.coa-detail-header {
+.coa-page-head {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
   align-items: flex-start;
+  gap: 12px 16px;
   flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.coa-page-head h1 {
+  margin: 4px 0 0;
+}
+.coa-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+  margin-bottom: 12px;
+}
+.coa-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  flex: 1 1 28rem;
+  min-width: 0;
+}
+.coa-filters .field,
+.coa-filters .select-field,
+.coa-filters .party-search-form {
+  margin: 0;
+}
+.coa-search-field {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+  max-width: 22rem;
+}
+.coa-filters .party-toolbar-filter {
+  flex: 0 1 10rem;
+  min-width: 8.5rem;
+}
+.coa-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.th-num,
+.td-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.th-sort-btn-end {
+  width: 100%;
+  justify-content: flex-end;
+}
+.coa-identity {
+  display: grid;
+  gap: 6px;
   margin-bottom: 16px;
+}
+.coa-identity-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.coa-identity .card-title {
+  margin: 0;
+}
+.coa-code-line {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.coa-balance {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.coa-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.coa-section h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.coa-form .coa-section {
+  margin: 0;
 }
 .coa-meta-grid {
   display: grid;
@@ -10294,14 +10422,47 @@ a.bih-card:hover {
   margin: 2px 0 0;
   font-size: 14px;
   font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.coa-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.coa-code-row,
+.coa-bank-row {
+  display: grid;
+  gap: 10px;
+}
+.coa-code-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+.coa-code-row .button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+.coa-bank-row {
+  grid-template-columns: minmax(0, 1fr) 7.5rem;
+  align-items: start;
+}
+.opening-date {
+  max-width: 16rem;
+}
+.opening-editor {
+  --opening-tracks: minmax(0, 2.2fr) minmax(7.5rem, 1fr) minmax(7.5rem, 1fr) 6.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
 }
 .opening-line-head,
-.opening-line-grid {
+.opening-line-grid,
+.opening-review {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: var(--opening-tracks);
   gap: 10px;
-  align-items: end;
-  margin-top: 10px;
+  align-items: start;
 }
 .opening-line-head {
   font-size: 11px;
@@ -10310,27 +10471,120 @@ a.bih-card:hover {
   letter-spacing: 0.04em;
   color: var(--ink-soft);
 }
-.opening-totals {
+.opening-line-head .num,
+.opening-review .num,
+.opening-line-grid .td-num {
+  text-align: right;
+}
+.opening-line-grid .field {
+  margin: 0;
+  min-width: 0;
+  position: relative;
+}
+@media (min-width: 721px) {
+  .opening-line-grid .field > label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+.opening-action {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px 18px;
-  margin: 12px 0;
+  align-items: flex-start;
+}
+.opening-remove {
+  min-height: 40px;
+  width: 100%;
+}
+.opening-review {
+  margin-top: 8px;
   font-size: 13px;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.opening-editor-actions {
+  margin-top: 8px;
+}
+.import-guide {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.import-guide code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.import-editor {
+  min-width: 0;
+}
+.import-editor textarea.input {
+  min-height: 14rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  white-space: pre;
+  overflow: auto;
+}
+.import-review {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
 }
 .import-issue-list {
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   padding-left: 18px;
   color: var(--danger);
   font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.adv-stack {
+  display: grid;
+  gap: 16px;
+}
+.adv-empty {
+  margin: 0;
+  font-size: 14px;
+}
+.adv-context {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
 }
 @media (max-width: 720px) {
   .coa-meta-grid,
-  .opening-line-head,
-  .opening-line-grid {
+  .coa-code-row,
+  .coa-bank-row {
     grid-template-columns: 1fr;
+  }
+  .coa-search-field,
+  .coa-filters .party-toolbar-filter {
+    flex: 1 1 100%;
+    max-width: none;
   }
   .opening-line-head {
     display: none;
+  }
+  .opening-editor {
+    --opening-tracks: 1fr;
+  }
+  .opening-line-grid::before {
+    content: 'Line ' attr(data-line);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .opening-date {
+    max-width: none;
+  }
+  .opening-review .num {
+    text-align: left;
   }
 }

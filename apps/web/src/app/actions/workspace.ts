@@ -966,6 +966,14 @@ export interface AccountWithBalance {
   type: string;
   normalSide: string;
   balance: number;
+  subtype?: string | null;
+  isGroup?: string | null;
+  isSystem?: string | null;
+  isActive?: string | null;
+  liquidity?: string | null;
+  controlRole?: string | null;
+  parentCode?: string | null;
+  version?: number;
 }
 
 export async function listAccountsWithBalances(): Promise<AccountWithBalance[]> {

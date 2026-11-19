@@ -1,3 +1,7 @@
+## 2026-11-19 — CoA web lint types (v2.12.1)
+
+Candidate **2.12.1** on `fix/v2121-coa-01-web-lint` from origin/master `57fcb60` / v2.12.0. Production Check on v2.12.0 failed web `tsc` for account-detail classification fields and advance cash-code literals. This candidate types those surfaces. COA-01 behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Company Chart of Accounts COA-01 (v2.12.0)
 
 Candidate **2.12.0** on `feat/v2120-coa-01-chart-of-accounts` from origin/master `b35762d` / v2.11.5. Business companies maintain a full chart of accounts, add banks and advances, post a balanced opening separately from account create, and see custom 11xx banks in cash/dashboard/cash-flow. Permission catalog stays v2. AgentBridge scopes are unchanged. Taxable advances are refused. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

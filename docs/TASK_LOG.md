@@ -1,3 +1,10 @@
+## 2026-11-19 — CoA web lint types (v2.12.1)
+
+- Record: [CHG-20261119-coa-01-web-lint](changes/CHG-20261119-coa-01-web-lint.md). Baseline product `57fcb60` / v2.12.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: `AccountWithBalance` includes classification fields already mapped by `listAccountsWithBalances`. Advance cash/expense line-builder params are `string`. VERSION 2.12.1. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/accounting` advances 4 passed, coa-01-pilot 3 passed. Local web `tsc --noEmit` no longer reports `src/app/accounts/[id]/page.tsx` or `src/app/actions/advances.ts`. Remaining local hits are `.next/types` PageProps noise absent from a clean CI checkout.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent live `/accounts` and `/advances` review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Company Chart of Accounts COA-01 (v2.12.0)
 
 - Record: [CHG-20261119-coa-01-chart-of-accounts](changes/CHG-20261119-coa-01-chart-of-accounts.md). Operator guide [CHART_OF_ACCOUNTS.md](CHART_OF_ACCOUNTS.md). Baseline product `b35762d` / v2.11.5. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

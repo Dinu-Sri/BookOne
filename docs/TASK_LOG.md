@@ -1,3 +1,10 @@
+## 2026-11-19 — Bank-recon CoreGuard ERP import (v2.14.2)
+
+- Record: [CHG-20261119-bank-recon-erp-import](changes/CHG-20261119-bank-recon-erp-import.md). Baseline product `23efc95` / v2.14.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: bank-recon Playwright opens `/reconciliation/import` and `bis-file-input`. Docker web image `44572345551` failed CoreGuard **Pilot custom-bank** because `/cashbook/import` redirects company tenants to `/` and the ISO CSV attached to another file input. VERSION 2.14.2. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: v2.14.1 Production Check succeeded. Docker lint/typecheck/build/test succeeded. Custom-bank Playwright 2 passed. Bank-recon Playwright failed waiting for Which bank? after 30s.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent disposable-company bank-recon review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Bank recon Studio web lint (v2.14.1)
 
 - Record: [CHG-20261119-bank-recon-web-lint](changes/CHG-20261119-bank-recon-web-lint.md). Baseline product `2b4be31` / v2.14.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

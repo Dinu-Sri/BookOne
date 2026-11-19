@@ -835,6 +835,7 @@ export function BankImportStudioWizard({
             accept=".xlsx,.xls,.csv,.tsv,.txt"
             hidden
             disabled={pending}
+            data-testid="bis-file-input"
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) upload(f);

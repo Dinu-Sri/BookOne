@@ -1,6 +1,6 @@
 # Bank reconciliation simple compare — candidate evidence
 
-Product **2.14.1**. Fixture `docs/coreguard/fixtures/bank-recon.v1.json` plus ISO/serial/invalid CSVs. v2.14.0 Production Check `44571222338` failed web `tsc`; this candidate types the Studio save confirmation and statement-equation difference.
+Product **2.14.2**. Fixture `docs/coreguard/fixtures/bank-recon.v1.json` plus ISO/serial/invalid CSVs. Pilot company tenants import at `/reconciliation/import`. v2.14.1 Docker web image `44572345551` failed Playwright bank-recon on `/cashbook/import`.
 
 ## Implemented
 

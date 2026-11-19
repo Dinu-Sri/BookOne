@@ -1,3 +1,7 @@
+## 2026-11-19 — Bank-recon CoreGuard ERP import (v2.14.2)
+
+Candidate **2.14.2** on `fix/v2142-bank-recon-erp-import` from origin/master `23efc95` / v2.14.1. Docker web image `44572345551` CoreGuard **Pilot custom-bank** failed Playwright bank-recon: company tenants cannot use `/cashbook/import`. This candidate drives the seeded journey through `/reconciliation/import` and a dedicated file input. Import/match/finish behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Bank recon Studio web lint (v2.14.1)
 
 Candidate **2.14.1** on `fix/v2141-bank-recon-web-lint` from origin/master `2b4be31` / v2.14.0. Production Check `44571222338` failed web `tsc`. Docker web image `44571222119` CoreGuard oracle/postgres passed, then `next build` failed on the same Studio `||` / `??` mix. This candidate types those two expressions. Bank-recon import/match/finish behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

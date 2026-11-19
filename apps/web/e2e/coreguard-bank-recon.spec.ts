@@ -56,8 +56,9 @@ test('ISO import matches existing entries without journals, then finishes after 
   }
 
   await login(page, ownerEmail, ownerPassword);
-  await page.goto('/cashbook/import');
-  await page.locator('input[type="file"]').setInputFiles(isoCsv);
+  await page.goto('/reconciliation/import');
+  await expect(page.getByRole('heading', { name: 'Upload bank file' })).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('bis-file-input').setInputFiles(isoCsv);
   await expect(page.getByRole('heading', { name: 'Which bank?' })).toBeVisible({ timeout: 30_000 });
   await page.locator('.bis-card', { hasText: fixture.bank.code }).click();
   await page.getByRole('button', { name: 'Next' }).click();

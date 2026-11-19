@@ -42,11 +42,28 @@ describe('Dashboard DB-01 source contracts', () => {
 
   it('cash bars share a common scale instead of independent 100% widths', () => {
     const ui = read('apps/web/src/components/dashboard/dashboard-overview.tsx');
-    expect(ui).toMatch(/const max = Math.max\(Math.abs\(inValue\), Math.abs\(outValue\)/);
+    const chart = read('apps/web/src/components/dashboard/dashboard-chart-panel.tsx');
+    expect(chart).toMatch(/Math\.max\(\s*0\.01,/);
+    expect(chart).toMatch(/Math\.max\(Math\.abs\(p\.moneyIn/);
+    expect(chart).toMatch(/dash-chart-table/);
     expect(ui).toMatch(/Selected period/);
     expect(ui).toMatch(/As of range end/);
-    expect(ui).toMatch(/dash-chart-table/);
     expect(ui).not.toMatch(/width: data\.cashFlow\.moneyIn > 0 \? '100%'/);
+  });
+
+  it('DB-02 compact overview keeps details on demand and does not clip the page', () => {
+    const ui = read('apps/web/src/components/dashboard/dashboard-overview.tsx');
+    const chart = read('apps/web/src/components/dashboard/dashboard-chart-panel.tsx');
+    const css = read('apps/web/src/app/globals.css');
+    const markup = read('apps/web/src/components/dashboard/dashboard-markup.ts');
+    expect(chart).toMatch(/View data/);
+    expect(chart).toMatch(/No activity in selected period/);
+    expect(ui).toMatch(/All clear|DashboardAttention/);
+    expect(ui).not.toMatch(/Deferred capability/);
+    expect(ui).not.toMatch(/#in-bar/);
+    expect(markup).toMatch(/class="dash-group-title"/);
+    expect(css).toMatch(/Business overview DB-02 compact/);
+    expect(css).not.toMatch(/\.workspace\.dash-page[\s\S]{0,120}overflow:\s*hidden/);
   });
 
   it('preserves AgentBridge signing-file support', () => {

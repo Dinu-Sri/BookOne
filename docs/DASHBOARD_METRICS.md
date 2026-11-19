@@ -1,6 +1,6 @@
-# Dashboard metric dictionary (DB-01)
+# Dashboard metric dictionary (DB-01 / DB-02)
 
-Product version: 2.9.0. Reporting engine: `packages/accounting/src/dashboard-metrics.ts` plus existing `composeFinancialStatements` / `netIncomeFromRows` / `signedCashFlow`. The dashboard does not post, reverse, or rewrite journals.
+Product version: 2.11.5. Reporting engine: `packages/accounting/src/dashboard-metrics.ts` plus existing `composeFinancialStatements` / `netIncomeFromRows` / `signedCashFlow`. The dashboard does not post, reverse, or rewrite journals. DB-02 is a presentation correction: metric IDs, formulas, date/currency rules and permissions are unchanged from DB-01.
 
 Date basis: period flows use the selected inclusive interval. Position balances use the interval end (`asOf`). Historic selection never substitutes today's balances. Company calendar day uses `company_profiles.timezone` (default `Asia/Colombo`). Fiscal year start month defaults to April. Maximum custom range is 1,826 days.
 
@@ -32,9 +32,19 @@ Comparison: previous equivalent elapsed interval immediately before the selectio
 
 - Sales series: daily if ≤ 45 days, weekly if that stays ≤ 30 buckets, otherwise monthly. Bucket sums equal DB01-NS.
 - Cash series: same grain, common scale, visible zero. Internal transfers do not inflate a day.
-- AR/AP aging: buckets current / 1–30 / 31–60 / 61–90 / 90+ with amounts and document counts. Links keep `asOf`.
-- Expenses: ranked period expense accounts with an Other group that reconciles to the expense total.
-- Attention: overdue invoices/bills at cutoff; outstanding drafts/pending approval (Current); open POS shifts (Current); low stock vs reorder (Current); category reviews in the period (not a health certification); AgentBridge inbox when enabled and permitted (Current, not a health certification).
+- AR/AP aging: buckets current / 1–30 / 31–60 / 61–90 / 90+ with amounts and document counts. Links keep `asOf`. Default overview shows overdue of the control total plus compact bucket segments; the full aging table stays on the existing aging reports.
+- Expenses: ranked period expense accounts with an Other group that reconciles to the expense total. Expense ranking is not on the default overview.
+- Attention: overdue invoices/bills at cutoff; outstanding drafts/pending approval (Current); open POS shifts (Current); low stock vs reorder (Current); category reviews in the period (not a health certification); AgentBridge inbox when enabled and permitted (Current, not a health certification). Default overview shows at most three items, or a quiet All clear when the count is 0.
+- Chart data tables open from View data into a native dialog. Account codes, formulas, rounding notes and card-clearing recon live in each metric's Details disclosure.
+- Empty series: compact “No activity in selected period.” Failed widgets render an error, never a healthy zero.
+
+## Desktop fit contract (DB-02)
+
+The default `/dashboard` overview must fit one normal desktop viewport at 100% zoom without a dashboard-caused page scrollbar. Recorded CSS viewports: 1280×720, 1366×768, 1440×900, 1920×1080. Assert `document.documentElement.scrollHeight <= clientHeight` and `scrollWidth <= clientWidth` (2px rounding). Do not achieve this with `overflow: hidden` on the dashboard, `body { overflow-y: hidden }`, clipped content, or scaled-down type.
+
+Default composition: compact Dashboard title plus period/as-of subtitle (company context stays in the shell topbar), six KPI cells in Selected period / As of range end groups, two chart panels (Sales trend, Cash received and paid) at about 220–270px on 900px+ heights and about 170px on short laptop heights, then a three-column overdue / due / exceptions summary.
+
+200% zoom and 375px width reflow and may scroll. Chart dialogs may scroll. Sidebar scrolling is separate from dashboard content fit. Both expanded and collapsed sidebar modes remain usable.
 
 ## Availability matrix
 

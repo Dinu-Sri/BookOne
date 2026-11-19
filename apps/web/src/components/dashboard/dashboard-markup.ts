@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
+  AGING_BUCKETS,
   DB01_AS_OF,
   DB01_CURRENCY,
   DB01_PERIOD,
@@ -36,33 +37,14 @@ export function db01OverviewModel() {
   return { expected, snapshot, money, sales, cash, maxCash };
 }
 
-export function dashboardDb01Html(opts?: { longLabel?: boolean; collapsedSidebar?: boolean }) {
+function shell(inner: string, opts?: { longLabel?: boolean; collapsedSidebar?: boolean; company?: string }) {
   const css = readFileSync(path.resolve(__dirname, '../../app/globals.css'), 'utf8');
-  const { expected, snapshot, money, sales, cash, maxCash } = db01OverviewModel();
-  const company = opts?.longLabel
-    ? 'DB01 Fixture Trading Company With A Very Long Registered Name For Layout'
-    : 'DB01 Fixture Co';
+  const company =
+    opts?.company ??
+    (opts?.longLabel
+      ? 'DB01 Fixture Trading Company With A Very Long Registered Name For Layout'
+      : 'DB01 Fixture Co');
   const collapsed = opts?.collapsedSidebar ? ' is-collapsed' : '';
-  const inPct = (snapshot.externalCash.moneyIn / Math.max(snapshot.externalCash.moneyIn, snapshot.externalCash.moneyOut, 0.01)) * 100;
-  const outPct = (snapshot.externalCash.moneyOut / Math.max(snapshot.externalCash.moneyIn, snapshot.externalCash.moneyOut, 0.01)) * 100;
-  const salesBars = sales
-    .map((p) => {
-      const max = Math.max(0.01, ...sales.map((s) => Math.abs(s.value)));
-      const h = (Math.abs(p.value) / max) * 140;
-      return `<rect x="${sales.indexOf(p) * 40 + 8}" y="${150 - h}" width="28" height="${h}" fill="#1677c9"></rect>`;
-    })
-    .join('');
-  const cashBars = cash
-    .map((p, i) => {
-      const inH = (p.moneyIn / maxCash) * 140;
-      const outH = (p.moneyOut / maxCash) * 140;
-      return `<g>
-        <rect data-cash-in="${p.key}" x="${i * 40 + 6}" y="${150 - inH}" width="14" height="${inH}" fill="#15835f"></rect>
-        <rect data-cash-out="${p.key}" x="${i * 40 + 22}" y="${150 - outH}" width="14" height="${outH}" fill="#c94141"></rect>
-      </g>`;
-    })
-    .join('');
-
   return `<!doctype html>
 <html class="light" lang="en">
 <head><meta charset="utf-8"><style>${css}</style></head>
@@ -87,59 +69,188 @@ export function dashboardDb01Html(opts?: { longLabel?: boolean; collapsedSidebar
     </div>
   </aside>
   <main class="main">
-    <div class="workspace dash-page" id="dashboard">
-      <header class="dash-header">
-        <div>
-          <p class="eyebrow">Business overview</p>
-          <h1 class="h1" id="company">${company}</h1>
-          <p class="lead">${DB01_PERIOD.from} to ${DB01_PERIOD.to} · Positions as of ${DB01_AS_OF}</p>
-        </div>
-        <div class="dash-controls">
-          <label class="dash-compare"><input type="checkbox" checked /> Compare previous equivalent interval</label>
-          <button type="button" class="btn secondary" id="refresh">Refresh</button>
-        </div>
-      </header>
-      <section class="dash-group" aria-labelledby="dash-period">
-        <h2 id="dash-period" class="dash-group-title">Selected period</h2>
-        <div class="grid metrics dash-metrics-3">
-          <article class="dash-metric" data-metric="DB01-NS"><p class="metric-label">Net sales</p><p class="metric-value" id="net-sales">${money(snapshot.netSales)}</p></article>
-          <article class="dash-metric" data-metric="DB01-OR"><p class="metric-label">Operating result</p><p class="metric-value" id="operating-result">${money(snapshot.operatingResult)}</p></article>
-          <article class="dash-metric" data-metric="DB01-NCM"><p class="metric-label">Net cash movement</p><p class="metric-value" id="net-cash">${money(snapshot.netCashMovement)}</p></article>
-        </div>
-      </section>
-      <section class="dash-group" aria-labelledby="dash-position">
-        <h2 id="dash-position" class="dash-group-title">As of range end</h2>
-        <div class="grid metrics dash-metrics-3">
-          <article class="dash-metric" data-metric="DB01-CB"><p class="metric-label">Cash and bank</p><p class="metric-value" id="cash-bank">${money(snapshot.cashAndBank)}</p></article>
-          <article class="dash-metric" data-metric="DB01-AR"><p class="metric-label">Receivables</p><p class="metric-value">${money(snapshot.receivables)}</p></article>
-          <article class="dash-metric" data-metric="DB01-AP"><p class="metric-label">Payables</p><p class="metric-value">${money(snapshot.payables)}</p></article>
-        </div>
-        <p class="dash-clearing" id="card-clearing">Card clearing ${money(snapshot.cardClearing)} — Account 1200 is unsettled card receipts, not spendable cash.</p>
-      </section>
-      <div class="grid two dash-charts">
-        <section class="card">
-          <div class="card-header"><h2 class="card-title">Net sales trend</h2></div>
-          <div class="card-body">
-            <svg id="sales-chart" viewBox="0 0 640 180" role="img">${salesBars}</svg>
-            <table class="dash-chart-table" id="sales-table"><caption>Sales by period</caption><tbody>${sales.map((p) => `<tr><th>${p.label}</th><td>${p.value}</td></tr>`).join('')}</tbody></table>
-          </div>
-        </section>
-        <section class="card">
-          <div class="card-header"><h2 class="card-title">Received and paid</h2></div>
-          <div class="card-body">
-            <div class="dash-bar-pair" id="cash-pair">
-              <div><span>Received ${snapshot.externalCash.moneyIn}</span><div class="cashflow-track"><i id="in-bar" style="width:${inPct}%"></i></div></div>
-              <div><span>Paid ${snapshot.externalCash.moneyOut}</span><div class="cashflow-track out"><i id="out-bar" style="width:${outPct}%"></i></div></div>
-            </div>
-            <svg id="cash-chart" viewBox="0 0 640 180" role="img">${cashBars}</svg>
-            <p id="funding">Funding in ${snapshot.externalCash.fundingIn} · internal transfers ${snapshot.externalCash.transferIn} excluded</p>
-          </div>
-        </section>
-      </div>
-      <p class="dash-deferred">Deferred: Historical stock valuation and stock aging (no stock snapshots).</p>
-      <p id="expected-net-sales" hidden>${expected.netSales}</p>
-    </div>
+    <header class="topbar">
+      <div class="cluster"><span>${company}</span></div>
+      <div class="topbar-actions"><span>Month to date</span></div>
+    </header>
+    ${inner}
   </main>
 </div>
 </body></html>`;
+}
+
+export function dashboardDb01Html(opts?: { longLabel?: boolean; collapsedSidebar?: boolean }) {
+  const { expected, snapshot, money, sales, cash, maxCash } = db01OverviewModel();
+  const company = opts?.longLabel
+    ? 'DB01 Fixture Trading Company With A Very Long Registered Name For Layout'
+    : 'DB01 Fixture Co';
+  const salesMax = Math.max(0.01, ...sales.map((s) => Math.abs(s.value)));
+  const salesBars = sales
+    .map((p, i) => {
+      const h = (Math.abs(p.value) / salesMax) * 180;
+      const y = p.value < 0 ? 200 : 200 - h;
+      return `<rect x="${i * 40 + 48}" y="${y}" width="28" height="${h}" fill="#1677c9"></rect>`;
+    })
+    .join('');
+  const cashBars = cash
+    .map((p, i) => {
+      const inH = (p.moneyIn / maxCash) * 180;
+      const outH = (p.moneyOut / maxCash) * 180;
+      return `<g>
+        <rect data-cash-in="${p.key}" x="${i * 40 + 46}" y="${200 - inH}" width="14" height="${inH}" fill="#15835f"></rect>
+        <rect data-cash-out="${p.key}" x="${i * 40 + 62}" y="${200 - outH}" width="14" height="${outH}" fill="#c94141"></rect>
+      </g>`;
+    })
+    .join('');
+  const salesRows = sales.map((p) => `<tr><th>${p.label}</th><td>${p.value}</td></tr>`).join('');
+  const cashRows = cash
+    .map((p) => `<tr><th>${p.label}</th><td>${p.moneyIn}</td><td>${p.moneyOut}</td></tr>`)
+    .join('');
+  const bucketLabel: Record<string, string> = {
+    current: 'Current',
+    d1_30: '1–30',
+    d31_60: '31–60',
+    d61_90: '61–90',
+    d90_plus: '90+',
+  };
+  const agingSegments = (aging: typeof snapshot.arAging) =>
+    AGING_BUCKETS.map((bucket) => {
+      const amount = aging.amounts[bucket];
+      const max = Math.max(aging.grandTotal, 0.01);
+      const h = Math.min(100, (Math.abs(amount) / max) * 100);
+      return `<li title="${bucketLabel[bucket]} ${amount.toFixed(2)}"><i style="height:${h}%"></i><span>${bucketLabel[bucket]}</span></li>`;
+    }).join('');
+
+  const inner = `
+    <div class="workspace dash-page" id="dashboard">
+      <header class="dash-header">
+        <div>
+          <h1 class="dash-title">Dashboard</h1>
+          <p class="dash-subtitle"><span id="company">${company}</span> · Month to date · ${DB01_PERIOD.from} to ${DB01_PERIOD.to} · as of ${DB01_AS_OF} (Asia/Colombo) · ${DB01_CURRENCY}</p>
+        </div>
+        <div class="dash-controls">
+          <label class="dash-compare"><input type="checkbox" checked /> Compare previous</label>
+          <p class="dash-stamp">Figures as of this load · 19 Mar 2026, 12:00</p>
+          <button type="button" class="button secondary" id="refresh">Refresh</button>
+        </div>
+      </header>
+      <div class="dash-kpis">
+        <section class="dash-group" aria-labelledby="dash-period">
+          <h2 id="dash-period" class="dash-group-title">Selected period</h2>
+          <div class="dash-kpi-row">
+            <article class="dash-metric" data-metric="DB01-NS"><p class="metric-label">Net sales</p><p class="metric-value" id="net-sales">${money(snapshot.netSales)}</p><p class="dash-compare-label">vs previous period</p><details class="dash-metric-details"><summary>Details</summary><p>${money(snapshot.netSales)}</p></details></article>
+            <article class="dash-metric" data-metric="DB01-OR"><p class="metric-label">Operating result</p><p class="metric-value" id="operating-result">${money(snapshot.operatingResult)}</p><p class="dash-compare-label">vs previous period</p><details class="dash-metric-details"><summary>Details</summary><p>${money(snapshot.operatingResult)}</p></details></article>
+            <article class="dash-metric" data-metric="DB01-NCM"><p class="metric-label">Net cash movement</p><p class="metric-value" id="net-cash">${money(snapshot.netCashMovement)}</p><p class="dash-compare-label">vs previous period</p><details class="dash-metric-details"><summary>Details</summary><p>${money(snapshot.netCashMovement)}</p></details></article>
+          </div>
+        </section>
+        <section class="dash-group" aria-labelledby="dash-position">
+          <h2 id="dash-position" class="dash-group-title">As of range end</h2>
+          <div class="dash-kpi-row">
+            <article class="dash-metric" data-metric="DB01-CB">
+              <p class="metric-label">Cash and bank</p>
+              <p class="metric-value" id="cash-bank">${money(snapshot.cashAndBank)}</p>
+              <details class="dash-metric-details"><summary>Details</summary><p>${money(snapshot.cashAndBank)}</p><p id="card-clearing">Card clearing ${money(snapshot.cardClearing)} — Account 1200 is unsettled card receipts, not spendable cash.</p></details>
+            </article>
+            <article class="dash-metric" data-metric="DB01-AR"><p class="metric-label">Receivables</p><p class="metric-value" id="receivables">${money(snapshot.receivables)}</p><details class="dash-metric-details"><summary>Details</summary><p>${money(snapshot.receivables)}</p></details></article>
+            <article class="dash-metric" data-metric="DB01-AP"><p class="metric-label">Payables</p><p class="metric-value" id="payables">${money(snapshot.payables)}</p><details class="dash-metric-details"><summary>Details</summary><p>${money(snapshot.payables)}</p></details></article>
+          </div>
+        </section>
+      </div>
+      <div class="grid two dash-charts">
+        <section class="card dash-chart-card">
+          <div class="card-header dash-chart-head"><h2 class="card-title">Sales trend</h2><button type="button" class="button secondary" id="sales-view-data">View data</button></div>
+          <div class="card-body">
+            <p class="dash-chart-legend"><span class="dash-legend-sales">Net sales</span></p>
+            <div class="dash-chart"><svg id="sales-chart" viewBox="0 0 640 240" role="img">${salesBars}<line x1="44" x2="630" y1="200" y2="200" stroke="currentColor" opacity="0.35"></line></svg></div>
+          </div>
+          <dialog class="dash-data-dialog" id="sales-data-dialog">
+            <div class="dash-data-dialog-head"><h2 class="card-title">Sales by period</h2><button type="button" class="button secondary" id="sales-close">Close</button></div>
+            <table class="dash-chart-table" id="sales-table"><caption>Sales by period</caption><tbody>${salesRows}</tbody></table>
+          </dialog>
+        </section>
+        <section class="card dash-chart-card">
+          <div class="card-header dash-chart-head"><h2 class="card-title">Cash received and paid</h2><button type="button" class="button secondary" id="cash-view-data">View data</button></div>
+          <div class="card-body">
+            <p class="dash-chart-legend"><span class="dash-legend-in">Received</span><span class="dash-legend-out">Paid</span></p>
+            <div class="dash-chart"><svg id="cash-chart" viewBox="0 0 640 240" role="img">${cashBars}</svg></div>
+            <p class="dash-chart-summary">Received ${snapshot.externalCash.moneyIn} · paid ${snapshot.externalCash.moneyOut}</p>
+          </div>
+          <dialog class="dash-data-dialog" id="cash-data-dialog">
+            <div class="dash-data-dialog-head"><h2 class="card-title">Cash received and paid</h2><button type="button" class="button secondary" id="cash-close">Close</button></div>
+            <table class="dash-chart-table" id="cash-table"><caption>Cash received and paid</caption><tbody>${cashRows}</tbody></table>
+            <p id="funding">Funding in ${snapshot.externalCash.fundingIn} · internal transfers ${snapshot.externalCash.transferIn} excluded</p>
+          </dialog>
+        </section>
+      </div>
+      <section class="dash-summary" aria-label="Balances and exceptions">
+        <div class="dash-aging-strip">
+          <p class="dash-strip-title">Customer overdue</p>
+          <p class="dash-strip-value">${money(snapshot.arAging.overdueAmount)} overdue <span>of ${money(snapshot.arAging.grandTotal)}</span></p>
+          <ol class="dash-aging-segments">${agingSegments(snapshot.arAging)}</ol>
+          <p><a href="/reports">View all customer overdue</a></p>
+        </div>
+        <div class="dash-aging-strip">
+          <p class="dash-strip-title">Supplier due</p>
+          <p class="dash-strip-value">${money(snapshot.apAging.overdueAmount)} overdue <span>of ${money(snapshot.apAging.grandTotal)}</span></p>
+          <ol class="dash-aging-segments">${agingSegments(snapshot.apAging)}</ol>
+          <p><a href="/reports">View all supplier due</a></p>
+        </div>
+        <div class="dash-aging-strip">
+          <p class="dash-strip-title">Exceptions</p>
+          <p class="dash-all-clear">All clear — no flagged items.</p>
+        </div>
+      </section>
+      <p id="expected-net-sales" hidden>${expected.netSales}</p>
+    </div>
+    <script>
+      document.getElementById('sales-view-data')?.addEventListener('click', () => document.getElementById('sales-data-dialog').showModal());
+      document.getElementById('sales-close')?.addEventListener('click', () => document.getElementById('sales-data-dialog').close());
+      document.getElementById('cash-view-data')?.addEventListener('click', () => document.getElementById('cash-data-dialog').showModal());
+      document.getElementById('cash-close')?.addEventListener('click', () => document.getElementById('cash-data-dialog').close());
+    </script>`;
+
+  return shell(inner, { ...opts, company });
+}
+
+export function dashboardDb02EmptyHtml() {
+  const zero = formatCompanyMoney(0, DB01_CURRENCY);
+  const inner = `
+    <div class="workspace dash-page" id="dashboard">
+      <header class="dash-header">
+        <div>
+          <h1 class="dash-title">Dashboard</h1>
+          <p class="dash-subtitle"><span id="company">Empty Co</span> · Month to date · as of ${DB01_AS_OF} (Asia/Colombo) · ${DB01_CURRENCY}</p>
+        </div>
+        <div class="dash-controls">
+          <label class="dash-compare"><input type="checkbox" /> Compare previous</label>
+          <button type="button" class="button secondary" id="refresh">Refresh</button>
+        </div>
+      </header>
+      <div class="dash-kpis">
+        <section class="dash-group" aria-labelledby="dash-period">
+          <h2 id="dash-period" class="dash-group-title">Selected period</h2>
+          <div class="dash-kpi-row">
+            <article class="dash-metric"><p class="metric-label">Net sales</p><p class="metric-value" id="net-sales">${zero}</p></article>
+            <article class="dash-metric"><p class="metric-label">Operating result</p><p class="metric-value">${zero}</p></article>
+            <article class="dash-metric"><p class="metric-label">Net cash movement</p><p class="metric-value">${zero}</p></article>
+          </div>
+        </section>
+        <section class="dash-group" aria-labelledby="dash-position">
+          <h2 id="dash-position" class="dash-group-title">As of range end</h2>
+          <div class="dash-kpi-row">
+            <article class="dash-metric"><p class="metric-label">Cash and bank</p><p class="metric-value">${zero}</p></article>
+            <article class="dash-metric"><p class="metric-label">Receivables</p><p class="metric-value">${zero}</p></article>
+            <article class="dash-metric"><p class="metric-label">Payables</p><p class="metric-value">${zero}</p></article>
+          </div>
+        </section>
+      </div>
+      <div class="grid two dash-charts">
+        <section class="card dash-chart-card"><div class="card-header dash-chart-head"><h2 class="card-title">Sales trend</h2></div><div class="card-body"><p class="dash-empty">No activity in selected period.</p></div></section>
+        <section class="card dash-chart-card"><div class="card-header dash-chart-head"><h2 class="card-title">Cash received and paid</h2></div><div class="card-body"><p class="dash-empty">No activity in selected period.</p></div></section>
+      </div>
+      <section class="dash-summary">
+        <p class="dash-all-clear">All clear — no flagged items.</p>
+      </section>
+    </div>`;
+  return shell(inner, { company: 'Empty Co' });
 }

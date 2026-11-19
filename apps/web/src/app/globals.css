@@ -9675,18 +9675,35 @@ a.bih-card:hover {
 }
 .ops-log-table th { color: #93c5fd; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 
-/* ── Business overview DB-01 ── */
-.dash-page { display: grid; gap: 22px; }
+/* ── Business overview DB-02 compact ── */
+.workspace.dash-page {
+  padding: 16px 28px 18px;
+  display: grid;
+  gap: 12px;
+}
 .dash-header {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
-  align-items: flex-start;
+  gap: 16px;
+  align-items: flex-end;
+}
+.dash-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+.dash-subtitle {
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.35;
+  max-width: 72ch;
 }
 .dash-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 14px;
+  gap: 8px 12px;
   align-items: center;
   justify-content: flex-end;
 }
@@ -9701,22 +9718,37 @@ a.bih-card:hover {
   font-size: 12px;
   color: var(--ink-soft);
 }
-.dash-group { display: grid; gap: 10px; }
+.dash-kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+.dash-group { display: grid; gap: 6px; }
 .dash-group-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--brand-strong);
 }
-.dash-metrics-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dash-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
 .dash-metric {
-  min-height: 118px;
-  padding: 16px;
+  min-height: 0;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+}
+.dash-metric .metric-label { font-size: 11px; }
+.dash-metric .metric-value {
+  margin-top: 4px;
+  font-size: 20px;
+  line-height: 1.15;
 }
 .dash-metric .metric-value a { color: inherit; }
 .dash-metric .metric-value a:focus-visible {
@@ -9724,23 +9756,64 @@ a.bih-card:hover {
   outline-offset: 2px;
 }
 .dash-compare-label {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.dash-metric-details {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.dash-metric-details summary {
+  cursor: pointer;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+.dash-metric-details p { margin-top: 4px; }
+.dash-charts { align-items: stretch; gap: 12px; }
+.dash-chart-card .card-header { padding: 10px 12px 0; }
+.dash-chart-head {
+  display: flex;
+  align-items: center;
+}
+.dash-chart-card .card-body { padding: 8px 12px 12px; }
+.dash-chart-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-bottom: 4px;
+}
+.dash-legend-in::before,
+.dash-legend-out::before,
+.dash-legend-sales::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.dash-legend-in::before { background: var(--success); }
+.dash-legend-out::before { background: var(--danger); }
+.dash-legend-sales::before { background: var(--brand); }
+.dash-chart svg { width: 100%; height: 220px; display: block; color: var(--ink-soft); }
+.dash-page,
+.dash-header,
+.dash-kpis,
+.dash-metric,
+.dash-charts,
+.dash-summary {
+  overflow: visible;
+}
+.dash-chart-summary {
   margin-top: 6px;
   font-size: 12px;
   color: var(--ink-muted);
 }
-.dash-clearing {
-  font-size: 13px;
-  color: var(--ink-muted);
-}
-.dash-charts, .dash-aging-row, .dash-lower { align-items: start; }
-.dash-bar-pair { display: grid; gap: 12px; margin-bottom: 12px; }
-.dash-bar-pair span {
-  display: block;
-  font-size: 12px;
-  font-weight: 750;
-  color: var(--ink-muted);
-}
-.dash-chart svg { width: 100%; height: 180px; display: block; color: var(--ink-soft); }
 .dash-chart-table {
   width: 100%;
   border-collapse: collapse;
@@ -9753,35 +9826,93 @@ a.bih-card:hover {
   border-bottom: 1px solid var(--line);
 }
 .dash-chart-table th[scope="row"], .dash-chart-table caption { text-align: left; }
-.dash-aging, .dash-expenses, .dash-attention {
+.dash-data-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+}
+.dash-data-dialog::backdrop {
+  background: rgba(19, 34, 56, 0.45);
+}
+.dash-data-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dash-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 10px 12px;
+}
+.dash-aging-strip { display: grid; gap: 4px; min-width: 0; }
+.dash-strip-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--brand-strong);
+}
+.dash-strip-value {
+  font-size: 13px;
+  font-weight: 700;
+}
+.dash-strip-value span { font-weight: 500; color: var(--ink-muted); }
+.dash-aging-segments {
   list-style: none;
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  align-items: end;
+  min-height: 36px;
+}
+.dash-aging-segments li {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+.dash-aging-segments i {
+  display: block;
+  width: 100%;
+  min-height: 3px;
+  background: var(--brand);
+  border-radius: 2px;
+}
+.dash-aging-segments span { font-size: 10px; color: var(--ink-soft); }
+.dash-attention {
+  list-style: none;
+  display: grid;
+  gap: 4px;
   margin: 0;
   padding: 0;
 }
-.dash-aging a, .dash-attention a {
+.dash-attention a {
   display: flex;
   justify-content: space-between;
   gap: 8px;
   align-items: baseline;
+  font-size: 13px;
+  min-height: 24px;
 }
-.dash-aging strong, .dash-expenses strong { font-variant-numeric: tabular-nums; }
-.dash-aging em { font-style: normal; color: var(--ink-soft); font-size: 12px; }
-.dash-aging-track {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--bg-subtle);
-  overflow: hidden;
-  margin-top: 4px;
+.dash-empty, .dash-all-clear, .dash-widget-muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
 }
-.dash-aging-track i {
-  display: block;
-  height: 100%;
-  background: var(--brand);
-  min-width: 0;
-}
-.dash-recon, .dash-deferred, .dash-widget-muted {
+.dash-recon {
   margin-top: 10px;
   font-size: 12px;
   color: var(--ink-muted);
@@ -9790,41 +9921,33 @@ a.bih-card:hover {
   color: var(--danger);
   font-size: 14px;
 }
-.dash-attention small {
-  display: block;
-  color: var(--ink-soft);
-  font-size: 12px;
-  margin-top: 2px;
-}
-.dash-modules {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.dash-module-link {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--brand-strong);
-  background: var(--brand-soft);
-}
-.dash-module-link:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
+
+@media (max-width: 1100px) {
+  .dash-kpis,
+  .dash-summary { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
-  .dash-header { flex-direction: column; }
-  .dash-metrics-3,
-  .dash-charts,
-  .dash-aging-row,
-  .dash-lower { grid-template-columns: 1fr; }
+  .dash-header { flex-direction: column; align-items: stretch; }
+  .dash-kpi-row,
+  .dash-charts { grid-template-columns: 1fr; }
+  .workspace.dash-page { padding: 16px; }
 }
 
-@media (min-width: 1440px) {
-  .dash-chart svg { height: 220px; }
+@media (min-height: 900px) {
+  .dash-chart svg { height: 250px; }
+}
+
+@media (max-height: 850px) {
+  .dash-chart svg { height: 170px; }
+  .workspace.dash-page { gap: 8px; padding-top: 10px; padding-bottom: 10px; }
+  .dash-charts { gap: 8px; }
+  .dash-aging-segments { min-height: 28px; }
+  .dash-chart-card .card-header { padding: 8px 12px 0; }
+  .dash-chart-card .card-body { padding: 6px 12px 10px; }
+  .dash-metric { padding: 6px 10px; }
+  .dash-metric-details { margin-top: 2px; }
+  .dash-summary { padding: 8px 12px; }
 }
 
 @media (min-width: 3440px) {

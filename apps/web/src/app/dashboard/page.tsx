@@ -48,8 +48,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <DashboardOverview overview={overview} />
       ) : (
         <div className="workspace dash-page">
-          <p className="eyebrow">Business overview</p>
-          <h1 className="h1">{tenant.name}</h1>
+          <h1 className="dash-title">Dashboard</h1>
           <p className="dash-widget-error" role="alert">
             {loadError ?? 'Could not load dashboard figures.'} This is a report error, not a sign-in failure.
           </p>

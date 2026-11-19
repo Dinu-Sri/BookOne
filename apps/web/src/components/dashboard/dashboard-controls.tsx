@@ -33,12 +33,12 @@ export function DashboardControls({
           checked={compare}
           onChange={(e) => setCompare(e.target.checked)}
         />
-        <span>Compare previous equivalent interval</span>
+        <span>Compare previous</span>
       </label>
       <p className="dash-stamp">
         Figures as of this load · {stamp}
       </p>
-      <Button type="button" variant="secondary" onClick={() => router.refresh()}>
+      <Button type="button" variant="secondary" id="refresh" onClick={() => router.refresh()}>
         Refresh
       </Button>
     </div>

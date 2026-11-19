@@ -1,3 +1,7 @@
+## 2026-11-19 — Compact desktop dashboard overview (v2.11.5)
+
+Candidate **2.11.5** on `fix/v2115-dashboard-db02-compact` from origin/master `9ed27aa` / v2.11.4. Live v2.11.4 `/dashboard` required scrolling through duplicate company heading, tall metric cards and always-visible daily tables. This candidate keeps DB-01 metric definitions and makes the default desktop overview fit one viewport. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — AgentBridge MCP protocol negotiation (v2.11.4)
 
 Candidate **2.11.4** on `fix/v2114-agentbridge-11-mcp-negotiation` from origin/master `2edf473` / v2.11.3. Live v2.11.3 Codex OAuth succeeded, then `initialize` failed with `UNSUPPORTED_PROTOCOL` for `2025-06-18`. This candidate accepts that protocol, keeps older versions, negotiates unknown versions, and returns Streamable HTTP notification 202 plus `MCP-Protocol-Version` handling. Capabilities stay tools-only. This is not a live-tested Codex tool inventory. Owner deploys after the Docker web image is green, then retries initialize on the existing authorized connector. Independent staging QA pending. Real Codex/Claude stay unverified until that retry. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

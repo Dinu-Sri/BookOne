@@ -1,6 +1,6 @@
-## 2026-11-19 — Accounts/Advances layout follow-up (v2.13.1)
+## 2026-11-19 — Accounts/Advances layout follow-up (v2.13.2)
 
-Candidate **2.13.1** on `fix/v2131-ui-02-accounting-layout` from origin/master `870ccfa` / v2.13.0. Independent desktop review of live v2.13.0 found displaced labels and grouping issues on all six Accounts/Advances routes. This candidate keeps the shared controls and repairs layout: aligned filters and dates, bounded form shells, grouped identity vs facts vs edit, shared opening tracks, compact empty allocate. COA-01 posting behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+Candidate **2.13.2** on `fix/v2131-ui-02-accounting-layout` from origin/master `870ccfa` / v2.13.0. Independent desktop review of live v2.13.0 found displaced labels and grouping issues on all six Accounts/Advances routes. v2.13.1 Docker web image failed CoreGuard Playwright UI-02 filter baseline on Linux; this candidate keeps Search/Class/Status on one nowrap row at laptop widths. Shared controls stay. Layout repairs: aligned filters and dates, bounded form shells, grouped identity vs facts vs edit, shared opening tracks, compact empty allocate. COA-01 posting behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
 
 ## 2026-11-19 — Accounts/Advances UI consistency and UI-02 gate (v2.13.0)
 

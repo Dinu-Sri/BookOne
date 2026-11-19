@@ -10326,7 +10326,7 @@ a.bih-card:hover {
 }
 .coa-filters {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-end;
   gap: 10px;
   flex: 1 1 28rem;
@@ -10561,6 +10561,9 @@ a.bih-card:hover {
   .coa-code-row,
   .coa-bank-row {
     grid-template-columns: 1fr;
+  }
+  .coa-filters {
+    flex-wrap: wrap;
   }
   .coa-search-field,
   .coa-filters .party-toolbar-filter {

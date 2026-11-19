@@ -149,7 +149,7 @@ test('UI-02 shows human-readable class labels and a blank date trigger', async (
 });
 
 test('UI-02 desktop filters share a control baseline and Balance is end-aligned', async ({ page }) => {
-  await openLayout(page, 'accounts', { width: 1366, height: 768 });
+  await openLayout(page, 'accounts', { width: 1920, height: 1080 });
   const search = await page.locator('#coa-search').boundingBox();
   const klass = await page.locator('#coa-root').boundingBox();
   const status = await page.locator('#coa-status').boundingBox();

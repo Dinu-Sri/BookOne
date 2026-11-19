@@ -1,6 +1,6 @@
 # UI-02 follow-up layout acceptance
 
-Product **2.13.1**. Base `870ccfa` (v2.13.0). Layout and grouping only. Shared SearchField / SelectField / DateField / TextField / FormShell stay. COA-01 posting and CATALOG_VERSION 2 stay.
+Product **2.13.2**. Base `870ccfa` (v2.13.0). v2.13.1 image was not published. Layout and grouping only. Shared SearchField / SelectField / DateField / TextField / FormShell stay. COA-01 posting and CATALOG_VERSION 2 stay.
 
 | Screen | Before (v2.13.0) | After (this candidate) | Evidence |
 |---|---|---|---|

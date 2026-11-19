@@ -6,7 +6,6 @@ import { assertScreenAccess } from '@/lib/access';
 import Link from 'next/link';
 
 export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await assertScreenAccess('/accounts', 'read');
   const { id } = await params;
   let tenant;
   let accounts;
@@ -15,6 +14,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   } catch {
     redirect('/login?from=/accounts');
   }
+  await assertScreenAccess('/accounts', 'read');
   const account = accounts.find((row) => row.id === id);
   if (!account) notFound();
   const currency = tenant.baseCurrency || 'LKR';

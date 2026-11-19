@@ -1,3 +1,7 @@
+## 2026-11-19 — CoA prerender login redirect (v2.12.2)
+
+Candidate **2.12.2** on `fix/v2122-coa-01-prerender` from origin/master `3efd103` / v2.12.1. Production Check on v2.12.1 passed lint then failed `next build` prerendering `/accounts/import` without a session. This candidate loads tenant first and redirects to login on CoA and Advances pages. COA-01 posting behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — CoA web lint types (v2.12.1)
 
 Candidate **2.12.1** on `fix/v2121-coa-01-web-lint` from origin/master `57fcb60` / v2.12.0. Production Check on v2.12.0 failed web `tsc` for account-detail classification fields and advance cash-code literals. This candidate types those surfaces. COA-01 behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Real Codex/Claude stay unverified. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -9,7 +9,6 @@ export default async function AccountsPage({
 }: {
   searchParams?: Promise<{ focus?: string }>;
 }) {
-  await assertScreenAccess('/accounts', 'read');
   const params = searchParams ? await searchParams : {};
   let tenant;
   let accounts;
@@ -18,6 +17,7 @@ export default async function AccountsPage({
   } catch {
     redirect('/login?from=/accounts');
   }
+  await assertScreenAccess('/accounts', 'read');
 
   return (
     <BookOneShell active="Accounts" tenant={tenant}>

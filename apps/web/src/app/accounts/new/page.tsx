@@ -10,7 +10,6 @@ export default async function NewAccountPage({
 }: {
   searchParams?: Promise<{ template?: string }>;
 }) {
-  await assertScreenAccess('/accounts', 'write');
   const params = searchParams ? await searchParams : {};
   let tenant;
   try {
@@ -18,6 +17,7 @@ export default async function NewAccountPage({
   } catch {
     redirect('/login?from=/accounts/new');
   }
+  await assertScreenAccess('/accounts', 'read');
   if (!jobCanWrite(tenant, 'Accounts')) redirect('/accounts');
   const template = (params.template as WizardTemplateId | undefined) ?? 'bank';
 

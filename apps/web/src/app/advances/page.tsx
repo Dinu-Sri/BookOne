@@ -6,7 +6,6 @@ import { AdvancesPanel } from '@/components/advances/advances-panel';
 import { assertPermission, jobCanWrite } from '@/lib/access';
 
 export default async function AdvancesPage() {
-  await assertPermission('accounting.accounts.read', 'read', { surface: 'rsc' });
   let tenant;
   let advances;
   let people;
@@ -21,6 +20,7 @@ export default async function AdvancesPage() {
   } catch {
     redirect('/login?from=/advances');
   }
+  await assertPermission('accounting.accounts.read', 'read', { surface: 'rsc' });
   const canWrite =
     jobCanWrite(tenant, 'Receive Payments') ||
     jobCanWrite(tenant, 'Pay Vendors') ||

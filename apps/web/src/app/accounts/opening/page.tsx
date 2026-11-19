@@ -5,7 +5,6 @@ import { CoaOpening } from '@/components/accounts/coa-opening';
 import { assertScreenAccess, jobCanWrite } from '@/lib/access';
 
 export default async function OpeningBalancesPage() {
-  await assertScreenAccess('/accounts', 'write');
   let tenant;
   let accounts;
   try {
@@ -13,6 +12,7 @@ export default async function OpeningBalancesPage() {
   } catch {
     redirect('/login?from=/accounts/opening');
   }
+  await assertScreenAccess('/accounts', 'read');
   if (!jobCanWrite(tenant, 'Accounts')) redirect('/accounts');
   return (
     <BookOneShell active="Accounts" tenant={tenant}>

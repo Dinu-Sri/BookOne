@@ -5,13 +5,13 @@ import { CoaImport } from '@/components/accounts/coa-import';
 import { assertScreenAccess, jobCanWrite } from '@/lib/access';
 
 export default async function ChartImportPage() {
-  await assertScreenAccess('/accounts', 'write');
   let tenant;
   try {
     tenant = await getTenantInfo();
   } catch {
     redirect('/login?from=/accounts/import');
   }
+  await assertScreenAccess('/accounts', 'read');
   if (!jobCanWrite(tenant, 'Accounts')) redirect('/accounts');
   return (
     <BookOneShell active="Accounts" tenant={tenant}>

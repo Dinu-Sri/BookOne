@@ -1,3 +1,10 @@
+## 2026-11-19 — CoA prerender login redirect (v2.12.2)
+
+- Record: [CHG-20261119-coa-01-prerender](changes/CHG-20261119-coa-01-prerender.md). Baseline product `3efd103` / v2.12.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: `/accounts*` and `/advances` load tenant first and redirect to login during `next build` prerender, matching `/dashboard`. Write CoA URLs still require Accounts write via `jobCanWrite`. VERSION 2.12.2. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: v2.12.1 lint/typecheck, Tests, Security Scan, and Docker CoreGuard COA-01 succeeded; `next build` failed on `/accounts/import` session throw. This candidate removes that throw from prerender.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent live `/accounts` and `/advances` review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — CoA web lint types (v2.12.1)
 
 - Record: [CHG-20261119-coa-01-web-lint](changes/CHG-20261119-coa-01-web-lint.md). Baseline product `57fcb60` / v2.12.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

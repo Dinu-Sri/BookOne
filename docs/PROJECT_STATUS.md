@@ -1,3 +1,7 @@
+## 2026-11-19 — CoreGuard recon cleanup (v2.14.3)
+
+Candidate **2.14.3** on `fix/v2143-coreguard-recon-cleanup` from origin/master `7e1b267` / v2.14.2. Docker web image `44573723494` CoreGuard Playwright bank-recon passed in 5.8s, then cleanup failed on recon book-transaction foreign keys. This candidate deletes recon and statement rows before transactions. Import/match/finish behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Bank-recon CoreGuard ERP import (v2.14.2)
 
 Candidate **2.14.2** on `fix/v2142-bank-recon-erp-import` from origin/master `23efc95` / v2.14.1. Docker web image `44572345551` CoreGuard **Pilot custom-bank** failed Playwright bank-recon: company tenants cannot use `/cashbook/import`. This candidate drives the seeded journey through `/reconciliation/import` and a dedicated file input. Import/match/finish behaviour is unchanged. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

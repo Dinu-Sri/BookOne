@@ -190,6 +190,21 @@ export async function cleanupPilotSeed(databaseUrl: string, seed: PilotSeed): Pr
   try {
     for (const tenantId of tenantIds) {
       await sql`SELECT set_config('app.current_tenant_id', ${tenantId}, false)`;
+      await sql`SELECT set_config('app.tenant_id', ${tenantId}, false)`;
+      await sql`DELETE FROM bank_reconciliation_case_book_transactions WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_reconciliation_case_bank_lines WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_reconciliation_outstanding_items WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_reconciliation_events WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_reconciliation_snapshots WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_reconciliation_session_imports WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_reconciliation_cases WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_reconciliation_sessions WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_import_issues WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_statement_import_events WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_statement_lines WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_statement_imports WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_statement_profile_versions WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM bank_statement_profiles WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM opening_balance_lines WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM opening_balance_runs WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM journal_lines WHERE tenant_id = ${tenantId}`;

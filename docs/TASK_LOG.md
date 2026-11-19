@@ -1,3 +1,10 @@
+## 2026-11-19 — CoreGuard recon cleanup (v2.14.3)
+
+- Record: [CHG-20261119-coreguard-recon-cleanup](changes/CHG-20261119-coreguard-recon-cleanup.md). Baseline product `7e1b267` / v2.14.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: `cleanupPilotSeed` deletes recon cases, outstanding items, statement lines/imports, and profiles before `transactions`. Docker web image `44573723494` Playwright bank-recon passed in 5.8s then cleanup hit `bank_reconciliation_case_book_transactions`. VERSION 2.14.3. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: v2.14.2 Production Check succeeded. Docker lint/typecheck/build/test succeeded. Playwright 3 passed (bank-recon 5.8s, custom-bank Owner 3.7s, Viewer 884ms) then cleanup failed.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent disposable-company bank-recon review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — Bank-recon CoreGuard ERP import (v2.14.2)
 
 - Record: [CHG-20261119-bank-recon-erp-import](changes/CHG-20261119-bank-recon-erp-import.md). Baseline product `23efc95` / v2.14.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

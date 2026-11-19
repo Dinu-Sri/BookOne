@@ -1,6 +1,6 @@
 # Bank reconciliation simple compare — candidate evidence
 
-Product **2.14.2**. Fixture `docs/coreguard/fixtures/bank-recon.v1.json` plus ISO/serial/invalid CSVs. Pilot company tenants import at `/reconciliation/import`. v2.14.1 Docker web image `44572345551` failed Playwright bank-recon on `/cashbook/import`.
+Product **2.14.3**. Fixture `docs/coreguard/fixtures/bank-recon.v1.json` plus ISO/serial/invalid CSVs. Pilot company tenants import at `/reconciliation/import`. Docker web image `44573723494` Playwright bank-recon passed in 5.8s; this candidate lets Pilot cleanup delete recon rows.
 
 ## Implemented
 

@@ -50,7 +50,7 @@ test('headless HTTP client sells the last unit once and replays without a second
   expect(http.connection.status).toBe(200);
   expect(http.first.status).toBe(202);
   expect(http.replay.status).toBe(202);
-  expect(http.first.json?.status).toBe('posted');
+  expect(http.first.json?.status, String(http.first.json?.reviewReason ?? '')).toBe('posted');
   expect(http.first.json?.documentId).toBeTruthy();
   expect(http.first.json?.documentNumber).toBeTruthy();
   expect(http.replay.json?.replayed === true || http.replay.json?.documentId === http.first.json?.documentId).toBe(true);

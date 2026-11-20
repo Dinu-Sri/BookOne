@@ -1,3 +1,10 @@
+## 2026-11-20 — Commerce authorized posting uses connection owner scope (v2.16.1)
+
+- Record: [CHG-20261120-commerce-authorized-posting-scope](changes/CHG-20261120-commerce-authorized-posting-scope.md). Baseline product `0a1c6f0` / v2.16.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: `createCommercialDocumentWithUser({ alreadyAuthorized: true })` resolves brand/location from the connection owner instead of the browser session. CoreGuard HTTP last-unit can post without cookies. VERSION 2.16.1. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` commerce-gate. Docker web image `44735130720` Pilot custom-bank HTTP last-unit was 202 `needs_review`. Woo live checkout remains not-run.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent C4 store pilot. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce UI and operations repair (v2.16.0)
 
 - Record: [CHG-20261120-commerce-ui-operations-repair](changes/CHG-20261120-commerce-ui-operations-repair.md). Baseline product `c4d3655` / v2.15.3. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

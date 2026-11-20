@@ -52,7 +52,7 @@ import {
   cashSettledReturnStatus,
   shouldSkipHireSourceConversion,
 } from '@bookone/accounting';
-import { requireTenantContext } from '@bookone/auth';
+import { inDimensionScope, requireTenantContext } from '@bookone/auth';
 import { postedObligationSql } from '@/lib/posted-obligations';
 import {
   accounts,
@@ -89,7 +89,7 @@ import { ensureParty } from '@/app/actions/parties';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { getInventorySettings } from '@/app/actions/inventory-settings';
 import { resolveDimensions } from '@/lib/dimensions';
-import { assertDimensionScope, columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
+import { assertDimensionScope, columnInScope, currentDimensionScope, dimensionScopeForUser } from '@/lib/dimension-scope';
 import {
   consumeCostLayers,
   receiveCostLayer,
@@ -1192,13 +1192,17 @@ export async function createCommercialDocumentWithUser(
       (parsed.documentType === 'sales_return' && Boolean(parsed.posMode));
     let dimensions: { brandId: string | null; locationId: string | null };
     try {
-      const scope = await currentDimensionScope();
+      const scope = opts?.alreadyAuthorized
+        ? await dimensionScopeForUser(user)
+        : await currentDimensionScope();
       dimensions = await resolveDimensions(user.tenantId, parsed.brandId, parsed.locationId, {
         auto: isPosDoc,
         allowedLocationIds: scope.locationIds,
         allowedBrandIds: scope.brandIds,
       });
-      await assertDimensionScope(dimensions);
+      if (!inDimensionScope(scope, dimensions)) {
+        throw new Error('You can only work in your assigned shops.');
+      }
     } catch (e) {
       return refuseAfterClaim(e instanceof Error ? e.message : 'Invalid brand/location.');
     }

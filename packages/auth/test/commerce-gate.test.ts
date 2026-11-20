@@ -27,6 +27,9 @@ describe('Commerce C1–C3 CoreGuard contracts', () => {
     const runtime = read('apps/web/src/lib/commerce-runtime.ts');
     expect(runtime).toMatch(/createCommercialDocumentWithUser/);
     expect(runtime).toMatch(/alreadyAuthorized: true/);
+    const docs = read('apps/web/src/app/actions/commercial-docs.ts');
+    expect(docs).toMatch(/dimensionScopeForUser/);
+    expect(docs).toMatch(/alreadyAuthorized/);
     expect(runtime).not.toMatch(/agentBridgeTokenSecret/);
     const sql = read('packages/db/migrations/050_commerce.sql');
     expect(sql).toMatch(/ENABLE ROW LEVEL SECURITY/);

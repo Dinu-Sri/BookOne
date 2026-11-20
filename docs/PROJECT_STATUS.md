@@ -1,3 +1,7 @@
+## 2026-11-20 — Commerce authorized posting uses connection owner scope (v2.16.1)
+
+Candidate **2.16.1** on `fix/v2161-commerce-authorized-posting-scope` from origin/master `0a1c6f0` / v2.16.0. Docker web image `44735130720` Pilot custom-bank HTTP last-unit returned 202 `needs_review` because authorized commerce posting read the missing browser session for location scope. This candidate loads the connection owner scope instead. Commerce UI from v2.16.0 is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce UI and operations repair (v2.16.0)
 
 Candidate **2.16.0** on `feat/v2160-commerce-ui-operations-repair` from origin/master `c4d3655` / v2.15.3. Fixes credential query-string leakage, invoice money mapping, restock line refs, claim-before-post, Commerce page layout/tabs/mapping preview/activity queue, Woo job durability and payment evidence. Plugin ZIP 1.1.0. CoreGuard HTTP last-unit requires posted + document + remaining 0. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

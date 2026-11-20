@@ -1,10 +1,23 @@
 import { inArray, isNull, or } from '@bookone/db';
-import { inDimensionScope, type DimensionScope } from '@bookone/auth';
+import { getRequestAccess, inDimensionScope, type DimensionScope } from '@bookone/auth';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import { getMyAccess } from '@/lib/access';
 
 export async function currentDimensionScope(): Promise<DimensionScope> {
   const access = await getMyAccess();
+  return {
+    locationIds: access?.locationIds ?? null,
+    brandIds: access?.brandIds ?? null,
+  };
+}
+
+/** Scope for a known user (commerce alreadyAuthorized posting has no browser session). */
+export async function dimensionScopeForUser(user: {
+  id: string;
+  tenantId: string;
+  platformRole: 'super_admin' | 'user';
+}): Promise<DimensionScope> {
+  const access = await getRequestAccess(user.id, user.tenantId, user.platformRole);
   return {
     locationIds: access?.locationIds ?? null,
     brandIds: access?.brandIds ?? null,

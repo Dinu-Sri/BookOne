@@ -191,6 +191,35 @@ export async function cleanupPilotSeed(databaseUrl: string, seed: PilotSeed): Pr
     for (const tenantId of tenantIds) {
       await sql`SELECT set_config('app.current_tenant_id', ${tenantId}, false)`;
       await sql`SELECT set_config('app.tenant_id', ${tenantId}, false)`;
+      const commerceTable = await sql<{ t: string | null }[]>`SELECT to_regclass('public.commerce_connections')::text AS t`;
+      if (commerceTable[0]?.t) {
+        await sql`DELETE FROM commerce_order_events WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_order_lines WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_refunds WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_idempotency WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_orders WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_outbox WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_checkpoints WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_product_mappings WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_credentials WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_activity WHERE tenant_id = ${tenantId}`;
+        await sql`DELETE FROM commerce_connections WHERE tenant_id = ${tenantId}`;
+      }
+      await sql`DELETE FROM ops_idempotency WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM settlement_allocations WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM inventory_cost_layer_consumptions WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM inventory_cost_layers WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM inventory_movements WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM inventory_stock_doc_lines WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM inventory_stock_docs WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM business_document_lines WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM business_documents WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM inventory_stock_levels WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM inventory_products WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM locations WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM party_advance_allocations WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM party_advances WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM parties WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM bank_reconciliation_case_book_transactions WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM bank_reconciliation_case_bank_lines WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM bank_reconciliation_outstanding_items WHERE tenant_id = ${tenantId}`;

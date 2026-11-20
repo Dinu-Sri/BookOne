@@ -33,6 +33,7 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === '/authorize') return true;
   if (pathname === '/.well-known' || pathname.startsWith('/.well-known/')) return true;
   if (pathname === '/api/agent-bridge' || pathname.startsWith('/api/agent-bridge/')) return true;
+  if (pathname === '/api/commerce' || pathname.startsWith('/api/commerce/')) return true;
   return false;
 }
 

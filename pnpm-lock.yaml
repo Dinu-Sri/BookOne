@@ -53,6 +53,9 @@ importers:
       '@bookone/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@bookone/commerce':
+        specifier: workspace:*
+        version: link:../../packages/commerce
       '@bookone/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -213,6 +216,22 @@ importers:
       next:
         specifier: ^15.0.0
         version: 15.5.19(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.21)(lightningcss@1.32.0)
+
+  packages/commerce:
+    dependencies:
+      '@bookone/db':
+        specifier: workspace:*
+        version: link:../db
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.21
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

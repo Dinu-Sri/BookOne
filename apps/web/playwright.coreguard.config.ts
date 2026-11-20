@@ -4,7 +4,7 @@ const baseURL = process.env.AUTH_URL ?? 'http://127.0.0.1:3000';
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: /coreguard-(custom-bank|bank-recon)\.spec\.ts/,
+  testMatch: /coreguard-(custom-bank|bank-recon|commerce)\.spec\.ts/,
   timeout: 180_000,
   fullyParallel: false,
   workers: 1,

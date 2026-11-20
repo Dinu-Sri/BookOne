@@ -1,0 +1,45 @@
+# Disposable WooCommerce store for CoreGuard C3. Not used by staging/prod.
+services:
+  commerce-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      MYSQL_ROOT_PASSWORD: wordpress
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uwordpress", "-pwordpress"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  commerce-wp:
+    image: wordpress:6.7-php8.2-apache
+    depends_on:
+      commerce-db:
+        condition: service_healthy
+    ports:
+      - "8088:80"
+    environment:
+      WORDPRESS_DB_HOST: commerce-db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - commerce-wp:/var/www/html
+  commerce-cli:
+    image: wordpress:cli-php8.2
+    depends_on:
+      - commerce-wp
+    user: "33:33"
+    environment:
+      WORDPRESS_DB_HOST: commerce-db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - commerce-wp:/var/www/html
+      - ../connectors/woocommerce/release:/release
+      - ../connectors/woocommerce/bookone-commerce:/plugin
+    entrypoint: ["sleep", "infinity"]
+volumes:
+  commerce-wp:

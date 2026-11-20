@@ -17,6 +17,7 @@ on:
       - apps/**
       - packages/**
       - scripts/**
+      - connectors/**
       - .github/workflows/docker-web.yml
   workflow_dispatch:
 
@@ -113,6 +114,11 @@ jobs:
           REDIS_URL: redis://localhost:6379
           AUTH_SECRET: test-secret-for-ci-only
 
+      - name: Commerce C1-C3 unit
+        run: pnpm --filter @bookone/commerce test
+        env:
+          AUTH_SECRET: test-secret-for-ci-only
+
   coreguard:
     name: AgentBridge CoreGuard
     runs-on: ubuntu-latest
@@ -153,6 +159,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Commerce C1-C3 unit
+        run: pnpm --filter @bookone/commerce test
+
       - name: AgentBridge unit API MCP jobs security
         run: pnpm --filter @bookone/agent-bridge test
         env:
@@ -165,7 +174,7 @@ jobs:
           NODE_ENV: test
 
       - name: AgentBridge permissions archive and publication gate
-        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/tenant-archive.test.ts test/ab06-postgres-claim.test.ts test/agent-bridge-signing-compose.test.ts test/dashboard-db01-gate.test.ts
+        run: pnpm --filter @bookone/auth exec vitest run test/agent-bridge-permissions.test.ts test/ab04-permissions.test.ts test/release-gate-workflow.test.ts test/ui-nav-01.test.ts test/tenant-archive.test.ts test/ab06-postgres-claim.test.ts test/agent-bridge-signing-compose.test.ts test/dashboard-db01-gate.test.ts test/commerce-gate.test.ts
         env:
           DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
           DB01_REQUIRE_POSTGRES: '1'

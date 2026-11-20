@@ -1,3 +1,10 @@
+## 2026-11-20 — Commerce C1–C3 API, Woo plugin, HTTP client (v2.15.0)
+
+- Record: [CHG-20261120-commerce-c1-c3](changes/CHG-20261120-commerce-c1-c3.md). Baseline product `d66d0b5` / v2.14.4. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Company → Commerce Integrations issues scoped keys, maps SKUs and publishes absolute BookOne stock. Durable `POST /api/commerce/v1/orders` with Idempotency-Key returns 202 and posts through `createCommercialDocumentWithUser`. Woo plugin ZIP 1.0.0 with HPOS. Independent HTTP client. CoreGuard requires `.local/commerce-results.json` firstStatus 202. VERSION 2.15.0. Migration 050. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/commerce` vitest. `@bookone/auth` commerce-gate. Plugin package script. CoreGuard Playwright commerce + existing custom-bank and bank-recon. Woo live checkout remains not-run.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent C4 store pilot. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Bank-recon live retest inbox, posting names, guided search (v2.14.4)
 
 - Record: [CHG-20261120-bank-recon-live-retest](changes/CHG-20261120-bank-recon-live-retest.md). Baseline product `7513520` / v2.14.3. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

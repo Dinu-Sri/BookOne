@@ -1,0 +1,14 @@
+{
+  "file": "bookone-commerce-1.0.0.zip",
+  "sha256": "61a645b02e6e4633cdf220d470a5e7b794a7ec4e7c0173b73100a7d24b37f59c",
+  "bytes": 8549,
+  "files": [
+    "bookone-commerce/bookone-commerce.php",
+    "bookone-commerce/includes/class-bookone-admin.php",
+    "bookone-commerce/includes/class-bookone-client.php",
+    "bookone-commerce/includes/class-bookone-orders.php",
+    "bookone-commerce/includes/class-bookone-sync.php",
+    "bookone-commerce/includes/class-bookone-worker.php",
+    "bookone-commerce/readme.txt"
+  ]
+}

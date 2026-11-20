@@ -71,6 +71,19 @@ export {
   agentBridgeFactsKeys,
   agentBridgeOauthCodes,
 } from './agent-bridge';
+export {
+  commerceConnections,
+  commerceCredentials,
+  commerceProductMappings,
+  commerceOrders,
+  commerceOrderLines,
+  commerceOrderEvents,
+  commerceRefunds,
+  commerceIdempotency,
+  commerceOutbox,
+  commerceCheckpoints,
+  commerceActivity,
+} from './commerce';
 export { posRegisters, posShifts } from './pos';
 export {
   tenantRoles,

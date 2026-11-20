@@ -11,6 +11,7 @@ import postgres from 'postgres';
 import { assertPilotTargets } from './allowlist';
 import { fixtureVersion, productSha, productVersion, schemaFingerprint } from './identity';
 import { cleanupPilotSeed, seedPilotCompanies } from './seed';
+import { seedCommerceFixture } from '../commerce/seed';
 
 const ROOT = path.resolve(__dirname, '../..');
 
@@ -62,13 +63,15 @@ async function main() {
   run('npx', ['tsx', 'scripts/init-db.ts'], { DATABASE_URL: targets.databaseUrl });
 
   const seed = await seedPilotCompanies(targets.databaseUrl);
+  const commerce = await seedCommerceFixture(targets.databaseUrl, seed);
   const manifestPath = path.join(ROOT, '.local', 'coreguard-run.json');
   mkdirSync(path.dirname(manifestPath), { recursive: true });
   writeFileSync(
     path.join(ROOT, '.local', 'coreguard-run.json'),
-    JSON.stringify({ identity, seed, createdAt: new Date().toISOString() }, null, 2),
+    JSON.stringify({ identity, seed, commerce: { tenantId: commerce.tenantId, sku: commerce.sku }, createdAt: new Date().toISOString() }, null, 2),
   );
   console.log(`Seeded ${seed.companies.alpha.name} and ${seed.companies.beta.name}`);
+  console.log('Seeded commerce SKU-1 last-unit fixture');
 
   const extraEnv: NodeJS.ProcessEnv = {
     DATABASE_URL: targets.databaseUrl,
@@ -81,12 +84,15 @@ async function main() {
     COREGUARD_BROWSER_TENANT_A: seed.companies.alpha.tenantId,
     COREGUARD_BROWSER_TENANT_B: seed.companies.beta.tenantId,
     COREGUARD_RUN_ID: seed.runId,
+    COREGUARD_COMMERCE_HTTP_TOKEN: commerce.httpToken,
+    COREGUARD_COMMERCE_WOO_TOKEN: commerce.wooToken,
     AUTH_SECRET: process.env.AUTH_SECRET ?? process.env.BETTER_AUTH_SECRET ?? 'test-secret-for-ci-only',
     AUTH_URL: process.env.AUTH_URL ?? 'http://127.0.0.1:3000',
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? process.env.AUTH_URL ?? 'http://127.0.0.1:3000',
   };
 
   let failed: string | null = null;
+  const wantBrowser = process.env.COREGUARD_PILOT_BROWSER === '1' || process.env.GITHUB_ACTIONS === 'true';
   try {
     run(
       'pnpm',
@@ -113,17 +119,20 @@ async function main() {
         'test/coreguard-custom-bank-contract.test.ts',
         'test/coreguard-custom-bank-postgres.test.ts',
         'test/coreguard-bank-recon-postgres.test.ts',
+        'test/commerce-gate.test.ts',
       ],
       extraEnv,
     );
+    run('pnpm', ['--filter', '@bookone/commerce', 'exec', 'vitest', 'run'], extraEnv);
+    run('node', ['scripts/commerce/package-plugin.mjs'], extraEnv);
 
-    const wantBrowser = process.env.COREGUARD_PILOT_BROWSER === '1' || process.env.GITHUB_ACTIONS === 'true';
     if (wantBrowser) {
       if (process.env.COREGUARD_SKIP_WEB_BUILD === '1') {
         console.log('BROWSER: reusing existing apps/web build (COREGUARD_SKIP_WEB_BUILD=1).');
       } else {
         run('pnpm', ['--dir', 'apps/web', 'build'], extraEnv);
       }
+      // Playwright testMatch includes coreguard-commerce.spec.ts
       run('pnpm', ['--dir', 'apps/web', 'run', 'test:coreguard-browser'], extraEnv);
     } else {
       console.log('BROWSER: not-run (set COREGUARD_PILOT_BROWSER=1 to drive the real app).');
@@ -141,11 +150,26 @@ async function main() {
   }
 
   console.log(`Manifest ${manifestPath}`);
+  const commerceResults = path.join(ROOT, '.local', 'commerce-results.json');
+  if (!failed && wantBrowser) {
+    try {
+      const { readFileSync, existsSync } = await import('node:fs');
+      if (!existsSync(commerceResults)) {
+        throw new Error('Required commerce-results.json is missing.');
+      }
+      const parsed = JSON.parse(readFileSync(commerceResults, 'utf8')) as { httpLastUnit?: { firstStatus?: number } };
+      if (parsed.httpLastUnit?.firstStatus !== 202) {
+        throw new Error('Required commerce HTTP last-unit result is missing or not 202.');
+      }
+    } catch (error) {
+      failed = error instanceof Error ? error.message : String(error);
+    }
+  }
   if (failed) {
     console.error(`FAILED: ${failed}`);
     process.exit(1);
   }
-  console.log('PASS: custom-bank and bank-recon CoreGuard lane');
+  console.log('PASS: custom-bank, bank-recon and commerce CoreGuard lane');
 }
 
 main().catch((error) => {

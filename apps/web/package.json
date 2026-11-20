@@ -18,6 +18,7 @@
     "@bookone/accounting": "workspace:*",
     "@bookone/agent-bridge": "workspace:*",
     "@bookone/auth": "workspace:*",
+    "@bookone/commerce": "workspace:*",
     "@bookone/db": "workspace:*",
     "@bookone/modules": "workspace:*",
     "@bookone/statement-import": "workspace:*",

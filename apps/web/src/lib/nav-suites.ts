@@ -140,6 +140,7 @@ export const NAV_SUITES: NavSuite[] = [
       { label: 'Document styles', icon: FileText, href: '/company/document-styles' },
       { label: 'Purchase Settings', icon: ShoppingCart, href: '/company/purchase' },
       { label: 'AgentBridge', icon: FileText, href: '/company/agent-bridge' },
+      { label: 'Commerce Integrations', icon: ShoppingCart, href: '/company/commerce' },
       { label: 'Inventory Settings', icon: Package, href: '/company/inventory' },
       { label: 'Rental Settings', icon: CalendarDays, href: '/company/rental' },
       { label: 'Brands', icon: Package, href: '/company/brands' },

@@ -1,3 +1,7 @@
+## 2026-11-20 — Commerce authorized posting ensures the customer without a session (v2.16.2)
+
+Candidate **2.16.2** on `fix/v2162-commerce-authorized-ensure-party` from origin/master `2771a1e` / v2.16.1. Docker web image `44736222130` HTTP last-unit was still 202 `needs_review` (`No authenticated session with tenant context`) because `ensureParty` read cookies. This candidate passes the connection owner into `ensureParty`. Commerce UI from v2.16.0 is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce authorized posting uses connection owner scope (v2.16.1)
 
 Candidate **2.16.1** on `fix/v2161-commerce-authorized-posting-scope` from origin/master `0a1c6f0` / v2.16.0. Docker web image `44735130720` Pilot custom-bank HTTP last-unit returned 202 `needs_review` because authorized commerce posting read the missing browser session for location scope. This candidate loads the connection owner scope instead. Commerce UI from v2.16.0 is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

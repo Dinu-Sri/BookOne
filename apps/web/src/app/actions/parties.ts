@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireTenantContext } from '@bookone/auth';
+import { requireTenantContext, type SessionUser } from '@bookone/auth';
 import { assertPermission } from '@/lib/access';
 import { AP_BALANCE_TYPES, AR_BALANCE_TYPES, postedObligationSql } from '@/lib/posted-obligations';
 import {
@@ -725,13 +725,13 @@ export async function ensureParty(input: {
   email?: string;
   address?: string;
   taxId?: string;
-}): Promise<PartyRow> {
+}, actor?: SessionUser): Promise<PartyRow> {
   const flags = input.kind
     ? flagsFromKind(input.kind)
     : { isCustomer: Boolean(input.isCustomer ?? true), isVendor: Boolean(input.isVendor) };
   if (!flags.isCustomer && !flags.isVendor) flags.isCustomer = true;
 
-  const user = await requireTenantContext();
+  const user = actor ?? (await requireTenantContext());
   return withTenantContext(user.tenantId, async () => {
     const name = input.name.trim();
     const [existing] = await db()

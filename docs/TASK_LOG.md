@@ -1,3 +1,10 @@
+## 2026-11-20 — Commerce authorized posting ensures the customer without a session (v2.16.2)
+
+- Record: [CHG-20261120-commerce-authorized-ensure-party](changes/CHG-20261120-commerce-authorized-ensure-party.md). Baseline product `2771a1e` / v2.16.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: `ensureParty` accepts the connection owner so authorized commerce posting does not call `requireTenantContext`. Docker web image `44736222130` still failed HTTP last-unit with `No authenticated session with tenant context`. VERSION 2.16.2. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` commerce-gate. Woo live checkout remains not-run.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent C4 store pilot. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce authorized posting uses connection owner scope (v2.16.1)
 
 - Record: [CHG-20261120-commerce-authorized-posting-scope](changes/CHG-20261120-commerce-authorized-posting-scope.md). Baseline product `0a1c6f0` / v2.16.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

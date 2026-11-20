@@ -1271,12 +1271,15 @@ export async function createCommercialDocumentWithUser(
           }
           partyNameForEnsure = srcParty.name;
         }
-        const party = await ensureParty({
-          name: partyNameForEnsure,
-          kind: isSales ? 'customer' : 'vendor',
-          isCustomer: isSales,
-          isVendor: !isSales,
-        });
+        const party = await ensureParty(
+          {
+            name: partyNameForEnsure,
+            kind: isSales ? 'customer' : 'vendor',
+            isCustomer: isSales,
+            isVendor: !isSales,
+          },
+          user,
+        );
         if (party.status === 'blocked') {
           throw new Error('This party is blocked. Unblock them in Parties before posting.');
         }

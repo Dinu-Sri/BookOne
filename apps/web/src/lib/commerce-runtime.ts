@@ -32,7 +32,10 @@ async function postingPort(): Promise<PostingPort> {
           notes: `Commerce ${input.order.externalId}`,
           locationId: input.locationId,
           saleChannel: 'local',
-          invoiceKind: 'tax_invoice',
+          invoiceKind: input.invoiceKind ?? 'commercial',
+          headerDiscount: input.headerDiscount ?? 0,
+          freightAmount: input.freightAmount ?? 0,
+          paymentAccountCode: input.paymentAccountCode,
           intent: 'post',
           idempotencyKey: input.idempotencyKey.slice(0, 80),
           lines: input.lines.map((line) => ({
@@ -40,6 +43,7 @@ async function postingPort(): Promise<PostingPort> {
             description: line.description,
             quantity: line.quantity,
             unitPrice: line.unitPrice,
+            discountAmount: line.discountAmount ?? 0,
             sku: line.sku,
           })),
         },
@@ -52,7 +56,11 @@ async function postingPort(): Promise<PostingPort> {
           httpStatus: 422,
         });
       }
-      return { documentId: result.id, documentNumber: result.id } satisfies PostedDocument;
+      return {
+        documentId: result.id,
+        documentNumber: await lookupDocumentNumber(result.id, result.id),
+        settled: Boolean(input.paymentAccountCode),
+      } satisfies PostedDocument;
     },
     async postSalesReturn(input) {
       const user = actorUser(input.actor);
@@ -82,9 +90,26 @@ async function postingPort(): Promise<PostingPort> {
           httpStatus: 422,
         });
       }
-      return { documentId: result.id, documentNumber: result.id };
+      return {
+        documentId: result.id,
+        documentNumber: await lookupDocumentNumber(result.id, result.id),
+      };
     },
   };
+}
+
+async function lookupDocumentNumber(id: string, fallback: string): Promise<string> {
+  try {
+    const { businessDocuments, db, eq } = await import('@bookone/db');
+    const [row] = await db()
+      .select({ documentNumber: businessDocuments.documentNumber })
+      .from(businessDocuments)
+      .where(eq(businessDocuments.id, id))
+      .limit(1);
+    return row?.documentNumber || fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function actorUser(actor: CommerceActor): SessionUser {

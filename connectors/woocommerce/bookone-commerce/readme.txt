@@ -3,7 +3,7 @@ Contributors: bookone
 Requires at least: 6.4
 Tested up to: 6.7
 Requires PHP: 8.1
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 
 Connect WooCommerce to BookOne. BookOne remains the inventory authority.
@@ -31,6 +31,11 @@ Unsupported in v1: multi-currency, reservation checkout, bundles/kits, fractiona
 5. Preview mappings for a simple product and a variant, then publish stock.
 
 == Changelog ==
+
+= 1.1.0 =
+* Durable claimed job table with backoff, dead state and retry.
+* Paid events require Woo payment evidence (`is_paid()`). COD/processing without paid stay pending.
+* First order POST is not repeated for later snapshot edits. Refunds send original line references.
 
 = 1.0.0 =
 * Initial C3 connector for BookOne 2.15.0.

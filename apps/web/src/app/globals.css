@@ -10247,6 +10247,81 @@ a.bih-card:hover {
 .form-shell.form-shell-wide {
   max-width: 56rem;
 }
+.commerce-workspace .form-shell.form-shell-wide {
+  max-width: min(72rem, 100%);
+  width: 100%;
+}
+.commerce-workspace .party-form-body {
+  flex: 0 0 auto;
+  overflow: visible;
+  min-height: 0;
+}
+.commerce-workspace .party-tabs {
+  flex: 0 0 auto;
+}
+.commerce-workspace .party-tab-panel {
+  flex: 0 0 auto;
+  overflow: visible;
+  min-height: auto;
+}
+.commerce-connection-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.commerce-connection-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.commerce-store-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.commerce-store-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+}
+.commerce-store-btn.active {
+  border-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  background: var(--brand-soft);
+}
+.commerce-issued {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.commerce-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 14px;
+}
+.commerce-table th,
+.commerce-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.commerce-section-title {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
 .form-shell > .party-form-footer {
   padding: 12px 18px 16px;
   flex-wrap: wrap;

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { CommerceError } from './errors';
 import { defaultScopes, hashSecret, hashesEqual, issueToken, parseScopes, parseToken, redactedCredential } from './credentials';
-import { moneyString, parseMoney, stableHash } from './money';
+import { moneyString, parseMoney, parseQty, stableHash } from './money';
 import type { CommerceStore } from './store';
 import type {
   CommerceActor,
@@ -138,7 +138,7 @@ export class CommerceService {
     current.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await this.store.updateCredential(current);
     await this.audit(operator, connectionId, 'credential.rotate', 'credential', current.id, { prefix: current.prefix });
-    return issued;
+    return { ...issued, previousExpiresAt: current.expiresAt, rotatedFromPrefix: current.prefix };
   }
 
   async revokeCredential(operator: OperatorActor, connectionId: string, credentialId: string) {
@@ -159,6 +159,7 @@ export class CommerceService {
     for (const connection of connections) {
       const credentials = (await this.store.listCredentials(operator.tenantId, connection.id)).map(redactedCredential);
       const mappings = await this.store.listMappings(operator.tenantId, connection.id);
+      const products = await this.store.listSellableProducts(operator.tenantId);
       const activity = await this.store.listActivity(operator.tenantId, connection.id);
       const review = await this.store.listOrders(operator.tenantId, connection.id, 'needs_review');
       out.push({
@@ -166,7 +167,30 @@ export class CommerceService {
         credentials,
         mappingCount: mappings.length,
         reviewCount: review.length,
-        activity: activity.slice(0, 50),
+        mappings: mappings.map((m) => ({
+          id: m.id,
+          sku: m.sku,
+          bookoneProductId: m.bookoneProductId,
+          bookoneName: products.find((p) => p.id === m.bookoneProductId)?.name ?? null,
+          externalProductId: m.externalProductId,
+          externalVariantId: m.externalVariantId,
+          status: m.status,
+        })),
+        reviews: review.map((o) => ({
+          id: o.id,
+          externalId: o.externalId,
+          status: o.status,
+          reviewReason: o.reviewReason,
+          createdAt: o.createdAt,
+        })),
+        activity: activity.slice(0, 50).map((a) => ({
+          id: a.id,
+          action: a.action,
+          entity: a.entity,
+          entityId: a.entityId,
+          createdAt: a.createdAt,
+          detail: sanitizeActivityDetail(a.detail),
+        })),
       });
     }
     return out;
@@ -304,16 +328,30 @@ export class CommerceService {
 
   async previewMappings(operator: OperatorActor, connectionId: string, proposed: MappingInput[]) {
     this.assertWrite(operator);
+    const existing = await this.store.listMappings(operator.tenantId, connectionId);
     const preview = [];
     for (const row of proposed) {
       const product = await this.store.getProduct(operator.tenantId, row.bookoneProductId);
+      const sku = row.sku || product?.sku || '';
+      const conflict =
+        existing.find(
+          (m) =>
+            m.bookoneProductId !== row.bookoneProductId &&
+            (m.sku === sku ||
+              (m.externalProductId === row.externalProductId &&
+                (m.externalVariantId || '') === (row.externalVariantId ?? ''))),
+        ) ?? null;
       preview.push({
-        sku: row.sku,
+        sku,
         bookoneProductId: row.bookoneProductId,
         bookoneName: product?.name ?? null,
         externalProductId: row.externalProductId,
         externalVariantId: row.externalVariantId ?? '',
-        issue: product ? null : 'BookOne product was not found.',
+        issue: product
+          ? conflict
+            ? `Conflicts with existing mapping ${conflict.sku} / ${conflict.externalProductId}.`
+            : null
+          : 'BookOne product was not found.',
       });
     }
     return { items: preview, preservesUnrelatedListings: true };
@@ -402,17 +440,28 @@ export class CommerceService {
     if (!input.externalId?.trim()) fail('VALIDATION', 'Store order ID is required and is immutable.');
     const payloadHash = stableHash(input);
     const existingKey = await this.store.getIdempotency(actor.tenantId, actor.connectionId, idempotencyKey);
+    const existingOrder = await this.store.getOrderByExternalId(actor.tenantId, actor.connectionId, input.externalId);
     if (existingKey) {
       if (existingKey.payloadHash !== payloadHash) {
         fail('CONFLICT', 'This Idempotency-Key was already used with a different payload.');
       }
+      if (existingOrder && !existingOrder.documentId && existingOrder.status === 'received') {
+        await this.finishEligiblePost(actor, existingOrder);
+        const receipt = this.orderReceipt(existingOrder, 'accepted_for_processing');
+        await this.store.putIdempotency(actor.tenantId, actor.connectionId, idempotencyKey, {
+          payloadHash,
+          orderId: existingOrder.id,
+          receipt,
+        });
+        return { ...receipt, replayed: true };
+      }
       return { ...existingKey.receipt, replayed: true };
     }
-    const existingOrder = await this.store.getOrderByExternalId(actor.tenantId, actor.connectionId, input.externalId);
     if (existingOrder) {
       if (existingOrder.payloadHash !== payloadHash) {
         fail('CONFLICT', 'This store order ID already exists with a different payload.');
       }
+      if (!existingOrder.documentId && existingOrder.status === 'received') await this.finishEligiblePost(actor, existingOrder);
       const receipt = this.orderReceipt(existingOrder, 'accepted_for_processing');
       await this.store.putIdempotency(actor.tenantId, actor.connectionId, idempotencyKey, {
         payloadHash,
@@ -423,15 +472,21 @@ export class CommerceService {
     }
 
     const preview = await this.validateOrder(actor, input);
-    const orderId = randomUUID();
     let status: OrderStatus = 'received';
     let reviewReason: string | null = null;
+    const unrepresentable = representabilityIssue(input);
     if (!preview.ok) {
       status = 'needs_review';
       reviewReason = preview.issues.filter((i) => i.blocking).map((i) => i.message).join(' ');
+    } else if (unrepresentable) {
+      status = 'needs_review';
+      reviewReason = unrepresentable;
     } else if (input.payment?.status === 'failed' || input.payment?.status === 'pending') {
       status = 'received';
-      reviewReason = input.payment.status === 'failed' ? 'Payment failed. No inventory or journals were posted.' : 'Payment is pending. Inventory is not committed.';
+      reviewReason =
+        input.payment.status === 'failed'
+          ? 'Payment failed. No inventory or journals were posted.'
+          : 'Payment is pending. Inventory is not committed.';
     } else if (actor.postingMode !== 'posting') {
       status = 'needs_review';
       reviewReason = 'Connection posting is in preview. Enable posting after mappings are checked.';
@@ -454,7 +509,7 @@ export class CommerceService {
     }
 
     const order: OrderRow = {
-      id: orderId,
+      id: randomUUID(),
       tenantId: actor.tenantId,
       connectionId: actor.connectionId,
       externalId: input.externalId,
@@ -486,36 +541,18 @@ export class CommerceService {
       })),
     };
 
+    await this.store.insertOrder(order);
+    const claimed = this.orderReceipt(order, 'accepted_for_processing');
+    await this.store.putIdempotency(actor.tenantId, actor.connectionId, idempotencyKey, {
+      payloadHash,
+      orderId: order.id,
+      receipt: claimed,
+    });
+
     if (status === 'received' && actor.postingMode === 'posting' && preview.ok && input.payment?.status === 'paid' && !stockIssues.length) {
-      try {
-        const posted = await this.posting.postSalesInvoice({
-          actor,
-          order: input,
-          lines: preview.mapped
-            .filter((m) => m.productId)
-            .map((m) => ({
-              productId: m.productId as string,
-              sku: m.sku,
-              description: input.lines.find((l) => l.sku === m.sku)?.description || m.sku,
-              quantity: m.quantity,
-              unitPrice: m.unitPrice,
-            })),
-          idempotencyKey: `commerce:${actor.connectionId}:${input.externalId}`,
-          locationId: actor.locationId,
-          issueDate: input.placedAt.slice(0, 10),
-        });
-        order.documentId = posted.documentId;
-        order.documentNumber = posted.documentNumber;
-        order.status = 'posted';
-        order.reviewReason = null;
-        await this.emitStock(actor);
-      } catch (error) {
-        order.status = 'needs_review';
-        order.reviewReason = error instanceof Error ? error.message : 'BookOne posting failed. No duplicate journals were created.';
-      }
+      await this.tryPostInvoice(actor, order, preview);
     }
 
-    await this.store.insertOrder(order);
     const receipt = this.orderReceipt(order, 'accepted_for_processing');
     await this.store.putIdempotency(actor.tenantId, actor.connectionId, idempotencyKey, {
       payloadHash,
@@ -542,103 +579,132 @@ export class CommerceService {
     if (issues.length) fail('VALIDATION', issues[0]!.message, { issues });
     const order = await this.store.getOrderByExternalId(actor.tenantId, actor.connectionId, externalId);
     if (!order) fail('NOT_FOUND', 'Order was not found.');
-    const inserted = await this.store.insertEvent({
-      id: randomUUID(),
-      tenantId: actor.tenantId,
-      connectionId: actor.connectionId,
-      orderId: order.id,
-      externalEventId: input.externalEventId,
-      kind: input.kind,
-      status: 'applied',
-      sourceVersion: input.sourceVersion ?? null,
-      effectiveAt: input.effectiveAt,
-      amount: input.amount ?? null,
-      restock: Boolean(input.restock),
-      payload: input as unknown as Record<string, unknown>,
-      result: null,
-    });
-    if (inserted === 'duplicate') return this.orderReceipt(order, order.status);
+    if (isStaleVersion(order.lastAppliedVersion, input.sourceVersion)) {
+      fail('CONFLICT', 'This event is older than the last applied store version.', {
+        lastAppliedVersion: order.lastAppliedVersion,
+        sourceVersion: input.sourceVersion,
+      });
+    }
 
-    if (input.kind === 'cancelled') {
-      if (order.status === 'posted' && order.documentId) {
-        await this.posting.postSalesReturn({
-          actor,
-          sourceDocumentId: order.documentId,
-          idempotencyKey: `commerce-cancel:${actor.connectionId}:${order.externalId}`,
-          issueDate: input.effectiveAt.slice(0, 10),
-          restock: true,
-          amount: Number(order.total),
-          lines: order.lines.map((line) => ({
-            productId: line.bookoneProductId,
-            description: `Cancel ${order.externalId}`,
-            quantity: Number(line.quantity),
-            unitPrice: Number(line.unitPrice),
-          })),
-        });
-        await this.emitStock(actor);
+    const existingEvent = await this.store.getEvent(actor.tenantId, actor.connectionId, input.externalEventId);
+    if (existingEvent?.status === 'applied') return this.orderReceipt(order, order.status);
+
+    let eventId = existingEvent?.id;
+    if (!existingEvent) {
+      eventId = randomUUID();
+      const inserted = await this.store.insertEvent({
+        id: eventId,
+        tenantId: actor.tenantId,
+        connectionId: actor.connectionId,
+        orderId: order.id,
+        externalEventId: input.externalEventId,
+        kind: input.kind,
+        status: 'received',
+        sourceVersion: input.sourceVersion ?? null,
+        effectiveAt: input.effectiveAt,
+        amount: input.amount ?? null,
+        restock: Boolean(input.restock),
+        payload: input as unknown as Record<string, unknown>,
+        result: null,
+      });
+      if (inserted === 'duplicate') {
+        const raced = await this.store.getEvent(actor.tenantId, actor.connectionId, input.externalEventId);
+        if (raced?.status === 'applied') return this.orderReceipt(order, order.status);
+        eventId = raced?.id ?? eventId;
       }
-      if (order.status === 'posted' || order.status === 'received' || order.status === 'needs_review' || order.status === 'accepted') {
-        order.status = 'cancelled';
-        order.reviewReason = null;
-      }
-    } else if (input.kind === 'paid') {
-      if (order.status === 'received' || order.status === 'needs_review') {
-        order.snapshot.payment = { ...(order.snapshot.payment ?? { status: 'paid' }), status: 'paid' };
-        if (actor.postingMode === 'posting' && !order.documentId) {
-          const preview = await this.validateOrder(actor, order.snapshot);
-          const stockIssues: string[] = [];
-          for (const line of preview.mapped) {
-            if (!line.productId) continue;
-            const stock = await this.store.getStock(actor.tenantId, line.productId, actor.locationId);
-            if (Number(stock?.quantity ?? '0') < line.quantity) stockIssues.push(line.sku);
-          }
-          if (preview.ok && !stockIssues.length) {
-            const posted = await this.posting.postSalesInvoice({
+    }
+
+    try {
+      if (input.kind === 'cancelled') {
+        if (order.documentId && (order.status === 'posted' || order.status === 'partially_refunded' || order.status === 'fulfilled' || order.status === 'paid')) {
+          const remaining = order.lines
+            .map((line) => ({
+              productId: line.bookoneProductId,
+              description: `Cancel ${order.externalId}`,
+              quantity: Number(line.quantity) - Number(line.restockedQty),
+              unitPrice: Number(line.unitPrice),
+            }))
+            .filter((line) => line.quantity > 0);
+          if (remaining.length) {
+            await this.posting.postSalesReturn({
               actor,
-              order: order.snapshot,
-              lines: preview.mapped
-                .filter((m) => m.productId)
-                .map((m) => ({
-                  productId: m.productId as string,
-                  sku: m.sku,
-                  description: m.sku,
-                  quantity: m.quantity,
-                  unitPrice: m.unitPrice,
-                })),
-              idempotencyKey: `commerce:${actor.connectionId}:${order.externalId}`,
-              locationId: actor.locationId,
-              issueDate: order.placedAt.slice(0, 10),
+              sourceDocumentId: order.documentId,
+              idempotencyKey: `commerce-cancel:${actor.connectionId}:${order.externalId}`,
+              issueDate: input.effectiveAt.slice(0, 10),
+              restock: true,
+              amount: remaining.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0),
+              lines: remaining,
             });
-            order.documentId = posted.documentId;
-            order.documentNumber = posted.documentNumber;
-            order.status = 'posted';
-            order.reviewReason = null;
+            for (const line of order.lines) line.restockedQty = line.quantity;
             await this.emitStock(actor);
-          } else {
-            order.status = 'needs_review';
-            order.reviewReason = stockIssues.length
-              ? `Paid order cannot be accepted: stock unavailable for ${stockIssues.join(', ')}.`
-              : preview.issues.map((i) => i.message).join(' ');
           }
-        } else {
-          order.status = 'paid';
         }
-      }
-    } else if (input.kind === 'fulfilled') {
-      if (order.status === 'posted' || order.status === 'paid') order.status = 'fulfilled';
-      else {
+        if (order.status === 'posted' || order.status === 'received' || order.status === 'needs_review' || order.status === 'accepted' || order.status === 'partially_refunded') {
+          order.status = 'cancelled';
+          order.reviewReason = null;
+        }
+      } else if (input.kind === 'paid') {
+        if (order.status === 'received' || order.status === 'needs_review') {
+          order.snapshot.payment = { ...(order.snapshot.payment ?? { status: 'paid' }), status: 'paid' };
+          if (actor.postingMode === 'posting' && !order.documentId) {
+            await this.finishEligiblePost(actor, order);
+          } else if (!order.documentId) {
+            order.status = 'paid';
+          }
+        }
+      } else if (input.kind === 'fulfilled') {
+        if (order.status === 'posted' || order.status === 'paid') order.status = 'fulfilled';
+        else {
+          order.status = 'needs_review';
+          order.reviewReason = 'Fulfilment arrived before the order was posted.';
+        }
+      } else if (input.kind === 'refunded') {
+        await this.applyRefund(actor, order, input);
+      } else {
         order.status = 'needs_review';
-        order.reviewReason = 'Fulfilment arrived before the order was posted.';
+        order.reviewReason = `Unsupported lifecycle event ${input.kind} was staged with no accounting effect.`;
       }
-    } else if (input.kind === 'refunded') {
-      await this.applyRefund(actor, order, input);
-    } else {
-      order.status = 'needs_review';
-      order.reviewReason = `Unsupported lifecycle event ${input.kind} was staged with no accounting effect.`;
+      if (eventId) await this.store.updateEvent(eventId, { status: 'applied', result: { status: order.status } });
+    } catch (error) {
+      if (eventId) {
+        await this.store.updateEvent(eventId, {
+          status: 'retryable',
+          result: { error: error instanceof Error ? error.message : 'Event failed' },
+        });
+      }
+      throw error;
     }
     order.lastAppliedVersion = input.sourceVersion ?? order.lastAppliedVersion;
     order.updatedAt = nowIso();
     await this.store.updateOrder(order);
+    return this.orderReceipt(order, order.status);
+  }
+
+  async retryReviewOrder(operator: OperatorActor, connectionId: string, orderId: string) {
+    this.assertWrite(operator);
+    const connection = await this.requireConnection(operator.tenantId, connectionId);
+    const orders = await this.store.listOrders(operator.tenantId, connectionId, 'needs_review');
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) fail('NOT_FOUND', 'Review order was not found.');
+    const actor: CommerceActor = {
+      tenantId: operator.tenantId,
+      connectionId: connection.id,
+      credentialId: 'operator-retry',
+      userId: connection.createdByUserId,
+      locationId: connection.locationId,
+      currency: connection.currency,
+      environment: connection.environment,
+      kind: connection.kind,
+      scopes: ['catalog', 'inventory', 'order', 'lifecycle'],
+      postingMode: connection.postingMode,
+      inboundPaused: connection.inboundPaused,
+      outboundPaused: connection.outboundPaused,
+      oversellPolicy: connection.oversellPolicy,
+      reservationMode: connection.reservationMode,
+      prefix: 'operator',
+    };
+    await this.finishEligiblePost(actor, order);
+    await this.audit(operator, connectionId, 'order.retry', 'order', order.id, { externalId: order.externalId, status: order.status });
     return this.orderReceipt(order, order.status);
   }
 
@@ -653,51 +719,125 @@ export class CommerceService {
     if (amount <= 0 || amount - remaining > 0.01) {
       fail('VALIDATION', `Refund amount ${moneyString(amount)} is not valid against remaining ${moneyString(remaining)}.`);
     }
-    const refundInsert = await this.store.insertRefund({
-      id: randomUUID(),
-      tenantId: actor.tenantId,
-      connectionId: actor.connectionId,
-      orderId: order.id,
-      externalRefundId: input.externalRefundId ?? input.externalEventId,
-      amount: moneyString(amount),
-      restock: Boolean(input.restock),
-      documentId: null,
-    });
-    if (refundInsert === 'duplicate') return;
+    const externalRefundId = input.externalRefundId ?? input.externalEventId;
+    const existingRefund = await this.store.getRefund(actor.tenantId, actor.connectionId, externalRefundId);
+    if (existingRefund?.documentId) return;
+
+    let refundId = existingRefund?.id;
+    if (!existingRefund) {
+      refundId = randomUUID();
+      const refundInsert = await this.store.insertRefund({
+        id: refundId,
+        tenantId: actor.tenantId,
+        connectionId: actor.connectionId,
+        orderId: order.id,
+        externalRefundId,
+        amount: moneyString(amount),
+        restock: Boolean(input.restock),
+        documentId: null,
+      });
+      if (refundInsert === 'duplicate') {
+        const raced = await this.store.getRefund(actor.tenantId, actor.connectionId, externalRefundId);
+        if (raced?.documentId) return;
+        refundId = raced?.id ?? refundId;
+      }
+    }
+
     if (!order.documentId) {
       order.status = 'needs_review';
       order.reviewReason = 'Refund arrived before its order was posted. No journals were created.';
       return;
     }
+
+    const returnLines: Array<{ productId: string | null; description: string; quantity: number; unitPrice: number }> = [];
+    if (input.restock) {
+      if (!input.lines?.length) {
+        order.status = 'needs_review';
+        order.reviewReason = 'Physical restock requires original line references and quantities.';
+        return;
+      }
+      for (const ref of input.lines) {
+        const line = order.lines.find((row) => row.externalLineId === ref.externalLineId);
+        if (!line) {
+          order.status = 'needs_review';
+          order.reviewReason = `Refund line ${ref.externalLineId} is not on the original order.`;
+          return;
+        }
+        const qty = parseQty(ref.quantity ?? '0', `Restock quantity for ${line.sku}`);
+        const alreadyQty = Number(line.restockedQty);
+        if (alreadyQty + qty - Number(line.quantity) > 0.0001) {
+          fail('VALIDATION', `Cannot restock ${qty} of ${line.sku}; remaining ${Number(line.quantity) - alreadyQty}.`);
+        }
+        const lineAmount = ref.amount
+          ? parseMoney(ref.amount, `Refund amount for ${line.sku}`)
+          : qty * Number(line.unitPrice);
+        const lineCap = Number(line.quantity) * Number(line.unitPrice) - Number(line.refundedAmount);
+        if (lineAmount - lineCap > 0.01) {
+          fail('VALIDATION', `Refund amount ${moneyString(lineAmount)} exceeds remaining ${moneyString(lineCap)} on ${line.sku}.`);
+        }
+        returnLines.push({
+          productId: line.bookoneProductId,
+          description: line.sku,
+          quantity: qty,
+          unitPrice: Number(line.unitPrice),
+        });
+        line.restockedQty = String(alreadyQty + qty);
+        line.refundedAmount = moneyString(Number(line.refundedAmount) + lineAmount);
+      }
+    } else if (input.lines?.length) {
+      let allocated = 0;
+      for (const ref of input.lines) {
+        const line = order.lines.find((row) => row.externalLineId === ref.externalLineId);
+        if (!line) {
+          order.status = 'needs_review';
+          order.reviewReason = `Refund line ${ref.externalLineId} is not on the original order.`;
+          return;
+        }
+        const lineAmount = parseMoney(ref.amount ?? '0', `Refund amount for ${line.sku}`);
+        const lineCap = Number(line.quantity) * Number(line.unitPrice) - Number(line.refundedAmount);
+        if (lineAmount - lineCap > 0.01) {
+          fail('VALIDATION', `Refund amount ${moneyString(lineAmount)} exceeds remaining ${moneyString(lineCap)} on ${line.sku}.`);
+        }
+        line.refundedAmount = moneyString(Number(line.refundedAmount) + lineAmount);
+        allocated += lineAmount;
+      }
+      if (Math.abs(allocated - amount) > 0.01) {
+        fail('VALIDATION', `Refund line amounts ${moneyString(allocated)} do not match ${moneyString(amount)}.`);
+      }
+      returnLines.push({
+        productId: null,
+        description: `Money-only refund ${order.externalId}`,
+        quantity: 1,
+        unitPrice: amount,
+      });
+    } else {
+      let leftover = amount;
+      for (const line of order.lines) {
+        const cap = Number(line.quantity) * Number(line.unitPrice) - Number(line.refundedAmount);
+        const take = Math.min(leftover, Math.max(0, cap));
+        line.refundedAmount = moneyString(Number(line.refundedAmount) + take);
+        leftover -= take;
+      }
+      returnLines.push({
+        productId: null,
+        description: `Money-only refund ${order.externalId}`,
+        quantity: 1,
+        unitPrice: amount,
+      });
+    }
+
     const posted = await this.posting.postSalesReturn({
       actor,
       sourceDocumentId: order.documentId,
-      idempotencyKey: `commerce-refund:${actor.connectionId}:${input.externalRefundId}`,
+      idempotencyKey: `commerce-refund:${actor.connectionId}:${externalRefundId}`,
       issueDate: input.effectiveAt.slice(0, 10),
       restock: Boolean(input.restock),
       amount,
-      lines: input.restock
-        ? order.lines.map((line) => ({
-            productId: line.bookoneProductId,
-            description: line.sku,
-            quantity: Number(line.quantity),
-            unitPrice: Number(line.unitPrice),
-          }))
-        : [
-            {
-              productId: null,
-              description: `Money-only refund ${order.externalId}`,
-              quantity: 1,
-              unitPrice: amount,
-            },
-          ],
+      lines: returnLines,
     });
-    for (const line of order.lines) {
-      line.refundedAmount = moneyString(Number(line.refundedAmount) + amount / order.lines.length);
-      if (input.restock) line.restockedQty = line.quantity;
-    }
+    if (refundId) await this.store.updateRefund(refundId, { documentId: posted.documentId });
     order.status = almostEqualRefund(already + amount, Number(order.total)) ? 'refunded' : 'partially_refunded';
-    void posted;
+    order.reviewReason = null;
     if (input.restock) await this.emitStock(actor);
   }
 
@@ -720,6 +860,86 @@ export class CommerceService {
     }
   }
 
+  private async finishEligiblePost(actor: CommerceActor, order: OrderRow) {
+    if (order.documentId) return;
+    if (actor.postingMode !== 'posting') return;
+    const input = order.snapshot;
+    if (input.payment?.status !== 'paid') return;
+    const unrepresentable = representabilityIssue(input);
+    if (unrepresentable) {
+      order.status = 'needs_review';
+      order.reviewReason = unrepresentable;
+      await this.store.updateOrder(order);
+      return;
+    }
+    const preview = await this.validateOrder(actor, input);
+    if (!preview.ok) {
+      order.status = 'needs_review';
+      order.reviewReason = preview.issues.filter((i) => i.blocking).map((i) => i.message).join(' ');
+      await this.store.updateOrder(order);
+      return;
+    }
+    const stockIssues: string[] = [];
+    for (const line of preview.mapped) {
+      if (!line.productId) continue;
+      const stock = await this.store.getStock(actor.tenantId, line.productId, actor.locationId);
+      if (Number(stock?.quantity ?? '0') < line.quantity) stockIssues.push(line.sku);
+    }
+    if (stockIssues.length) {
+      order.status = 'needs_review';
+      order.reviewReason = `Paid order cannot be accepted: stock unavailable for ${stockIssues.join(', ')}.`;
+      await this.store.updateOrder(order);
+      return;
+    }
+    await this.tryPostInvoice(actor, order, preview);
+  }
+
+  private async tryPostInvoice(
+    actor: CommerceActor,
+    order: OrderRow,
+    preview: { mapped: Array<{ sku: string; productId: string | null; quantity: number; unitPrice: number }> },
+  ) {
+    try {
+      const input = order.snapshot;
+      const posted = await this.posting.postSalesInvoice({
+        actor,
+        order: input,
+        lines: preview.mapped
+          .filter((m) => m.productId)
+          .map((m) => {
+            const line = input.lines.find((row) => row.sku === m.sku);
+            return {
+              productId: m.productId as string,
+              sku: m.sku,
+              description: line?.description || m.sku,
+              quantity: m.quantity,
+              unitPrice: m.unitPrice,
+              discountAmount: Number(line?.discountAmount ?? 0),
+            };
+          }),
+        headerDiscount: Number(input.discountAmount ?? 0),
+        freightAmount: Number(input.shippingAmount ?? 0),
+        invoiceKind: 'commercial',
+        paymentAccountCode: paymentAccountCode(input),
+        idempotencyKey: `commerce:${actor.connectionId}:${input.externalId}`,
+        locationId: actor.locationId,
+        issueDate: input.placedAt.slice(0, 10),
+      });
+      order.documentId = posted.documentId;
+      order.documentNumber = posted.documentNumber;
+      order.status = 'posted';
+      order.reviewReason = null;
+      order.updatedAt = nowIso();
+      await this.store.updateOrder(order);
+      await this.emitStock(actor);
+    } catch (error) {
+      order.status = 'needs_review';
+      order.reviewReason = error instanceof Error ? error.message : 'BookOne posting failed. No duplicate journals were created.';
+      order.updatedAt = nowIso();
+      await this.store.updateOrder(order);
+    }
+  }
+
   private orderReceipt(order: OrderRow, processing: string) {
     return {
       ok: true as const,
@@ -731,6 +951,11 @@ export class CommerceService {
       documentId: order.documentId,
       documentNumber: order.documentNumber,
       lastAppliedVersion: order.lastAppliedVersion,
+      settlement: order.documentId
+        ? paymentAccountCode(order.snapshot)
+          ? 'settled'
+          : 'not_configured'
+        : 'none',
       httpStatusIsNotAccountingAcceptance: true,
     };
   }
@@ -773,6 +998,40 @@ export class CommerceService {
 
 function almostEqualRefund(a: number, b: number) {
   return Math.abs(a - b) <= 0.01;
+}
+
+function representabilityIssue(input: OrderInput): string | null {
+  const tax =
+    Number(input.taxAmount ?? 0) + (input.lines ?? []).reduce((sum, line) => sum + Number(line.taxAmount ?? 0), 0);
+  if (tax > 0.005) {
+    return 'Store tax amounts cannot be represented as BookOne VAT on this path. The order is held for review.';
+  }
+  return null;
+}
+
+function paymentAccountCode(input: OrderInput): string | undefined {
+  const method = input.payment?.method?.trim() ?? '';
+  if (/^\d{4}$/.test(method)) return method;
+  return undefined;
+}
+
+function isStaleVersion(previous: string | null, incoming: string | undefined): boolean {
+  if (!previous || !incoming) return false;
+  const a = Number(previous);
+  const b = Number(incoming);
+  if (Number.isFinite(a) && Number.isFinite(b) && previous.trim() !== '' && incoming.trim() !== '') return b < a;
+  return incoming < previous;
+}
+
+function sanitizeActivityDetail(detail: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!detail) return null;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(detail)) {
+    const lower = key.toLowerCase();
+    if (lower.includes('token') || lower.includes('secret') || lower.includes('email') || lower.includes('phone')) continue;
+    out[key] = value;
+  }
+  return out;
 }
 
 export function parseScopeQuery(raw: string | null): CommerceScope[] {

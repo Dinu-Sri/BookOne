@@ -10,7 +10,7 @@ import { listProducts } from '@/app/actions/inventory';
 export default async function CompanyCommercePage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; err?: string; issued?: string; prefix?: string; tab?: string }>;
+  searchParams: Promise<{ saved?: string; err?: string; tab?: string; connection?: string }>;
 }) {
   let tenant;
   try {
@@ -37,8 +37,8 @@ export default async function CompanyCommercePage({
         canWrite={canWrite}
         saved={query.saved === '1'}
         saveError={query.err ? decodeURIComponent(query.err) : null}
-        issuedToken={query.issued ? decodeURIComponent(query.issued) : null}
-        issuedPrefix={query.prefix ? decodeURIComponent(query.prefix) : null}
+        initialTab={query.tab === 'mapping' || query.tab === 'activity' ? query.tab : 'connections'}
+        initialConnectionId={query.connection ?? ''}
         apiBase={origin ? `${origin.replace(/\/$/, '')}/api/commerce/v1` : '/api/commerce/v1'}
         locations={(company?.locations ?? []).map((l) => ({ id: l.id, name: l.name }))}
         products={products.map((p) => ({ id: p.id, sku: p.sku, name: p.name }))}
@@ -58,6 +58,8 @@ export default async function CompanyCommercePage({
           lastStock: row.connection.lastStockSyncAt,
           lastOrder: row.connection.lastOrderSyncAt,
           credentials: row.credentials,
+          mappings: row.mappings,
+          reviews: row.reviews,
           activity: row.activity.map((a) => ({
             id: a.id,
             action: a.action,

@@ -57,6 +57,12 @@ final class BookOne_Commerce_Admin {
         if ($action === 'repair') {
             BookOne_Commerce_Worker::tick(true);
         }
+        if ($action === 'retry_dead') {
+            $job_key = sanitize_text_field(wp_unslash($_POST['job_key'] ?? ''));
+            if ($job_key !== '') {
+                BookOne_Commerce_Worker::retry_dead($job_key);
+            }
+        }
     }
 
     public static function render(): void {
@@ -99,6 +105,24 @@ final class BookOne_Commerce_Admin {
         echo '</form>';
         echo '<p>Last success: ' . esc_html($s['last_ok'] ?: '—') . ' · Last error: ' . esc_html($s['last_error'] ?: '—') . '</p>';
         echo '<p>Worker hook <code>bookone_commerce_tick</code>. Next run: ' . esc_html((string) wp_next_scheduled('bookone_commerce_tick')) . '</p>';
+        echo '<p>Supported: WordPress 6.4–6.7, WooCommerce 8.8–9.4 with HPOS, PHP 8.1+. Payment evidence uses Woo <code>is_paid()</code>. COD and processing without paid stay pending.</p>';
+        $dead = BookOne_Commerce_Worker::dead_jobs();
+        echo '<h2>Dead jobs</h2>';
+        if (!$dead) {
+            echo '<p>None.</p>';
+        } else {
+            echo '<table class="widefat"><thead><tr><th>Job</th><th>Attempts</th><th>Error</th><th></th></tr></thead><tbody>';
+            foreach ($dead as $job) {
+                echo '<tr><td>' . esc_html((string) $job['job_key']) . '</td><td>' . esc_html((string) $job['attempts']) . '</td><td>' . esc_html((string) ($job['last_error'] ?? '')) . '</td><td>';
+                echo '<form method="post" style="display:inline">';
+                wp_nonce_field('bookone_commerce', 'bookone_commerce_nonce');
+                echo '<input type="hidden" name="bookone_action" value="retry_dead" />';
+                echo '<input type="hidden" name="job_key" value="' . esc_attr((string) $job['job_key']) . '" />';
+                submit_button(__('Retry', 'bookone-commerce'), 'secondary', 'submit', false);
+                echo '</form></td></tr>';
+            }
+            echo '</tbody></table>';
+        }
         echo '</div>';
     }
 

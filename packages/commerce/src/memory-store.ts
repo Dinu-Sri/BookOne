@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { CommerceStore } from './store';
+import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
 import type {
   ActivityRow,
   ConnectionRow,
@@ -20,8 +20,8 @@ export class MemoryCommerceStore implements CommerceStore {
   stock: StockRecord[] = [];
   orders: OrderRow[] = [];
   idem = new Map<string, IdempotencyRow>();
-  events = new Set<string>();
-  refunds = new Set<string>();
+  events: CommerceEventRow[] = [];
+  refunds: CommerceRefundRow[] = [];
   outbox: Array<OutboxRow & { tenantId: string; connectionId: string }> = [];
   activity: Array<ActivityRow & { tenantId: string }> = [];
   revisions = new Map<string, number>();
@@ -114,17 +114,39 @@ export class MemoryCommerceStore implements CommerceStore {
   async putIdempotency(tenantId: string, connectionId: string, key: string, row: IdempotencyRow) {
     this.idem.set(this.idempKey(tenantId, connectionId, key), row);
   }
-  async insertEvent(row: { tenantId: string; connectionId: string; externalEventId: string }) {
-    const key = `${row.tenantId}:${row.connectionId}:${row.externalEventId}`;
-    if (this.events.has(key)) return 'duplicate';
-    this.events.add(key);
+  async insertEvent(row: CommerceEventRow) {
+    if (await this.getEvent(row.tenantId, row.connectionId, row.externalEventId)) return 'duplicate';
+    this.events.push({ ...row, payload: { ...row.payload }, result: row.result ? { ...row.result } : null });
     return 'inserted';
   }
-  async insertRefund(row: { tenantId: string; connectionId: string; externalRefundId: string }) {
-    const key = `${row.tenantId}:${row.connectionId}:${row.externalRefundId}`;
-    if (this.refunds.has(key)) return 'duplicate';
-    this.refunds.add(key);
+  async getEvent(tenantId: string, connectionId: string, externalEventId: string) {
+    return (
+      this.events.find(
+        (e) => e.tenantId === tenantId && e.connectionId === connectionId && e.externalEventId === externalEventId,
+      ) ?? null
+    );
+  }
+  async updateEvent(id: string, patch: { status: string; result?: Record<string, unknown> | null }) {
+    const row = this.events.find((e) => e.id === id);
+    if (!row) return;
+    row.status = patch.status;
+    if (patch.result !== undefined) row.result = patch.result;
+  }
+  async insertRefund(row: CommerceRefundRow) {
+    if (await this.getRefund(row.tenantId, row.connectionId, row.externalRefundId)) return 'duplicate';
+    this.refunds.push({ ...row });
     return 'inserted';
+  }
+  async getRefund(tenantId: string, connectionId: string, externalRefundId: string) {
+    return (
+      this.refunds.find(
+        (r) => r.tenantId === tenantId && r.connectionId === connectionId && r.externalRefundId === externalRefundId,
+      ) ?? null
+    );
+  }
+  async updateRefund(id: string, patch: { documentId: string | null }) {
+    const row = this.refunds.find((r) => r.id === id);
+    if (row) row.documentId = patch.documentId;
   }
   async nextRevision(tenantId: string, connectionId: string) {
     const key = `${tenantId}:${connectionId}`;

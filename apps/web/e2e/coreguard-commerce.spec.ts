@@ -50,10 +50,17 @@ test('headless HTTP client sells the last unit once and replays without a second
   expect(http.connection.status).toBe(200);
   expect(http.first.status).toBe(202);
   expect(http.replay.status).toBe(202);
+  expect(http.first.json?.status).toBe('posted');
+  expect(http.first.json?.documentId).toBeTruthy();
+  expect(http.first.json?.documentNumber).toBeTruthy();
   expect(http.replay.json?.replayed === true || http.replay.json?.documentId === http.first.json?.documentId).toBe(true);
+  expect(http.replay.json?.documentId).toBe(http.first.json?.documentId);
+  const before = http.inventoryBefore.json as { items?: Array<{ sku: string; quantity: string }> };
   const after = http.inventoryAfter.json as { items?: Array<{ sku: string; quantity: string }> };
+  const beforeRow = before.items?.find((i) => i.sku === 'SKU-1');
   const row = after.items?.find((i) => i.sku === 'SKU-1');
-  expect(row?.quantity === '0' || http.first.json?.status === 'posted' || http.first.json?.status === 'needs_review').toBeTruthy();
+  expect(beforeRow?.quantity).toBe('1');
+  expect(row?.quantity).toBe('0');
 
   const conflict = await fetch(`${base}/orders`, {
     method: 'POST',
@@ -95,7 +102,10 @@ test('headless HTTP client sells the last unit once and replays without a second
           firstStatus: http.first.status,
           replayStatus: http.replay.status,
           orderStatus: http.first.json?.status,
+          documentId: http.first.json?.documentId ?? null,
+          documentNumber: http.first.json?.documentNumber ?? null,
           remaining: row?.quantity ?? null,
+          settlement: http.first.json?.settlement ?? null,
         },
         reservations: reservations.status,
         ranAt: new Date().toISOString(),

@@ -19,7 +19,7 @@ import {
   inventoryStockLevels,
   sql,
 } from '@bookone/db';
-import type { CommerceStore } from './store';
+import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
 import type {
   ActivityRow,
   ConnectionKind,
@@ -463,24 +463,17 @@ export class PostgresCommerceStore implements CommerceStore {
         orderId: row.orderId,
         receiptJson: row.receipt,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [commerceIdempotency.tenantId, commerceIdempotency.connectionId, commerceIdempotency.idempotencyKey],
+        set: {
+          payloadHash: row.payloadHash,
+          orderId: row.orderId,
+          receiptJson: row.receipt,
+        },
+      });
   }
 
-  async insertEvent(row: {
-    id: string;
-    tenantId: string;
-    connectionId: string;
-    orderId: string;
-    externalEventId: string;
-    kind: string;
-    status: string;
-    sourceVersion: string | null;
-    effectiveAt: string;
-    amount: string | null;
-    restock: boolean;
-    payload: Record<string, unknown>;
-    result: Record<string, unknown> | null;
-  }) {
+  async insertEvent(row: CommerceEventRow) {
     try {
       await db().insert(commerceOrderEvents).values({
         id: row.id,
@@ -499,22 +492,33 @@ export class PostgresCommerceStore implements CommerceStore {
       });
       return 'inserted' as const;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('commerce_order_events_external_uq') || msg.toLowerCase().includes('duplicate')) return 'duplicate';
+      if (isUniqueViolation(error, 'commerce_order_events_external_uq')) return 'duplicate';
       throw error;
     }
   }
 
-  async insertRefund(row: {
-    id: string;
-    tenantId: string;
-    connectionId: string;
-    orderId: string;
-    externalRefundId: string;
-    amount: string;
-    restock: boolean;
-    documentId: string | null;
-  }) {
+  async getEvent(tenantId: string, connectionId: string, externalEventId: string) {
+    const [row] = await db()
+      .select()
+      .from(commerceOrderEvents)
+      .where(
+        and(
+          eq(commerceOrderEvents.tenantId, tenantId),
+          eq(commerceOrderEvents.connectionId, connectionId),
+          eq(commerceOrderEvents.externalEventId, externalEventId),
+        ),
+      )
+      .limit(1);
+    return row ? eventFrom(row) : null;
+  }
+
+  async updateEvent(id: string, patch: { status: string; result?: Record<string, unknown> | null }) {
+    const set: { status: string; resultJson?: Record<string, unknown> | null } = { status: patch.status };
+    if (patch.result !== undefined) set.resultJson = patch.result;
+    await db().update(commerceOrderEvents).set(set).where(eq(commerceOrderEvents.id, id));
+  }
+
+  async insertRefund(row: CommerceRefundRow) {
     try {
       await db().insert(commerceRefunds).values({
         id: row.id,
@@ -528,10 +532,28 @@ export class PostgresCommerceStore implements CommerceStore {
       });
       return 'inserted' as const;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('commerce_refunds_external_uq') || msg.toLowerCase().includes('duplicate')) return 'duplicate';
+      if (isUniqueViolation(error, 'commerce_refunds_external_uq')) return 'duplicate';
       throw error;
     }
+  }
+
+  async getRefund(tenantId: string, connectionId: string, externalRefundId: string) {
+    const [row] = await db()
+      .select()
+      .from(commerceRefunds)
+      .where(
+        and(
+          eq(commerceRefunds.tenantId, tenantId),
+          eq(commerceRefunds.connectionId, connectionId),
+          eq(commerceRefunds.externalRefundId, externalRefundId),
+        ),
+      )
+      .limit(1);
+    return row ? refundFrom(row) : null;
+  }
+
+  async updateRefund(id: string, patch: { documentId: string | null }) {
+    await db().update(commerceRefunds).set({ documentId: patch.documentId }).where(eq(commerceRefunds.id, id));
   }
 
   async nextRevision(tenantId: string, connectionId: string) {
@@ -543,16 +565,26 @@ export class PostgresCommerceStore implements CommerceStore {
   }
 
   async insertOutbox(row: OutboxRow & { tenantId: string; connectionId: string }) {
-    await db().insert(commerceOutbox).values({
-      id: row.id,
-      tenantId: row.tenantId,
-      connectionId: row.connectionId,
-      revision: row.revision,
-      kind: row.kind,
-      productId: row.productId,
-      sku: row.sku,
-      payloadJson: row.payload,
-    });
+    let revision = row.revision;
+    for (let attempt = 0; attempt < 16; attempt++) {
+      try {
+        await db().insert(commerceOutbox).values({
+          id: row.id,
+          tenantId: row.tenantId,
+          connectionId: row.connectionId,
+          revision,
+          kind: row.kind,
+          productId: row.productId,
+          sku: row.sku,
+          payloadJson: { ...row.payload, revision },
+        });
+        return;
+      } catch (error) {
+        if (!isUniqueViolation(error, 'commerce_outbox_revision_uq')) throw error;
+        revision = await this.nextRevision(row.tenantId, row.connectionId);
+      }
+    }
+    throw new Error('Could not allocate a commerce outbox revision.');
   }
 
   async listOutbox(tenantId: string, connectionId: string, afterRevision: number, limit: number) {
@@ -637,6 +669,42 @@ function productFrom(row: typeof inventoryProducts.$inferSelect): ProductRecord 
     archived: Boolean(row.voidedAt),
     sellPrice: String(row.sellPrice),
     revision: Math.floor(row.updatedAt.getTime() / 1000),
+  };
+}
+
+function isUniqueViolation(error: unknown, constraint: string): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes(constraint) || msg.toLowerCase().includes('duplicate');
+}
+
+function eventFrom(row: typeof commerceOrderEvents.$inferSelect): CommerceEventRow {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    orderId: row.orderId,
+    externalEventId: row.externalEventId,
+    kind: row.kind,
+    status: row.status,
+    sourceVersion: row.sourceVersion,
+    effectiveAt: row.effectiveAt.toISOString(),
+    amount: row.amount,
+    restock: isOn(row.restock),
+    payload: (row.payloadJson as Record<string, unknown>) ?? {},
+    result: (row.resultJson as Record<string, unknown> | null) ?? null,
+  };
+}
+
+function refundFrom(row: typeof commerceRefunds.$inferSelect): CommerceRefundRow {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    orderId: row.orderId,
+    externalRefundId: row.externalRefundId,
+    amount: row.amount,
+    restock: isOn(row.restock),
+    documentId: row.documentId,
   };
 }
 

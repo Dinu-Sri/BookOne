@@ -39,32 +39,16 @@ export type CommerceStore = {
   getIdempotency(tenantId: string, connectionId: string, key: string): Promise<IdempotencyRow | null>;
   putIdempotency(tenantId: string, connectionId: string, key: string, row: IdempotencyRow): Promise<void>;
 
-  insertEvent(row: {
-    id: string;
-    tenantId: string;
-    connectionId: string;
-    orderId: string;
-    externalEventId: string;
-    kind: string;
-    status: string;
-    sourceVersion: string | null;
-    effectiveAt: string;
-    amount: string | null;
-    restock: boolean;
-    payload: Record<string, unknown>;
-    result: Record<string, unknown> | null;
-  }): Promise<'inserted' | 'duplicate'>;
+  insertEvent(row: CommerceEventRow): Promise<'inserted' | 'duplicate'>;
+  getEvent(tenantId: string, connectionId: string, externalEventId: string): Promise<CommerceEventRow | null>;
+  updateEvent(
+    id: string,
+    patch: { status: string; result?: Record<string, unknown> | null },
+  ): Promise<void>;
 
-  insertRefund(row: {
-    id: string;
-    tenantId: string;
-    connectionId: string;
-    orderId: string;
-    externalRefundId: string;
-    amount: string;
-    restock: boolean;
-    documentId: string | null;
-  }): Promise<'inserted' | 'duplicate'>;
+  insertRefund(row: CommerceRefundRow): Promise<'inserted' | 'duplicate'>;
+  getRefund(tenantId: string, connectionId: string, externalRefundId: string): Promise<CommerceRefundRow | null>;
+  updateRefund(id: string, patch: { documentId: string | null }): Promise<void>;
 
   nextRevision(tenantId: string, connectionId: string): Promise<number>;
   insertOutbox(row: OutboxRow & { tenantId: string; connectionId: string }): Promise<void>;
@@ -73,4 +57,31 @@ export type CommerceStore = {
 
   insertActivity(row: ActivityRow & { tenantId: string }): Promise<void>;
   listActivity(tenantId: string, connectionId?: string): Promise<ActivityRow[]>;
+};
+
+export type CommerceEventRow = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  orderId: string;
+  externalEventId: string;
+  kind: string;
+  status: string;
+  sourceVersion: string | null;
+  effectiveAt: string;
+  amount: string | null;
+  restock: boolean;
+  payload: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+};
+
+export type CommerceRefundRow = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  orderId: string;
+  externalRefundId: string;
+  amount: string;
+  restock: boolean;
+  documentId: string | null;
 };

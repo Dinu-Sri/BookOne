@@ -63,9 +63,9 @@ Reservations stay **422** until a contention test passes.
 node scripts/commerce/package-plugin.mjs
 ```
 
-Install `connectors/woocommerce/release/bookone-commerce-1.0.0.zip` in WordPress. Confirm HPOS is on. Paste the BookOne API base and sandbox key. Test connection, preview mapping, publish stock. Do not put the token in a theme file.
+Install `connectors/woocommerce/release/bookone-commerce-1.1.0.zip` in WordPress. Confirm HPOS is on. Paste the BookOne API base and sandbox key. Test connection, preview mapping, publish stock. Do not put the token in a theme file.
 
-WP-Cron hook `bookone_commerce_tick` every five minutes is the durable worker. Repair from Woo → BookOne.
+WP-Cron hook `bookone_commerce_tick` every five minutes drains the claimed job table. Repair from Woo → BookOne. Dead jobs stay visible until Retry.
 
 ## 5. Bootstrap for CoreGuard
 
@@ -73,6 +73,6 @@ WP-Cron hook `bookone_commerce_tick` every five minutes is the durable worker. R
 pnpm coreguard:pilot
 ```
 
-Requires a disposable `bookone_test` database. Seeds SKU-1 qty 1 and SKU-VAR qty 2, Woo + HTTP connections in posting mode, and known sandbox tokens. Browser evidence writes `.local/commerce-results.json` with HTTP last-unit `firstStatus` 202. A missing required result fails the lane.
+Requires a disposable `bookone_test` database. Seeds SKU-1 qty 1 and SKU-VAR qty 2, Woo + HTTP connections in posting mode, and known sandbox tokens. Browser evidence writes `.local/commerce-results.json` with HTTP last-unit posted, a document id, and remaining qty 0. A missing required result fails the lane.
 
 Disposable Woo store: `docker compose -f docker/docker-compose.commerce-woo.yml up`. See [OPS.md](OPS.md).

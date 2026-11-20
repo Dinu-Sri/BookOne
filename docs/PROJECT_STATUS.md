@@ -1,3 +1,7 @@
+## 2026-11-20 — Commerce UI and operations repair (v2.16.0)
+
+Candidate **2.16.0** on `feat/v2160-commerce-ui-operations-repair` from origin/master `c4d3655` / v2.15.3. Fixes credential query-string leakage, invoice money mapping, restock line refs, claim-before-post, Commerce page layout/tabs/mapping preview/activity queue, Woo job durability and payment evidence. Plugin ZIP 1.1.0. CoreGuard HTTP last-unit requires posted + document + remaining 0. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — CoreGuard commerce UI locator and journal cleanup (v2.15.3)
 
 Candidate **2.15.3** on `fix/v2153-coreguard-commerce-ui-cleanup` from origin/master `c333f9d` / v2.15.2. Docker web image `44721171311` HTTP last-unit passed 202 in 156ms. Playwright then failed because `Commerce Integrations` matched nav and title, and cleanup hit `journal_entries.location_id`. This candidate scopes the title to `main` and deletes recon/journals/transactions before locations. Commerce C1–C3 product behaviour is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

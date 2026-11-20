@@ -158,9 +158,16 @@ async function main() {
       if (!existsSync(commerceResults)) {
         throw new Error('Required commerce-results.json is missing.');
       }
-      const parsed = JSON.parse(readFileSync(commerceResults, 'utf8')) as { httpLastUnit?: { firstStatus?: number } };
-      if (parsed.httpLastUnit?.firstStatus !== 202) {
-        throw new Error('Required commerce HTTP last-unit result is missing or not 202.');
+      const parsed = JSON.parse(readFileSync(commerceResults, 'utf8')) as {
+        httpLastUnit?: { firstStatus?: number; orderStatus?: string; remaining?: string | null; documentId?: string | null };
+      };
+      if (
+        parsed.httpLastUnit?.firstStatus !== 202 ||
+        parsed.httpLastUnit.orderStatus !== 'posted' ||
+        parsed.httpLastUnit.remaining !== '0' ||
+        !parsed.httpLastUnit.documentId
+      ) {
+        throw new Error('Required commerce HTTP last-unit must be posted with a document and zero remaining stock.');
       }
     } catch (error) {
       failed = error instanceof Error ? error.message : String(error);

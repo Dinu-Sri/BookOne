@@ -1,5 +1,5 @@
 export const COMMERCE_API_VERSION = 'v1';
-export const COMMERCE_PLUGIN_VERSION = '1.0.0';
+export const COMMERCE_PLUGIN_VERSION = '1.1.0';
 export const COMMERCE_SCOPES = ['catalog', 'inventory', 'order', 'lifecycle'] as const;
 export type CommerceScope = (typeof COMMERCE_SCOPES)[number];
 
@@ -123,13 +123,34 @@ export type StockRecord = {
 export type PostedDocument = {
   documentId: string;
   documentNumber: string;
+  settled?: boolean;
+};
+
+export type InvoicePostLine = {
+  productId: string;
+  sku: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  discountAmount?: number;
+};
+
+export type ReturnPostLine = {
+  productId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
 };
 
 export type PostingPort = {
   postSalesInvoice(input: {
     actor: CommerceActor;
     order: OrderInput;
-    lines: Array<{ productId: string; sku: string; description: string; quantity: number; unitPrice: number }>;
+    lines: InvoicePostLine[];
+    headerDiscount?: number;
+    freightAmount?: number;
+    invoiceKind?: 'commercial' | 'tax_invoice';
+    paymentAccountCode?: string;
     idempotencyKey: string;
     locationId: string | null;
     issueDate: string;
@@ -141,7 +162,7 @@ export type PostingPort = {
     issueDate: string;
     restock: boolean;
     amount: number;
-    lines: Array<{ productId: string | null; description: string; quantity: number; unitPrice: number }>;
+    lines: ReturnPostLine[];
   }): Promise<PostedDocument>;
 };
 

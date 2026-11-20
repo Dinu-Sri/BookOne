@@ -1,3 +1,10 @@
+## 2026-11-20 — Commerce UI and operations repair (v2.16.0)
+
+- Record: [CHG-20261120-commerce-ui-operations-repair](changes/CHG-20261120-commerce-ui-operations-repair.md). Baseline product `c4d3655` / v2.15.3. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Commerce keys return to a one-time dialog, never `?issued=`. Paid invoices carry discounts and shipping through `createCommercialDocumentWithUser` and store the real document number. Restock refunds require original line refs. Orders are claimed before posting. Company Commerce uses `active` tabs, a connection list, Preview then Apply mapping, and a review queue. Woo jobs use a claimed table, `is_paid()` evidence, and plugin ZIP 1.1.0. CoreGuard HTTP last-unit requires posted + document + zero stock. VERSION 2.16.0. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/commerce` vitest 17/17 including discounts, partial restock, stale version, interrupted retry. `@bookone/auth` commerce-gate 4/4. Plugin ZIP `bookone-commerce-1.1.0.zip` sha256 `64de7bcc3dcd95f77a0514f31752f15685dbd7b99dd2b10ecca0370df1a7d785`. Woo live checkout remains not-run. Rotate keys issued before 2.16.0.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent C4 store pilot. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — CoreGuard commerce UI locator and journal cleanup (v2.15.3)
 
 - Record: [CHG-20261120-coreguard-commerce-ui-cleanup](changes/CHG-20261120-coreguard-commerce-ui-cleanup.md). Baseline product `c333f9d` / v2.15.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

@@ -49,10 +49,13 @@ function make(stockQty = '1') {
   );
   const posts: PostedDocument[] = [];
   const returns: PostedDocument[] = [];
+  const invoices: Array<{ headerDiscount?: number; freightAmount?: number; lines: Array<{ discountAmount?: number; quantity: number }> }> = [];
   const posting: PostingPort = {
-    async postSalesInvoice() {
+    async postSalesInvoice(input) {
+      invoices.push(input);
       const current = store.stock[0]!;
-      const qty = Number(current.quantity) - 1;
+      const sold = input.lines.reduce((sum, line) => sum + line.quantity, 0) || 1;
+      const qty = Number(current.quantity) - sold;
       if (qty < 0) throw new Error('negative stock');
       current.quantity = String(qty);
       const doc = { documentId: `doc-${posts.length + 1}`, documentNumber: `INV-${posts.length + 1}` };
@@ -62,7 +65,8 @@ function make(stockQty = '1') {
     async postSalesReturn(input) {
       if (input.restock) {
         const current = store.stock[0]!;
-        current.quantity = String(Number(current.quantity) + 1);
+        const qty = input.lines.reduce((sum, line) => sum + line.quantity, 0) || 1;
+        current.quantity = String(Number(current.quantity) + qty);
       }
       const doc = { documentId: `ret-${returns.length + 1}`, documentNumber: `SR-${returns.length + 1}` };
       returns.push(doc);
@@ -70,7 +74,7 @@ function make(stockQty = '1') {
     },
   };
   const service = new CommerceService(store, pepper, posting);
-  return { store, service, posts, returns };
+  return { store, service, posts, returns, invoices };
 }
 
 describe('commerce order intake', () => {
@@ -180,6 +184,7 @@ describe('commerce order intake', () => {
       amount: '1500.00',
       restock: true,
       externalRefundId: 'rf-2',
+      lines: [{ externalLineId: 'r2-1', quantity: '1' }],
     });
     expect(store.stock[0]?.quantity).toBe('1');
     expect(posts).toHaveLength(2);
@@ -341,5 +346,186 @@ describe('commerce order intake', () => {
     expect(receipt.status).toBe('needs_review');
     expect(String(receipt.reviewReason)).toMatch(/period locked/);
     expect(store.stock[0]?.quantity).toBe('1');
+    expect(store.orders).toHaveLength(1);
+  });
+
+  it('posts line discounts and shipping, and stages non-zero store tax', async () => {
+    const { service, posts, invoices, store } = make('2');
+    const operator = { tenantId, userId, canWrite: true };
+    const connection = await service.createConnection(operator, {
+      name: 'HTTP',
+      kind: 'custom_website',
+      environment: 'sandbox',
+      locationId,
+    });
+    await service.updateConnection(operator, connection.id, { postingMode: 'posting' });
+    await service.applyMappings(operator, connection.id, [
+      { bookoneProductId: productId, sku: 'SKU-1', externalProductId: 'woo-1' },
+    ]);
+    const issued = await service.issueCredential(operator, connection.id);
+    const actor = await service.authenticate(`Bearer ${issued.token}`);
+    const priced: OrderInput = {
+      externalId: 'disc-1',
+      currency: 'LKR',
+      placedAt: '2026-11-20T10:00:00.000Z',
+      customer: { name: 'Walk-in' },
+      lines: [{ externalLineId: 'disc-1-1', sku: 'SKU-1', quantity: '1', unitPrice: '1500.00', discountAmount: '100.00' }],
+      shippingAmount: '50.00',
+      discountAmount: '25.00',
+      taxAmount: '0.00',
+      total: '1425.00',
+      payment: { status: 'paid', amount: '1425.00' },
+    };
+    const posted = await service.submitOrder(actor, priced, 'key-disc');
+    expect(posted.status).toBe('posted');
+    expect(posted.documentNumber).toMatch(/^INV-/);
+    expect(invoices[0]?.headerDiscount).toBe(25);
+    expect(invoices[0]?.freightAmount).toBe(50);
+    expect(invoices[0]?.lines[0]?.discountAmount).toBe(100);
+    expect(posted.settlement).toBe('not_configured');
+    const taxed = await service.submitOrder(
+      actor,
+      { ...paidOrder('tax-1'), taxAmount: '50.00', total: '1550.00' },
+      'key-tax',
+    );
+    expect(taxed.status).toBe('needs_review');
+    expect(String(taxed.reviewReason)).toMatch(/tax/);
+    expect(posts).toHaveLength(1);
+    expect(store.orders).toHaveLength(2);
+  });
+
+  it('restocks only the referenced unit on a multi-line order and cancels the remainder', async () => {
+    const { service, store, returns } = make('2');
+    const operator = { tenantId, userId, canWrite: true };
+    const connection = await service.createConnection(operator, {
+      name: 'HTTP',
+      kind: 'custom_website',
+      environment: 'sandbox',
+      locationId,
+    });
+    await service.updateConnection(operator, connection.id, { postingMode: 'posting' });
+    await service.applyMappings(operator, connection.id, [
+      { bookoneProductId: productId, sku: 'SKU-1', externalProductId: 'woo-1' },
+    ]);
+    const issued = await service.issueCredential(operator, connection.id);
+    const actor = await service.authenticate(`Bearer ${issued.token}`);
+    const multi: OrderInput = {
+      externalId: 'multi-1',
+      currency: 'LKR',
+      placedAt: '2026-11-20T10:00:00.000Z',
+      customer: { name: 'Walk-in' },
+      lines: [
+        { externalLineId: 'm-1', sku: 'SKU-1', quantity: '1', unitPrice: '1500.00' },
+        { externalLineId: 'm-2', sku: 'SKU-1', quantity: '1', unitPrice: '1500.00' },
+      ],
+      total: '3000.00',
+      payment: { status: 'paid', amount: '3000.00' },
+    };
+    await service.submitOrder(actor, multi, 'key-multi');
+    expect(store.stock[0]?.quantity).toBe('0');
+    await expect(
+      service.applyEvent(actor, 'multi-1', {
+        externalEventId: 'ref-no-lines',
+        kind: 'refunded',
+        effectiveAt: '2026-11-20T12:00:00.000Z',
+        amount: '1500.00',
+        restock: true,
+        externalRefundId: 'rf-bad',
+      }),
+    ).rejects.toBeInstanceOf(CommerceError);
+    expect(store.stock[0]?.quantity).toBe('0');
+    await service.applyEvent(actor, 'multi-1', {
+      externalEventId: 'ref-one',
+      kind: 'refunded',
+      effectiveAt: '2026-11-20T12:00:00.000Z',
+      amount: '1500.00',
+      restock: true,
+      externalRefundId: 'rf-one',
+      lines: [{ externalLineId: 'm-1', quantity: '1', amount: '1500.00' }],
+    });
+    expect(store.stock[0]?.quantity).toBe('1');
+    const order = store.orders.find((row) => row.externalId === 'multi-1');
+    expect(order?.lines.find((line) => line.externalLineId === 'm-1')?.restockedQty).toBe('1');
+    expect(order?.lines.find((line) => line.externalLineId === 'm-2')?.restockedQty).toBe('0');
+    await service.applyEvent(actor, 'multi-1', {
+      externalEventId: 'cancel-rest',
+      kind: 'cancelled',
+      sourceVersion: '2',
+      effectiveAt: '2026-11-20T13:00:00.000Z',
+    });
+    expect(store.stock[0]?.quantity).toBe('2');
+    expect(returns.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('rejects a stale lifecycle version and retries an interrupted post', async () => {
+    let fail = true;
+    const store = new MemoryCommerceStore();
+    store.seedProduct(
+      {
+        id: productId,
+        sku: 'SKU-1',
+        name: 'Pilot mug',
+        unit: 'each',
+        productType: 'physical',
+        isActive: true,
+        archived: false,
+        sellPrice: '1500.00',
+        revision: 1,
+      },
+      {
+        productId,
+        sku: 'SKU-1',
+        locationId,
+        quantity: '1',
+        revision: 1,
+        asOf: new Date().toISOString(),
+        stale: false,
+      },
+    );
+    const service = new CommerceService(store, pepper, {
+      async postSalesInvoice() {
+        if (fail) throw new Error('interrupted commit');
+        store.stock[0]!.quantity = '0';
+        return { documentId: 'doc-retry', documentNumber: 'INV-RETRY' };
+      },
+      async postSalesReturn() {
+        return { documentId: 'y', documentNumber: 'y' };
+      },
+    });
+    const operator = { tenantId, userId, canWrite: true };
+    const connection = await service.createConnection(operator, {
+      name: 'HTTP',
+      kind: 'custom_website',
+      environment: 'sandbox',
+      locationId,
+    });
+    await service.updateConnection(operator, connection.id, { postingMode: 'posting' });
+    await service.applyMappings(operator, connection.id, [
+      { bookoneProductId: productId, sku: 'SKU-1', externalProductId: 'woo-1' },
+    ]);
+    const issued = await service.issueCredential(operator, connection.id);
+    const actor = await service.authenticate(`Bearer ${issued.token}`);
+    const first = await service.submitOrder(actor, paidOrder('stale-1'), 'key-stale');
+    expect(first.status).toBe('needs_review');
+    expect(store.orders).toHaveLength(1);
+    await service.applyEvent(actor, 'stale-1', {
+      externalEventId: 'paid-2',
+      kind: 'paid',
+      sourceVersion: '2',
+      effectiveAt: '2026-11-20T12:00:00.000Z',
+    });
+    await expect(
+      service.applyEvent(actor, 'stale-1', {
+        externalEventId: 'paid-1',
+        kind: 'paid',
+        sourceVersion: '1',
+        effectiveAt: '2026-11-20T11:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    fail = false;
+    const retried = await service.retryReviewOrder(operator, connection.id, store.orders[0]!.id);
+    expect(retried.status).toBe('posted');
+    expect(retried.documentNumber).toBe('INV-RETRY');
+    expect(store.stock[0]?.quantity).toBe('0');
   });
 });

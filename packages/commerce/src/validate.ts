@@ -127,6 +127,27 @@ export function validateEvent(input: OrderEventInput): ValidationIssue[] {
   if (input.kind === 'refunded' && !input.externalRefundId?.trim()) {
     issues.push({ code: 'missing_refund_id', message: 'Refund events need an immutable store refund ID.', field: 'externalRefundId', blocking: true });
   }
+  if (input.kind === 'refunded' && input.restock) {
+    if (!input.lines?.length) {
+      issues.push({
+        code: 'missing_refund_lines',
+        message: 'Physical restock requires original line references and quantities.',
+        field: 'lines',
+        blocking: true,
+      });
+    } else {
+      for (const line of input.lines) {
+        if (!line.externalLineId?.trim()) {
+          issues.push({
+            code: 'missing_refund_line_id',
+            message: 'Each restock line needs the original store line ID.',
+            field: 'lines.externalLineId',
+            blocking: true,
+          });
+        }
+      }
+    }
+  }
   return issues;
 }
 

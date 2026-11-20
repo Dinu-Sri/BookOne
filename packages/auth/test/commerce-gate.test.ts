@@ -61,6 +61,16 @@ describe('Commerce C1–C3 CoreGuard contracts', () => {
     expect(spec).toMatch(/COREGUARD_ROOT/);
     expect(spec).toMatch(/commerce-results\.json/);
     expect(spec).toMatch(/getByRole\('main'\)\.getByText\('Commerce Integrations'\)/);
+    expect(spec).toMatch(/toBe\('posted'\)/);
+    expect(spec).toMatch(/toBe\('0'\)/);
+    const actions = read('apps/web/src/app/actions/commerce.ts');
+    expect(actions).not.toMatch(/issued=/);
+    const orders = read('connectors/woocommerce/bookone-commerce/includes/class-bookone-orders.php');
+    expect(orders).toMatch(/is_paid\(\)/);
+    expect(orders).not.toMatch(/processing.*completed/);
+    const worker = read('connectors/woocommerce/bookone-commerce/includes/class-bookone-worker.php');
+    expect(worker).toMatch(/bookone_commerce_jobs/);
+    expect(worker).toMatch(/status = 'dead'/);
     const playwright = read('apps/web/playwright.coreguard.config.ts');
     expect(playwright).toMatch(/commerce/);
     const e2e = read('apps/web/playwright.config.ts');

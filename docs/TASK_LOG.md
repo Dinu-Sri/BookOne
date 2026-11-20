@@ -1,3 +1,10 @@
+## 2026-11-20 — v2.17.0 CI follow-up (mapping combobox above catalog publish)
+
+- Record: [CHG-20261120-docs-api-mcp-catalog](changes/CHG-20261120-docs-api-mcp-catalog.md). Same VERSION 2.17.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Docker web image `44777738366` Pilot custom-bank failed CoreGuard commerce mapping: `SKU-1 ·` never appeared after clicking **BookOne product**. The new **Publish from BookOne** table sat above **Link existing products** on the 390px Mapping tab, so SelectField closed on the scroll that followed the click. Mapping CoreGuard controls stay first. Production Check `44777738488` succeeded.
+- Checks: `@bookone/auth` commerce-gate asserts Link existing products appears before Publish from BookOne.
+- Next: Fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image **Build & push** is green.
+
 ## 2026-11-20 — v2.17.0 CI follow-up (mapping scopes type + AB-04 catalog)
 
 - Record: [CHG-20261120-docs-api-mcp-catalog](changes/CHG-20261120-docs-api-mcp-catalog.md). Same VERSION 2.17.0 on `feat/v2170-docs-api-mcp-catalog` from `29f56c6`. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

@@ -990,78 +990,6 @@ export function CompanyCommerce(props: {
                         ) : null}
 
                         {props.canWrite && props.products.length > 0 ? (
-                          <form
-                            action={async (data) => {
-                              const result = await previewCommercePublishFromForm(data);
-                              if (!result.ok) {
-                                setActionError(result.error);
-                                setPublishPreview([]);
-                                return;
-                              }
-                              setActionError(null);
-                              setPublishPreview(result.items);
-                            }}
-                            className="commerce-map-form"
-                          >
-                            <input type="hidden" name="connectionId" value={selected.id} />
-                            <input type="hidden" name="tab" value="mapping" />
-                            <fieldset className="commerce-fields">
-                              <legend className="commerce-section-title">Publish from BookOne</legend>
-                              <p className="field-help">
-                                For an empty store. WooCommerce creations default to draft. Custom websites create listings
-                                themselves, then acknowledge stable IDs.
-                              </p>
-                              <div className="commerce-table-scroll" tabIndex={0} role="region" aria-label="Products to publish">
-                                <table className="commerce-table">
-                                  <thead>
-                                    <tr>
-                                      <th>Publish</th>
-                                      <th>SKU</th>
-                                      <th>BookOne</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {props.products.map((p) => (
-                                      <tr key={p.id}>
-                                        <td>
-                                          <input type="checkbox" name="publishProductId" value={p.id} />
-                                        </td>
-                                        <td>{p.sku}</td>
-                                        <td>{p.name}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                              <FormFooter>
-                                <Button type="submit">Preview publish</Button>
-                                <Button variant="primary" type="submit" formAction={queueCommercePublishFromForm} disabled={!props.canWrite}>
-                                  Queue publish
-                                </Button>
-                              </FormFooter>
-                            </fieldset>
-                          </form>
-                        ) : null}
-                        {publishPreview.length ? (
-                          <div className="commerce-card" role="status">
-                            <h2 className="commerce-section-title">Publish preview</h2>
-                            <ul>
-                              {publishPreview.map((row) => (
-                                <li key={row.bookoneProductId}>
-                                  {row.sku || row.bookoneProductId} · {row.name ?? 'Unknown'} · {row.kind} · {row.reason}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : null}
-                        {selected.publishClaims?.length ? (
-                          <p className="field-help">
-                            Queued claims: {selected.publishClaims.map((c) => `${c.sku} (${c.status})`).join(', ')}. The store
-                            pulls `/catalog/candidates` and acknowledges IDs. GET `/products` stays mapped-only.
-                          </p>
-                        ) : null}
-
-                        {props.canWrite && props.products.length > 0 ? (
                           <form action={onPreviewMapping} className="commerce-map-form">
                             <input type="hidden" name="connectionId" value={selected.id} />
                             <input type="hidden" name="tab" value="mapping" />
@@ -1073,6 +1001,7 @@ export function CompanyCommerce(props: {
                                 label="BookOne product"
                                 value={productId}
                                 onChange={pickProduct}
+                                searchable={false}
                                 options={[
                                   { value: '', label: 'Choose a product' },
                                   ...props.products.map((p) => ({ value: p.id, label: `${p.sku} · ${p.name}` })),
@@ -1157,6 +1086,78 @@ export function CompanyCommerce(props: {
                                 : `Publishes absolute BookOne quantities for mapped SKUs at ${locationName}. Store acknowledgment is separate.`}
                           </p>
                         </form>
+
+                        {props.canWrite && props.products.length > 0 ? (
+                          <form
+                            action={async (data) => {
+                              const result = await previewCommercePublishFromForm(data);
+                              if (!result.ok) {
+                                setActionError(result.error);
+                                setPublishPreview([]);
+                                return;
+                              }
+                              setActionError(null);
+                              setPublishPreview(result.items);
+                            }}
+                            className="commerce-map-form"
+                          >
+                            <input type="hidden" name="connectionId" value={selected.id} />
+                            <input type="hidden" name="tab" value="mapping" />
+                            <fieldset className="commerce-fields">
+                              <legend className="commerce-section-title">Publish from BookOne</legend>
+                              <p className="field-help">
+                                For an empty store. WooCommerce creations default to draft. Custom websites create listings
+                                themselves, then acknowledge stable IDs.
+                              </p>
+                              <div className="commerce-table-scroll" tabIndex={0} role="region" aria-label="Products to publish">
+                                <table className="commerce-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Publish</th>
+                                      <th>SKU</th>
+                                      <th>BookOne</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {props.products.map((p) => (
+                                      <tr key={p.id}>
+                                        <td>
+                                          <input type="checkbox" name="publishProductId" value={p.id} />
+                                        </td>
+                                        <td>{p.sku}</td>
+                                        <td>{p.name}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <FormFooter>
+                                <Button type="submit">Preview publish</Button>
+                                <Button variant="primary" type="submit" formAction={queueCommercePublishFromForm} disabled={!props.canWrite}>
+                                  Queue publish
+                                </Button>
+                              </FormFooter>
+                            </fieldset>
+                          </form>
+                        ) : null}
+                        {publishPreview.length ? (
+                          <div className="commerce-card" role="status">
+                            <h2 className="commerce-section-title">Publish preview</h2>
+                            <ul>
+                              {publishPreview.map((row) => (
+                                <li key={row.bookoneProductId}>
+                                  {row.sku || row.bookoneProductId} · {row.name ?? 'Unknown'} · {row.kind} · {row.reason}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {selected.publishClaims?.length ? (
+                          <p className="field-help">
+                            Queued claims: {selected.publishClaims.map((c) => `${c.sku} (${c.status})`).join(', ')}. The store
+                            pulls `/catalog/candidates` and acknowledges IDs. GET `/products` stays mapped-only.
+                          </p>
+                        ) : null}
                       </div>
                     )}
                   </div>

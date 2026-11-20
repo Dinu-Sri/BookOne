@@ -93,6 +93,8 @@ describe('Commerce C1–C3 CoreGuard contracts', () => {
     expect(commerceUi).toMatch(/Open Products/);
     expect(commerceUi).toMatch(/Link existing products/);
     expect(commerceUi).toMatch(/Publish from BookOne/);
+    expect(commerceUi.indexOf('Link existing products')).toBeGreaterThan(-1);
+    expect(commerceUi.indexOf('Link existing products')).toBeLessThan(commerceUi.indexOf('Publish from BookOne'));
     expect(commerceUi).toMatch(/Developers &amp; Integrations/);
     expect(spec).toMatch(/toBe\('posted'\)/);
     expect(spec).toMatch(/toBe\('0'\)/);

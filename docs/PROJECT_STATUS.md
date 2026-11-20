@@ -1,3 +1,7 @@
+## 2026-11-20 — CoreGuard commerce-results.json path (v2.15.2)
+
+Candidate **2.15.2** on `fix/v2152-coreguard-commerce-results-path` from origin/master `b293d9e` / v2.15.1. Playwright wrote commerce evidence two directories above `apps/web`, so CoreGuard would miss `.local/commerce-results.json` after a passing HTTP last-unit. This candidate writes that file under `COREGUARD_ROOT/.local`. Commerce C1–C3 product behaviour is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — CoreGuard Playwright commerce contract (v2.15.1)
 
 Candidate **2.15.1** on `fix/v2151-coreguard-commerce-playwright-contract` from origin/master `c3d742e` / v2.15.0. Docker web image `44720274005` and Production Check `44720274282` failed because the custom-bank Playwright contract required `coreguard-(custom-bank|bank-recon)` only. This candidate keeps commerce in CoreGuard Playwright and widens that contract. Regular e2e ignores the commerce spec. Commerce C1–C3 product behaviour is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

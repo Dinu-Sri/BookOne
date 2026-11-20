@@ -84,7 +84,8 @@ test('headless HTTP client sells the last unit once and replays without a second
   const other = await fetch(`${base}/connection`, { headers: { authorization: `Bearer ${wooToken || 'bkc_sand_nope_nope'}` } });
   expect([200, 401, 403].includes(other.status)).toBe(true);
 
-  const dir = path.resolve(process.cwd(), '../../.local');
+  const root = process.env.COREGUARD_ROOT || path.resolve(__dirname, '../../..');
+  const dir = path.join(root, '.local');
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     path.join(dir, 'commerce-results.json'),

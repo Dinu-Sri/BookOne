@@ -89,6 +89,7 @@ async function main() {
     AUTH_SECRET: process.env.AUTH_SECRET ?? process.env.BETTER_AUTH_SECRET ?? 'test-secret-for-ci-only',
     AUTH_URL: process.env.AUTH_URL ?? 'http://127.0.0.1:3000',
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? process.env.AUTH_URL ?? 'http://127.0.0.1:3000',
+    COREGUARD_ROOT: ROOT,
   };
 
   let failed: string | null = null;

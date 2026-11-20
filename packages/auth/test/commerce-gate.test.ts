@@ -60,6 +60,7 @@ describe('Commerce C1–C3 CoreGuard contracts', () => {
     const spec = read('apps/web/e2e/coreguard-commerce.spec.ts');
     expect(spec).toMatch(/COREGUARD_ROOT/);
     expect(spec).toMatch(/commerce-results\.json/);
+    expect(spec).toMatch(/getByRole\('main'\)\.getByText\('Commerce Integrations'\)/);
     const playwright = read('apps/web/playwright.coreguard.config.ts');
     expect(playwright).toMatch(/commerce/);
     const e2e = read('apps/web/playwright.config.ts');

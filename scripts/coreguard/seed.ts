@@ -216,10 +216,6 @@ export async function cleanupPilotSeed(databaseUrl: string, seed: PilotSeed): Pr
       await sql`DELETE FROM business_documents WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM inventory_stock_levels WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM inventory_products WHERE tenant_id = ${tenantId}`;
-      await sql`DELETE FROM locations WHERE tenant_id = ${tenantId}`;
-      await sql`DELETE FROM party_advance_allocations WHERE tenant_id = ${tenantId}`;
-      await sql`DELETE FROM party_advances WHERE tenant_id = ${tenantId}`;
-      await sql`DELETE FROM parties WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM bank_reconciliation_case_book_transactions WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM bank_reconciliation_case_bank_lines WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM bank_reconciliation_outstanding_items WHERE tenant_id = ${tenantId}`;
@@ -239,6 +235,10 @@ export async function cleanupPilotSeed(databaseUrl: string, seed: PilotSeed): Pr
       await sql`DELETE FROM journal_lines WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM journal_entries WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM transactions WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM locations WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM party_advance_allocations WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM party_advances WHERE tenant_id = ${tenantId}`;
+      await sql`DELETE FROM parties WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM audit_log WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM accounts WHERE tenant_id = ${tenantId}`;
       await sql`DELETE FROM tenant_permission_overrides WHERE tenant_id = ${tenantId}`;

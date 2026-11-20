@@ -1,3 +1,10 @@
+## 2026-11-20 — CoreGuard commerce UI locator and journal cleanup (v2.15.3)
+
+- Record: [CHG-20261120-coreguard-commerce-ui-cleanup](changes/CHG-20261120-coreguard-commerce-ui-cleanup.md). Baseline product `c333f9d` / v2.15.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Playwright scopes `Commerce Integrations` to `main`. Cleanup deletes recon, journals and transactions before locations so a posted last-unit invoice does not block Pilot teardown. VERSION 2.15.3. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` commerce-gate. Linux v2.15.1 HTTP last-unit 202 in 156ms. Woo live checkout remains not-run.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent C4 store pilot. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — CoreGuard commerce-results.json path (v2.15.2)
 
 - Record: [CHG-20261120-coreguard-commerce-results-path](changes/CHG-20261120-coreguard-commerce-results-path.md). Baseline product `b293d9e` / v2.15.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

@@ -1,3 +1,7 @@
+## 2026-11-20 — CoreGuard commerce UI locator and journal cleanup (v2.15.3)
+
+Candidate **2.15.3** on `fix/v2153-coreguard-commerce-ui-cleanup` from origin/master `c333f9d` / v2.15.2. Docker web image `44721171311` HTTP last-unit passed 202 in 156ms. Playwright then failed because `Commerce Integrations` matched nav and title, and cleanup hit `journal_entries.location_id`. This candidate scopes the title to `main` and deletes recon/journals/transactions before locations. Commerce C1–C3 product behaviour is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — CoreGuard commerce-results.json path (v2.15.2)
 
 Candidate **2.15.2** on `fix/v2152-coreguard-commerce-results-path` from origin/master `b293d9e` / v2.15.1. Playwright wrote commerce evidence two directories above `apps/web`, so CoreGuard would miss `.local/commerce-results.json` after a passing HTTP last-unit. This candidate writes that file under `COREGUARD_ROOT/.local`. Commerce C1–C3 product behaviour is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

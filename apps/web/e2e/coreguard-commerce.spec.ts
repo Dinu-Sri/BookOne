@@ -24,7 +24,7 @@ async function login(page: Page, email: string, password: string) {
 test('commerce company UI issues a key once and denies the viewer', async ({ page }) => {
   await login(page, ownerEmail, ownerPassword);
   await page.goto('/company/commerce');
-  await expect(page.getByText('Commerce Integrations')).toBeVisible();
+  await expect(page.getByRole('main').getByText('Commerce Integrations')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Issue scoped key' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('tab', { name: 'Connections' })).toBeVisible();

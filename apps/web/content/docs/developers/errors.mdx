@@ -1,0 +1,51 @@
+---
+title: API errors and recovery
+description: Commerce and AgentBridge error codes, HTTP status, and the next operator action.
+---
+
+# API errors and recovery
+
+## Commerce HTTP
+
+Every error body includes `ok: false`, `code`, `error`, and `requestId`.
+
+| code | Typical HTTP | Recovery |
+|------|--------------|----------|
+| `UNAUTHENTICATED` | 401 | Issue or rotate the scoped key. Prefix-only display means the secret was already shown |
+| `FORBIDDEN` | 403 | The key lacks that scope (`catalog`, `inventory`, `order`, `lifecycle`) |
+| `NOT_FOUND` | 404 | Unknown route or order `externalId` |
+| `VALIDATION` | 400 | Fix the payload. Empty acknowledge batches and zero-item publish are refused |
+| `CONFLICT` | 409 | Same idempotency key with a different payload, or a second acknowledge ID for one BookOne product |
+| `RATE_LIMITED` | 429 | Honor `Retry-After` |
+| `INBOUND_PAUSED` / `OUTBOUND_PAUSED` | 409 | Operator unpauses inbound orders or outbound stock |
+| `CURSOR_EXPIRED` | 422 | Full `/inventory` snapshot, then `/changes` without the old cursor |
+| `RESERVATION_DISABLED` | 422 | Reservations stay off. Do not retry as a checkout hold |
+| `UNSUPPORTED` | 422 | Feature is out of v1 (FX, kits, Shopify, price export) |
+
+HTTP **202** on `POST /orders` means accepted for processing. Confirm `status`, `documentNumber`, and inventory. `httpStatusIsNotAccountingAcceptance` is always true on that receipt.
+
+Lost 202: replay the **same** `Idempotency-Key` and body. A changed body under that key is `CONFLICT`.
+
+## Mapping and publish
+
+| Symptom | Cause | Recovery |
+|---------|-------|----------|
+| Apply mapping stays disabled | Preview not run, or Store product ID changed | Preview again |
+| `ambiguous` | Duplicate BookOne SKU | Ask which product. Do not guess |
+| `conflicting` | Store IDs or BookOne product already linked elsewhere | Review before/after. Reject the proposal |
+| `unsupported` | Archived/inactive, or missing sell price on publish | Fix the product, then preview |
+| Candidates `bootstrap: idle` | Nothing queued | **Publish from BookOne** → Preview → Queue |
+| Woo created a draft but mapping is empty | Acknowledge lost | Click **Publish from BookOne** again. Existing SKU is acknowledged |
+
+## AgentBridge / MCP
+
+| Symptom | Recovery |
+|---------|----------|
+| `PERMISSION_DENIED` on mapping tools | Owner/Admin job plus **Allow catalog mapping** on that connection |
+| Mapping tools missing from `tools/list` | Purchase-only token. Expected for existing Codex grants |
+| `HUMAN_APPROVAL_REQUIRED` | Approve in BookOne. Agents cannot mint approval |
+| `FEATURE_DISABLED` | Company AgentBridge flag is off, or commerce mapping is not wired |
+| `invalid_grant` | Do not replay consumed codes. Start a new consent |
+| `UNSUPPORTED_PROTOCOL` | Send `2025-06-18`, `2025-03-26`, or `2024-11-05` |
+
+Public OAuth errors stay generic. Operators use the non-secret request id on the connection row.

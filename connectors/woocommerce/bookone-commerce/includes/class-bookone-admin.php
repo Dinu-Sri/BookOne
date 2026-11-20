@@ -54,6 +54,9 @@ final class BookOne_Commerce_Admin {
         if ($action === 'publish_stock') {
             BookOne_Commerce_Sync::publish_stock();
         }
+        if ($action === 'publish_from_bookone') {
+            BookOne_Commerce_Sync::publish_from_bookone();
+        }
         if ($action === 'repair') {
             BookOne_Commerce_Worker::tick(true);
         }
@@ -73,7 +76,7 @@ final class BookOne_Commerce_Admin {
         $has_token = $s['token'] !== '';
         echo '<div class="wrap"><h1>BookOne Commerce</h1>';
         settings_errors('bookone_commerce');
-        echo '<p>Install, paste the BookOne sandbox key, test the connection, preview SKU mapping, then publish stock. Do not put the token in a theme file.</p>';
+        echo '<p>Install, paste the BookOne sandbox key, test the connection, then either map existing SKUs or use Publish from BookOne for an empty store. Creations save as Woo drafts. Do not put the token in a theme file.</p>';
         echo '<form method="post">';
         wp_nonce_field('bookone_commerce', 'bookone_commerce_nonce');
         echo '<table class="form-table"><tr><th>BookOne API base</th><td><input class="regular-text" name="base_url" value="' . esc_attr($s['base_url']) . '" placeholder="https://example/api/commerce/v1" /></td></tr>';
@@ -97,6 +100,11 @@ final class BookOne_Commerce_Admin {
         wp_nonce_field('bookone_commerce', 'bookone_commerce_nonce');
         echo '<input type="hidden" name="bookone_action" value="publish_stock" />';
         submit_button(__('Publish stock', 'bookone-commerce'), 'secondary', 'submit', false);
+        echo '</form> ';
+        echo '<form method="post" style="display:inline">';
+        wp_nonce_field('bookone_commerce', 'bookone_commerce_nonce');
+        echo '<input type="hidden" name="bookone_action" value="publish_from_bookone" />';
+        submit_button(__('Publish from BookOne', 'bookone-commerce'), 'secondary', 'submit', false);
         echo '</form> ';
         echo '<form method="post" style="display:inline">';
         wp_nonce_field('bookone_commerce', 'bookone_commerce_nonce');

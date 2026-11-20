@@ -1,9 +1,15 @@
 ---
 title: Chart of accounts
-description: Canonical account codes used by BookOne posting engines.
+description: Default posting codes versus this company's accounts, openings, Advances, and custom banks.
 ---
 
 # Chart of accounts
+
+BookOne ships a **default chart** used by posting engines when a company has not mapped its own accounts. **Accounting → Accounts** is the company chart. Custom banks, opening balances, and Advances live there. Do not treat the table below as this company's live mappings.
+
+Screen: **Accounting → Accounts**. Write needs `accounting.accounts.write`. Viewer is read-only.
+
+## Default codes (engine templates)
 
 | Code | Name | Role |
 |------|------|------|
@@ -15,6 +21,7 @@ description: Canonical account codes used by BookOne posting engines.
 | 2150 | Goods Received Not Invoiced | Optional GRNI |
 | 2200 | Output VAT | Sales tax liability |
 | 2300 | Input VAT | Purchase tax asset |
+| 2400 | Customer deposits | Hire deposits (liability, not sales) |
 | 3000 | Owner Equity | Equity / opening stock credit |
 | 3100 | Owner Drawings | Drawings |
 | 4000 | Sales Revenue | Revenue |
@@ -23,4 +30,36 @@ description: Canonical account codes used by BookOne posting engines.
 | 5100 | Inventory | Inventory asset |
 | 6000–6800 | Expenses | Operating expenses |
 
-Products can override revenue/COGS/inventory codes on the product master.
+Products can override revenue/COGS/inventory codes on the product master. Spendable cash includes **10xx + 11xx**.
+
+## Company accounts
+
+**Accounting → Accounts**
+
+1. Search, Class, and Status stay on one row at laptop widths.
+2. Create a custom bank with the company account **name**, not a hardcoded 1100 label.
+3. Opening balances post to equity (default 3000) when this company has not chosen another opening account.
+4. Inactive/archived accounts drop out of posting pickers.
+
+## Advances
+
+**Accounting → Advances** (and related allocate screens)
+
+Advances are company-mapped cash/bank codes, not a second ledger. Allocate against the party and the originating document. Empty allocate stays compact.
+
+## Bank import and reconciliation
+
+**Accounting → Reconciliation**
+
+Bank left / BookOne right. Confirm match without inventing journals. Inbox difference is `bankClose − bookClose + outstandingNet`. Unverified appears when a current comparison is missing. Guided bank-only starts with **Search BookOne**.
+
+## Common errors
+
+| Symptom | Recovery |
+|---------|----------|
+| Posting used 1100 but the company bank is named differently | Map the custom bank on Accounts; pick it on the document |
+| Opening applied to the wrong equity account | Set openings on Accounts before the first stock/opening journal |
+| Viewer cannot create a bank | Expected. Owner/Admin/Accountant write |
+| Commerce settlement `not_configured` | Configure a payment account. HTTP 2xx is not settlement |
+
+Dated with BookOne 2.17.0 (2026-11-20). Live tenant CoA acceptance is independent QA.

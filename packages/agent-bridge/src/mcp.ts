@@ -8,7 +8,7 @@ import {
   type ProposalFacts,
 } from './contracts';
 import { actorFromToken, resolveActorFromAuthorization, verifyConnectionToken } from './authz';
-import { AgentBridgeService, TOOL_NAMES } from './service';
+import { AgentBridgeService, TOOL_NAMES, toolsForActor } from './service';
 import { TOOL_INPUT_SCHEMAS, validateAgainstSchema } from './schemas';
 import { money } from './money';
 
@@ -26,7 +26,7 @@ export type JsonRpcResponse = {
   error?: { code: number; message: string; data?: unknown };
 };
 
-const TOOL_DESCRIPTIONS: Record<(typeof TOOL_NAMES)[number], string> = {
+const TOOL_DESCRIPTIONS: Record<string, string> = {
   get_capabilities: 'List AgentBridge flags, scopes, operations and tools for this connection.',
   get_policy_context: 'Return the company purchase-bill policy in force.',
   submit_document: 'Upload an owned PDF or image. Pass filename, mime and contentBase64. Never a filesystem path or URL.',
@@ -51,12 +51,26 @@ const TOOL_DESCRIPTIONS: Record<(typeof TOOL_NAMES)[number], string> = {
   commit_approved_proposal: 'Post once with a durable idempotency key.',
   get_operation_status: 'Read a commit operation without retrying.',
   get_receipt: 'Read the durable receipt for a finished operation.',
+  list_commerce_connections:
+    'List eligible BookOne Commerce store connections. Does not return API keys. Requires commerce_read.',
+  list_bookone_catalog: 'Search sellable BookOne products and variants for mapping. Requires commerce_read.',
+  get_mapping_summary: 'Read current SKU mappings for one Commerce connection. Requires commerce_read.',
+  preview_mapping_proposal:
+    'Preview and store a mapping proposal from sanitized store identities. SKU is a search aid. Apply stays in the BookOne UI. Requires commerce_propose.',
 };
 
 export function mcpToolsList() {
   return TOOL_NAMES.map((name) => ({
     name,
     description: TOOL_DESCRIPTIONS[name],
+    inputSchema: TOOL_INPUT_SCHEMAS[name] ?? { type: 'object', additionalProperties: false, properties: {} },
+  }));
+}
+
+export function mcpToolsListForActor(actor: Actor) {
+  return toolsForActor(actor).map((name) => ({
+    name,
+    description: TOOL_DESCRIPTIONS[name] ?? name,
     inputSchema: TOOL_INPUT_SCHEMAS[name] ?? { type: 'object', additionalProperties: false, properties: {} },
   }));
 }
@@ -210,6 +224,17 @@ export async function dispatchTool(
       return service.getOperationStatus(actor, String(args.operationId ?? ''));
     case 'get_receipt':
       return service.getReceipt(actor, String(args.operationId ?? ''));
+    case 'list_commerce_connections':
+      return service.listCommerceConnections(actor);
+    case 'list_bookone_catalog':
+      return service.listBookoneCatalog(actor, args.q ? String(args.q) : undefined);
+    case 'get_mapping_summary':
+      return service.getMappingSummary(actor, String(args.connectionId ?? ''));
+    case 'preview_mapping_proposal':
+      return service.previewMappingProposal(actor, {
+        connectionId: String(args.connectionId ?? ''),
+        observations: (args.observations as never) ?? [],
+      });
     default:
       return { ok: false, code: 'STALE_REVISION', error: `Unknown tool ${name}.` };
   }
@@ -367,7 +392,7 @@ export async function handleMcpJsonRpc(input: {
       return { jsonrpc: '2.0', id, result: {} };
     }
     if (method === 'tools/list') {
-      return { jsonrpc: '2.0', id, result: { tools: mcpToolsList() } };
+      return { jsonrpc: '2.0', id, result: { tools: mcpToolsListForActor(input.actor) } };
     }
     if (method === 'tools/call') {
       const name = String(input.body.params?.name ?? '');

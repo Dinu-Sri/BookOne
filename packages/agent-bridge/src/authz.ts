@@ -42,6 +42,11 @@ export function parseScopes(keys: string[]): Capability[] {
     }
     if (k === 'agent_bridge.approve' || k === 'agent_bridge.approve.write') out.add('approve');
     if (k === 'agent_bridge.post' || k === 'agent_bridge.post.write' || k === 'purchase.bills.write') out.add('post');
+    if (k === 'agent_bridge.commerce_read' || k === 'commerce_read') out.add('commerce_read');
+    if (k === 'agent_bridge.commerce_propose' || k === 'commerce_propose') {
+      out.add('commerce_read');
+      out.add('commerce_propose');
+    }
   }
   return [...out];
 }

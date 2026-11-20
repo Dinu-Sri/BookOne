@@ -178,6 +178,78 @@ export async function applyCommerceMappingFromForm(formData: FormData) {
   finish(formData, { saved: '1', tab: 'mapping' });
 }
 
+export async function applyCommerceMappingProposalFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  try {
+    await withCommerceService(operator.tenantId, (service) =>
+      service.applyMappingProposal(operator, connectionId, String(formData.get('proposalId') ?? '')),
+    );
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not apply the proposal.', tab: 'mapping' });
+  }
+  finish(formData, { saved: '1', tab: 'mapping' });
+}
+
+export async function rejectCommerceMappingProposalFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  try {
+    await withCommerceService(operator.tenantId, (service) =>
+      service.rejectMappingProposal(
+        operator,
+        String(formData.get('connectionId') ?? ''),
+        String(formData.get('proposalId') ?? ''),
+      ),
+    );
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not reject the proposal.', tab: 'mapping' });
+  }
+  finish(formData, { saved: '1', tab: 'mapping' });
+}
+
+export type PublishPreviewResult =
+  | {
+      ok: true;
+      items: Array<{ bookoneProductId: string; sku: string; name: string | null; kind: string; reason: string }>;
+    }
+  | { ok: false; error: string };
+
+export async function previewCommercePublishFromForm(formData: FormData): Promise<PublishPreviewResult> {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  const productIds = formData.getAll('publishProductId').map(String).filter(Boolean);
+  try {
+    const preview = await withCommerceService(operator.tenantId, (service) =>
+      service.previewPublish(operator, connectionId, productIds),
+    );
+    return { ok: true, items: preview.items };
+  } catch (e) {
+    rethrowNav(e);
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not preview publish.' };
+  }
+}
+
+export async function queueCommercePublishFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  const productIds = formData.getAll('publishProductId').map(String).filter(Boolean);
+  try {
+    await withCommerceService(operator.tenantId, async (service) => {
+      const preview = await service.previewPublish(operator, connectionId, productIds);
+      if (!preview.items.some((item) => item.kind === 'create')) {
+        throw new Error('No eligible products to publish.');
+      }
+      return service.queuePublish(operator, connectionId, productIds);
+    });
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not queue publish.', tab: 'mapping' });
+  }
+  finish(formData, { saved: '1', tab: 'mapping' });
+}
+
 export async function publishCommerceStockFromForm(formData: FormData) {
   const operator = await operatorFromSession();
   try {

@@ -1,0 +1,42 @@
+---
+title: Developers & Integrations
+description: Public contracts for the Custom Website API, WooCommerce, and AgentBridge/MCP.
+---
+
+# Developers & Integrations
+
+Use these pages when you connect a website or an authorized agent to BookOne. Company operators stay on **Company → Commerce Integrations** and **Company → AgentBridge**.
+
+These pages are public. You do not need a BookOne session to read them or to download the Commerce OpenAPI document.
+
+## Choose a path
+
+| Goal | Guide |
+|------|--------|
+| Build a custom website that reads stock and submits orders | [Custom Website API](/docs/developers/custom-website) |
+| Install the packaged WooCommerce plugin | [WooCommerce](/docs/developers/woocommerce) |
+| Connect Codex or Claude for supplier-invoice intake and optional catalog mapping | [AgentBridge / MCP](/docs/developers/agentbridge) |
+| Recover from HTTP, mapping, or MCP errors | [API errors and recovery](/docs/developers/errors) |
+| See what is supported, limited, disabled, or later | [Compatibility and versions](/docs/developers/compatibility) |
+
+## Contracts you can download
+
+- Commerce OpenAPI 3.1: `GET /api/commerce/v1/openapi.json` (no session) and the checked-in copy `docs/commerce/openapi.yaml`
+- Node server-side sample: `docs/commerce/quickstart-node.mjs`
+- curl examples live on the OpenAPI document as `x-examples`
+
+Keep every Commerce bearer token on your server. Never put it in a theme file, shopper HTML, screenshot, or job payload.
+
+## Operator screens
+
+- **Company → Commerce Integrations** — create a sandbox connection, issue a scoped key once, **Link existing products**, **Publish from BookOne**, then review Agent mapping proposals
+- **Company → AgentBridge** — company flags, connected clients, Codex/Claude prompts, and the optional **Allow catalog mapping** grant
+
+AgentBridge purchase grants never include commerce mapping. Mapping apply stays on the BookOne screen.
+
+## Honest status as of BookOne 2.17.0 (2026-11-20)
+
+- Commerce HTTP last-unit posting is covered by CoreGuard.
+- Woo live checkout is **not-run**.
+- Real Codex/Claude mapping discovery is **LIVE-UNVERIFIED**.
+- HTTP 2xx is not accounting acceptance. Read the order, inventory, and journals.

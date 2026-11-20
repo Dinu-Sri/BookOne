@@ -1,0 +1,42 @@
+---
+title: Compatibility and versions
+description: Dated support matrix for Commerce v1, Woo plugin 1.2.0, and AgentBridge MCP.
+---
+
+# Compatibility and versions
+
+Claims below are dated **2026-11-20** with BookOne **2.17.0**. Re-read this page after a VERSION bump.
+
+## Supported in this build
+
+| Piece | Version / evidence |
+|-------|-------------------|
+| BookOne product | 2.17.0, migration **051** additive (`commerce_mapping_proposals`, `commerce_publish_claims`). Catalog stays **v2** |
+| Commerce API | v1 OpenAPI 3.1. CoreGuard HTTP last-unit posted + remaining 0 |
+| Woo plugin ZIP | 1.2.0 (`bookone-commerce-1.2.0.zip`). HPOS declared. Live checkout **not-run** |
+| AgentBridge MCP | Protocol 2025-06-18 / 2025-03-26 / 2024-11-05. Schema `ab-06.1`. CoreGuard version `ab-11` |
+| Mapping tools | Implemented. Actual Codex/Claude discovery **LIVE-UNVERIFIED** |
+| Custom website acknowledge | Implemented in HTTP. Independent website e2e is generic HTTP, not Woo |
+
+## Implemented with limited test evidence
+
+- Agent mapping proposals through MCP in unit tests (purchase actor does not see the tools)
+- BookOne-first queue + acknowledge in `@bookone/commerce` catalog tests
+- Woo create-draft path is in plugin source; ZIP e2e on a disposable empty store is **not-run** here
+
+## Disabled
+
+- Reservation checkout (`RESERVATION_DISABLED`)
+- AgentBridge posting until the owner changes company flags (posting-stop stays on)
+- Price export, FX, kits/bundles, fractional units, multi-location fan-in, Shopify adapter
+
+## Planned separately
+
+- C4 supervised store pilot
+- Shopify
+- Live Woo checkout qualification
+- Independent Codex/Claude mapping discovery on the saved connector
+
+## What “supported” means here
+
+A public page labels a flow **supported** only when this repository has acceptance evidence (unit, CoreGuard, or a named live run). HTTP 2xx is not accounting acceptance.

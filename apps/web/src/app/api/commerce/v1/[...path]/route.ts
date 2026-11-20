@@ -37,6 +37,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
       if (route === 'products') {
         return json(await service.products(actor, req.nextUrl.searchParams.get('cursor') ?? undefined));
       }
+      if (route === 'catalog/candidates') {
+        return json(await service.catalogCandidates(actor));
+      }
       if (route === 'inventory') {
         const sku = req.nextUrl.searchParams.getAll('sku');
         return json(await service.inventory(actor, sku.length ? sku : undefined));
@@ -62,6 +65,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
     const actor = await authenticate(req);
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     return await withCommerceService(actor.tenantId, async (service) => {
+      if (route === 'catalog/acknowledge') {
+        return json(await service.acknowledgeCatalog(actor, ((body.items as never) ?? []) as never));
+      }
       if (route === 'orders/validate') {
         return json(await service.validateOrder(actor, body as never));
       }

@@ -1,3 +1,7 @@
+## 2026-11-20 — Docs, Commerce API, AgentBridge mapping, BookOne-first catalog (v2.17.0)
+
+Candidate **2.17.0** on `feat/v2170-docs-api-mcp-catalog` from origin/master `e6df41c` / v2.16.4. Public Developers & Integrations docs, Commerce OpenAPI 3.1 catalog bootstrap, AgentBridge mapping tools behind a separate grant, Woo plugin 1.2.0 draft publish, migration 051. Woo live checkout remains not-run. Real Codex/Claude mapping discovery is LIVE-UNVERIFIED. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce layout, setup evidence and stock fan-out (v2.16.4)
 
 Candidate **2.16.4** on `feat/v2164-commerce-ui-sync-followup` from origin/master `a67a86e` / v2.16.3. Compact store selector, create-as-own-view, mapping empty states, review-first Activity, refuse zero-item publish, and fan-out stock events to other mapped connections at the same location. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

@@ -1,0 +1,51 @@
+---
+title: WooCommerce
+description: Install the BookOne Commerce plugin, map an existing catalog, or publish drafts from BookOne.
+---
+
+# WooCommerce
+
+Packaged plugin **1.2.0**. WordPress 6.4–6.7, WooCommerce 8.8–9.4 with **HPOS** on, PHP 8.1+. Payment evidence uses Woo `is_paid()`. COD and processing without paid stay pending.
+
+Live Woo checkout remains **not-run** as of BookOne 2.17.0 (2026-11-20). CoreGuard covers BookOne HTTP last-unit posting. A disposable empty-store ZIP test is later qualification.
+
+## Install
+
+1. Build the ZIP: `node scripts/commerce/package-plugin.mjs`
+2. Install `connectors/woocommerce/release/bookone-commerce-1.2.0.zip`
+3. Confirm HPOS (custom order tables) is on
+4. Open **WooCommerce → BookOne**
+5. Paste the BookOne API base (`…/api/commerce/v1`) and the sandbox key issued in **Company → Commerce Integrations**
+6. Click **Save connection**, then **Test connection**
+
+The token is stored in an autoload-off option. It is never printed to shoppers.
+
+## Existing catalog — link products
+
+1. In BookOne, map with **Link existing products** (**BookOne product**, **Store product ID**, **Preview mapping**, **Apply mapping**)
+2. In Woo, **Preview and apply mappings** writes `_bookone_product_id` on SKU matches
+3. **Publish stock** overwrites mapped Woo quantities from BookOne
+
+SKU is a search aid. Durable identity is BookOne product id + Woo product id.
+
+## Empty store — Publish from BookOne
+
+`GET /products` cannot fill an empty store.
+
+1. In BookOne **Mapping**, select products under **Publish from BookOne**, **Preview publish**, then **Queue publish**
+2. In Woo, click **Publish from BookOne**
+3. The plugin `GET /catalog/candidates`, creates **draft** simple products (or acknowledges an existing SKU), then `POST /catalog/acknowledge`
+
+Creations stay draft and hidden until a merchandiser publishes them. A lost acknowledge can be retried; the same Woo id is idempotent. A second Woo object for the same BookOne product is refused.
+
+## Orders
+
+Orders POST with `Idempotency-Key: woo-{orderId}`. Duplicate deliveries replay the original BookOne receipt. Worker hook `bookone_commerce_tick` every five minutes. **Repair worker** and dead-job **Retry** stay on the Woo screen.
+
+## What this plugin does not do
+
+- Put the token in a theme
+- Create a BookOne-hosted storefront
+- Charge a payment gateway
+- Enable reservation checkout
+- Install Shopify

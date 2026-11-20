@@ -16,6 +16,7 @@ import {
   type Actor,
   type AgentBridgeStore,
   type Capability,
+  type CommerceMappingPort,
   type CompanyPolicy,
   type FeatureFlags,
   type OauthRedeemReason,
@@ -1198,11 +1199,60 @@ export async function actorFromSession(): Promise<Actor> {
   if (access?.allows('agent_bridge.approve', 'write')) keys.push('agent_bridge.approve');
   if (access?.allows('agent_bridge.post', 'write')) keys.push('agent_bridge.post');
   if (access?.allows('purchase.bills.write', 'write')) keys.push('purchase.bills.write');
+  if (access?.allows('agent_bridge.commerce_read', 'write')) keys.push('agent_bridge.commerce_read');
+  if (access?.allows('agent_bridge.commerce_propose', 'write')) keys.push('agent_bridge.commerce_propose');
   const capabilities = parseScopes(keys);
   return {
     userId: user.id,
     tenantId: user.tenantId,
     capabilities: capabilities.length ? capabilities : (['read'] as Capability[]),
+  };
+}
+
+function webCommerceMappingPort(): CommerceMappingPort {
+  return {
+    async listConnections(tenantId) {
+      const { makeCommerceService } = await import('@/lib/commerce-runtime');
+      const service = await makeCommerceService();
+      const view = await service.listOperatorView({ tenantId, userId: 'agent', canWrite: false });
+      return view.map((row) => ({
+        id: row.connection.id,
+        name: row.connection.name,
+        kind: row.connection.kind,
+        locationId: row.connection.locationId,
+        mappingCount: row.mappingCount,
+      }));
+    },
+    async listCatalog(tenantId, q) {
+      const { makeCommerceService } = await import('@/lib/commerce-runtime');
+      const service = await makeCommerceService();
+      return service.listCatalogForAgent({ tenantId, userId: 'agent', canWrite: false }, q);
+    },
+    async mappingSummary(tenantId, connectionId) {
+      const { makeCommerceService } = await import('@/lib/commerce-runtime');
+      const service = await makeCommerceService();
+      return service.mappingSummary({ tenantId, userId: 'agent', canWrite: false }, connectionId);
+    },
+    async previewProposal(input) {
+      const { makeCommerceService } = await import('@/lib/commerce-runtime');
+      const service = await makeCommerceService();
+      const row = await service.saveMappingProposal(
+        { tenantId: input.tenantId, userId: input.userId, canWrite: true },
+        input.connectionId,
+        input.observations,
+        'agent',
+      );
+      return {
+        proposalId: row.id,
+        items: row.items.map((item) => ({
+          sku: item.sku,
+          kind: item.kind,
+          reason: item.reason,
+          bookoneProductId: item.bookoneProductId,
+          origin: item.origin,
+        })),
+      };
+    },
   };
 }
 
@@ -1212,6 +1262,7 @@ export function makeAgentBridgeService(): AgentBridgeService {
     store,
     extractor: extractorFor(process.env),
     posting: webPostingPort(),
+    commerce: webCommerceMappingPort(),
     policyFor: policyForTenant,
     authorizeActor: authorizeAgentConnection,
     publicBaseUrl: process.env.AGENT_BRIDGE_PUBLIC_URL || process.env.AUTH_URL,
@@ -1235,6 +1286,7 @@ export async function authorizeAgentConnection(actor: Actor): Promise<Actor> {
     if (!membership || membership.status !== 'active' || membership.voidedAt) {
       throw Object.assign(new Error('Membership is not active in this company.'), { code: 'PERMISSION_DENIED' });
     }
+    let storedScopes: string[] = [];
     if (actor.connectionId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actor.connectionId)) {
       const [connection] = await db()
         .select()
@@ -1255,6 +1307,7 @@ export async function authorizeAgentConnection(actor: Actor): Promise<Actor> {
       if (connection.userId !== actor.userId) {
         throw Object.assign(new Error('AgentBridge connection belongs to another user.'), { code: 'PERMISSION_DENIED' });
       }
+      storedScopes = String(connection.scopes || '').split(/[\s,]+/).filter(Boolean);
       await db()
         .update(agentBridgeConnections)
         .set({ lastUsedAt: new Date() })
@@ -1270,8 +1323,11 @@ export async function authorizeAgentConnection(actor: Actor): Promise<Actor> {
     if (access.allows('agent_bridge.approve', 'write')) keys.push('agent_bridge.approve');
     if (access.allows('agent_bridge.post', 'write')) keys.push('agent_bridge.post');
     if (access.allows('purchase.bills.write', 'write')) keys.push('purchase.bills.write');
+    if (access.allows('agent_bridge.commerce_read', 'write')) keys.push('agent_bridge.commerce_read');
+    if (access.allows('agent_bridge.commerce_propose', 'write')) keys.push('agent_bridge.commerce_propose');
     const live = parseScopes(keys);
-    return { ...actor, capabilities: intersectCapabilities(actor.capabilities, live) };
+    const tokenCaps = [...new Set([...actor.capabilities, ...parseScopes(storedScopes)])];
+    return { ...actor, capabilities: intersectCapabilities(tokenCaps, live) };
   });
 }
 
@@ -1306,6 +1362,40 @@ export async function revokeAgentBridgeConnection(
   row.revokedAt = new Date().toISOString();
   await store.saveConnection(row);
   return row;
+}
+
+export async function setAgentBridgeCommerceMappingScopes(
+  tenantId: string,
+  userId: string,
+  connectionId: string,
+  enabled: boolean,
+) {
+  const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
+  if (!store.getConnection || !store.saveConnection) {
+    throw new Error('Connections are not available on this store.');
+  }
+  const row = await store.getConnection(tenantId, connectionId);
+  if (!row || row.tenantId !== tenantId) {
+    throw Object.assign(new Error('Connection was not found.'), { code: 'CONNECTION_REVOKED' });
+  }
+  const next = row.scopes.filter((s) => s !== 'commerce_read' && s !== 'commerce_propose');
+  if (enabled) {
+    next.push('commerce_read', 'commerce_propose');
+  }
+  row.scopes = next as Capability[];
+  await store.saveConnection(row);
+  return row;
+}
+
+export async function loadAgentBridgeConnectionScopes(
+  tenantId: string,
+  connectionId: string | null | undefined,
+): Promise<string[]> {
+  if (!connectionId) return [];
+  const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
+  if (!store.getConnection) return [];
+  const row = await store.getConnection(tenantId, connectionId);
+  return Array.isArray(row?.scopes) ? row.scopes : String(row?.scopes || '').split(/[\s,]+/).filter(Boolean);
 }
 
 export async function recordAgentBridgeConnection(row: StoredConnection) {

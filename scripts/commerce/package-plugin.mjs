@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const src = path.join(root, 'connectors/woocommerce/bookone-commerce');
 const outDir = path.join(root, 'connectors/woocommerce/release');
-const zipPath = path.join(outDir, 'bookone-commerce-1.1.0.zip');
+const zipPath = path.join(outDir, 'bookone-commerce-1.2.0.zip');
 
 mkdirSync(outDir, { recursive: true });
 
@@ -43,10 +43,10 @@ if (packed.status !== 0) {
 
 const buf = readFileSync(zipPath);
 const sha = createHash('sha256').update(buf).digest('hex');
-writeFileSync(path.join(outDir, 'SHA256SUMS'), `${sha}  bookone-commerce-1.1.0.zip\n`);
+writeFileSync(path.join(outDir, 'SHA256SUMS'), `${sha}  bookone-commerce-1.2.0.zip\n`);
 writeFileSync(
   path.join(outDir, 'checksum.json'),
-  JSON.stringify({ file: 'bookone-commerce-1.1.0.zip', sha256: sha, bytes: buf.length, files: listed.map((f) => f.rel) }, null, 2),
+  JSON.stringify({ file: 'bookone-commerce-1.2.0.zip', sha256: sha, bytes: buf.length, files: listed.map((f) => f.rel) }, null, 2),
 );
 console.log(`Wrote ${zipPath}`);
 console.log(`sha256 ${sha}`);

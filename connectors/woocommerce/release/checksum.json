@@ -1,7 +1,7 @@
 {
-  "file": "bookone-commerce-1.1.0.zip",
-  "sha256": "64de7bcc3dcd95f77a0514f31752f15685dbd7b99dd2b10ecca0370df1a7d785",
-  "bytes": 10797,
+  "file": "bookone-commerce-1.2.0.zip",
+  "sha256": "0972fa26ea35bad6212b94b69eb2a7e8c681aa7806bfb07e3d02656f32aed6bc",
+  "bytes": 11713,
   "files": [
     "bookone-commerce/bookone-commerce.php",
     "bookone-commerce/includes/class-bookone-admin.php",

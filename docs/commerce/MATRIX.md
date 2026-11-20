@@ -36,7 +36,9 @@ FX, export tax, kits/bundles, nonstock services as stocked SKUs, fractional unit
 | `@bookone/commerce` vitest (credentials, validate, last-unit, replay, oversell review, refunds, isolation, pause, posting failure) | required; run locally and in Docker web image quality + CoreGuard |
 | `@bookone/auth` `commerce-gate.test.ts` (catalog v2, grants, RLS, HPOS, CoreGuard wiring) | required |
 | CoreGuard Playwright `coreguard-commerce.spec.ts` company UI + HTTP last-unit | required when `COREGUARD_PILOT_BROWSER=1` or GitHub Actions; missing posted + document + remaining 0 fails the lane |
-| Plugin ZIP `node scripts/commerce/package-plugin.mjs` | required in CoreGuard. Local artifact `connectors/woocommerce/release/bookone-commerce-1.1.0.zip` (checksum written by the package script) |
+| Plugin ZIP `node scripts/commerce/package-plugin.mjs` | required in CoreGuard. Local artifact `connectors/woocommerce/release/bookone-commerce-1.2.0.zip` (checksum written by the package script) |
+| Catalog mapping proposals + acknowledge | required `@bookone/commerce` catalog tests. MCP mapping tools required `@bookone/agent-bridge` commerce-tools tests |
+| Woo ZIP e2e empty store / live checkout | **not-run** |
 | Independent HTTP client `scripts/commerce/http-client.ts` | required; no Woo imports |
 | Disposable Woo docker compose + live checkout | **not-run** in this candidate. Compose file and plugin ZIP are shipped. C4 supervised store pilot installs the ZIP on a real store. |
 | Live tenant CoA / AgentBridge posting | not-run. Company flags stay Inbox on / draft-only off / posting-stop on. |
@@ -55,8 +57,8 @@ Seed: SKU-1 qty 1, SKU-VAR qty 2, posting mode, LKR.
 
 | Piece | Version |
 |---|---|
-| BookOne | 2.16.0 / migration 050 |
-| Plugin | 1.1.0 |
+| BookOne | 2.17.0 / migrations 050 + 051 |
+| Plugin | 1.2.0 |
 | WordPress | 6.4+ (compose 6.7) |
 | WooCommerce | 8.8+ HPOS declared |
 | PHP | 8.1+ |

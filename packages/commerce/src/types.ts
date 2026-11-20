@@ -1,5 +1,5 @@
 export const COMMERCE_API_VERSION = 'v1';
-export const COMMERCE_PLUGIN_VERSION = '1.1.0';
+export const COMMERCE_PLUGIN_VERSION = '1.2.0';
 export const COMMERCE_SCOPES = ['catalog', 'inventory', 'order', 'lifecycle'] as const;
 export type CommerceScope = (typeof COMMERCE_SCOPES)[number];
 
@@ -96,6 +96,86 @@ export type MappingInput = {
   externalProductId: string;
   externalVariantId?: string;
   optedInFields?: string[];
+};
+
+export type MappingObservationOrigin = 'agent' | 'verified_store';
+export type MappingMatchKind =
+  | 'suggested'
+  | 'unchanged'
+  | 'ambiguous'
+  | 'missing'
+  | 'conflicting'
+  | 'unsupported';
+
+export type MappingObservation = {
+  sku?: string;
+  name?: string;
+  externalProductId: string;
+  externalVariantId?: string;
+  origin: MappingObservationOrigin;
+};
+
+export type MappingPreviewRow = {
+  sku: string;
+  bookoneProductId: string | null;
+  bookoneName: string | null;
+  externalProductId: string;
+  externalVariantId: string;
+  kind: MappingMatchKind;
+  reason: string;
+  origin: MappingObservationOrigin;
+  before?: { bookoneProductId: string; externalProductId: string; externalVariantId: string } | null;
+};
+
+export type MappingProposalStatus = 'proposed' | 'approved' | 'applied' | 'rejected' | 'stale';
+
+export type MappingProposalRow = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  createdByUserId: string;
+  origin: MappingObservationOrigin;
+  status: MappingProposalStatus;
+  expectedRevision: number;
+  items: MappingPreviewRow[];
+  receipt: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PublishClaimStatus = 'claimed' | 'created' | 'acknowledged' | 'conflict' | 'failed';
+
+export type PublishClaimRow = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  bookoneProductId: string;
+  sku: string;
+  claimKey: string;
+  status: PublishClaimStatus;
+  externalProductId: string;
+  externalVariantId: string;
+  issue: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CatalogCandidate = {
+  claimId: string;
+  bookoneProductId: string;
+  sku: string;
+  name: string;
+  unit: string;
+  sellPrice: string;
+  status: PublishClaimStatus;
+  alreadyLinked: boolean;
+};
+
+export type AcknowledgementItem = {
+  bookoneProductId: string;
+  claimId?: string;
+  externalProductId: string;
+  externalVariantId?: string;
 };
 
 export type ProductRecord = {

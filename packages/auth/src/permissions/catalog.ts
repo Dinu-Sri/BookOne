@@ -55,6 +55,8 @@ export const PERMISSION_KEYS = [
   'purchase.inbox.write',
   'agent_bridge.approve',
   'agent_bridge.post',
+  'agent_bridge.commerce_read',
+  'agent_bridge.commerce_propose',
   'inventory.products.read',
   'inventory.products.write',
   'inventory.categories.read',
@@ -233,6 +235,8 @@ export const ACTION_PERMISSIONS: {
 }[] = [
   { key: 'agent_bridge.approve', label: 'Approve inbox proposals', module: 'purchase' },
   { key: 'agent_bridge.post', label: 'Post approved inbox bills', module: 'purchase' },
+  { key: 'agent_bridge.commerce_read', label: 'Read commerce catalog for mapping', module: 'company' },
+  { key: 'agent_bridge.commerce_propose', label: 'Propose commerce SKU mappings', module: 'company' },
 ];
 
 export function moduleOfKey(key: string): string {

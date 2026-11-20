@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, text, jsonb, bigint, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, text, jsonb, bigint, integer, primaryKey } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { users } from './users';
 import { locations } from './company-settings';
@@ -228,4 +228,45 @@ export const commerceActivity = pgTable('commerce_activity', {
   entityId: uuid('entity_id'),
   detailJson: jsonb('detail_json'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const commerceMappingProposals = pgTable('commerce_mapping_proposals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  connectionId: uuid('connection_id')
+    .notNull()
+    .references(() => commerceConnections.id),
+  createdByUserId: uuid('created_by_user_id')
+    .notNull()
+    .references(() => users.id),
+  origin: varchar('origin', { length: 20 }).notNull().default('agent'),
+  status: varchar('status', { length: 20 }).notNull().default('proposed'),
+  expectedRevision: integer('expected_revision').notNull().default(1),
+  itemsJson: jsonb('items_json').notNull(),
+  receiptJson: jsonb('receipt_json'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const commercePublishClaims = pgTable('commerce_publish_claims', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  connectionId: uuid('connection_id')
+    .notNull()
+    .references(() => commerceConnections.id),
+  bookoneProductId: uuid('bookone_product_id')
+    .notNull()
+    .references(() => inventoryProducts.id),
+  sku: varchar('sku', { length: 80 }).notNull(),
+  claimKey: varchar('claim_key', { length: 120 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('claimed'),
+  externalProductId: varchar('external_product_id', { length: 80 }).notNull().default(''),
+  externalVariantId: varchar('external_variant_id', { length: 80 }).notNull().default(''),
+  issue: text('issue'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

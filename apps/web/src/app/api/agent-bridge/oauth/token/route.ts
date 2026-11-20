@@ -17,6 +17,7 @@ import {
 } from '@bookone/agent-bridge';
 import {
   agentBridgeTokenSecret,
+  loadAgentBridgeConnectionScopes,
   markAgentBridgeTokenIssued,
   redeemOauthCode,
   saveOauthCode,
@@ -54,7 +55,10 @@ async function mintTokens(row: {
   scopes: string;
   redirectUri: string;
 }) {
-  const parsed = parseRequestedScopes(row.scopes).filter((s) => s !== 'approve' && s !== 'post') as Capability[];
+  const storedConnectionScopes = await loadAgentBridgeConnectionScopes(row.tenantId, row.connectionId);
+  const parsed = parseRequestedScopes([row.scopes, storedConnectionScopes.join(' ')].filter(Boolean).join(' ')).filter(
+    (s) => s !== 'approve' && s !== 'post',
+  ) as Capability[];
   const scopes = parsed.length ? parsed : [...DEFAULT_CONNECTION_SCOPES];
   const connectionId = row.connectionId || row.userId;
   const pem = ensureOauthSigningPem(process.env);

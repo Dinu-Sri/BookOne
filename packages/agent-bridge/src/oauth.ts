@@ -112,6 +112,11 @@ export function parseRequestedScopes(raw: string | undefined): Capability[] {
       out.add('draft');
     }
     if (item === 'agent_bridge.post' || item === 'agent_bridge.post.write') out.add('post');
+    if (item === 'agent_bridge.commerce_read' || item === 'commerce_read') out.add('commerce_read');
+    if (item === 'agent_bridge.commerce_propose' || item === 'commerce_propose') {
+      out.add('commerce_read');
+      out.add('commerce_propose');
+    }
   }
   out.delete('approve');
   if (!out.has('read')) out.add('read');
@@ -240,7 +245,7 @@ export function protectedResourceMetadata(resource: string, authorizationServers
     resource: mcp ?? base,
     authorization_servers: authorizationServers,
     bearer_methods_supported: ['header'],
-    scopes_supported: [...DEFAULT_CONNECTION_SCOPES, 'post'],
+    scopes_supported: [...DEFAULT_CONNECTION_SCOPES, 'post', 'commerce_read', 'commerce_propose'],
     resource_documentation: docs,
     mcp_endpoint: mcp,
   };

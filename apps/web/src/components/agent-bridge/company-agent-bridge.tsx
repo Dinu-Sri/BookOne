@@ -1,7 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { revokeAgentConnection, saveAgentBridgeSettingsFromForm } from '@/app/actions/agent-bridge';
+import {
+  revokeAgentConnection,
+  saveAgentBridgeSettingsFromForm,
+  setAgentBridgeMappingScopesFromForm,
+} from '@/app/actions/agent-bridge';
 import { Button } from '@/components/ui/bookone-ui';
 
 export type AgentBridgePromptCard = {
@@ -259,7 +263,10 @@ export function CompanyAgentBridge({
             <h1 className="ab-page-title">AgentBridge</h1>
             <p className="ab-connect-lead">
               Connect an AI assistant to help prepare and review business entries under BookOne&apos;s rules and
-              permissions.
+              permissions.{' '}
+              <a href="/docs/developers/agentbridge" target="_blank" rel="noopener noreferrer">
+                AgentBridge developer guide
+              </a>
             </p>
           </header>
 
@@ -334,13 +341,14 @@ export function CompanyAgentBridge({
                   <th>Status</th>
                   <th>Last use</th>
                   <th>Created</th>
+                  <th>Catalog mapping</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {connections.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       No authenticated clients yet. Copying a connection prompt does not itself connect anything. After
                       you paste it into Codex or Claude, sign in and Allow in BookOne. Then the client appears here.
                     </td>
@@ -357,6 +365,22 @@ export function CompanyAgentBridge({
                       </td>
                       <td>{row.lastUsed}</td>
                       <td>{row.created}</td>
+                      <td>
+                        {row.canRevoke ? (
+                          <form action={setAgentBridgeMappingScopesFromForm}>
+                            <input type="hidden" name="connectionId" value={row.id} />
+                            <label>
+                              <input
+                                type="checkbox"
+                                name="commerceMapping"
+                                defaultChecked={/\bcommerce_read\b|\bcommerce_propose\b/.test(row.scopes)}
+                              />{' '}
+                              Allow catalog mapping
+                            </label>
+                            <Button type="submit">Save</Button>
+                          </form>
+                        ) : null}
+                      </td>
                       <td>{row.canRevoke ? <RevokeAccess connectionId={row.id} label={row.label} /> : null}</td>
                     </tr>
                   ))

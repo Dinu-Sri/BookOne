@@ -4,18 +4,23 @@ import { defaultScopes, hashSecret, hashesEqual, issueToken, parseScopes, parseT
 import { moneyString, parseMoney, parseQty, stableHash } from './money';
 import type { CommerceStore } from './store';
 import type {
+  AcknowledgementItem,
   CommerceActor,
   CommerceScope,
   ConnectionKind,
   ConnectionRow,
   CredentialRow,
   MappingInput,
+  MappingObservation,
+  MappingPreviewRow,
+  MappingProposalRow,
   OperatorActor,
   OrderEventInput,
   OrderInput,
   OrderRow,
   OrderStatus,
   PostingPort,
+  PublishClaimRow,
   CommerceEnvironment,
 } from './types';
 import { fail, validateEvent, validateOrderInput } from './validate';
@@ -191,6 +196,10 @@ export class CommerceService {
           createdAt: a.createdAt,
           detail: sanitizeActivityDetail(a.detail),
         })),
+        proposals: (await this.store.listMappingProposals(operator.tenantId, connection.id))
+          .filter((p) => p.status === 'proposed' || p.status === 'approved')
+          .slice(0, 20),
+        publishClaims: (await this.store.listPublishClaims(operator.tenantId, connection.id)).slice(0, 50),
       });
     }
     return out;
@@ -391,6 +400,333 @@ export class CommerceService {
     await this.store.updateConnection(connection);
     await this.audit(operator, connectionId, 'mapping.apply', 'mapping', connectionId, { count: proposed.length });
     return { applied: proposed.length };
+  }
+
+  async listCatalogForAgent(operator: OperatorActor, q?: string) {
+    const products = await this.store.listSellableProducts(operator.tenantId);
+    const needle = q?.trim().toLowerCase() ?? '';
+    return products
+      .filter((p) => p.isActive && !p.archived)
+      .filter((p) => !needle || p.sku.toLowerCase().includes(needle) || p.name.toLowerCase().includes(needle))
+      .slice(0, 50)
+      .map((p) => ({
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        unit: p.unit,
+        archived: p.archived,
+        sellPrice: p.sellPrice,
+      }));
+  }
+
+  async mappingSummary(operator: OperatorActor, connectionId: string) {
+    const connection = await this.requireConnection(operator.tenantId, connectionId);
+    const mappings = await this.store.listMappings(operator.tenantId, connectionId);
+    const products = await this.store.listSellableProducts(operator.tenantId);
+    return {
+      connectionId: connection.id,
+      connectionName: connection.name,
+      locationId: connection.locationId,
+      mapped: mappings.length,
+      items: mappings.map((m) => ({
+        sku: m.sku,
+        bookoneProductId: m.bookoneProductId,
+        bookoneName: products.find((p) => p.id === m.bookoneProductId)?.name ?? null,
+        externalProductId: m.externalProductId,
+        externalVariantId: m.externalVariantId,
+        status: m.status,
+      })),
+    };
+  }
+
+  async previewMappingObservations(
+    operator: OperatorActor,
+    connectionId: string,
+    observations: MappingObservation[],
+  ) {
+    await this.requireConnection(operator.tenantId, connectionId);
+    if (observations.length > 50) fail('VALIDATION', 'Mapping proposals are limited to 50 rows.');
+    const existing = await this.store.listMappings(operator.tenantId, connectionId);
+    const products = await this.store.listSellableProducts(operator.tenantId);
+    const items = observations.map((obs) => classifyObservation(obs, products, existing));
+    return { items, preservesUnrelatedListings: true };
+  }
+
+  async saveMappingProposal(
+    operator: OperatorActor,
+    connectionId: string,
+    observations: MappingObservation[],
+    origin: MappingObservation['origin'] = 'agent',
+  ) {
+    this.assertWrite(operator);
+    const preview = await this.previewMappingObservations(operator, connectionId, observations);
+    const now = nowIso();
+    const row: MappingProposalRow = {
+      id: randomUUID(),
+      tenantId: operator.tenantId,
+      connectionId,
+      createdByUserId: operator.userId,
+      origin,
+      status: 'proposed',
+      expectedRevision: 1,
+      items: preview.items,
+      receipt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.store.insertMappingProposal(row);
+    await this.audit(operator, connectionId, 'mapping.propose', 'mapping', row.id, {
+      count: row.items.length,
+      origin,
+    });
+    return row;
+  }
+
+  async applyMappingProposal(operator: OperatorActor, connectionId: string, proposalId: string) {
+    this.assertWrite(operator);
+    const proposal = await this.store.getMappingProposal(operator.tenantId, proposalId);
+    if (!proposal || proposal.connectionId !== connectionId) fail('NOT_FOUND', 'Mapping proposal was not found.');
+    if (proposal.status === 'applied') {
+      return { applied: 0, replayed: true, proposalId: proposal.id, receipt: proposal.receipt };
+    }
+    if (proposal.status === 'rejected' || proposal.status === 'stale') {
+      fail('CONFLICT', `This proposal is ${proposal.status} and cannot be applied.`);
+    }
+    const suggested = proposal.items.filter((item) => item.kind === 'suggested' && item.bookoneProductId);
+    if (!suggested.length) fail('VALIDATION', 'This proposal has no suggested rows to apply.');
+    const observations: MappingObservation[] = suggested.map((item) => ({
+      sku: item.sku,
+      externalProductId: item.externalProductId,
+      externalVariantId: item.externalVariantId,
+      origin: item.origin,
+    }));
+    const recheck = await this.previewMappingObservations(operator, connectionId, observations);
+    const conflict = recheck.items.find((item) => item.kind === 'conflicting' || item.kind === 'ambiguous');
+    if (conflict) {
+      proposal.status = 'stale';
+      proposal.items = recheck.items;
+      proposal.updatedAt = nowIso();
+      await this.store.updateMappingProposal(proposal);
+      fail('CONFLICT', conflict.reason);
+    }
+    const toApply: MappingInput[] = recheck.items
+      .filter((item) => (item.kind === 'suggested' || item.kind === 'unchanged') && item.bookoneProductId)
+      .map((item) => ({
+        bookoneProductId: item.bookoneProductId as string,
+        sku: item.sku,
+        externalProductId: item.externalProductId,
+        externalVariantId: item.externalVariantId,
+      }));
+    const result = await this.applyMappings(operator, connectionId, toApply);
+    proposal.status = 'applied';
+    proposal.receipt = { applied: result.applied };
+    proposal.updatedAt = nowIso();
+    await this.store.updateMappingProposal(proposal);
+    return { applied: result.applied, replayed: false, proposalId: proposal.id, receipt: proposal.receipt };
+  }
+
+  async rejectMappingProposal(operator: OperatorActor, connectionId: string, proposalId: string) {
+    this.assertWrite(operator);
+    const proposal = await this.store.getMappingProposal(operator.tenantId, proposalId);
+    if (!proposal || proposal.connectionId !== connectionId) fail('NOT_FOUND', 'Mapping proposal was not found.');
+    proposal.status = 'rejected';
+    proposal.updatedAt = nowIso();
+    await this.store.updateMappingProposal(proposal);
+    await this.audit(operator, connectionId, 'mapping.reject', 'mapping', proposal.id, {});
+    return { rejected: true, proposalId: proposal.id };
+  }
+
+  async previewPublish(operator: OperatorActor, connectionId: string, productIds: string[]) {
+    this.assertWrite(operator);
+    const connection = await this.requireConnection(operator.tenantId, connectionId);
+    const uniqueIds = [...new Set(productIds.filter(Boolean))].slice(0, 100);
+    const mappings = await this.store.listMappings(operator.tenantId, connectionId);
+    const products = await this.store.listSellableProducts(operator.tenantId);
+    const items = uniqueIds.map((id) => {
+      const product = products.find((p) => p.id === id);
+      const mapped = mappings.find((m) => m.bookoneProductId === id);
+      if (!product) {
+        return {
+          bookoneProductId: id,
+          sku: '',
+          name: null as string | null,
+          kind: 'missing' as const,
+          reason: 'BookOne product was not found.',
+        };
+      }
+      if (product.archived || !product.isActive) {
+        return {
+          bookoneProductId: id,
+          sku: product.sku,
+          name: product.name,
+          kind: 'unsupported' as const,
+          reason: 'Archived or inactive products cannot be published.',
+        };
+      }
+      if (mapped) {
+        return {
+          bookoneProductId: id,
+          sku: product.sku,
+          name: product.name,
+          kind: 'already_linked' as const,
+          reason: `Already linked to store product ${mapped.externalProductId}.`,
+        };
+      }
+      if (!product.sellPrice || Number(product.sellPrice) <= 0) {
+        return {
+          bookoneProductId: id,
+          sku: product.sku,
+          name: product.name,
+          kind: 'unsupported' as const,
+          reason: 'A sell price is required before BookOne-first publish.',
+        };
+      }
+      return {
+        bookoneProductId: id,
+        sku: product.sku,
+        name: product.name,
+        kind: 'create' as const,
+        reason: connection.kind === 'woocommerce' ? 'Will create a WooCommerce draft.' : 'Website must create the listing then acknowledge the IDs.',
+      };
+    });
+    return { items, kind: connection.kind, defaultWooStatus: 'draft' as const };
+  }
+
+  async queuePublish(operator: OperatorActor, connectionId: string, productIds: string[]) {
+    this.assertWrite(operator);
+    const preview = await this.previewPublish(operator, connectionId, productIds);
+    const toCreate = preview.items.filter((item) => item.kind === 'create');
+    if (!toCreate.length) fail('VALIDATION', 'No eligible products to publish. Linked, missing, or unsupported rows were skipped.');
+    const now = nowIso();
+    const claims: PublishClaimRow[] = [];
+    for (const item of toCreate) {
+      const existing = await this.store.getPublishClaim(operator.tenantId, connectionId, item.bookoneProductId);
+      if (existing && (existing.status === 'claimed' || existing.status === 'created' || existing.status === 'acknowledged')) {
+        claims.push(existing);
+        continue;
+      }
+      const row: PublishClaimRow = {
+        id: existing?.id ?? randomUUID(),
+        tenantId: operator.tenantId,
+        connectionId,
+        bookoneProductId: item.bookoneProductId,
+        sku: item.sku,
+        claimKey: `pub:${connectionId}:${item.bookoneProductId}`,
+        status: 'claimed',
+        externalProductId: existing?.externalProductId ?? '',
+        externalVariantId: existing?.externalVariantId ?? '',
+        issue: null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      await this.store.upsertPublishClaim(row);
+      claims.push(row);
+    }
+    await this.audit(operator, connectionId, 'catalog.queue', 'mapping', connectionId, { count: claims.length });
+    return { queued: claims.length, claims };
+  }
+
+  async catalogCandidates(actor: CommerceActor) {
+    this.need(actor, 'catalog');
+    const claims = await this.store.listPublishClaims(actor.tenantId, actor.connectionId);
+    const products = await this.store.listSellableProducts(actor.tenantId);
+    const mappings = await this.store.listMappings(actor.tenantId, actor.connectionId);
+    const open = claims.filter((c) => c.status === 'claimed' || c.status === 'created');
+    const items = open.map((claim) => {
+      const product = products.find((p) => p.id === claim.bookoneProductId);
+      const mapped = mappings.find((m) => m.bookoneProductId === claim.bookoneProductId);
+      return {
+        claimId: claim.id,
+        bookoneProductId: claim.bookoneProductId,
+        sku: claim.sku,
+        name: product?.name ?? claim.sku,
+        unit: product?.unit ?? 'each',
+        sellPrice: product?.sellPrice ?? '0',
+        status: claim.status,
+        alreadyLinked: Boolean(mapped),
+      };
+    });
+    return {
+      items,
+      bootstrap: items.length ? 'queued' : 'idle',
+      defaultWooStatus: 'draft',
+      mappedOnlyProductsPath: '/products',
+    };
+  }
+
+  async acknowledgeCatalog(actor: CommerceActor, items: AcknowledgementItem[]) {
+    this.need(actor, 'catalog');
+    if (!items.length) fail('VALIDATION', 'Acknowledgement requires at least one item.');
+    if (items.length > 100) fail('VALIDATION', 'Acknowledgement batches are limited to 100 items.');
+    const operator: OperatorActor = {
+      tenantId: actor.tenantId,
+      userId: actor.userId,
+      canWrite: true,
+    };
+    const receipts = [];
+    for (const item of items) {
+      if (!item.bookoneProductId || !item.externalProductId) {
+        fail('VALIDATION', 'Each acknowledgement needs bookoneProductId and externalProductId.');
+      }
+      const product = await this.store.getProduct(actor.tenantId, item.bookoneProductId);
+      if (!product) fail('VALIDATION', `BookOne product ${item.bookoneProductId} was not found.`);
+      const claim =
+        (item.claimId
+          ? (await this.store.listPublishClaims(actor.tenantId, actor.connectionId)).find((c) => c.id === item.claimId)
+          : null) ??
+        (await this.store.getPublishClaim(actor.tenantId, actor.connectionId, item.bookoneProductId));
+      if (claim?.status === 'acknowledged') {
+        if (
+          claim.externalProductId === item.externalProductId &&
+          (claim.externalVariantId || '') === (item.externalVariantId ?? '')
+        ) {
+          receipts.push({
+            bookoneProductId: item.bookoneProductId,
+            status: 'acknowledged',
+            replayed: true,
+            externalProductId: claim.externalProductId,
+          });
+          continue;
+        }
+        fail(
+          'CONFLICT',
+          `Product ${product.sku} was already acknowledged as ${claim.externalProductId}. A second create is refused.`,
+        );
+      }
+      const mapping: MappingInput = {
+        bookoneProductId: item.bookoneProductId,
+        sku: product.sku,
+        externalProductId: item.externalProductId,
+        externalVariantId: item.externalVariantId,
+      };
+      const preview = await this.previewMappings(operator, actor.connectionId, [mapping]);
+      const issue = preview.items.find((row) => row.issue)?.issue;
+      if (issue) fail('CONFLICT', issue);
+      await this.applyMappings(operator, actor.connectionId, [mapping]);
+      const now = nowIso();
+      const nextClaim: PublishClaimRow = {
+        id: claim?.id ?? randomUUID(),
+        tenantId: actor.tenantId,
+        connectionId: actor.connectionId,
+        bookoneProductId: item.bookoneProductId,
+        sku: product.sku,
+        claimKey: claim?.claimKey ?? `pub:${actor.connectionId}:${item.bookoneProductId}`,
+        status: 'acknowledged',
+        externalProductId: item.externalProductId,
+        externalVariantId: item.externalVariantId ?? '',
+        issue: null,
+        createdAt: claim?.createdAt ?? now,
+        updatedAt: now,
+      };
+      await this.store.upsertPublishClaim(nextClaim);
+      receipts.push({
+        bookoneProductId: item.bookoneProductId,
+        status: 'acknowledged',
+        replayed: false,
+        externalProductId: item.externalProductId,
+      });
+    }
+    return { ok: true as const, items: receipts };
   }
 
   async publishStock(operator: OperatorActor, connectionId: string) {
@@ -1066,6 +1402,154 @@ function sanitizeActivityDetail(detail: Record<string, unknown> | null): Record<
     out[key] = value;
   }
   return out;
+}
+
+function classifyObservation(
+  obs: MappingObservation,
+  products: Array<{ id: string; sku: string; name: string; archived: boolean; isActive: boolean }>,
+  existing: Array<{ bookoneProductId: string; sku: string; externalProductId: string; externalVariantId: string }>,
+): MappingPreviewRow {
+  const sku = (obs.sku ?? '').trim();
+  const externalProductId = (obs.externalProductId ?? '').trim();
+  const externalVariantId = (obs.externalVariantId ?? '').trim();
+  const origin = obs.origin === 'verified_store' ? 'verified_store' : 'agent';
+  if (!externalProductId) {
+    return {
+      sku,
+      bookoneProductId: null,
+      bookoneName: null,
+      externalProductId,
+      externalVariantId,
+      kind: 'missing',
+      reason: 'Store product ID is required. SKU is only a search aid.',
+      origin,
+      before: null,
+    };
+  }
+  const byExternal = existing.find(
+    (m) => m.externalProductId === externalProductId && (m.externalVariantId || '') === externalVariantId,
+  );
+  const skuMatches = sku ? products.filter((p) => p.sku.toLowerCase() === sku.toLowerCase()) : [];
+  if (byExternal) {
+    const linked = products.find((p) => p.id === byExternal.bookoneProductId);
+    if (sku && skuMatches.length === 1 && skuMatches[0]!.id !== byExternal.bookoneProductId) {
+      return {
+        sku,
+        bookoneProductId: skuMatches[0]!.id,
+        bookoneName: skuMatches[0]!.name,
+        externalProductId,
+        externalVariantId,
+        kind: 'conflicting',
+        reason: `Store IDs already link to ${linked?.sku ?? byExternal.sku}. Ask before replacing that link.`,
+        origin,
+        before: {
+          bookoneProductId: byExternal.bookoneProductId,
+          externalProductId: byExternal.externalProductId,
+          externalVariantId: byExternal.externalVariantId,
+        },
+      };
+    }
+    return {
+      sku: linked?.sku ?? byExternal.sku,
+      bookoneProductId: byExternal.bookoneProductId,
+      bookoneName: linked?.name ?? null,
+      externalProductId,
+      externalVariantId,
+      kind: 'unchanged',
+      reason: 'Already linked. Website merchandising is unchanged.',
+      origin,
+      before: {
+        bookoneProductId: byExternal.bookoneProductId,
+        externalProductId: byExternal.externalProductId,
+        externalVariantId: byExternal.externalVariantId,
+      },
+    };
+  }
+  if (!sku) {
+    return {
+      sku,
+      bookoneProductId: null,
+      bookoneName: null,
+      externalProductId,
+      externalVariantId,
+      kind: 'missing',
+      reason: 'No SKU was supplied and these store IDs are not already linked. Ask for a BookOne product.',
+      origin,
+      before: null,
+    };
+  }
+  if (skuMatches.length > 1) {
+    return {
+      sku,
+      bookoneProductId: null,
+      bookoneName: null,
+      externalProductId,
+      externalVariantId,
+      kind: 'ambiguous',
+      reason: `SKU ${sku} matches more than one BookOne product. Ask which product to link.`,
+      origin,
+      before: null,
+    };
+  }
+  if (skuMatches.length === 0) {
+    return {
+      sku,
+      bookoneProductId: null,
+      bookoneName: obs.name ?? null,
+      externalProductId,
+      externalVariantId,
+      kind: 'missing',
+      reason: `No BookOne product uses SKU ${sku}.`,
+      origin,
+      before: null,
+    };
+  }
+  const product = skuMatches[0]!;
+  if (product.archived || !product.isActive) {
+    return {
+      sku: product.sku,
+      bookoneProductId: product.id,
+      bookoneName: product.name,
+      externalProductId,
+      externalVariantId,
+      kind: 'unsupported',
+      reason: 'That BookOne product is archived or inactive.',
+      origin,
+      before: null,
+    };
+  }
+  const other = existing.find((m) => m.bookoneProductId === product.id);
+  if (other) {
+    return {
+      sku: product.sku,
+      bookoneProductId: product.id,
+      bookoneName: product.name,
+      externalProductId,
+      externalVariantId,
+      kind: 'conflicting',
+      reason: `${product.sku} is already linked to store product ${other.externalProductId}.`,
+      origin,
+      before: {
+        bookoneProductId: other.bookoneProductId,
+        externalProductId: other.externalProductId,
+        externalVariantId: other.externalVariantId,
+      },
+    };
+  }
+  return {
+    sku: product.sku,
+    bookoneProductId: product.id,
+    bookoneName: product.name,
+    externalProductId,
+    externalVariantId,
+    kind: 'suggested',
+    reason:
+      origin === 'verified_store'
+        ? `SKU ${product.sku} matches ${product.name}. Confirm in BookOne before applying.`
+        : `Agent-supplied SKU ${product.sku} matches ${product.name}. This is not verified store data.`,
+    origin,
+    before: null,
+  };
 }
 
 export function parseScopeQuery(raw: string | null): CommerceScope[] {

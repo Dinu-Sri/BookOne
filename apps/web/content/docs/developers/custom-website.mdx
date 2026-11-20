@@ -1,0 +1,90 @@
+---
+title: Custom Website API
+description: Commerce API v1 for an independent website backend. Keep the key on the server.
+---
+
+# Custom Website API
+
+Base path: `/api/commerce/v1`. Version **v1**. Single store, single location, single currency (typically LKR). BookOne is the inventory authority. Website merchandising stays on your site.
+
+Authentication: `Authorization: Bearer bkc_…`. Scopes on the issued key: `catalog`, `inventory`, `order`, `lifecycle`. Reservations stay disabled (`POST /reservations` → 422 `RESERVATION_DISABLED`).
+
+Download the spec: [OpenAPI JSON](/api/commerce/v1/openapi.json). Checked-in YAML: `docs/commerce/openapi.yaml`.
+
+## 1. Create a sandbox connection
+
+Prerequisites: Owner or Admin job, a stock location whose type is eligible (not fleet).
+
+1. Open **Company → Commerce Integrations**.
+2. Choose **New connection**.
+3. Kind **Custom Website**, environment **sandbox**, pick the location.
+4. Click **Issue scoped key**. Copy the secret from the one-time dialog. Later visits show only the prefix.
+5. `GET /connection` must return `apiVersion: v1` and `reservationMode: disabled`.
+
+Rotate keeps the old key for 24 hours. Revoke ends it immediately. Viewer can open the screen and cannot issue, rotate, or revoke.
+
+## 2. Map or publish products
+
+`GET /products` returns **mapped items only**. An empty store cannot bootstrap from that list.
+
+### Link existing products
+
+On **Mapping**, use **Link existing products**. Labels: **BookOne product**, **Store product ID**, **Preview mapping**, **Apply mapping**. Apply stays disabled until Preview, and a Store product ID change invalidates the preview.
+
+SKU is a search aid. BookOne stores the BookOne product id plus your `externalProductId` / `externalVariantId`.
+
+### Publish from BookOne
+
+On **Mapping**, use **Publish from BookOne**. Preview rows are `create`, `already_linked`, `missing`, or `unsupported`. Queue creates durable claims. Your backend then:
+
+1. `GET /catalog/candidates` — empty unless the operator queued products (`bootstrap: queued` or `idle`)
+2. Create listings in your catalog with **your** stable IDs
+3. `POST /catalog/acknowledge` with `bookoneProductId` and `externalProductId`
+
+Same IDs replay. A different ID for an already-acknowledged product is `409 CONFLICT`. Do not build a BookOne storefront.
+
+## 3. Stock snapshot and changes
+
+```bash
+export BOOKONE_COMMERCE_BASE='https://example/api/commerce/v1'
+export BOOKONE_COMMERCE_TOKEN='bkc_sand_prefix_secret'
+
+curl -sS -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \
+  "$BOOKONE_COMMERCE_BASE/inventory?sku=SKU-1"
+
+curl -sS -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \
+  "$BOOKONE_COMMERCE_BASE/changes"
+```
+
+Quantities are absolute decimal strings. Checkpoint `nextCursor` after you apply a page. `CURSOR_EXPIRED` means full resync from `/inventory` then `/changes` with no cursor.
+
+## 4. Validate and submit an order
+
+`POST /orders` requires `Idempotency-Key` and a stable store `externalId`. Response is **202**. Read `status`:
+
+| status | Meaning |
+|--------|---------|
+| `received` / `accepted` | Taken in. Journals may still be pending |
+| `needs_review` | No unintended journals. Operator reviews |
+| `posted` | Sales invoice exists. Confirm `documentNumber` and stock |
+| `paid` / `fulfilled` / `cancelled` / `refunded` | Lifecycle after post |
+
+`httpStatusIsNotAccountingAcceptance` is always true on the receipt. Settlement stays `not_configured` until a payment account is configured.
+
+Same key + same payload replays the original receipt. Same key + different payload is `409 CONFLICT`.
+
+Supported events on `POST /orders/{externalId}/events`: `paid`, `cancelled`, `fulfilled`, `refunded`. Refunds need `externalRefundId`. `restock: true` restores referenced original line quantities. `restock: false` is money-only.
+
+## 5. Node on the server
+
+```bash
+BOOKONE_COMMERCE_BASE="$BOOKONE_COMMERCE_BASE" \
+BOOKONE_COMMERCE_TOKEN="$BOOKONE_COMMERCE_TOKEN" \
+node docs/commerce/quickstart-node.mjs
+```
+
+Placeholders only. Never ship the secret to the shopper browser.
+
+## Common errors
+
+See [API errors and recovery](/docs/developers/errors). Typical website mistakes: putting the token in a theme, treating 202 as posted, and calling `/products` on an empty mapping.

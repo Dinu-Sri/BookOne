@@ -3,7 +3,7 @@
  * Plugin Name: BookOne Commerce
  * Plugin URI: https://github.com/Dinu-Sri/BookOne
  * Description: Connect WooCommerce to BookOne inventory and order intake. Credentials stay on the server.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: BookOne
  * Requires at least: 6.4
  * Requires PHP: 8.1
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('BOOKONE_COMMERCE_VERSION', '1.1.0');
+define('BOOKONE_COMMERCE_VERSION', '1.2.0');
 define('BOOKONE_COMMERCE_FILE', __FILE__);
 define('BOOKONE_COMMERCE_DIR', plugin_dir_path(__FILE__));
 

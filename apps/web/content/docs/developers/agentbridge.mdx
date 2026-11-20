@@ -1,0 +1,56 @@
+---
+title: AgentBridge / MCP
+description: Unpaid supplier-invoice intake plus optional commerce mapping proposals. Human approval stays in BookOne.
+---
+
+# AgentBridge / MCP
+
+AgentBridge is BookOne’s authorized agent connection for **unpaid domestic service/expense bills**, with an optional extra grant for **commerce mapping proposals**.
+
+Protocol: MCP **2025-06-18** (also `2025-03-26`, `2024-11-05`). Schema `ab-06.1`. Product **2.17.0**.
+
+Human approval is **not** an agent-callable permission. `grant_approval` is refused for a connected agent. Mapping **Apply** stays on **Company → Commerce Integrations**.
+
+## Company flags (do not change without the owner)
+
+Live staging last observed: Inbox on / draft-only off / posting-stop **on**. Do not enable AgentBridge posting from this guide.
+
+Screen: **Company → AgentBridge**. Secondary link from Purchase settings. Job keys: `company.purchase_settings` plus `purchase.inbox`.
+
+New connections start with `read`, `upload`, `draft`. Existing purchase grants do **not** receive `commerce_read` or `commerce_propose`.
+
+## Codex and Claude
+
+Verified-client status as of 2.17.0: **LIVE-UNVERIFIED**. Preserve the saved Codex `bookone` entry. Do not replay consumed OAuth codes `4b22d15c` or `7bf93de1`.
+
+1. Copy the Codex or Claude prompt from **Company → AgentBridge**
+2. Sign in through BookOne consent. Consent always grants `read upload draft`
+3. Confirm `GET /api/agent-bridge/oauth/jwks` returns RSA `use: sig` keys
+4. MCP initialize negotiates protocol. `tools/list` then matches the token ∩ live job grants
+
+OAuth discovery is public (no session 307): `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`, `/.well-known/jwks.json`.
+
+## Purchase-inbox tools
+
+`tools/list` for a purchase-only token advertises the inbox tools only (`get_capabilities` through `get_receipt`). Agents upload an owned PDF/image, submit facts, answer issues, request approval, and read receipts. A trusted human with `agent_bridge.approve` approves the exact revision in BookOne. Commit needs `agent_bridge.post`.
+
+## Catalog mapping tools (separate grant)
+
+Owner/Admin jobs include `agent_bridge.commerce_read` and `agent_bridge.commerce_propose`. Accountant and Purchasing templates do **not**. Viewer does **not**.
+
+On each revocable connection, check **Allow catalog mapping** and Save. Authorize unions stored connection scopes with the token, then intersects live job grants. Existing purchase tokens stay purchase-only until that checkbox is saved.
+
+| Tool | Capability | Result |
+|------|------------|--------|
+| `list_commerce_connections` | `commerce_read` | Eligible stores. No API keys |
+| `list_bookone_catalog` | `commerce_read` | Sellable BookOne products |
+| `get_mapping_summary` | `commerce_read` | Current links |
+| `preview_mapping_proposal` | `commerce_propose` | Stores a proposal. `applyInBookOne: true`, `humanApprovalRequired: true` |
+
+SKU is a search aid. Rows come back `suggested`, `unchanged`, `ambiguous`, `missing`, `conflicting`, or `unsupported`. The operator reviews **Agent mapping proposals** and clicks **Apply** or **Reject**. Mapping tools cannot change stock, prices, posting, or permissions.
+
+## Confirm health
+
+`get_capabilities` returns flags, scopes, and the **filtered** tool list for this actor. If mapping tools are absent, the connection does not have the extra grant.
+
+Full operator notes: repository `docs/AGENT_BRIDGE.md`.

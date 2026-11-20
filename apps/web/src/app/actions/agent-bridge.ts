@@ -71,6 +71,18 @@ export async function retryInboxExtraction(formData: FormData) {
   redirect(`/purchase/inbox/${documentId}`);
 }
 
+export async function setAgentBridgeMappingScopesFromForm(formData: FormData) {
+  await assertPermission('company.purchase_settings.write', 'write');
+  await assertPermission('agent_bridge.commerce_propose', 'write');
+  const user = await requireTenantContext();
+  const id = String(formData.get('connectionId') ?? '');
+  const enabled = String(formData.get('commerceMapping') ?? '') === 'on';
+  const { setAgentBridgeCommerceMappingScopes } = await import('@/lib/agent-bridge-runtime');
+  await withTenantContext(user.tenantId, () => setAgentBridgeCommerceMappingScopes(user.tenantId, user.id, id, enabled));
+  revalidatePath('/company/agent-bridge');
+  redirect('/company/agent-bridge?saved=1');
+}
+
 export async function revokeAgentConnection(formData: FormData) {
   await assertPermission('purchase.inbox.write', 'write');
   const user = await requireTenantContext();

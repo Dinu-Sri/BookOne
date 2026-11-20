@@ -221,6 +221,39 @@ export const TOOL_INPUT_SCHEMAS: Record<string, JsonSchema> = {
   commit_approved_proposal: COMMIT_SCHEMA,
   get_operation_status: OPERATION_ID_SCHEMA,
   get_receipt: OPERATION_ID_SCHEMA,
+  list_commerce_connections: EMPTY_OBJECT_SCHEMA,
+  list_bookone_catalog: LOOKUP_SCHEMA,
+  get_mapping_summary: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['connectionId'],
+    properties: { connectionId: id },
+  },
+  preview_mapping_proposal: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['connectionId', 'observations'],
+    properties: {
+      connectionId: id,
+      observations: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 50,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['externalProductId'],
+          properties: {
+            sku: { type: 'string', maxLength: 80 },
+            name: { type: 'string', maxLength: 200 },
+            externalProductId: { type: 'string', minLength: 1, maxLength: 80 },
+            externalVariantId: { type: 'string', maxLength: 80 },
+            origin: { type: 'string', enum: ['agent', 'verified_store'] },
+          },
+        },
+      },
+    },
+  },
 };
 
 export function validateAgainstSchema(

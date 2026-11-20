@@ -11,10 +11,14 @@ import { withFormPending } from '@/components/ui/form-busy';
 import { LOCATION_TYPE_LABELS, isFleetLocationType } from '@/lib/rental-locations';
 import {
   applyCommerceMappingFromForm,
+  applyCommerceMappingProposalFromForm,
   createCommerceConnectionFromForm,
   issueCommerceCredentialFromForm,
   previewCommerceMappingFromForm,
+  previewCommercePublishFromForm,
   publishCommerceStockFromForm,
+  queueCommercePublishFromForm,
+  rejectCommerceMappingProposalFromForm,
   retryCommerceReviewFromForm,
   revokeCommerceCredentialFromForm,
   rotateCommerceCredentialFromForm,
@@ -84,6 +88,13 @@ type ConnectionView = {
   mappings: MappingView[];
   reviews: ReviewView[];
   activity: Array<{ id: string; action: string; entity: string; createdAt: string }>;
+  proposals: Array<{
+    id: string;
+    status: string;
+    origin: string;
+    items: Array<{ sku: string; kind: string; reason: string; bookoneName: string | null; origin: string }>;
+  }>;
+  publishClaims: Array<{ id: string; sku: string; status: string; issue: string | null }>;
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -93,6 +104,9 @@ const ACTION_LABELS: Record<string, string> = {
   'credential.rotate': 'Rotated key',
   'credential.revoke': 'Revoked key',
   'mapping.apply': 'Applied mapping',
+  'mapping.propose': 'Proposed mapping',
+  'mapping.reject': 'Rejected mapping proposal',
+  'catalog.queue': 'Queued BookOne-first publish',
   'stock.publish': 'Published stock',
   'order.retry': 'Retried review order',
 };
@@ -177,6 +191,9 @@ export function CompanyCommerce(props: {
     signature: string;
     items: Array<{ sku: string; bookoneName: string | null; issue: string | null }>;
   } | null>(null);
+  const [publishPreview, setPublishPreview] = useState<
+    Array<{ bookoneProductId: string; sku: string; name: string | null; kind: string; reason: string }>
+  >([]);
   const [confirmPosting, setConfirmPosting] = useState(false);
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [draftPosting, setDraftPosting] = useState<string | null>(null);
@@ -319,7 +336,7 @@ export function CompanyCommerce(props: {
         title: 'Connect your website',
         detail:
           selected.kind === 'woocommerce'
-            ? 'Issue a scoped key, install bookone-commerce-1.1.0.zip with HPOS on, and paste the key in the plugin. An issued key is only a key.'
+            ? 'Issue a scoped key, install bookone-commerce-1.2.0.zip with HPOS on, and paste the key in the plugin. An issued key is only a key.'
             : 'Issue a scoped key and store it on your website server with Authorization: Bearer. An issued key is only a key.',
         tab: 'connections' as Tab,
         label: null,
@@ -471,7 +488,10 @@ export function CompanyCommerce(props: {
                 <div>
                   <h1 className="commerce-page-title">Commerce Integrations</h1>
                   <p className="commerce-page-lead">
-                    Connect your website so BookOne can share stock levels and receive orders.
+                    Connect your website so BookOne can share stock levels and receive orders.{' '}
+                    <a href="/docs/developers" target="_blank" rel="noopener noreferrer">
+                      Developers &amp; Integrations
+                    </a>
                   </p>
                 </div>
                 {props.canWrite && !empty ? (
@@ -709,7 +729,7 @@ export function CompanyCommerce(props: {
                         </div>
                         {selected.kind === 'woocommerce' ? (
                           <p className="field-help">
-                            Install `bookone-commerce-1.1.0.zip`, turn HPOS on, then paste the endpoint and sandbox key.
+                            Install `bookone-commerce-1.2.0.zip`, turn HPOS on, then paste the endpoint and sandbox key.
                           </p>
                         ) : (
                           <p className="field-help">
@@ -927,12 +947,126 @@ export function CompanyCommerce(props: {
                           <p className="field-help">No mappings match your search.</p>
                         ) : null}
 
+                        {selected.proposals?.length ? (
+                          <section className="commerce-card">
+                            <h2 className="commerce-section-title">Agent mapping proposals</h2>
+                            <p className="field-help">
+                              Review suggested links. Apply stays in BookOne. Agents cannot change stock, prices, or posting.
+                            </p>
+                            {selected.proposals.map((proposal) => (
+                              <div key={proposal.id} className="commerce-card">
+                                <p>
+                                  {proposal.origin === 'verified_store' ? 'Verified store data' : 'Agent-supplied'} ·{' '}
+                                  {proposal.status}
+                                </p>
+                                <ul>
+                                  {proposal.items.map((item, index) => (
+                                    <li key={`${proposal.id}-${index}`}>
+                                      {item.sku || 'No SKU'} · {item.bookoneName ?? 'Unmatched'} · {item.kind} · {item.reason}
+                                    </li>
+                                  ))}
+                                </ul>
+                                {props.canWrite ? (
+                                  <FormFooter>
+                                    <form action={applyCommerceMappingProposalFromForm}>
+                                      <input type="hidden" name="connectionId" value={selected.id} />
+                                      <input type="hidden" name="proposalId" value={proposal.id} />
+                                      <input type="hidden" name="tab" value="mapping" />
+                                      <Button variant="primary" type="submit">
+                                        Apply proposal
+                                      </Button>
+                                    </form>
+                                    <form action={rejectCommerceMappingProposalFromForm}>
+                                      <input type="hidden" name="connectionId" value={selected.id} />
+                                      <input type="hidden" name="proposalId" value={proposal.id} />
+                                      <input type="hidden" name="tab" value="mapping" />
+                                      <Button type="submit">Reject proposal</Button>
+                                    </form>
+                                  </FormFooter>
+                                ) : null}
+                              </div>
+                            ))}
+                          </section>
+                        ) : null}
+
+                        {props.canWrite && props.products.length > 0 ? (
+                          <form
+                            action={async (data) => {
+                              const result = await previewCommercePublishFromForm(data);
+                              if (!result.ok) {
+                                setActionError(result.error);
+                                setPublishPreview([]);
+                                return;
+                              }
+                              setActionError(null);
+                              setPublishPreview(result.items);
+                            }}
+                            className="commerce-map-form"
+                          >
+                            <input type="hidden" name="connectionId" value={selected.id} />
+                            <input type="hidden" name="tab" value="mapping" />
+                            <fieldset className="commerce-fields">
+                              <legend className="commerce-section-title">Publish from BookOne</legend>
+                              <p className="field-help">
+                                For an empty store. WooCommerce creations default to draft. Custom websites create listings
+                                themselves, then acknowledge stable IDs.
+                              </p>
+                              <div className="commerce-table-scroll" tabIndex={0} role="region" aria-label="Products to publish">
+                                <table className="commerce-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Publish</th>
+                                      <th>SKU</th>
+                                      <th>BookOne</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {props.products.map((p) => (
+                                      <tr key={p.id}>
+                                        <td>
+                                          <input type="checkbox" name="publishProductId" value={p.id} />
+                                        </td>
+                                        <td>{p.sku}</td>
+                                        <td>{p.name}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <FormFooter>
+                                <Button type="submit">Preview publish</Button>
+                                <Button variant="primary" type="submit" formAction={queueCommercePublishFromForm} disabled={!props.canWrite}>
+                                  Queue publish
+                                </Button>
+                              </FormFooter>
+                            </fieldset>
+                          </form>
+                        ) : null}
+                        {publishPreview.length ? (
+                          <div className="commerce-card" role="status">
+                            <h2 className="commerce-section-title">Publish preview</h2>
+                            <ul>
+                              {publishPreview.map((row) => (
+                                <li key={row.bookoneProductId}>
+                                  {row.sku || row.bookoneProductId} · {row.name ?? 'Unknown'} · {row.kind} · {row.reason}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {selected.publishClaims?.length ? (
+                          <p className="field-help">
+                            Queued claims: {selected.publishClaims.map((c) => `${c.sku} (${c.status})`).join(', ')}. The store
+                            pulls `/catalog/candidates` and acknowledges IDs. GET `/products` stays mapped-only.
+                          </p>
+                        ) : null}
+
                         {props.canWrite && props.products.length > 0 ? (
                           <form action={onPreviewMapping} className="commerce-map-form">
                             <input type="hidden" name="connectionId" value={selected.id} />
                             <input type="hidden" name="tab" value="mapping" />
                             <fieldset className="commerce-fields">
-                              <legend className="commerce-section-title">Add a product mapping</legend>
+                              <legend className="commerce-section-title">Link existing products</legend>
                               <SelectField
                                 id={`map-product-${selected.id}`}
                                 name="bookoneProductId"

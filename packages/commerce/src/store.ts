@@ -3,10 +3,12 @@ import type {
   ConnectionRow,
   CredentialRow,
   IdempotencyRow,
+  MappingProposalRow,
   MappingRow,
   OrderRow,
   OutboxRow,
   ProductRecord,
+  PublishClaimRow,
   StockRecord,
 } from './types';
 
@@ -24,6 +26,16 @@ export type CommerceStore = {
   listMappings(tenantId: string, connectionId: string): Promise<MappingRow[]>;
   upsertMapping(row: MappingRow): Promise<void>;
   deleteMapping(tenantId: string, id: string): Promise<void>;
+
+  insertMappingProposal(row: MappingProposalRow): Promise<void>;
+  getMappingProposal(tenantId: string, id: string): Promise<MappingProposalRow | null>;
+  listMappingProposals(tenantId: string, connectionId: string): Promise<MappingProposalRow[]>;
+  updateMappingProposal(row: MappingProposalRow): Promise<void>;
+
+  upsertPublishClaim(row: PublishClaimRow): Promise<void>;
+  getPublishClaim(tenantId: string, connectionId: string, bookoneProductId: string): Promise<PublishClaimRow | null>;
+  getPublishClaimByKey(tenantId: string, connectionId: string, claimKey: string): Promise<PublishClaimRow | null>;
+  listPublishClaims(tenantId: string, connectionId: string): Promise<PublishClaimRow[]>;
 
   getProduct(tenantId: string, id: string): Promise<ProductRecord | null>;
   findProductBySku(tenantId: string, sku: string): Promise<ProductRecord | null>;

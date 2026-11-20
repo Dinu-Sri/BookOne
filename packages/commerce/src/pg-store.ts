@@ -4,11 +4,13 @@ import {
   commerceConnections,
   commerceCredentials,
   commerceIdempotency,
+  commerceMappingProposals,
   commerceOrderEvents,
   commerceOrderLines,
   commerceOrders,
   commerceOutbox,
   commerceProductMappings,
+  commercePublishClaims,
   commerceRefunds,
   db,
   desc,
@@ -26,8 +28,14 @@ import type {
   ConnectionRow,
   CredentialRow,
   IdempotencyRow,
+  MappingProposalRow,
+  MappingPreviewRow,
   MappingRow,
   OrderRow,
+  PublishClaimRow,
+  PublishClaimStatus,
+  MappingProposalStatus,
+  MappingObservationOrigin,
   OutboxRow,
   ProductRecord,
   StockRecord,
@@ -67,6 +75,39 @@ function connectionFrom(row: typeof commerceConnections.$inferSelect): Connectio
     lastStockSyncAt: row.lastStockSyncAt?.toISOString() ?? null,
     lastOrderSyncAt: row.lastOrderSyncAt?.toISOString() ?? null,
     lastError: row.lastError,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function proposalFrom(row: typeof commerceMappingProposals.$inferSelect): MappingProposalRow {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    createdByUserId: row.createdByUserId,
+    origin: (row.origin as MappingObservationOrigin) || 'agent',
+    status: (row.status as MappingProposalStatus) || 'proposed',
+    expectedRevision: Number(row.expectedRevision ?? 1),
+    items: (row.itemsJson as MappingPreviewRow[]) ?? [],
+    receipt: (row.receiptJson as Record<string, unknown> | null) ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function claimFrom(row: typeof commercePublishClaims.$inferSelect): PublishClaimRow {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    bookoneProductId: row.bookoneProductId,
+    sku: row.sku,
+    claimKey: row.claimKey,
+    status: (row.status as PublishClaimStatus) || 'claimed',
+    externalProductId: row.externalProductId,
+    externalVariantId: row.externalVariantId,
+    issue: row.issue,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -285,6 +326,126 @@ export class PostgresCommerceStore implements CommerceStore {
     await db()
       .delete(commerceProductMappings)
       .where(and(eq(commerceProductMappings.tenantId, tenantId), eq(commerceProductMappings.id, id)));
+  }
+
+  async insertMappingProposal(row: MappingProposalRow) {
+    await db().insert(commerceMappingProposals).values({
+      id: row.id,
+      tenantId: row.tenantId,
+      connectionId: row.connectionId,
+      createdByUserId: row.createdByUserId,
+      origin: row.origin,
+      status: row.status,
+      expectedRevision: row.expectedRevision,
+      itemsJson: row.items,
+      receiptJson: row.receipt,
+      createdAt: new Date(row.createdAt),
+      updatedAt: new Date(row.updatedAt),
+    });
+  }
+
+  async getMappingProposal(tenantId: string, id: string): Promise<MappingProposalRow | null> {
+    const [row] = await db()
+      .select()
+      .from(commerceMappingProposals)
+      .where(and(eq(commerceMappingProposals.tenantId, tenantId), eq(commerceMappingProposals.id, id)))
+      .limit(1);
+    return row ? proposalFrom(row) : null;
+  }
+
+  async listMappingProposals(tenantId: string, connectionId: string): Promise<MappingProposalRow[]> {
+    const rows = await db()
+      .select()
+      .from(commerceMappingProposals)
+      .where(
+        and(eq(commerceMappingProposals.tenantId, tenantId), eq(commerceMappingProposals.connectionId, connectionId)),
+      )
+      .orderBy(desc(commerceMappingProposals.createdAt));
+    return rows.map(proposalFrom);
+  }
+
+  async updateMappingProposal(row: MappingProposalRow) {
+    await db()
+      .update(commerceMappingProposals)
+      .set({
+        status: row.status,
+        expectedRevision: row.expectedRevision,
+        itemsJson: row.items,
+        receiptJson: row.receipt,
+        updatedAt: new Date(row.updatedAt),
+      })
+      .where(eq(commerceMappingProposals.id, row.id));
+  }
+
+  async upsertPublishClaim(row: PublishClaimRow) {
+    const existing = await this.getPublishClaim(row.tenantId, row.connectionId, row.bookoneProductId);
+    if (existing) {
+      await db()
+        .update(commercePublishClaims)
+        .set({
+          sku: row.sku,
+          claimKey: row.claimKey,
+          status: row.status,
+          externalProductId: row.externalProductId,
+          externalVariantId: row.externalVariantId,
+          issue: row.issue,
+          updatedAt: new Date(row.updatedAt),
+        })
+        .where(eq(commercePublishClaims.id, existing.id));
+      return;
+    }
+    await db().insert(commercePublishClaims).values({
+      id: row.id,
+      tenantId: row.tenantId,
+      connectionId: row.connectionId,
+      bookoneProductId: row.bookoneProductId,
+      sku: row.sku,
+      claimKey: row.claimKey,
+      status: row.status,
+      externalProductId: row.externalProductId,
+      externalVariantId: row.externalVariantId,
+      issue: row.issue,
+      createdAt: new Date(row.createdAt),
+      updatedAt: new Date(row.updatedAt),
+    });
+  }
+
+  async getPublishClaim(tenantId: string, connectionId: string, bookoneProductId: string): Promise<PublishClaimRow | null> {
+    const [row] = await db()
+      .select()
+      .from(commercePublishClaims)
+      .where(
+        and(
+          eq(commercePublishClaims.tenantId, tenantId),
+          eq(commercePublishClaims.connectionId, connectionId),
+          eq(commercePublishClaims.bookoneProductId, bookoneProductId),
+        ),
+      )
+      .limit(1);
+    return row ? claimFrom(row) : null;
+  }
+
+  async getPublishClaimByKey(tenantId: string, connectionId: string, claimKey: string): Promise<PublishClaimRow | null> {
+    const [row] = await db()
+      .select()
+      .from(commercePublishClaims)
+      .where(
+        and(
+          eq(commercePublishClaims.tenantId, tenantId),
+          eq(commercePublishClaims.connectionId, connectionId),
+          eq(commercePublishClaims.claimKey, claimKey),
+        ),
+      )
+      .limit(1);
+    return row ? claimFrom(row) : null;
+  }
+
+  async listPublishClaims(tenantId: string, connectionId: string): Promise<PublishClaimRow[]> {
+    const rows = await db()
+      .select()
+      .from(commercePublishClaims)
+      .where(and(eq(commercePublishClaims.tenantId, tenantId), eq(commercePublishClaims.connectionId, connectionId)));
+    return rows.map(claimFrom);
   }
 
   async getProduct(tenantId: string, id: string): Promise<ProductRecord | null> {

@@ -5,10 +5,12 @@ import type {
   ConnectionRow,
   CredentialRow,
   IdempotencyRow,
+  MappingProposalRow,
   MappingRow,
   OrderRow,
   OutboxRow,
   ProductRecord,
+  PublishClaimRow,
   StockRecord,
 } from './types';
 
@@ -16,6 +18,8 @@ export class MemoryCommerceStore implements CommerceStore {
   connections: ConnectionRow[] = [];
   credentials: CredentialRow[] = [];
   mappings: MappingRow[] = [];
+  proposals: MappingProposalRow[] = [];
+  claims: PublishClaimRow[] = [];
   products: ProductRecord[] = [];
   stock: StockRecord[] = [];
   orders: OrderRow[] = [];
@@ -70,6 +74,43 @@ export class MemoryCommerceStore implements CommerceStore {
   async deleteMapping(tenantId: string, id: string) {
     this.mappings = this.mappings.filter((m) => !(m.tenantId === tenantId && m.id === id));
   }
+  async insertMappingProposal(row: MappingProposalRow) {
+    this.proposals.push(structuredClone(row));
+  }
+  async getMappingProposal(tenantId: string, id: string) {
+    return this.proposals.find((p) => p.tenantId === tenantId && p.id === id) ?? null;
+  }
+  async listMappingProposals(tenantId: string, connectionId: string) {
+    return this.proposals
+      .filter((p) => p.tenantId === tenantId && p.connectionId === connectionId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  async updateMappingProposal(row: MappingProposalRow) {
+    const i = this.proposals.findIndex((p) => p.id === row.id);
+    if (i >= 0) this.proposals[i] = structuredClone(row);
+  }
+  async upsertPublishClaim(row: PublishClaimRow) {
+    const i = this.claims.findIndex(
+      (c) => c.tenantId === row.tenantId && c.connectionId === row.connectionId && c.bookoneProductId === row.bookoneProductId,
+    );
+    if (i >= 0) this.claims[i] = structuredClone(row);
+    else this.claims.push(structuredClone(row));
+  }
+  async getPublishClaim(tenantId: string, connectionId: string, bookoneProductId: string) {
+    return (
+      this.claims.find(
+        (c) => c.tenantId === tenantId && c.connectionId === connectionId && c.bookoneProductId === bookoneProductId,
+      ) ?? null
+    );
+  }
+  async getPublishClaimByKey(tenantId: string, connectionId: string, claimKey: string) {
+    return (
+      this.claims.find((c) => c.tenantId === tenantId && c.connectionId === connectionId && c.claimKey === claimKey) ?? null
+    );
+  }
+  async listPublishClaims(tenantId: string, connectionId: string) {
+    return this.claims.filter((c) => c.tenantId === tenantId && c.connectionId === connectionId);
+  }
   async getProduct(tenantId: string, id: string) {
     void tenantId;
     return this.products.find((p) => p.id === id) ?? null;
@@ -80,7 +121,7 @@ export class MemoryCommerceStore implements CommerceStore {
   }
   async listSellableProducts(tenantId: string) {
     void tenantId;
-    return this.products.filter((p) => p.isActive && !p.archived);
+    return this.products;
   }
   async getStock(tenantId: string, productId: string, locationId: string | null) {
     void tenantId;

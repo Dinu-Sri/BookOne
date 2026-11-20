@@ -78,6 +78,24 @@ export default async function CompanyCommercePage({
             entity: a.entity,
             createdAt: a.createdAt,
           })),
+          proposals: row.proposals.map((p) => ({
+            id: p.id,
+            status: p.status,
+            origin: p.origin,
+            items: p.items.map((item) => ({
+              sku: item.sku,
+              kind: item.kind,
+              reason: item.reason,
+              bookoneName: item.bookoneName,
+              origin: item.origin,
+            })),
+          })),
+          publishClaims: row.publishClaims.map((c) => ({
+            id: c.id,
+            sku: c.sku,
+            status: c.status,
+            issue: c.issue,
+          })),
         }))}
       />
     </BookOneShell>

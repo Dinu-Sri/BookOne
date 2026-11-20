@@ -50,7 +50,8 @@ Keys issued before BookOne 2.16.0 were returned in `?issued=` query data. Treat 
 
 - Migration **050** is additive. Default posting is preview. Rollback is `DROP` of `commerce_*` tables and the lookup function. Sales and inventory tables stay.
 - Forward-repair: re-run `scripts/init-db.ts`. Existing connections, mappings, receipts and checkpoints are preserved.
-- Plugin 1.1.0 settings survive deactivate. The job table is created on activate. Uninstall leaves the autoload-off option unless the operator deletes it.
+- Plugin 1.2.0 settings survive deactivate. The job table is created on activate. Uninstall leaves the autoload-off option unless the operator deletes it.
+- Migration **051** is additive (`commerce_mapping_proposals`, `commerce_publish_claims`). RLS on. Rollback is `DROP` of those two tables.
 
 ## Conflicts
 

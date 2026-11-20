@@ -83,6 +83,8 @@ export {
   commerceOutbox,
   commerceCheckpoints,
   commerceActivity,
+  commerceMappingProposals,
+  commercePublishClaims,
 } from './commerce';
 export { posRegisters, posShifts } from './pos';
 export {

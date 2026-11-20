@@ -54,10 +54,53 @@ export type PostingPort = {
   ): Promise<{ billId: string; documentNumber: string } | null>;
 };
 
+export type CommerceMappingPort = {
+  listConnections(tenantId: string): Promise<
+    Array<{ id: string; name: string; kind: string; locationId: string | null; mappingCount: number }>
+  >;
+  listCatalog(
+    tenantId: string,
+    q?: string,
+  ): Promise<Array<{ id: string; sku: string; name: string; unit: string; archived: boolean; sellPrice: string }>>;
+  mappingSummary(
+    tenantId: string,
+    connectionId: string,
+  ): Promise<{
+    connectionId: string;
+    connectionName: string;
+    locationId: string | null;
+    mapped: number;
+    items: Array<{
+      sku: string;
+      bookoneProductId: string;
+      bookoneName: string | null;
+      externalProductId: string;
+      externalVariantId: string;
+      status: string;
+    }>;
+  }>;
+  previewProposal(input: {
+    tenantId: string;
+    userId: string;
+    connectionId: string;
+    observations: Array<{
+      sku?: string;
+      name?: string;
+      externalProductId: string;
+      externalVariantId?: string;
+      origin: 'agent' | 'verified_store';
+    }>;
+  }): Promise<{
+    proposalId: string;
+    items: Array<{ sku: string; kind: string; reason: string; bookoneProductId: string | null; origin: string }>;
+  }>;
+};
+
 export type AgentBridgeDeps = {
   store: AgentBridgeStore;
   extractor?: ExtractionProvider;
   posting?: PostingPort;
+  commerce?: CommerceMappingPort;
   policyFor(tenantId: string): Promise<CompanyPolicy>;
   now?: () => number;
   authorizeActor?(actor: Actor): Promise<Actor>;
@@ -97,7 +140,7 @@ export class AgentBridgeService {
       policyVersion: (await this.deps.policyFor(actor.tenantId)).policyVersion,
       flags,
       capabilities: actor.capabilities,
-      tools: TOOL_NAMES,
+      tools: toolsForActor(actor),
       operations: capabilityMatrix(),
       posting: flags.enabled && !flags.postingDisabled && !flags.draftOnly && actor.capabilities.includes('post'),
       defaultConnectionScopes: ['read', 'upload', 'draft'],
@@ -111,6 +154,65 @@ export class AgentBridgeService {
   async getPolicyContext(actor: Actor) {
     actor = await this.authorized(actor, 'read');
     return this.deps.policyFor(actor.tenantId);
+  }
+
+  async listCommerceConnections(actor: Actor) {
+    actor = await this.authorized(actor, 'commerce_read');
+    if (!this.deps.commerce) return fail('FEATURE_DISABLED', 'Commerce mapping is not wired on this runtime.');
+    const items = await this.deps.commerce.listConnections(actor.tenantId);
+    return { ok: true as const, items, keysExposed: false };
+  }
+
+  async listBookoneCatalog(actor: Actor, q?: string) {
+    actor = await this.authorized(actor, 'commerce_read');
+    if (!this.deps.commerce) return fail('FEATURE_DISABLED', 'Commerce mapping is not wired on this runtime.');
+    const items = await this.deps.commerce.listCatalog(actor.tenantId, q);
+    return { ok: true as const, items };
+  }
+
+  async getMappingSummary(actor: Actor, connectionId: string) {
+    actor = await this.authorized(actor, 'commerce_read');
+    if (!this.deps.commerce) return fail('FEATURE_DISABLED', 'Commerce mapping is not wired on this runtime.');
+    const summary = await this.deps.commerce.mappingSummary(actor.tenantId, connectionId);
+    return { ok: true as const, ...summary, keysExposed: false };
+  }
+
+  async previewMappingProposal(
+    actor: Actor,
+    input: {
+      connectionId: string;
+      observations: Array<{
+        sku?: string;
+        name?: string;
+        externalProductId: string;
+        externalVariantId?: string;
+        origin?: 'agent' | 'verified_store';
+      }>;
+    },
+  ) {
+    actor = await this.authorized(actor, 'commerce_propose');
+    if (!this.deps.commerce) return fail('FEATURE_DISABLED', 'Commerce mapping is not wired on this runtime.');
+    if (!input.connectionId) return fail('VALIDATION', 'connectionId is required.');
+    const observations = (input.observations ?? []).map((row) => ({
+      sku: row.sku,
+      name: row.name,
+      externalProductId: row.externalProductId,
+      externalVariantId: row.externalVariantId,
+      origin: row.origin === 'verified_store' ? ('verified_store' as const) : ('agent' as const),
+    }));
+    const result = await this.deps.commerce.previewProposal({
+      tenantId: actor.tenantId,
+      userId: actor.userId,
+      connectionId: input.connectionId,
+      observations,
+    });
+    return {
+      ok: true as const,
+      proposalId: result.proposalId,
+      items: result.items,
+      applyInBookOne: true,
+      humanApprovalRequired: true,
+    };
   }
 
   async submitDocument(
@@ -1039,6 +1141,21 @@ export const TOOL_NAMES = [
   'get_operation_status',
   'get_receipt',
 ] as const;
+
+export const COMMERCE_READ_TOOL_NAMES = [
+  'list_commerce_connections',
+  'list_bookone_catalog',
+  'get_mapping_summary',
+] as const;
+
+export const COMMERCE_PROPOSE_TOOL_NAMES = ['preview_mapping_proposal'] as const;
+
+export function toolsForActor(actor: { capabilities: Capability[] }): string[] {
+  const names: string[] = [...TOOL_NAMES];
+  if (actor.capabilities.includes('commerce_read')) names.push(...COMMERCE_READ_TOOL_NAMES);
+  if (actor.capabilities.includes('commerce_propose')) names.push(...COMMERCE_PROPOSE_TOOL_NAMES);
+  return names;
+}
 
 function fail(code: string, error: string) {
   return { ok: false as const, code, error };

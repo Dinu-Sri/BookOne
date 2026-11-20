@@ -38,7 +38,19 @@ npx tsx scripts/commerce/http-client.ts \
   --sku SKU-1
 ```
 
-OpenAPI: `GET /api/commerce/v1/openapi.json` and `docs/commerce/openapi.yaml`.
+OpenAPI: `GET /api/commerce/v1/openapi.json` (no session) and `docs/commerce/openapi.yaml`.
+
+BookOne-first bootstrap (mapped-only `/products` stays):
+
+```bash
+curl -sS -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \
+  "$BOOKONE_COMMERCE_BASE/catalog/candidates"
+
+curl -sS -X POST -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"bookoneProductId":"<id>","externalProductId":"site-12"}]}' \
+  "$BOOKONE_COMMERCE_BASE/catalog/acknowledge"
+```
 
 ## 3. Durable order
 
@@ -63,7 +75,9 @@ Reservations stay **422** until a contention test passes.
 node scripts/commerce/package-plugin.mjs
 ```
 
-Install `connectors/woocommerce/release/bookone-commerce-1.1.0.zip` in WordPress. Confirm HPOS is on. Paste the BookOne API base and sandbox key. Test connection, preview mapping, publish stock. Do not put the token in a theme file.
+Install `connectors/woocommerce/release/bookone-commerce-1.2.0.zip` in WordPress. Confirm HPOS is on. Paste the BookOne API base and sandbox key. Test connection. For an existing catalog, preview mapping then publish stock. For an empty store, queue **Publish from BookOne** in BookOne then click **Publish from BookOne** in Woo (creates drafts). Do not put the token in a theme file.
+
+Public docs: `/docs/developers`. Node sample: `docs/commerce/quickstart-node.mjs`.
 
 WP-Cron hook `bookone_commerce_tick` every five minutes drains the claimed job table. Repair from Woo → BookOne. Dead jobs stay visible until Retry.
 

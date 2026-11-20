@@ -325,6 +325,10 @@ export function scopePlainLabel(scope: string): string {
       return 'Post approved bills';
     case 'approve':
       return 'Approve proposals';
+    case 'commerce_read':
+      return 'Read BookOne catalog and mapping summaries';
+    case 'commerce_propose':
+      return 'Propose store product mappings';
     default:
       return scope;
   }

@@ -1378,11 +1378,8 @@ export async function setAgentBridgeCommerceMappingScopes(
   if (!row || row.tenantId !== tenantId) {
     throw Object.assign(new Error('Connection was not found.'), { code: 'CONNECTION_REVOKED' });
   }
-  const next = row.scopes.filter((s) => s !== 'commerce_read' && s !== 'commerce_propose');
-  if (enabled) {
-    next.push('commerce_read', 'commerce_propose');
-  }
-  row.scopes = next as Capability[];
+  const kept = row.scopes.filter((s) => s !== 'commerce_read' && s !== 'commerce_propose');
+  row.scopes = (enabled ? [...kept, 'commerce_read', 'commerce_propose'] : kept) as Capability[];
   await store.saveConnection(row);
   return row;
 }

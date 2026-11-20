@@ -13,7 +13,7 @@ Status: ready-for-QA.
 - Migrations, schema/history compatibility and recovery implications: additive `051_commerce_catalog.sql` with RLS. Rollback is DROP of `commerce_mapping_proposals` and `commerce_publish_claims`. CATALOG_VERSION stays 2 because uncustomized Owner/Admin jobs pick up new keys via `allKeys()`
 - Dependencies, settings/flags, deployment and external-service changes: plugin ZIP `connectors/woocommerce/release/bookone-commerce-1.2.0.zip` sha256 `0972fa26ea35bad6212b94b69eb2a7e8c681aa7806bfb07e3d02656f32aed6bc`. Owner Portainer Re-pull ON after Docker web image green. Do not enable AgentBridge posting
 - Independent diff/impact review and uncertainties: Woo ZIP e2e on a disposable empty store is not-run. Real Codex/Claude mapping discovery is LIVE-UNVERIFIED. Live tenant CoA acceptance is independent
-- Checks executed: recorded in TASK_LOG
+- Checks executed: recorded in TASK_LOG. Follow-up after Production Check `44775995830` / Docker web image `44775995904`: web `tsc` and `@bookone/auth` ab04 ACTION_PERMISSIONS now include mapping keys; connection scope save no longer pushes onto the old Capability union
 - Failed/skipped/flaky/blocked/not-run checks: live Woo checkout, Shopify, reservation contention, Codex/Claude live mapping discovery stay not-run. Encrypted restore LAST
 - New QA assertions or outstanding work; changed expectations and owner decision: public docs must list Developers nav and serve OpenAPI without a session. Purchase tokens must not list mapping tools. Viewer must not receive mapping action keys
 - Created staging records/cleanup, if any: none

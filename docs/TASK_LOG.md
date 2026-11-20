@@ -1,3 +1,10 @@
+## 2026-11-20 — v2.17.0 CI follow-up (mapping scopes type + AB-04 catalog)
+
+- Record: [CHG-20261120-docs-api-mcp-catalog](changes/CHG-20261120-docs-api-mcp-catalog.md). Same VERSION 2.17.0 on `feat/v2170-docs-api-mcp-catalog` from `29f56c6`. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Production Check `44775995830` and Docker web image `44775995904` failed on `29f56c6`. Saving **Allow catalog mapping** no longer `push`es `commerce_read` onto the old connection-scope union. AB-04 `ACTION_PERMISSIONS` now includes `agent_bridge.commerce_read` and `agent_bridge.commerce_propose` so Owner/Admin `allKeys()` stays additive at CATALOG_VERSION 2.
+- Checks: `@bookone/web` `tsc --noEmit` after removing stale `.next/types`. `@bookone/auth` 168 passed / 5 skipped including ab04-permissions and commerce-gate.
+- Next: Fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image **Build & push** is green. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Docs, Commerce API, AgentBridge mapping, BookOne-first catalog (v2.17.0)
 
 - Record: [CHG-20261120-docs-api-mcp-catalog](changes/CHG-20261120-docs-api-mcp-catalog.md). Baseline product `e6df41c` / v2.16.4. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

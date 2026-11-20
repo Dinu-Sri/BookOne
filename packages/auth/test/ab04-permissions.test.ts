@@ -134,6 +134,11 @@ describe('AB-04 AgentBridge action keys through the actual resolver', () => {
     expect(actionPermissionLevel(saved, 'agent_bridge.approve')).toBe('write');
     expect(actionPermissionLevel(new Set(['agent_bridge.post.write']), 'agent_bridge.post')).toBe('write');
     expect(actionPermissionLevel(new Set(), 'agent_bridge.approve')).toBe('none');
-    expect(ACTION_PERMISSIONS.map((a) => a.key)).toEqual(['agent_bridge.approve', 'agent_bridge.post']);
+    expect(ACTION_PERMISSIONS.map((a) => a.key)).toEqual([
+      'agent_bridge.approve',
+      'agent_bridge.post',
+      'agent_bridge.commerce_read',
+      'agent_bridge.commerce_propose',
+    ]);
   });
 });

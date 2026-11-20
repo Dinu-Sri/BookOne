@@ -1,3 +1,10 @@
+## 2026-11-20 — Commerce layout, setup evidence and stock fan-out (v2.16.4)
+
+- Record: [CHG-20261120-commerce-ui-sync-followup](changes/CHG-20261120-commerce-ui-sync-followup.md). Baseline product `a67a86e` / v2.16.3. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Compact store selector above all tabs, create as its own view, empty catalog Open Products, last mapping change label, refuse zero-item publish, fan-out inventory events to other mapped connections at the same location. VERSION 2.16.4. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/commerce` 19/19 including zero-item publish refusal and two-connection fan-out. `@bookone/auth` commerce-gate and UI-02 17/17. CoreGuard locators keep heading `Commerce Integrations`, Issue scoped key, Arrow/Home/End tabs, stale-preview Apply disabled. Woo live checkout remains not-run. Local `pnpm --filter @bookone/web typecheck` only reported stale `.next/types` cashbook/import pages, not commerce sources.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent C4 store pilot. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce first-visit and setup layout (v2.16.3)
 
 - Record: [CHG-20261120-commerce-ui-followup](changes/CHG-20261120-commerce-ui-followup.md). Baseline product `3fdd9f7` / v2.16.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

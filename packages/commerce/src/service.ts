@@ -398,6 +398,12 @@ export class CommerceService {
     const connection = await this.requireConnection(operator.tenantId, connectionId);
     if (connection.outboundPaused) fail('OUTBOUND_PAUSED', 'Outbound stock publishing is paused.');
     const mappings = await this.store.listMappings(operator.tenantId, connectionId);
+    if (mappings.length === 0) {
+      fail(
+        'VALIDATION',
+        'Map at least one product before publishing BookOne stock. A zero-item publish is not a successful publication.',
+      );
+    }
     let count = 0;
     for (const mapping of mappings) {
       const stock = await this.store.getStock(operator.tenantId, mapping.bookoneProductId, connection.locationId);
@@ -415,6 +421,7 @@ export class CommerceService {
           quantity: stock?.quantity ?? '0',
           revision,
           asOf: nowIso(),
+          locationId: connection.locationId,
         },
         createdAt: nowIso(),
       });
@@ -422,8 +429,11 @@ export class CommerceService {
     }
     connection.lastStockSyncAt = nowIso();
     await this.store.updateConnection(connection);
-    await this.audit(operator, connectionId, 'stock.publish', 'inventory', connectionId, { count });
-    return { published: count };
+    await this.audit(operator, connectionId, 'stock.publish', 'inventory', connectionId, {
+      count,
+      locationId: connection.locationId,
+    });
+    return { published: count, locationId: connection.locationId };
   }
 
   async validateOrder(actor: CommerceActor, input: OrderInput) {
@@ -636,7 +646,10 @@ export class CommerceService {
               lines: remaining,
             });
             for (const line of order.lines) line.restockedQty = line.quantity;
-            await this.emitStock(actor);
+            await this.emitStock(
+              actor,
+              remaining.map((line) => line.productId).filter((id): id is string => Boolean(id)),
+            );
           }
         }
         if (order.status === 'posted' || order.status === 'received' || order.status === 'needs_review' || order.status === 'accepted' || order.status === 'partially_refunded') {
@@ -838,25 +851,43 @@ export class CommerceService {
     if (refundId) await this.store.updateRefund(refundId, { documentId: posted.documentId });
     order.status = almostEqualRefund(already + amount, Number(order.total)) ? 'refunded' : 'partially_refunded';
     order.reviewReason = null;
-    if (input.restock) await this.emitStock(actor);
+    if (input.restock) {
+      await this.emitStock(
+        actor,
+        returnLines.map((line) => line.productId).filter((id): id is string => Boolean(id)),
+      );
+    }
   }
 
-  private async emitStock(actor: CommerceActor) {
-    const mappings = await this.store.listMappings(actor.tenantId, actor.connectionId);
-    for (const mapping of mappings) {
-      const stock = await this.store.getStock(actor.tenantId, mapping.bookoneProductId, actor.locationId);
-      const revision = await this.store.nextRevision(actor.tenantId, actor.connectionId);
-      await this.store.insertOutbox({
-        id: randomUUID(),
-        tenantId: actor.tenantId,
-        connectionId: actor.connectionId,
-        revision,
-        kind: 'inventory',
-        productId: mapping.bookoneProductId,
-        sku: mapping.sku,
-        payload: { sku: mapping.sku, quantity: stock?.quantity ?? '0', revision, asOf: nowIso() },
-        createdAt: nowIso(),
-      });
+  private async emitStock(actor: CommerceActor, productIds?: string[]) {
+    const wanted = productIds?.length ? new Set(productIds) : null;
+    const connections = await this.store.listConnections(actor.tenantId);
+    for (const connection of connections) {
+      if (connection.outboundPaused) continue;
+      if ((connection.locationId ?? null) !== (actor.locationId ?? null)) continue;
+      const mappings = await this.store.listMappings(actor.tenantId, connection.id);
+      for (const mapping of mappings) {
+        if (wanted && !wanted.has(mapping.bookoneProductId)) continue;
+        const stock = await this.store.getStock(actor.tenantId, mapping.bookoneProductId, connection.locationId);
+        const revision = await this.store.nextRevision(actor.tenantId, connection.id);
+        await this.store.insertOutbox({
+          id: randomUUID(),
+          tenantId: actor.tenantId,
+          connectionId: connection.id,
+          revision,
+          kind: 'inventory',
+          productId: mapping.bookoneProductId,
+          sku: mapping.sku,
+          payload: {
+            sku: mapping.sku,
+            quantity: stock?.quantity ?? '0',
+            revision,
+            asOf: nowIso(),
+            locationId: connection.locationId,
+          },
+          createdAt: nowIso(),
+        });
+      }
     }
   }
 
@@ -931,7 +962,10 @@ export class CommerceService {
       order.reviewReason = null;
       order.updatedAt = nowIso();
       await this.store.updateOrder(order);
-      await this.emitStock(actor);
+      await this.emitStock(
+        actor,
+        preview.mapped.map((line) => line.productId).filter((id): id is string => Boolean(id)),
+      );
     } catch (error) {
       order.status = 'needs_review';
       order.reviewReason = error instanceof Error ? error.message : 'BookOne posting failed. No duplicate journals were created.';

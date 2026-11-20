@@ -30,6 +30,7 @@ export function FormShell({
   children,
   footer,
   size = 'form',
+  fillViewport = false,
 }: {
   backHref: string;
   backParent: string;
@@ -37,9 +38,13 @@ export function FormShell({
   children: ReactNode;
   footer?: ReactNode;
   size?: 'form' | 'wide';
+  fillViewport?: boolean;
 }) {
   return (
-    <div className={`party-form-shell form-shell form-shell-${size}`} style={{ maxHeight: 'none', minHeight: 0 }}>
+    <div
+      className={`party-form-shell form-shell form-shell-${size}${fillViewport ? ' form-shell-fill' : ''}`}
+      style={fillViewport ? undefined : { maxHeight: 'none', minHeight: 0 }}
+    >
       <div className="party-form-top">
         <FormBackLink href={backHref} parent={backParent} />
         {title ? <span className="form-shell-title">{title}</span> : null}

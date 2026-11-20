@@ -47,6 +47,7 @@ function commercePath(formData: FormData, extra: Record<string, string | undefin
   if (connection) params.set('connection', connection);
   if (extra.saved) params.set('saved', extra.saved);
   if (extra.err) params.set('err', extra.err);
+  if (extra.published) params.set('published', extra.published);
   const query = params.toString();
   return query ? `/company/commerce?${query}` : '/company/commerce';
 }
@@ -134,6 +135,7 @@ export async function updateCommerceConnectionFromForm(formData: FormData) {
         postingMode: String(formData.get('postingMode') ?? 'preview') === 'posting' ? 'posting' : 'preview',
         inboundPaused: formData.get('inboundPaused') === 'on',
         outboundPaused: formData.get('outboundPaused') === 'on',
+        locationId: String(formData.get('locationId') ?? '') || null,
       }),
     );
   } catch (e) {
@@ -179,14 +181,14 @@ export async function applyCommerceMappingFromForm(formData: FormData) {
 export async function publishCommerceStockFromForm(formData: FormData) {
   const operator = await operatorFromSession();
   try {
-    await withCommerceService(operator.tenantId, (service) =>
+    const result = await withCommerceService(operator.tenantId, (service) =>
       service.publishStock(operator, String(formData.get('connectionId') ?? '')),
     );
+    finish(formData, { saved: '1', tab: 'mapping', published: String(result.published) });
   } catch (e) {
     rethrowNav(e);
     finish(formData, { err: e instanceof Error ? e.message : 'Could not publish stock.', tab: 'mapping' });
   }
-  finish(formData, { saved: '1', tab: 'mapping' });
 }
 
 export async function retryCommerceReviewFromForm(formData: FormData) {

@@ -9,6 +9,7 @@ const tenantId = '11111111-1111-1111-1111-111111111111';
 const userId = '22222222-2222-2222-2222-222222222222';
 const productId = '33333333-3333-3333-3333-333333333333';
 const locationId = '44444444-4444-4444-4444-444444444444';
+const otherLocationId = '55555555-5555-5555-5555-555555555555';
 
 function paidOrder(id: string, sku = 'SKU-1'): OrderInput {
   return {
@@ -527,5 +528,105 @@ describe('commerce order intake', () => {
     expect(retried.status).toBe('posted');
     expect(retried.documentNumber).toBe('INV-RETRY');
     expect(store.stock[0]?.quantity).toBe('0');
+  });
+
+  it('refuses a zero-item stock publish and does not set a publication timestamp', async () => {
+    const { service } = make('1');
+    const operator = { tenantId, userId, canWrite: true };
+    const connection = await service.createConnection(operator, {
+      name: 'HTTP',
+      kind: 'custom_website',
+      environment: 'sandbox',
+      locationId,
+    });
+    await expect(service.publishStock(operator, connection.id)).rejects.toMatchObject({ code: 'VALIDATION' });
+    const listed = await service.listOperatorView(operator);
+    expect(listed[0]?.connection.lastStockSyncAt).toBeNull();
+    const applied = await service.applyMappings(operator, connection.id, [
+      { bookoneProductId: productId, sku: 'SKU-1', externalProductId: 'http-1' },
+    ]);
+    expect(applied.applied).toBe(1);
+    const published = await service.publishStock(operator, connection.id);
+    expect(published.published).toBe(1);
+    expect(published.locationId).toBe(locationId);
+    const after = await service.listOperatorView(operator);
+    expect(after[0]?.connection.lastStockSyncAt).toBeTruthy();
+  });
+
+  it('fans a paid last-unit out to every mapped connection at the same location', async () => {
+    const { service, store, posts } = make('1');
+    store.stock.push({
+      productId,
+      sku: 'SKU-1',
+      locationId: otherLocationId,
+      quantity: '9',
+      revision: 1,
+      asOf: new Date().toISOString(),
+      stale: false,
+    });
+    const operator = { tenantId, userId, canWrite: true };
+    const http = await service.createConnection(operator, {
+      name: 'Generic HTTP',
+      kind: 'custom_website',
+      environment: 'sandbox',
+      locationId,
+    });
+    const woo = await service.createConnection(operator, {
+      name: 'Woo',
+      kind: 'woocommerce',
+      environment: 'sandbox',
+      locationId,
+    });
+    const other = await service.createConnection(operator, {
+      name: 'Other location',
+      kind: 'custom_website',
+      environment: 'sandbox',
+      locationId: otherLocationId,
+    });
+    const paused = await service.createConnection(operator, {
+      name: 'Paused',
+      kind: 'custom_website',
+      environment: 'sandbox',
+      locationId,
+    });
+    await service.updateConnection(operator, http.id, { postingMode: 'posting' });
+    await service.updateConnection(operator, paused.id, { outboundPaused: true });
+    await service.applyMappings(operator, http.id, [
+      { bookoneProductId: productId, sku: 'SKU-1', externalProductId: 'http-1' },
+    ]);
+    await service.applyMappings(operator, woo.id, [
+      { bookoneProductId: productId, sku: 'SKU-1', externalProductId: 'woo-1', externalVariantId: 'woo-1-v' },
+    ]);
+    await service.applyMappings(operator, other.id, [
+      { bookoneProductId: productId, sku: 'SKU-1', externalProductId: 'other-1' },
+    ]);
+    await service.applyMappings(operator, paused.id, [
+      { bookoneProductId: productId, sku: 'SKU-1', externalProductId: 'paused-1' },
+    ]);
+    const httpKey = await service.issueCredential(operator, http.id);
+    const wooKey = await service.issueCredential(operator, woo.id);
+    const otherKey = await service.issueCredential(operator, other.id);
+    const httpActor = await service.authenticate(`Bearer ${httpKey.token}`);
+    const wooActor = await service.authenticate(`Bearer ${wooKey.token}`);
+    const otherActor = await service.authenticate(`Bearer ${otherKey.token}`);
+    const wooBefore = await service.changes(wooActor);
+    const otherBefore = await service.changes(otherActor);
+    const first = await service.submitOrder(httpActor, paidOrder('fan-1'), 'key-fan');
+    expect(first.status).toBe('posted');
+    expect(first.settlement).toBe('not_configured');
+    expect(posts).toHaveLength(1);
+    expect(store.stock.find((row) => row.locationId === locationId)?.quantity).toBe('0');
+    expect(store.stock.find((row) => row.locationId === otherLocationId)?.quantity).toBe('9');
+    const delta = await service.changes(wooActor, wooBefore.nextCursor);
+    const inventory = delta.items.filter((item) => item.kind === 'inventory' && item.sku === 'SKU-1');
+    expect(inventory).toHaveLength(1);
+    expect(inventory[0]?.payload).toMatchObject({ sku: 'SKU-1', quantity: '0', locationId });
+    const snapshot = await service.inventory(wooActor, ['SKU-1']);
+    expect(snapshot.items[0]?.quantity).toBe('0');
+    const otherDelta = await service.changes(otherActor, otherBefore.nextCursor);
+    expect(otherDelta.items.filter((item) => item.kind === 'inventory')).toHaveLength(0);
+    expect(
+      store.outbox.filter((row) => row.connectionId === paused.id && row.kind === 'inventory' && row.payload.quantity === '0'),
+    ).toHaveLength(0);
   });
 });

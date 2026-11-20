@@ -1,3 +1,7 @@
+## 2026-11-20 — Commerce layout, setup evidence and stock fan-out (v2.16.4)
+
+Candidate **2.16.4** on `feat/v2164-commerce-ui-sync-followup` from origin/master `a67a86e` / v2.16.3. Compact store selector, create-as-own-view, mapping empty states, review-first Activity, refuse zero-item publish, and fan-out stock events to other mapped connections at the same location. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce first-visit and setup layout (v2.16.3)
 
 Candidate **2.16.3** on `feat/v2163-commerce-live-ui` from origin/master `3fdd9f7` / v2.16.2. First visit uses a heading, purpose sentence and one New connection action. Setup shows Create a connection → Connect your website → Map products and test sync. Connected stores use a compact header, distinct credential and posting sections, and readable Mapping/Activity tables. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

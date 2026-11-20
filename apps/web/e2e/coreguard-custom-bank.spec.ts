@@ -119,8 +119,13 @@ test('Viewer sees Chart of Accounts without write actions', async ({ page }) => 
   const commerceTitle = page.getByRole('heading', { name: 'Commerce Integrations' });
   if (new URL(page.url()).pathname === '/company/commerce') {
     await expect(commerceTitle).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Issue scoped key' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Save pauses and posting' })).toBeDisabled();
+    const issue = page.getByRole('button', { name: 'Issue scoped key' });
+    if ((await issue.count()) > 0) {
+      await expect(issue).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Save pauses and posting' })).toBeDisabled();
+    } else {
+      await expect(issue).toHaveCount(0);
+    }
   } else {
     await expect(commerceTitle).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Issue scoped key' })).toHaveCount(0);

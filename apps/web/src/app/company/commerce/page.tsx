@@ -10,7 +10,7 @@ import { listProducts } from '@/app/actions/inventory';
 export default async function CompanyCommercePage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; err?: string; tab?: string; connection?: string }>;
+  searchParams: Promise<{ saved?: string; err?: string; tab?: string; connection?: string; published?: string }>;
 }) {
   let tenant;
   try {
@@ -24,11 +24,17 @@ export default async function CompanyCommercePage({
   const query = await searchParams;
   const canWrite = jobCanWrite(tenant, 'Commerce Integrations');
   const operator = await operatorFromSession();
-  const [view, company, products] = await Promise.all([
+  let products: Awaited<ReturnType<typeof listProducts>> = [];
+  let productsError: string | null = null;
+  const [view, company, productLoad] = await Promise.all([
     withCommerceService(operator.tenantId, (service) => service.listOperatorView(operator)),
     getCompanySettingsData().catch(() => null),
-    listProducts().catch(() => []),
+    listProducts()
+      .then((rows) => ({ ok: true as const, rows }))
+      .catch(() => ({ ok: false as const })),
   ]);
+  if (productLoad.ok) products = productLoad.rows;
+  else productsError = 'Could not load BookOne products.';
   const origin = process.env.AUTH_URL ?? process.env.BETTER_AUTH_URL ?? '';
 
   return (
@@ -37,9 +43,11 @@ export default async function CompanyCommercePage({
         canWrite={canWrite}
         saved={query.saved === '1'}
         saveError={query.err ? decodeURIComponent(query.err) : null}
+        publishedCount={query.published ? Number(query.published) : null}
         initialTab={query.tab === 'mapping' || query.tab === 'activity' ? query.tab : 'connections'}
         initialConnectionId={query.connection ?? ''}
         apiBase={origin ? `${origin.replace(/\/$/, '')}/api/commerce/v1` : '/api/commerce/v1'}
+        productsError={productsError}
         locations={(company?.locations ?? []).map((l) => ({
           id: l.id,
           name: l.name,

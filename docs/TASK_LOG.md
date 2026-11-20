@@ -1,3 +1,10 @@
+## 2026-11-20 — Bank-recon live retest inbox, posting names, guided search (v2.14.4)
+
+- Record: [CHG-20261120-bank-recon-live-retest](changes/CHG-20261120-bank-recon-live-retest.md). Baseline product `7513520` / v2.14.3. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: inbox and compare share `bankClose − bookClose + outstandingNet` and show Unverified when a current comparison is missing. Create category resolves eligible company accounts by actual name. Guided bank-only starts with Search BookOne. Live prior statement was not matched, posted, excluded, or finished. VERSION 2.14.4. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/statement-import` finish/comparison/posting-label tests. CoreGuard Playwright bank-recon asserts inbox 85.00, guided Search BookOne, and 6800 · General Expense. CI evidence is the unmasked CoreGuard **Pilot custom-bank** step.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent disposable-company bank-recon review. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-19 — CoreGuard recon cleanup (v2.14.3)
 
 - Record: [CHG-20261119-coreguard-recon-cleanup](changes/CHG-20261119-coreguard-recon-cleanup.md). Baseline product `7e1b267` / v2.14.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

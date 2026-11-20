@@ -23,19 +23,13 @@ import { SelectField } from '@/components/ui/select-field';
 import { TextField } from '@/components/ui/text-field';
 import { withFormPending } from '@/components/ui/form-busy';
 
-const OUT_CATS = [
-  { value: '6800', label: '6800 · Bank fees' },
-  { value: '6600', label: '6600 · Bank charges' },
-  { value: '6200', label: '6200 · Utilities' },
-  { value: '6100', label: '6100 · Rent' },
-  { value: '6400', label: '6400 · Transport' },
-  { value: '6000', label: '6000 · Other cost' },
-];
-const IN_CATS = [
-  { value: '4300', label: '4300 · Other income' },
-  { value: '4000', label: '4000 · Sales' },
-  { value: '3000', label: '3000 · Own money in' },
-];
+function catLabel(account: { code: string; name: string }) {
+  return `${account.code} · ${account.name}`;
+}
+
+function catOptions(accounts: { code: string; name: string }[]) {
+  return accounts.map((a) => ({ value: a.code, label: catLabel(a) }));
+}
 
 function money(n: number) {
   const sign = n < 0 ? '−' : '';
@@ -86,7 +80,7 @@ export function ReconciliationCompare({
   const [bankSel, setBankSel] = useState<string[]>([]);
   const [bookSel, setBookSel] = useState<string[]>([]);
   const [createCaseId, setCreateCaseId] = useState<string | null>(null);
-  const [cat, setCat] = useState('6800');
+  const [cat, setCat] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState('');
   const [searchHits, setSearchHits] = useState<
@@ -161,11 +155,15 @@ export function ReconciliationCompare({
       ? selectedBank[0]
       : null;
   const createIn = (createRow?.amount ?? 0) > 0;
+  const postingList = createIn ? (board?.posting?.income ?? []) : (board?.posting?.expenses ?? []);
+  const selectedCat = postingList.find((a) => a.code === cat);
 
   useEffect(() => {
     if (!createRow) return;
-    setCat(createRow.amount > 0 ? '4300' : '6800');
-  }, [createRow]);
+    const list = createRow.amount > 0 ? (board?.posting?.income ?? []) : (board?.posting?.expenses ?? []);
+    const preferred = createRow.amount > 0 ? '4300' : '6800';
+    setCat(list.some((a) => a.code === preferred) ? preferred : (list[0]?.code ?? ''));
+  }, [createRow, board]);
 
   function toggle(list: string[], id: string, set: (v: string[]) => void) {
     set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
@@ -345,12 +343,15 @@ export function ReconciliationCompare({
         </div>
         <div>
           <span>Difference</span>
-          <strong>{money(review?.difference ?? 0)}</strong>
+          <strong data-testid="brc-difference">
+            {review?.differenceVerified ? money(review.difference) : 'Unverified'}
+          </strong>
         </div>
       </div>
       <p className="brc-explain">
         BookOne {money(review?.bookClosing ?? 0)} − waiting items {money(review?.outstandingNet ?? 0)} should equal
-        bank {money(review?.bankClosing ?? 0)}. Remaining difference {money(review?.difference ?? 0)}.
+        bank {money(review?.bankClosing ?? 0)}. Remaining difference{' '}
+        {review?.differenceVerified ? money(review.difference) : 'Unverified'}.
       </p>
       {bankToReview > 0 ? (
         <p className="muted-line">{bankToReview} bank line{bankToReview === 1 ? '' : 's'} to review</p>
@@ -454,10 +455,16 @@ export function ReconciliationCompare({
                   label="Category"
                   value={cat}
                   onChange={setCat}
-                  options={createIn ? IN_CATS : OUT_CATS}
-                  searchable={false}
+                  options={catOptions(postingList)}
+                  searchable={postingList.length >= 8}
+                  emptyReason="No eligible posting account on this company chart."
                 />
-                <Button variant="secondary" type="button" disabled={pending} onClick={() => setCreateOpen(true)}>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  disabled={pending || !cat}
+                  onClick={() => setCreateOpen(true)}
+                >
                   Create in BookOne
                 </Button>
               </>
@@ -523,7 +530,7 @@ export function ReconciliationCompare({
         title="Create this BookOne entry?"
         message={
           createRow
-            ? `Post ${money(createRow.amount)} as ${createIn ? 'income' : 'expense'} ${cat}. This creates a journal.`
+            ? `Post ${money(createRow.amount)} as ${createIn ? 'income' : 'expense'} ${selectedCat ? catLabel(selectedCat) : cat}. This creates a journal.`
             : 'Create a BookOne entry for the selected bank line?'
         }
         confirmLabel="Create entry"
@@ -555,7 +562,9 @@ export function ReconciliationCompare({
             <li>Bank closing {money(review?.bankClosing ?? 0)}</li>
             <li>BookOne closing {money(review?.bookClosing ?? 0)}</li>
             <li>Waiting to clear {money(review?.outstandingNet ?? 0)}</li>
-            <li>Difference {money(review?.difference ?? 0)}</li>
+            <li>
+              Difference {review?.differenceVerified ? money(review.difference) : 'Unverified'}
+            </li>
             <li>Matched {review?.matched ?? 0}</li>
             <li>Added {review?.added ?? 0}</li>
           </ul>

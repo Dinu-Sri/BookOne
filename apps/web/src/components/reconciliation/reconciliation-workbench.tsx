@@ -788,9 +788,9 @@ export function ReconciliationWorkbench({
           <span>Explained timing</span>
           <strong>{formatRs(s.outstandingNet)}</strong>
         </div>
-        <div className={`brw-card emphasize ${Math.abs(diff) < 0.02 ? 'ok' : 'warn'}`}>
+        <div className={`brw-card emphasize ${s.differenceVerified && Math.abs(diff) < 0.02 ? 'ok' : 'warn'}`}>
           <span>Difference left</span>
-          <strong>{formatRs(diff)}</strong>
+          <strong>{s.differenceVerified ? formatRs(diff) : 'Unverified'}</strong>
         </div>
       </div>
 
@@ -955,8 +955,9 @@ export function ReconciliationWorkbench({
             <div>
               Timing items <strong>{formatRs(review.outstandingNet)}</strong>
             </div>
-            <div className={Math.abs(review.difference) < 0.02 ? 'ok' : 'warn'}>
-              Difference left <strong>{formatRs(review.difference)}</strong>
+            <div className={review.differenceVerified && Math.abs(review.difference) < 0.02 ? 'ok' : 'warn'}>
+              Difference left{' '}
+              <strong>{review.differenceVerified ? formatRs(review.difference) : 'Unverified'}</strong>
             </div>
           </div>
           {review.finishBlockers.length > 0 ? (

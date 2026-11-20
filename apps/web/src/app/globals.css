@@ -9687,6 +9687,7 @@ a.bih-card:hover {
 .brc-search ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .brc-search-hit { display: grid; grid-template-columns: 64px 1fr auto; gap: 8px; width: 100%; text-align: left; font: inherit; background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
 .brc-search-hit:hover { background: var(--surface-muted, #f8fafc); }
+.brc-search-hit.is-on { border-color: #93c5fd; background: #eff6ff; }
 .brc-finish-review ul { margin: 8px 0; padding-left: 18px; }
 @media (max-width: 860px) {
   .brc-board { grid-template-columns: 1fr; }

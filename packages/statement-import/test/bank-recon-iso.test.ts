@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { finishEligibility } from '../src/finish-eligibility';
+import { comparisonDifference, finishEligibility } from '../src/finish-eligibility';
+import {
+  eligiblePostingAccounts,
+  pickDefaultPostingCode,
+  postingAccountLabel,
+} from '../src/posting-accounts';
 import { parseStatementDate } from '../src/normalize';
 import { mappingIsConfident } from '../src/studio-mapping';
 import {
@@ -136,7 +141,67 @@ describe('finish eligibility', () => {
       outstandingNet: 60,
     });
     expect(r.ok).toBe(true);
+    expect(r.verified).toBe(true);
     expect(r.difference).toBe(0);
     expect(r.blockers).toEqual([]);
+  });
+
+  it('uses the live close formula even when stored differenceAmount is 0', () => {
+    const cmp = comparisonDifference({
+      bankClose: 1400,
+      bookClose: 0,
+      outstandingNet: 0,
+    });
+    expect(cmp.verified).toBe(true);
+    expect(cmp.difference).toBe(1400);
+    const r = finishEligibility({
+      openCases: [{ caseType: 'create_entry', state: 'needs_review' }],
+      bankClose: 1400,
+      bookClose: 0,
+      outstandingNet: 0,
+      differenceAmount: 0,
+    });
+    expect(r.verified).toBe(true);
+    expect(r.difference).toBe(1400);
+    expect(r.blockers.some((b) => /1400\.00/.test(b))).toBe(true);
+  });
+
+  it('does not treat a missing comparison as Rs. 0.00 explained', () => {
+    const cmp = comparisonDifference({
+      bankClose: null,
+      bookClose: 0,
+      outstandingNet: 0,
+    });
+    expect(cmp.verified).toBe(false);
+    const r = finishEligibility({
+      openCases: [],
+      bankClose: null,
+      bookClose: null,
+      outstandingNet: 0,
+      differenceAmount: 0,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.verified).toBe(false);
+    expect(r.blockers).toContain('No current comparison');
+  });
+});
+
+describe('recon posting account labels', () => {
+  it('shows the company account name, not a hardcoded Bank fees caption', () => {
+    expect(postingAccountLabel({ code: '6800', name: 'General Expense' })).toBe('6800 · General Expense');
+    expect(postingAccountLabel({ code: '6800', name: 'Bank service fees' })).toBe('6800 · Bank service fees');
+    const eligible = eligiblePostingAccounts(
+      [
+        { code: '6800', name: 'General Expense', type: 'expense', isActive: '1', isGroup: '0' },
+        { code: '4300', name: 'Other Income', type: 'revenue', isActive: '1', isGroup: '0' },
+        { code: '3000', name: 'Owner Equity', type: 'equity', isActive: '1', isGroup: '0' },
+        { code: '6999', name: 'Expense group', type: 'expense', isActive: '1', isGroup: '1' },
+        { code: '6100', name: 'Old rent', type: 'expense', isActive: '0', isGroup: '0' },
+      ],
+      'out',
+    );
+    expect(eligible.map((a) => a.code)).toEqual(['6800']);
+    expect(pickDefaultPostingCode(eligible, '6800')).toBe('6800');
+    expect(postingAccountLabel(eligible[0]!)).not.toMatch(/Bank fees/);
   });
 });

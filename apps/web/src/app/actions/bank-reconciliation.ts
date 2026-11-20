@@ -9,8 +9,13 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
+  comparisonDifference,
+  eligiblePostingAccounts,
   finishEligibility,
+  isEligiblePostingAccount,
   matchAll,
+  pickDefaultPostingCode,
+  postingAccountLabel,
   type BookCandidate,
   type CanonicalStatementLine,
 } from '@bookone/statement-import';
@@ -18,6 +23,7 @@ import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
   and,
+  asc,
   bankReconciliationCaseBankLines,
   bankReconciliationCaseBookTransactions,
   bankReconciliationCases,
@@ -75,6 +81,7 @@ export type ReconSessionListItem = {
   resolvedCaseCount: number;
   openCaseCount: number;
   differenceAmount: number;
+  differenceVerified: boolean;
   progressPct: number;
   updatedAt: string;
 };
@@ -140,9 +147,16 @@ export type ReconReviewSummary = {
   bookClosing: number | null;
   outstandingNet: number;
   difference: number;
+  differenceVerified: boolean;
   canFinish: boolean;
   finishBlockers: string[];
   status: string;
+};
+
+export type ReconPostingAccount = {
+  code: string;
+  name: string;
+  type: 'expense' | 'revenue';
 };
 
 /** Detect likely inter-account transfer narratives (suggest only). */
@@ -360,6 +374,61 @@ async function bookBalanceThrough(
     if (s != null) bal += s;
   }
   return Math.round(bal * 100) / 100;
+}
+
+async function loadReconPostingAccounts(tenantId: string): Promise<{
+  expenses: ReconPostingAccount[];
+  income: ReconPostingAccount[];
+}> {
+  const rows = await db()
+    .select({
+      code: accounts.code,
+      name: accounts.name,
+      type: accounts.type,
+      isActive: accounts.isActive,
+      isGroup: accounts.isGroup,
+    })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.tenantId, tenantId),
+        isNull(accounts.voidedAt),
+        inArray(accounts.type, ['expense', 'revenue']),
+      ),
+    )
+    .orderBy(asc(accounts.code));
+  const mapped = rows.map((r) => ({
+    code: r.code,
+    name: r.name,
+    type: r.type,
+    isActive: r.isActive,
+    isGroup: r.isGroup,
+  }));
+  return {
+    expenses: eligiblePostingAccounts(mapped, 'out').map((a) => ({
+      code: a.code,
+      name: a.name,
+      type: 'expense' as const,
+    })),
+    income: eligiblePostingAccounts(mapped, 'in').map((a) => ({
+      code: a.code,
+      name: a.name,
+      type: 'revenue' as const,
+    })),
+  };
+}
+
+export async function listReconPostingAccounts(): Promise<
+  | { ok: true; expenses: ReconPostingAccount[]; income: ReconPostingAccount[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await requireTenantContext();
+    const posting = await withTenantContext(user.tenantId, () => loadReconPostingAccounts(user.tenantId));
+    return { ok: true, ...posting };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not load posting accounts.' };
+  }
 }
 
 async function refreshSessionCounts(tenantId: string, sessionId: string) {
@@ -1305,6 +1374,8 @@ export async function listReconciliationSessions(): Promise<ReconSessionListItem
         resolvedCaseCount: bankReconciliationSessions.resolvedCaseCount,
         openCaseCount: bankReconciliationSessions.openCaseCount,
         differenceAmount: bankReconciliationSessions.differenceAmount,
+        statementClosingBalance: bankReconciliationSessions.statementClosingBalance,
+        outstandingNet: bankReconciliationSessions.outstandingNet,
         updatedAt: bankReconciliationSessions.updatedAt,
       })
       .from(bankReconciliationSessions)
@@ -1327,11 +1398,19 @@ export async function listReconciliationSessions(): Promise<ReconSessionListItem
       for (const b of banks) bankMap.set(b.id, { name: b.name, code: b.code });
     }
 
-    return rows.map((r) => {
+    const items: ReconSessionListItem[] = [];
+    for (const r of rows) {
       const bank = bankMap.get(r.bankAccountId);
       const total = Math.max(r.bankLineCount || r.resolvedCaseCount + r.openCaseCount, 1);
       const resolved = r.resolvedCaseCount;
-      return {
+      const bankClose = r.statementClosingBalance != null ? Number(r.statementClosingBalance) : null;
+      const liveBook = await bookBalanceThrough(user.tenantId, r.bankAccountId, r.periodTo);
+      const cmp = comparisonDifference({
+        bankClose,
+        bookClose: liveBook,
+        outstandingNet: Number(r.outstandingNet ?? 0),
+      });
+      items.push({
         id: r.id,
         bankAccountId: r.bankAccountId,
         bankName: bank?.name ?? 'Bank',
@@ -1345,11 +1424,13 @@ export async function listReconciliationSessions(): Promise<ReconSessionListItem
         bankLineCount: r.bankLineCount,
         resolvedCaseCount: r.resolvedCaseCount,
         openCaseCount: r.openCaseCount,
-        differenceAmount: Number(r.differenceAmount),
+        differenceAmount: cmp.difference,
+        differenceVerified: cmp.verified,
         progressPct: Math.min(100, Math.round((resolved / total) * 100)),
         updatedAt: r.updatedAt.toISOString(),
-      };
-    });
+      });
+    }
+    return items;
   });
 }
 
@@ -1723,6 +1804,7 @@ export async function openReconciliationSession(
         resolvedCaseCount: session.resolvedCaseCount,
         openCaseCount: session.openCaseCount,
         differenceAmount: Number(session.differenceAmount),
+        differenceVerified: false,
         progressPct: Math.min(
           100,
           Math.round((session.resolvedCaseCount / total) * 100),
@@ -1742,7 +1824,13 @@ export async function openReconciliationSession(
       };
 
       const revBankClose = listItem.statementClosingBalance;
-      const revBookClose = listItem.bookClosingBalance;
+      const liveBook = await bookBalanceThrough(
+        user.tenantId,
+        session.bankAccountId,
+        session.periodTo,
+      );
+      const revBookClose = liveBook;
+      listItem.bookClosingBalance = liveBook;
       const revOutstanding = listItem.outstandingNet;
       const finishEval = finishEligibility({
         openCases: allCases.map((c) => ({ caseType: c.caseType, state: c.state })),
@@ -1754,6 +1842,8 @@ export async function openReconciliationSession(
       });
       const revDiff = finishEval.difference;
       const finishBlockers = finishEval.blockers;
+      listItem.differenceAmount = revDiff;
+      listItem.differenceVerified = finishEval.verified;
 
       const review: ReconReviewSummary = {
         bankLines: session.bankLineCount,
@@ -1785,6 +1875,7 @@ export async function openReconciliationSession(
         bookClosing: revBookClose,
         outstandingNet: revOutstanding,
         difference: revDiff,
+        differenceVerified: finishEval.verified,
         canFinish: finishBlockers.length === 0 && session.status !== 'reconciled',
         finishBlockers,
         status: session.status,
@@ -2070,8 +2161,6 @@ export async function createCaseEntry(input: {
 }): Promise<{ ok: true; transactionId: string } | { ok: false; error: string }> {
   try {
     const caseId = z.string().uuid().parse(input.caseId);
-    const expenseCode = (input.expenseCode ?? '6800').slice(0, 20);
-    const incomeCode = (input.incomeCode ?? '4300').slice(0, 20);
     const user = await requireTenantContext();
 
     const prepared = await withTenantContext(user.tenantId, async () => {
@@ -2144,7 +2233,17 @@ export async function createCaseEntry(input: {
     const isIn = signed > 0;
     const desc = (prepared.bankJoin.description || 'Bank statement').slice(0, 1000);
     const party = isIn ? 'Bank deposit' : 'Bank payment';
-    const catCode = isIn ? incomeCode : expenseCode;
+    const posting = await withTenantContext(user.tenantId, () => loadReconPostingAccounts(user.tenantId));
+    const eligible = isIn ? posting.income : posting.expenses;
+    const requested = (isIn ? input.incomeCode : input.expenseCode)?.trim().slice(0, 20);
+    const catCode =
+      requested && eligible.some((a) => a.code === requested)
+        ? requested
+        : pickDefaultPostingCode(eligible, isIn ? '4300' : '6800');
+    const postingAcct = eligible.find((a) => a.code === catCode);
+    if (!postingAcct || !isEligiblePostingAccount({ ...postingAcct, isActive: '1', isGroup: '0' }, isIn ? 'in' : 'out')) {
+      throw new Error('Pick a posting account from this company chart.');
+    }
     const payMethod =
       prepared.bankCode === '1000'
         ? 'Cash'
@@ -2235,6 +2334,7 @@ export async function createCaseEntry(input: {
           transactionId: entryResult.transactionId,
           bankLineId: prepared.bankJoin.bankLineId,
           category: catCode,
+          categoryLabel: postingAccountLabel(postingAcct),
         },
       });
       await refreshSessionCounts(user.tenantId, prepared.caseRow.sessionId);
@@ -3155,6 +3255,10 @@ export type CompareBoard = {
   bank: CompareSideRow[];
   book: CompareSideRow[];
   obviousCount: number;
+  posting: {
+    expenses: ReconPostingAccount[];
+    income: ReconPostingAccount[];
+  };
 };
 
 const OPEN_CASE_STATES = ['suggested', 'needs_review', 'deferred', 'reopened'] as const;
@@ -3320,11 +3424,13 @@ export async function getCompareBoard(
       const obviousCount = bankRows.filter(
         (r) => r.caseType === 'match_1_1' && r.confidence === 'strong' && r.state === 'suggested',
       ).length;
+      const posting = await loadReconPostingAccounts(user.tenantId);
 
       return {
         ok: true as const,
         board: {
           session: opened.detail.session,
+          posting,
           review: opened.detail.review ?? {
             bankLines: opened.detail.session.bankLineCount,
             matched: 0,
@@ -3338,6 +3444,7 @@ export async function getCompareBoard(
             bookClosing: opened.detail.session.bookClosingBalance,
             outstandingNet: opened.detail.session.outstandingNet,
             difference: opened.detail.session.differenceAmount,
+            differenceVerified: opened.detail.session.differenceVerified,
             canFinish: false,
             finishBlockers: [],
             status: opened.detail.session.status,

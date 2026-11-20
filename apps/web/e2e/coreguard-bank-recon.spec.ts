@@ -84,10 +84,19 @@ test('ISO import matches existing entries without journals, then finishes after 
     await afterImport.end({ timeout: 5 });
   }
 
-  await page.getByRole('link', { name: 'Reconcile now' }).click();
+  await page.goto('/reconciliation');
+  const inboxDiff = page.getByTestId('recon-inbox-difference').first();
+  await expect(inboxDiff).toBeVisible({ timeout: 30_000 });
+  await expect(inboxDiff).toContainText('85.00');
+  await expect(inboxDiff).not.toContainText('Unverified');
+  await expect(inboxDiff).not.toHaveText('Rs. 0.00');
+  await page.locator('a[href^="/reconciliation/session/"]').first().click();
+
   await expect(page.getByTestId('brc-bank-pane')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Bank statement' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'BookOne records' })).toBeVisible();
+  await expect(page.getByTestId('brc-difference')).toContainText('85.00');
+  await expect(page.getByTestId('brc-difference')).not.toContainText('Unverified');
   await expect(page.getByText('Possible match').first()).toBeVisible();
   await expect(page.getByText('Bank only').first()).toBeVisible();
   await expect(page.getByText('BookOne only').first()).toBeVisible();
@@ -100,6 +109,15 @@ test('ISO import matches existing entries without journals, then finishes after 
   }
   await expect(page.getByText('Possible match')).toHaveCount(0, { timeout: 15_000 });
 
+  const sessionMatch = page.url().match(/\/reconciliation\/session\/([^/?#]+)/);
+  expect(sessionMatch?.[1]).toBeTruthy();
+  await page.goto(`/reconciliation/session/${sessionMatch![1]}/guided`);
+  await expect(page.getByRole('button', { name: 'Search BookOne' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Add to BookOne' })).toHaveCount(0);
+  await expect(page.getByText('Search BookOne first')).toBeVisible();
+  await page.goto(`/reconciliation/session/${sessionMatch![1]}`);
+  await expect(page.getByTestId('brc-bank-pane')).toBeVisible({ timeout: 30_000 });
+
   const afterMatch = openLedger(databaseUrl);
   try {
     expect(await journalCount(afterMatch, tenantId)).toBe(oracle.afterImportMatch.journals);
@@ -110,6 +128,8 @@ test('ISO import matches existing entries without journals, then finishes after 
   await page.getByText('Bank only').first().click();
   await page.getByRole('button', { name: 'Search BookOne' }).click();
   await pickSelect(page, 'Category', fixture.expense.code);
+  await expect(page.getByRole('combobox', { name: 'Category' })).toContainText('General Expense');
+  await expect(page.getByRole('combobox', { name: 'Category' })).not.toContainText('Bank fees');
   await page.getByRole('button', { name: 'Create in BookOne' }).click();
   await page.getByRole('button', { name: 'Create entry' }).click();
   await expect(page.getByText('Added to BookOne')).toBeVisible({ timeout: 20_000 });

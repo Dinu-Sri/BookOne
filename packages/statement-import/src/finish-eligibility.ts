@@ -9,8 +9,29 @@ const OPEN_STATES = new Set(['suggested', 'needs_review', 'deferred', 'reopened'
 export type FinishEligibility = {
   ok: boolean;
   difference: number;
+  verified: boolean;
   blockers: string[];
 };
+
+export type ComparisonDifference = {
+  verified: boolean;
+  difference: number;
+};
+
+/** Same formula as compare: bankClose − bookClose + outstandingNet. */
+export function comparisonDifference(input: {
+  bankClose: number | null;
+  bookClose: number | null;
+  outstandingNet: number;
+}): ComparisonDifference {
+  if (input.bankClose == null || input.bookClose == null) {
+    return { verified: false, difference: 0 };
+  }
+  return {
+    verified: true,
+    difference: Math.round((input.bankClose - input.bookClose + input.outstandingNet) * 100) / 100,
+  };
+}
 
 export function finishEligibility(input: {
   openCases: FinishCase[];
@@ -41,13 +62,18 @@ export function finishEligibility(input: {
     );
   }
 
-  const diff =
-    input.bankClose != null && input.bookClose != null
-      ? Math.round((input.bankClose - input.bookClose + input.outstandingNet) * 100) / 100
-      : Math.round((input.differenceAmount ?? 0) * 100) / 100;
-  if (Math.abs(diff) > tol) {
+  const cmp = comparisonDifference({
+    bankClose: input.bankClose,
+    bookClose: input.bookClose,
+    outstandingNet: input.outstandingNet,
+  });
+  if (!cmp.verified) {
+    blockers.push('No current comparison');
+  }
+  const diff = cmp.verified ? cmp.difference : Math.round((input.differenceAmount ?? 0) * 100) / 100;
+  if (cmp.verified && Math.abs(diff) > tol) {
     blockers.push(`Difference LKR ${diff.toFixed(2)} is unexplained`);
   }
 
-  return { ok: blockers.length === 0, difference: diff, blockers };
+  return { ok: blockers.length === 0, difference: diff, verified: cmp.verified, blockers };
 }

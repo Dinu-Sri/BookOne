@@ -15,14 +15,24 @@ import {
   confirmCaseMatch,
   createCaseEntry,
   listGuidedQueue,
+  listReconPostingAccounts,
   markCaseOutstanding,
+  matchBankToBook,
   rejectTransferCase,
+  searchBookForSession,
   undoCaseMatch,
   type ReconCaseRow,
+  type ReconPostingAccount,
   type ReconSessionListItem,
 } from '@/app/actions/bank-reconciliation';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SelectField } from '@/components/ui/select-field';
+import { TextField } from '@/components/ui/text-field';
 import { pushStatusToast } from '@/components/layout/status-toast';
+
+function catLabel(account: { code: string; name: string }) {
+  return `${account.code} · ${account.name}`;
+}
 
 function formatRs(n: number | null | undefined) {
   if (n == null || Number.isNaN(n)) return '-';
@@ -66,10 +76,19 @@ export function ReconciliationGuided({
   const [pending, startTransition] = useTransition();
   const [createConfirmId, setCreateConfirmId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  const [searchHits, setSearchHits] = useState<
+    { id: string; date: string; description: string; amountSigned: number }[]
+  >([]);
+  const [pickedBookId, setPickedBookId] = useState<string | null>(null);
+  const [cat, setCat] = useState('');
+  const [expenses, setExpenses] = useState<ReconPostingAccount[]>([]);
+  const [income, setIncome] = useState<ReconPostingAccount[]>([]);
 
   const reload = useCallback(() => {
     startTransition(() => {
-      listGuidedQueue(sessionId).then((res) => {
+      Promise.all([listGuidedQueue(sessionId), listReconPostingAccounts()]).then(([res, posting]) => {
         setReady(true);
         if (!res.ok) {
           setError(res.error);
@@ -79,6 +98,13 @@ export function ReconciliationGuided({
         setQueue(res.cases);
         setIdx((i) => Math.min(i, Math.max(0, res.cases.length - 1)));
         setError(null);
+        setSearchOpen(false);
+        setSearchHits([]);
+        setPickedBookId(null);
+        if (posting.ok) {
+          setExpenses(posting.expenses);
+          setIncome(posting.income);
+        }
       });
     });
   }, [sessionId]);
@@ -89,6 +115,19 @@ export function ReconciliationGuided({
 
   const current = queue[idx] ?? null;
   const total = queue.length;
+  const createIn = (current?.bank.amount ?? 0) > 0;
+  const postingList = createIn ? income : expenses;
+  const selectedCat = postingList.find((a) => a.code === cat);
+
+  useEffect(() => {
+    if (!current || (current.caseType !== 'create_entry' && current.caseType !== 'group_match')) return;
+    const list = (current.bank.amount ?? 0) > 0 ? income : expenses;
+    const preferred = (current.bank.amount ?? 0) > 0 ? '4300' : '6800';
+    setCat(list.some((a) => a.code === preferred) ? preferred : (list[0]?.code ?? ''));
+    setSearchOpen(false);
+    setSearchHits([]);
+    setPickedBookId(null);
+  }, [current, expenses, income]);
 
   function afterAction() {
     setInfo(null);
@@ -238,14 +277,100 @@ export function ReconciliationGuided({
               ) : null}
               {(current.caseType === 'create_entry' || current.caseType === 'group_match') &&
               current.state !== 'confirmed' ? (
-                <button
-                  type="button"
-                  className="bis-btn primary bis-btn-block"
-                  disabled={pending}
-                  onClick={() => setCreateConfirmId(current.id)}
-                >
-                  <Plus size={14} /> Add to BookOne
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="bis-btn primary bis-btn-block"
+                    disabled={pending}
+                    onClick={() => {
+                      startTransition(() => {
+                        searchBookForSession({
+                          sessionId,
+                          q: searchQ,
+                          targetAmount: current.bank.amount ?? undefined,
+                        }).then((res) => {
+                          if (!res.ok) {
+                            pushStatusToast({ kind: 'error', message: res.error });
+                            return;
+                          }
+                          setSearchHits(res.candidates);
+                          setSearchOpen(true);
+                        });
+                      });
+                    }}
+                  >
+                    Search BookOne
+                  </button>
+                  {searchOpen ? (
+                    <div className="brc-search" data-testid="brg-search">
+                      <TextField
+                        id="brg-search-q"
+                        label="Search BookOne"
+                        value={searchQ}
+                        onChange={(e) => setSearchQ(e.target.value)}
+                        placeholder="Amount, date, reference or description"
+                      />
+                      <ul>
+                        {searchHits.length === 0 ? (
+                          <li className="muted-line">No BookOne rows yet. Create the bank line if it is missing.</li>
+                        ) : (
+                          searchHits.map((hit) => (
+                            <li key={hit.id}>
+                              <button
+                                type="button"
+                                className={`brc-search-hit${pickedBookId === hit.id ? ' is-on' : ''}`}
+                                onClick={() => setPickedBookId(hit.id)}
+                              >
+                                <span>{formatDate(hit.date)}</span>
+                                <strong>{hit.description}</strong>
+                                <span>{formatRs(hit.amountSigned)}</span>
+                              </button>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="muted-line">Search BookOne first, then create if the line is missing.</p>
+                  )}
+                  {pickedBookId && current.bank.lineId ? (
+                    <button
+                      type="button"
+                      className="bis-btn secondary bis-btn-block"
+                      disabled={pending}
+                      onClick={() =>
+                        act(
+                          () =>
+                            matchBankToBook({
+                              sessionId,
+                              bankLineIds: [current.bank.lineId!],
+                              transactionIds: [pickedBookId],
+                            }),
+                          'Match confirmed.',
+                        )
+                      }
+                    >
+                      Confirm match
+                    </button>
+                  ) : null}
+                  <SelectField
+                    id="brg-create-cat"
+                    label="Category"
+                    value={cat}
+                    onChange={setCat}
+                    options={postingList.map((a) => ({ value: a.code, label: catLabel(a) }))}
+                    searchable={postingList.length >= 8}
+                    emptyReason="No eligible posting account on this company chart."
+                  />
+                  <button
+                    type="button"
+                    className="bis-btn secondary bis-btn-block"
+                    disabled={pending || !cat}
+                    onClick={() => setCreateConfirmId(current.id)}
+                  >
+                    <Plus size={14} /> Create in BookOne
+                  </button>
+                </>
               ) : null}
               {current.caseType === 'transfer' && current.state !== 'confirmed' ? (
                 <>
@@ -315,9 +440,13 @@ export function ReconciliationGuided({
 
       <ConfirmDialog
         open={!!createConfirmId}
-        title="Add to BookOne?"
-        message="Add this bank transaction to BookOne? It posts a cashbook entry (Other expense / Other income by default)."
-        confirmLabel="Add to BookOne"
+        title="Create this BookOne entry?"
+        message={
+          current
+            ? `Post ${formatRs(current.bank.amount)} as ${createIn ? 'income' : 'expense'} ${selectedCat ? catLabel(selectedCat) : cat}. This creates a journal.`
+            : 'Create a BookOne entry for this bank line?'
+        }
+        confirmLabel="Create entry"
         tone="primary"
         busy={pending}
         onCancel={() => setCreateConfirmId(null)}
@@ -325,11 +454,14 @@ export function ReconciliationGuided({
           const id = createConfirmId;
           setCreateConfirmId(null);
           if (!id) return;
+          const isIn = (current?.bank.amount ?? 0) > 0;
           act(
             () =>
-              createCaseEntry({ caseId: id }).then((r) =>
-                r.ok ? { ok: true as const } : r,
-              ),
+              createCaseEntry({
+                caseId: id,
+                expenseCode: isIn ? undefined : cat,
+                incomeCode: isIn ? cat : undefined,
+              }).then((r) => (r.ok ? { ok: true as const } : r)),
             'Added to BookOne.',
           );
         }}

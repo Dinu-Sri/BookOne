@@ -35,4 +35,17 @@ export {
 } from './unknown-labels';
 
 export { mappingIsConfident } from './studio-mapping';
-export { finishEligibility, type FinishCase, type FinishEligibility } from './finish-eligibility';
+export {
+  comparisonDifference,
+  finishEligibility,
+  type ComparisonDifference,
+  type FinishCase,
+  type FinishEligibility,
+} from './finish-eligibility';
+export {
+  eligiblePostingAccounts,
+  isEligiblePostingAccount,
+  pickDefaultPostingCode,
+  postingAccountLabel,
+  type PostingAccount,
+} from './posting-accounts';

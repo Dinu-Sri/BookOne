@@ -173,14 +173,18 @@ export function ReconciliationInbox({
                               </span>
                             </div>
                           </td>
-                          <td>
-                            <strong
-                              className={
-                                Math.abs(s.differenceAmount) > 0.009 ? 'text-warn' : 'text-ok'
-                              }
-                            >
-                              {formatRs(s.differenceAmount)}
-                            </strong>
+                          <td data-testid="recon-inbox-difference">
+                            {s.differenceVerified ? (
+                              <strong
+                                className={
+                                  Math.abs(s.differenceAmount) > 0.009 ? 'text-warn' : 'text-ok'
+                                }
+                              >
+                                {formatRs(s.differenceAmount)}
+                              </strong>
+                            ) : (
+                              <span className="bih-meta-inline">Unverified</span>
+                            )}
                           </td>
                           <td className="td-actions">
                             <Link href={`${sessionBase}/${s.id}`}>

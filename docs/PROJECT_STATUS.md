@@ -1,3 +1,7 @@
+## 2026-11-20 — CoreGuard Playwright commerce contract (v2.15.1)
+
+Candidate **2.15.1** on `fix/v2151-coreguard-commerce-playwright-contract` from origin/master `c3d742e` / v2.15.0. Docker web image `44720274005` and Production Check `44720274282` failed because the custom-bank Playwright contract required `coreguard-(custom-bank|bank-recon)` only. This candidate keeps commerce in CoreGuard Playwright and widens that contract. Regular e2e ignores the commerce spec. Commerce C1–C3 product behaviour is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce C1–C3 API, Woo plugin, HTTP client (v2.15.0)
 
 Candidate **2.15.0** on `feat/v2150-commerce-c1-c3` from origin/master `d66d0b5` / v2.14.4. Adds Company Commerce Integrations, Commerce API v1, durable order intake, WooCommerce plugin ZIP 1.0.0, and an independent HTTP test client. Default posting is preview. Oversell policy is review. Reservation mode is disabled. HTTP 2xx is not accounting acceptance. CoreGuard requires the HTTP last-unit 202 result. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

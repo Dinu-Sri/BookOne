@@ -1,3 +1,10 @@
+## 2026-11-20 — CoreGuard Playwright commerce contract (v2.15.1)
+
+- Record: [CHG-20261120-coreguard-commerce-playwright-contract](changes/CHG-20261120-coreguard-commerce-playwright-contract.md). Baseline product `c3d742e` / v2.15.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: custom-bank contract still requires Playwright `custom-bank` and `bank-recon` and now accepts `|commerce`. Regular e2e `testIgnore` excludes `coreguard-commerce.spec.ts`. Docker web image `44720274005` and Production Check `44720274282` failed `@bookone/auth` at the old exact regex. VERSION 2.15.1. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` custom-bank contract and commerce-gate. Commerce product behaviour is unchanged. Woo live checkout remains not-run.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent C4 store pilot. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce C1–C3 API, Woo plugin, HTTP client (v2.15.0)
 
 - Record: [CHG-20261120-commerce-c1-c3](changes/CHG-20261120-commerce-c1-c3.md). Baseline product `d66d0b5` / v2.14.4. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

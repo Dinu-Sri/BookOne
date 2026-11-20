@@ -58,6 +58,8 @@ describe('Commerce C1–C3 CoreGuard contracts', () => {
     expect(run).toMatch(/coreguard-commerce/);
     const playwright = read('apps/web/playwright.coreguard.config.ts');
     expect(playwright).toMatch(/commerce/);
+    const e2e = read('apps/web/playwright.config.ts');
+    expect(e2e).toMatch(/coreguard-\(custom-bank\|bank-recon\|commerce\)/);
     const docker = read('.github/workflows/docker-web.yml');
     expect(docker).toMatch(/needs: \[quality, coreguard\]/);
     expect(docker).toMatch(/@bookone\/commerce/);

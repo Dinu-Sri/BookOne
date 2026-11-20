@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { ConnectionKind, CommerceEnvironment, MappingInput } from '@bookone/commerce';
+import { parseScopes, type ConnectionKind, type CommerceEnvironment, type MappingInput } from '@bookone/commerce';
 import { authenticateCommerceRequest, operatorFromSession, withCommerceService } from '@/lib/commerce-runtime';
 
 export type CommerceActionResult =
@@ -80,7 +80,9 @@ export async function issueCommerceCredentialFromForm(formData: FormData): Promi
   const operator = await operatorFromSession();
   const connectionId = String(formData.get('connectionId') ?? '');
   try {
-    const issued = await withCommerceService(operator.tenantId, (service) => service.issueCredential(operator, connectionId));
+    const issued = await withCommerceService(operator.tenantId, (service) =>
+      service.issueCredential(operator, connectionId, parseScopes(formData.getAll('scope').map(String))),
+    );
     revalidatePath('/company/commerce');
     return { ok: true, token: issued.token, prefix: issued.prefix, connectionId };
   } catch (e) {
@@ -161,7 +163,12 @@ export async function applyCommerceMappingFromForm(formData: FormData) {
   const connectionId = String(formData.get('connectionId') ?? '');
   const mapping = mappingFromForm(formData);
   try {
-    await withCommerceService(operator.tenantId, (service) => service.applyMappings(operator, connectionId, [mapping]));
+    await withCommerceService(operator.tenantId, async (service) => {
+      const { items } = await service.previewMappings(operator, connectionId, [mapping]);
+      const issue = items.find((item) => item.issue)?.issue;
+      if (issue) throw new Error(issue);
+      return service.applyMappings(operator, connectionId, [mapping]);
+    });
   } catch (e) {
     rethrowNav(e);
     finish(formData, { err: e instanceof Error ? e.message : 'Could not apply the mapping.', tab: 'mapping' });

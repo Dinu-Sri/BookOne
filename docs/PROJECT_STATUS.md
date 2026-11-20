@@ -1,3 +1,7 @@
+## 2026-11-20 — Commerce first-visit and setup layout (v2.16.3)
+
+Candidate **2.16.3** on `feat/v2163-commerce-live-ui` from origin/master `3fdd9f7` / v2.16.2. First visit uses a heading, purpose sentence and one New connection action. Setup shows Create a connection → Connect your website → Map products and test sync. Connected stores use a compact header, distinct credential and posting sections, and readable Mapping/Activity tables. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce authorized posting ensures the customer without a session (v2.16.2)
 
 Candidate **2.16.2** on `fix/v2162-commerce-authorized-ensure-party` from origin/master `2771a1e` / v2.16.1. Docker web image `44736222130` HTTP last-unit was still 202 `needs_review` (`No authenticated session with tenant context`) because `ensureParty` read cookies. This candidate passes the connection owner into `ensureParty`. Commerce UI from v2.16.0 is unchanged. Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

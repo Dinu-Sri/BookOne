@@ -113,4 +113,16 @@ test('Viewer sees Chart of Accounts without write actions', async ({ page }) => 
   await expect(page.getByRole('link', { name: 'New account' })).toHaveCount(0);
   await page.goto('/accounts/new');
   await expect(page.getByRole('button', { name: 'Create account' })).toHaveCount(0);
+
+  // Verify Commerce using the same Viewer session so the shared sign-in limit remains exercised normally.
+  await page.goto('/company/commerce');
+  const commerceTitle = page.getByRole('heading', { name: 'Commerce Integrations' });
+  if (new URL(page.url()).pathname === '/company/commerce') {
+    await expect(commerceTitle).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Issue scoped key' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save pauses and posting' })).toBeDisabled();
+  } else {
+    await expect(commerceTitle).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Issue scoped key' })).toHaveCount(0);
+  }
 });

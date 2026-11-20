@@ -10247,6 +10247,12 @@ a.bih-card:hover {
 .form-shell.form-shell-wide {
   max-width: 56rem;
 }
+.commerce-workspace {
+  width: 100%;
+  max-width: min(72rem, 100%);
+  margin-inline: auto;
+  padding-inline: 0;
+}
 .commerce-workspace .form-shell.form-shell-wide {
   max-width: min(72rem, 100%);
   width: 100%;
@@ -10255,26 +10261,107 @@ a.bih-card:hover {
   flex: 0 0 auto;
   overflow: visible;
   min-height: 0;
+  min-width: 0;
+  gap: 16px;
 }
 .commerce-workspace .party-tabs {
   flex: 0 0 auto;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
 }
 .commerce-workspace .party-tab-panel {
   flex: 0 0 auto;
   overflow: visible;
   min-height: auto;
+  min-width: 0;
 }
-.commerce-connection-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px 16px;
+.commerce-page-head {
+  display: grid;
+  gap: 6px;
+  max-width: 42rem;
+}
+.commerce-page-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+.commerce-page-lead {
+  margin: 0;
+  color: var(--ink-muted);
+}
+.commerce-first-card,
+.commerce-setup-form,
+.commerce-empty-panel {
+  max-width: 42rem;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.commerce-empty-panel {
+  align-content: start;
+}
+.commerce-first-card .button,
+.commerce-empty-panel .button {
+  width: max-content;
+}
+.commerce-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.commerce-steps li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px 8px 12px;
+  border-left: 3px solid var(--line);
+}
+.commerce-steps li.is-done {
+  border-left-color: var(--brand);
+}
+.commerce-steps li.is-current {
+  border-left-color: var(--brand-strong);
+  background: var(--brand-soft);
+}
+.commerce-steps span {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+.commerce-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 16px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.commerce-fields > legend,
+.commerce-fields .field-full,
+.commerce-fields .party-form-footer {
+  grid-column: 1 / -1;
+}
+.commerce-fields > legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+.commerce-store-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  gap: 16px 20px;
+  align-items: start;
 }
 .commerce-connection-list {
   display: grid;
   gap: 10px;
-  margin-bottom: 12px;
+}
+.commerce-connection-list .button {
+  width: max-content;
 }
 .commerce-store-list {
   list-style: none;
@@ -10284,7 +10371,8 @@ a.bih-card:hover {
   gap: 6px;
 }
 .commerce-store-btn {
-  display: block;
+  display: grid;
+  gap: 2px;
   width: 100%;
   text-align: left;
   border: 1px solid var(--line);
@@ -10298,18 +10386,93 @@ a.bih-card:hover {
   border-color: color-mix(in srgb, var(--brand) 35%, transparent);
   background: var(--brand-soft);
 }
-.commerce-issued {
+.commerce-store-main {
   display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 12px;
+  gap: 14px;
+  min-width: 0;
+}
+.commerce-connection-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.commerce-badges,
+.commerce-header-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+.commerce-sync-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+.commerce-sync-facts dt {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.commerce-sync-facts dd {
+  margin: 0;
+}
+.commerce-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
+  gap: 14px;
+  align-items: start;
+}
+.commerce-card {
+  min-width: 0;
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
+  background: var(--surface);
+}
+.commerce-endpoints > p {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.commerce-scope-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+}
+.commerce-scope-list .field-help {
+  display: block;
+  margin-left: 1.5rem;
+}
+.commerce-key-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.commerce-key-list > li + li {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.commerce-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.commerce-table-scroll .commerce-table {
+  min-width: 32rem;
 }
 .commerce-table {
   width: 100%;
   border-collapse: collapse;
-  margin: 8px 0 14px;
+  margin: 0;
 }
 .commerce-table th,
 .commerce-table td {
@@ -10320,7 +10483,19 @@ a.bih-card:hover {
 }
 .commerce-section-title {
   font-size: 15px;
-  margin: 0 0 8px;
+  margin: 0;
+}
+@media (max-width: 1100px) {
+  .commerce-store-layout,
+  .commerce-split,
+  .commerce-sync-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 720px) {
+  .commerce-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .form-shell > .party-form-footer {
   padding: 12px 18px 16px;

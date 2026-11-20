@@ -1,3 +1,10 @@
+## 2026-11-20 — Commerce first-visit and setup layout (v2.16.3)
+
+- Record: [CHG-20261120-commerce-ui-followup](changes/CHG-20261120-commerce-ui-followup.md). Baseline product `3fdd9f7` / v2.16.2. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Empty Commerce shows a heading, purpose line, three setup stages and one New connection button. The form opens on click with Cancel. Connected stores use a compact header, separate credentials and posting, and Mapping/Activity tables. Location options use location type, not the name, for fleet ineligibility. Mapping apply revalidates the current preview. VERSION 2.16.3. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` commerce-gate and UI-02 lint. CoreGuard commerce heading, keyboard tabs, preview invalidation, last-unit posted. Woo live checkout remains not-run.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image green. Independent C4 store pilot. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Commerce authorized posting ensures the customer without a session (v2.16.2)
 
 - Record: [CHG-20261120-commerce-authorized-ensure-party](changes/CHG-20261120-commerce-authorized-ensure-party.md). Baseline product `2771a1e` / v2.16.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

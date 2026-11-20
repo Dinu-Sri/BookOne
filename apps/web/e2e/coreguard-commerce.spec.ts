@@ -5,8 +5,6 @@ import { proveCatalogStockOrder } from '../../../scripts/commerce/http-client';
 
 const ownerEmail = process.env.COREGUARD_BROWSER_OWNER_EMAIL ?? '';
 const ownerPassword = process.env.COREGUARD_BROWSER_OWNER_PASSWORD ?? '';
-const viewerEmail = process.env.COREGUARD_BROWSER_VIEWER_EMAIL ?? '';
-const viewerPassword = process.env.COREGUARD_BROWSER_VIEWER_PASSWORD ?? '';
 const httpToken = process.env.COREGUARD_COMMERCE_HTTP_TOKEN ?? '';
 const wooToken = process.env.COREGUARD_COMMERCE_WOO_TOKEN ?? '';
 const base = `${process.env.AUTH_URL ?? 'http://127.0.0.1:3000'}/api/commerce/v1`;
@@ -21,23 +19,31 @@ async function login(page: Page, email: string, password: string) {
   await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30_000 });
 }
 
-test('commerce company UI issues a key once and denies the viewer', async ({ page }) => {
+test('Commerce settings support keyboard tabs and invalidate an edited mapping preview', async ({ page }) => {
   await login(page, ownerEmail, ownerPassword);
   await page.goto('/company/commerce');
-  await expect(page.getByRole('main').getByText('Commerce Integrations')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Commerce Integrations' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Issue scoped key' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('tab', { name: 'Connections' })).toBeVisible();
-  await page.setViewportSize({ width: 1440, height: 900 });
-  if (viewerEmail && viewerPassword) {
-    await page.goto('/login');
-    await login(page, viewerEmail, viewerPassword);
-    await page.goto('/company/commerce');
-    const issue = page.getByRole('button', { name: 'Issue scoped key' });
-    if (await issue.count()) {
-      await expect(issue).toBeDisabled();
-    }
-  }
+  const connections = page.getByRole('tab', { name: 'Connections' });
+  await expect(connections).toBeVisible();
+  await connections.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Mapping' })).toBeFocused();
+  await expect(page.getByRole('tabpanel', { name: 'Mapping' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeDisabled();
+  const product = page.getByRole('combobox', { name: 'BookOne product' });
+  await product.click();
+  await page.getByRole('option', { name: /^SKU-1 ·/ }).click();
+  const external = page.getByRole('textbox', { name: 'Store product ID' });
+  await external.fill('ui-preview-test');
+  await page.getByRole('button', { name: 'Preview mapping' }).click();
+  await expect(page.getByRole('heading', { name: 'Mapping preview' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeEnabled();
+  await external.fill('changed-after-preview');
+  await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeDisabled();
+  await page.getByRole('tab', { name: 'Mapping' }).press('End');
+  await expect(page.getByRole('tabpanel', { name: 'Activity' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test('headless HTTP client sells the last unit once and replays without a second post', async () => {

@@ -66,7 +66,10 @@ describe('Commerce C1–C3 CoreGuard contracts', () => {
     const spec = read('apps/web/e2e/coreguard-commerce.spec.ts');
     expect(spec).toMatch(/COREGUARD_ROOT/);
     expect(spec).toMatch(/commerce-results\.json/);
-    expect(spec).toMatch(/getByRole\('main'\)\.getByText\('Commerce Integrations'\)/);
+    expect(spec).toMatch(/getByRole\('heading', \{ name: 'Commerce Integrations' \}\)/);
+    const commerceUi = read('apps/web/src/components/commerce/company-commerce.tsx');
+    expect(commerceUi).toMatch(/Connect your website so BookOne can share stock levels and receive orders/);
+    expect(commerceUi).toMatch(/Map products and test sync/);
     expect(spec).toMatch(/toBe\('posted'\)/);
     expect(spec).toMatch(/toBe\('0'\)/);
     const actions = read('apps/web/src/app/actions/commerce.ts');

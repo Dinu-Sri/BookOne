@@ -40,7 +40,11 @@ export default async function CompanyCommercePage({
         initialTab={query.tab === 'mapping' || query.tab === 'activity' ? query.tab : 'connections'}
         initialConnectionId={query.connection ?? ''}
         apiBase={origin ? `${origin.replace(/\/$/, '')}/api/commerce/v1` : '/api/commerce/v1'}
-        locations={(company?.locations ?? []).map((l) => ({ id: l.id, name: l.name }))}
+        locations={(company?.locations ?? []).map((l) => ({
+          id: l.id,
+          name: l.name,
+          locationType: l.locationType,
+        }))}
         products={products.map((p) => ({ id: p.id, sku: p.sku, name: p.name }))}
         connections={view.map((row) => ({
           id: row.connection.id,

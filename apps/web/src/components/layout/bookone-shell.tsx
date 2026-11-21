@@ -247,7 +247,6 @@ export function BookOneShell({
             active={active}
             openSuite={openSuite}
             onOpenSuite={setOpenSuite}
-            accessByLabel={tenant?.accessByLabel}
           />
         </div>
         <div className="sidebar-identity">

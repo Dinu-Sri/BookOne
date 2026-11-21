@@ -1,3 +1,10 @@
+## 2026-11-21 — Single-line sidebar nav rows (v2.17.2)
+
+- Record: [CHG-20261121-sidebar-single-line.md](changes/CHG-20261121-sidebar-single-line.md). Baseline product `b2e6ca2` / v2.17.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: Sidebar children render icon and name on one aligned line. Visible “View only”, “Opens in a new tab”, “Dispatch Note”, “Terminal”, and Cashbook “Personal · Business” subtitles are gone. Documentation still uses `target="_blank"` plus `aria-label="Documentation (opens in a new tab)"` and the external-link icon. Inbox/CoA/Team keep on-screen View only copy. VERSION 2.17.2. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` `test/ui-nav-01.test.ts` **11 passed** (single-line source locks, docs new-tab announcement, screen View only copy retained, Owner/Viewer filterVisibleSuites). Playwright `ui-nav-01.spec.ts` **11 passed**: last Accounting child inside panel; consistent single-line height; Owner/Viewer rows match without View only; closed panel `inert`; keyboard focus; 1366×600 nav scroll; zoom 125/150/200; 1440/1366/768/390 last child reachable; collapsed titles; Documentation popup leaves the original tab; long names ellipsis with full accessible name. Docs history spec still skips unless `UI_NAV_BASE_URL` is set. Staging Owner/Viewer login remains LIVE-UNVERIFIED.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image **Build & push** is green. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-21 — Documentation navigation freeze repair (v2.17.1)
 
 - Record: [CHG-20261121-docs-theme-navigation.md](changes/CHG-20261121-docs-theme-navigation.md). Baseline product `6067a89` / v2.17.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

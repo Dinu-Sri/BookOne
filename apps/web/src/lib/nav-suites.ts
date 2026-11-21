@@ -25,7 +25,6 @@ import {
 
 export type NavItem = {
   label: string;
-  subtitle?: string;
   icon: LucideIcon;
   href?: string;
 };
@@ -40,7 +39,6 @@ export type NavSuite = {
 
 export const CASHBOOK_NAV_ITEM: NavItem = {
   label: 'Cashbook',
-  subtitle: 'Personal · Business',
   icon: BookOpen,
   href: '/cashbook',
 };
@@ -85,12 +83,12 @@ export const NAV_SUITES: NavSuite[] = [
     icon: ShoppingCart,
     items: [
       { label: 'Quotations', icon: FileText, href: '/sales/quotations' },
-      { label: 'Sales Orders', subtitle: 'Dispatch Note', icon: ClipboardList, href: '/sales/orders' },
+      { label: 'Sales Orders', icon: ClipboardList, href: '/sales/orders' },
       { label: 'Sales Invoices', icon: ReceiptText, href: '/sales/invoices' },
       { label: 'Receive Payments', icon: Landmark, href: '/sales/payments' },
       { label: 'AR Aging', icon: CalendarDays, href: '/sales/aging' },
       { label: 'Sales Returns', icon: BookOpenCheck, href: '/sales/returns' },
-      { label: 'POS', subtitle: 'Terminal', icon: ShoppingCart, href: '/pos' },
+      { label: 'POS', icon: ShoppingCart, href: '/pos' },
       { label: 'POS History', icon: ReceiptText, href: '/sales/pos' },
       { label: 'Discounts', icon: Calculator, href: '/sales/discounts' },
     ],

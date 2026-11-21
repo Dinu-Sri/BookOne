@@ -10,7 +10,6 @@ import { modulesForPlan } from '../../../apps/web/src/lib/platform-modules';
 
 type NavItem = {
   label: string;
-  subtitle?: string;
   icon: NavSuite['icon'];
   href?: string;
 };
@@ -44,7 +43,7 @@ const accounting = suite('accounting', [
 ]);
 const sales = suite('sales', [
   item('Sales Invoices', '/sales/invoices'),
-  item('POS', '/pos', { subtitle: 'Terminal' }),
+  item('POS', '/pos'),
   item('POS History', '/sales/pos'),
 ]);
 const company = suite('company', [
@@ -63,7 +62,7 @@ const control = suite(
 );
 
 const allSuites = [accounting, sales, company, inventory, control];
-const cashbookItem = item('Cashbook', '/cashbook', { subtitle: 'Personal · Business' });
+const cashbookItem = item('Cashbook', '/cashbook');
 const fullModules = {
   sales: true,
   purchase: true,
@@ -108,6 +107,37 @@ describe('UI-NAV-01 clipping reproduction', () => {
     expect(list).toContain('inert={!isOpen');
     expect(css).not.toContain('.nav-tile-grid');
     expect(css).not.toContain('.nav-mode-toggle');
+  });
+
+  it('sidebar rows are a single icon+name line without secondary text', () => {
+    const css = readRepo('apps/web/src/app/globals.css');
+    const list = readRepo('apps/web/src/components/layout/sidebar-nav.tsx');
+    const suites = readRepo('apps/web/src/lib/nav-suites.ts');
+    const spec = readRepo('apps/web/e2e/ui-nav-01.spec.ts');
+    expect(list).not.toContain('View only');
+    expect(list).not.toContain('Opens in a new tab');
+    expect(list).toContain('opens in a new tab');
+    expect(list).not.toContain('showNewTabHint');
+    expect(list).not.toContain('nav-item-sub');
+    expect(list).not.toContain('nav-child-multi');
+    expect(list).not.toContain('accessByLabel');
+    expect(css).not.toContain('.nav-item-sub');
+    expect(css).not.toContain('.nav-child-multi');
+    expect(css).not.toContain('.nav-new-tab-hint');
+    expect(css).toContain('text-overflow: ellipsis');
+    expect(suites).not.toMatch(/\bsubtitle\b/);
+    expect(suites).not.toContain('Dispatch Note');
+    expect(suites).not.toContain("'Terminal'");
+    expect(suites).not.toContain('Personal · Business');
+    expect(spec).toContain('Accounting children share one consistent single-line row height');
+    expect(spec).toContain('Documentation (opens in a new tab)');
+  });
+
+  it('keeps screen-level read-only guidance outside the sidebar', () => {
+    const inbox = readRepo('apps/web/src/app/purchase/inbox/page.tsx');
+    const coa = readRepo('apps/web/src/components/accounts/coa-manager.tsx');
+    expect(inbox).toContain('View only. You can open documents but not upload.');
+    expect(coa).toContain('View only — archive needs Accounts write.');
   });
 });
 

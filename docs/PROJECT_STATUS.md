@@ -1,3 +1,7 @@
+## 2026-11-21 — Single-line sidebar nav rows (v2.17.2)
+
+Candidate **2.17.2** on `fix/v2172-sidebar-single-line` from origin/master `b2e6ca2` / v2.17.1. Sidebar children show icon and name on one aligned line. Visible nav subtitles including View only and Opens in a new tab are removed. Documentation still opens in a new tab with an external-link icon and screen-reader announcement. See [CHG-20261121-sidebar-single-line](changes/CHG-20261121-sidebar-single-line.md). Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-21 — Documentation navigation freeze repair (v2.17.1)
 
 Candidate **2.17.1** on `fix/v2171-docs-theme-navigation` from origin/master `6067a89` / v2.17.0. The docs theme observer skips class/`data-theme` writes that already match, so `/docs` child pages stay responsive after the URL updates. See [CHG-20261121-docs-theme-navigation](changes/CHG-20261121-docs-theme-navigation.md). Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

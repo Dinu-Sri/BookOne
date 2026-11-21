@@ -1,3 +1,7 @@
+## 2026-11-21 — Documentation navigation freeze repair (v2.17.1)
+
+Candidate **2.17.1** on `fix/v2171-docs-theme-navigation` from origin/master `6067a89` / v2.17.0. The docs theme observer skips class/`data-theme` writes that already match, so `/docs` child pages stay responsive after the URL updates. See [CHG-20261121-docs-theme-navigation](changes/CHG-20261121-docs-theme-navigation.md). Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.
+
 ## 2026-11-20 — Docs, Commerce API, AgentBridge mapping, BookOne-first catalog (v2.17.0)
 
 Candidate **2.17.0** on `feat/v2170-docs-api-mcp-catalog` (CI follow-up after `29f56c6` lint/ab04 red). Baseline origin/master `e6df41c` / v2.16.4. Public Developers & Integrations docs, Commerce OpenAPI 3.1 catalog bootstrap, AgentBridge mapping tools behind a separate grant, Woo plugin 1.2.0 draft publish, migration 051. Woo live checkout remains not-run. Real Codex/Claude mapping discovery is LIVE-UNVERIFIED. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

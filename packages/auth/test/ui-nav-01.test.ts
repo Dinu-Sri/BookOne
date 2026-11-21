@@ -133,6 +133,12 @@ describe('UI-NAV-01 documentation link and theme isolation', () => {
     expect(css).not.toContain('body:has(#nd-docs-layout)');
     expect(boundary).toContain("html.className = previousClass");
     expect(boundary).toContain('bookone-docs');
+    expect(boundary).toContain('if (!html.classList.contains(cls)) html.classList.add(cls)');
+    expect(boundary).toContain("root.classList.contains('dark') !== dark");
+    expect(boundary).toContain("root.getAttribute('data-theme') !== theme");
+    const docsSpec = readRepo('apps/web/e2e/ui-nav-01-docs.spec.ts');
+    expect(docsSpec).toContain("name: 'Developers & Integrations'");
+    expect(docsSpec).toContain("name: 'Custom Website API'");
   });
 });
 

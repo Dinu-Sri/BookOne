@@ -5,6 +5,20 @@ const BASE = process.env.UI_NAV_BASE_URL;
 test.describe('UI-NAV-01 docs history isolation', () => {
   test.skip(!BASE, 'Set UI_NAV_BASE_URL to a running BookOne origin to exercise Next history.');
 
+  test('public docs stay responsive across child page links and history', async ({ page }) => {
+    await page.goto(`${BASE}/docs`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#bookone-docs')).toBeVisible();
+    await page.locator('#nd-page').getByRole('link', { name: 'Developers & Integrations', exact: true }).click();
+    await expect(page).toHaveURL(/\/docs\/developers$/);
+    await page.locator('#nd-page').getByRole('link', { name: 'Custom Website API', exact: true }).click();
+    await expect(page).toHaveURL(/\/docs\/developers\/custom-website$/);
+    // A URL/title update alone can happen before the renderer becomes unresponsive.
+    await expect(page.locator('#nd-page').getByRole('heading', { name: 'Custom Website API', exact: true }).first()).toBeVisible();
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/docs\/developers$/);
+    await expect(page.locator('#nd-page').getByRole('link', { name: 'WooCommerce', exact: true })).toBeVisible();
+  });
+
   test('same-tab docs then Back restores login layout tokens', async ({ page }) => {
     test.skip(!BASE);
     const origin = BASE as string;

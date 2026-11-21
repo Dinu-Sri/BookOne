@@ -1,3 +1,10 @@
+## 2026-11-21 — Documentation navigation freeze repair (v2.17.1)
+
+- Record: [CHG-20261121-docs-theme-navigation.md](changes/CHG-20261121-docs-theme-navigation.md). Baseline product `6067a89` / v2.17.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.
+- Repair: `DocsThemeBoundary` no longer re-adds an already-present html class or rewrites `#bookone-docs` theme attributes that already match. Chromium was looping MutationObserver callbacks after a no-op `classList.add`, so `/docs` child links updated the URL and then stopped answering clicks. VERSION 2.17.1. CATALOG_VERSION stays 2. CoreGuard version stays `ab-11`.
+- Checks: `@bookone/auth` ui-nav-01 source lock on guarded class/`data-theme` writes. Playwright `ui-nav-01-docs.spec.ts` covers Developers → Custom Website API → Back; that case skips unless `UI_NAV_BASE_URL` is set.
+- Next: Reviewable PR, then fast-forward origin/master. Owner Portainer Re-pull ON after Docker web image **Build & push** is green. Do not enable AgentBridge posting. Backup last. BookOne is not customer-ready.
+
 ## 2026-11-20 — v2.17.0 CI follow-up (mapping combobox above catalog publish)
 
 - Record: [CHG-20261120-docs-api-mcp-catalog](changes/CHG-20261120-docs-api-mcp-catalog.md). Same VERSION 2.17.0. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

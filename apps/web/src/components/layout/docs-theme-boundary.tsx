@@ -25,13 +25,18 @@ export function DocsThemeBoundary({ children }: { children: ReactNode }) {
     const root = document.getElementById(DOCS_ROOT_ID);
 
     const sync = () => {
-      for (const cls of preserved) html.classList.add(cls);
+      // A no-op DOMTokenList.add can still enqueue a class mutation in Chromium.
+      // Only write if needed so the observer cannot trigger itself indefinitely.
+      for (const cls of preserved) {
+        if (!html.classList.contains(cls)) html.classList.add(cls);
+      }
       if (!html.classList.contains('light') && !html.classList.contains('dark')) {
         html.classList.add('light');
       }
       const dark = html.classList.contains('dark');
-      root?.classList.toggle('dark', dark);
-      root?.setAttribute('data-theme', dark ? 'dark' : 'light');
+      const theme = dark ? 'dark' : 'light';
+      if (root && root.classList.contains('dark') !== dark) root.classList.toggle('dark', dark);
+      if (root && root.getAttribute('data-theme') !== theme) root.setAttribute('data-theme', theme);
     };
 
     sync();

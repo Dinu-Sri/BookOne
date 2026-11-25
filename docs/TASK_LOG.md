@@ -1,3 +1,7 @@
+## 2026-11-25 — Entrypoint uses additive schema push (v2.17.7)
+
+- v2.17.6 entrypoint still ran `drizzle-kit push --force` directly; now runs `scripts/push-additive.ts`. Test locks the entrypoint. See [CHG-20261125-coa-links-additive-push](changes/CHG-20261125-coa-links-additive-push.md).
+
 ## 2026-11-25 — Company CoA names, per-host links, additive schema push (v2.17.6)
 
 - Record: [CHG-20261125-coa-links-additive-push.md](changes/CHG-20261125-coa-links-additive-push.md). Baseline `6c870c6` / v2.17.5.

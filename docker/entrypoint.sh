@@ -20,10 +20,13 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
-echo "[1/3] Waiting for Postgres & pushing Drizzle schema..."
+echo "[1/3] Waiting for Postgres & pushing Drizzle schema (additive only)..."
 MIGRATE_OK=0
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  if pnpm --dir packages/db exec drizzle-kit push --force; then
+  # Additive-only sync (packages/db/scripts/push-additive.ts). Never
+  # `drizzle-kit push --force`: drizzle-kit 0.31 drops RLS policies, indexes and
+  # SQL-only tables that the SQL migrations in step [2/3] own.
+  if pnpm --dir packages/db exec tsx scripts/push-additive.ts; then
     echo "Schema push ok."
     MIGRATE_OK=1
     break
@@ -33,7 +36,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 if [ "$MIGRATE_OK" != "1" ]; then
-  echo "ERROR: drizzle-kit push failed after retries. Signup will fail until tables exist."
+  echo "ERROR: additive schema push failed after retries. Signup will fail until tables exist."
   echo "Check DATABASE_URL (postgres://USER:PASSWORD@postgres:5432/DBNAME)."
 fi
 

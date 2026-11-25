@@ -57,5 +57,13 @@ describe('additive drizzle push filter', () => {
     const pkg = JSON.parse(readFileSync(path.resolve(__dirname, '../../db/package.json'), 'utf8'));
     expect(pkg.scripts['db:migrate']).toBe('tsx scripts/push-additive.ts');
     expect(pkg.scripts['db:migrate']).not.toMatch(/--force/);
+
+    // docker/entrypoint.sh is what actually runs on every container start.
+    const entrypoint = readFileSync(path.resolve(__dirname, '../../../docker/entrypoint.sh'), 'utf8');
+    const commands = entrypoint
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#') && !line.trim().startsWith('echo'));
+    expect(commands.join('\n')).toMatch(/exec tsx scripts\/push-additive\.ts/);
+    expect(commands.join('\n')).not.toMatch(/drizzle-kit push/);
   });
 });

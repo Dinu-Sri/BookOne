@@ -42,3 +42,7 @@ Final product/QA SHAs belong in PR metadata and external run manifests after com
 ## UI/UX impact and existing-design compatibility
 
 No components or CSS changed. Visible effect: account names on Chart of Accounts/P&L for company tenants, and link hosts. Existing screens render the new names unchanged.
+
+## Follow-up v2.17.7 — entrypoint still called drizzle-kit directly
+
+Staging v2.17.6 log `[1/3]` still showed `No config path provided, using default 'drizzle.config.ts'` and no `[push-additive]` lines: `docker/entrypoint.sh` calls `pnpm --dir packages/db exec drizzle-kit push --force` directly, not `db:migrate`. v2.17.7 switches the entrypoint to `pnpm --dir packages/db exec tsx scripts/push-additive.ts` and `packages/auth/test/push-filter.test.ts` now locks the entrypoint command. Migration 052 and the link changes were already live in v2.17.6. `scripts/coreguard/run.ts` keeps a full push (throwaway test database).

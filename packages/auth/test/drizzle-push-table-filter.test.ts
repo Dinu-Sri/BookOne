@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// docker/entrypoint.sh runs `drizzle-kit push --force` on every web start.
+// v2.17.3 docker/entrypoint.sh ran `drizzle-kit push --force` on every web start.
 // Any table created by SQL migrations but missing from the Drizzle schema is
 // treated as extra and dropped. v2.17.3 (drizzle-kit 0.31) dropped all
 // Better Auth tables on staging this way. These locks keep every SQL-only

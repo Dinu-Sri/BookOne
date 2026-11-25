@@ -43,6 +43,7 @@ import {
 } from '@bookone/db';
 import { assertPermission, getMyAccess } from '@/lib/access';
 import { parseEntityKind } from '@/lib/entity-kind';
+import { publicOrigin } from '@/lib/public-origin';
 import { teamSeatCap } from '@/lib/team-seats';
 import { grantsHaveBillAndPay, teamSodArmed } from '@/lib/team-sod';
 
@@ -493,8 +494,7 @@ export async function inviteTeamMember(formData: FormData) {
       .returning({ id: tenantInvites.id });
     await audit(user.tenantId, user.id, 'CREATE', 'tenant_invites', invite.id, `Invited ${email} as ${job.name}.`);
     revalidateTeam();
-    const base = process.env.AUTH_URL || process.env.APP_URL || '';
-    const url = `${base.replace(/\/$/, '')}/invite/${token}`;
+    const url = `${await publicOrigin()}/invite/${token}`;
     return { ok: true as const, message: 'Invite created. Share this link with them.', url };
   });
 }

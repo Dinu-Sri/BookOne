@@ -17,6 +17,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { resolveActiveStyleSnapshot } from '@/app/actions/document-styles';
+import { publicOrigin } from '@/lib/public-origin';
 import {
   kindFromDocument,
   parseStyleSnapshot,
@@ -163,7 +164,7 @@ export async function getDocumentPrintModel(
         token = null;
       }
     }
-    const origin = (process.env.AUTH_URL || process.env.BETTER_AUTH_URL || '').replace(/\/$/, '');
+    const origin = await publicOrigin();
     const publicUrl = token && origin ? `${origin}/i/${token}` : null;
     if (style.showQr && publicUrl) {
       const { toQrDataUrl } = await import('@/lib/qr-dataurl');

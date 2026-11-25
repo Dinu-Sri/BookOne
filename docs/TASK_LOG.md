@@ -1,3 +1,10 @@
+## 2026-11-25 — Company CoA names, per-host links, additive schema push (v2.17.6)
+
+- Record: [CHG-20261125-coa-links-additive-push.md](changes/CHG-20261125-coa-links-additive-push.md). Baseline `6c870c6` / v2.17.5.
+- CoA: `coaRenamesForEntity` in onboarding + `052_company_coa_names.sql`. Links: `publicOrigin()` allowlisted host. Startup: `db:migrate` → `scripts/push-additive.ts` (pushSchema + `filterAdditive`), `pg` added to @bookone/db.
+- Checks: typecheck exit 0; 693 unit tests passed. Not run locally against Postgres.
+- Next: redeploy staging; check [1/3] log, pg_policies count across restart, new company sign-up CoA names.
+
 ## 2026-11-25 — Staging also served on staging.clossyan.com (v2.17.5)
 
 - Record: [CHG-20261125-staging-test-host.md](changes/CHG-20261125-staging-test-host.md). Baseline `3c1ceba` / v2.17.4.

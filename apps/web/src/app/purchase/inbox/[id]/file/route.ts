@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { getAgentBridgeService, loadAgentBridgeFlags } from '@/lib/agent-bridge-runtime';
+import { publicOrigin } from '@/lib/public-origin';
 
 export const runtime = 'nodejs';
 
@@ -9,7 +10,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   try {
     tenant = await getTenantInfo();
   } catch {
-    return NextResponse.redirect(new URL('/login', process.env.AUTH_URL || 'http://localhost:3000'));
+    return NextResponse.redirect(new URL('/login', (await publicOrigin()) || 'http://localhost:3000'));
   }
   const flags = await loadAgentBridgeFlags(tenant.id);
   if (!flags.enabled) return new NextResponse('Inbox is off.', { status: 404 });

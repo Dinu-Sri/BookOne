@@ -7,18 +7,21 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "drizzle-kit push --force",
+    "db:migrate": "tsx scripts/push-additive.ts",
     "db:seed": "tsx src/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:push:full": "drizzle-kit push --strict --verbose"
   },
   "dependencies": {
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.4",
+    "pg": "^8.22.0",
     "postgres": "^3.4.0",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.20.0",
     "dotenv": "^16.4.0",
     "tsx": "^4.19.0"
   }

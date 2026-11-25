@@ -1,3 +1,7 @@
+## 2026-11-25 — Company CoA names, per-host links, additive schema push (v2.17.6)
+
+Company workspaces created through sign-up no longer keep personal account names (6500 Healthcare → Office Supplies Expense; migration 052 repairs existing unposted accounts). Invite/print/redirect links use the host the user is on (allowlisted). Startup schema sync is additive-only: drizzle-kit 0.31 `push --force` had been dropping 92 RLS policies, disabling RLS on 92 tables and dropping 91 indexes on every boot before SQL migrations rebuilt them. See [CHG-20261125-coa-links-additive-push](changes/CHG-20261125-coa-links-additive-push.md).
+
 ## 2026-11-25 — Staging also served on staging.clossyan.com (v2.17.5)
 
 Traefik now routes `staging.clossyan.com` as well as `bookone.clossyan.com` to the staging web container, and Better Auth trusts both origins via `BETTER_AUTH_TRUSTED_ORIGINS`. Test accounts for agents/QA live on the staging.clossyan.com host. See [CHG-20261125-staging-test-host](changes/CHG-20261125-staging-test-host.md).

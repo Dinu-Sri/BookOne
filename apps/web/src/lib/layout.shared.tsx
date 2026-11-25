@@ -1,13 +1,12 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 
-/** Public ERP URL for "Open app" (works when docs are served on bookone-docs.* via proxy). */
+/**
+ * "Open app" from /docs. The docs here are served by the same app on every
+ * host, so a relative link keeps the user on the host (and session) they are
+ * on. The static docs site (apps/docs) builds its own absolute app link.
+ */
 function appHomeUrl(): string {
-  return (
-    process.env.AUTH_URL ||
-    process.env.BETTER_AUTH_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    '/'
-  );
+  return '/';
 }
 
 export function baseOptions(): BaseLayoutProps {

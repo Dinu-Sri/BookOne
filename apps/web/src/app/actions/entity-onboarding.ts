@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { chartOfAccountsForEntity, classifiedSeedValues } from '@bookone/accounting';
+import { chartOfAccountsForEntity, classifiedSeedValues, coaRenamesForEntity } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -89,6 +89,28 @@ export async function completeEntityOnboarding(input: {
             ...classifiedSeedValues(account),
           })),
         );
+      }
+
+      // Sign-up seeds the personal pack, so shared codes still carry personal
+      // names (6500 "Healthcare" instead of "Office Supplies Expense").
+      // Rename only untouched, unposted accounts.
+      const current = await db()
+        .select({
+          id: accounts.id,
+          code: accounts.code,
+          name: accounts.name,
+          hasPostings: sql<boolean>`EXISTS (SELECT 1 FROM journal_lines jl WHERE jl.account_id = ${accounts.id})`,
+        })
+        .from(accounts)
+        .where(eq(accounts.tenantId, user.tenantId));
+      const idByCode = new Map(current.map((a) => [a.code, a.id]));
+      for (const rename of coaRenamesForEntity(entityKind, current)) {
+        const id = idByCode.get(rename.code);
+        if (!id) continue;
+        await db()
+          .update(accounts)
+          .set({ name: rename.to, updatedAt: sql`NOW()` })
+          .where(and(eq(accounts.id, id), eq(accounts.name, rename.from)));
       }
     });
 

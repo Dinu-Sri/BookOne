@@ -1,3 +1,10 @@
+## 2026-11-25 — Staging also served on staging.clossyan.com (v2.17.5)
+
+- Record: [CHG-20261125-staging-test-host.md](changes/CHG-20261125-staging-test-host.md). Baseline `3c1ceba` / v2.17.4.
+- Change: staging web router matches `WEB_HOST` or `WEB_HOST_TEST` (default staging.clossyan.com); `BETTER_AUTH_TRUSTED_ORIGINS` passed through and parsed into Better Auth `trustedOrigins`.
+- Checks: `@bookone/auth` 173 passed; auth/web typecheck exit 0.
+- Next: redeploy staging; create ZZ-TEST account on staging.clossyan.com; smoke test.
+
 ## 2026-11-25 — Stop drizzle push dropping Better Auth tables (v2.17.4)
 
 - Record: [CHG-20261125-drizzle-push-auth-tables.md](changes/CHG-20261125-drizzle-push-auth-tables.md). Baseline `debf4f6` / v2.17.3.

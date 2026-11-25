@@ -1,3 +1,7 @@
+## 2026-11-25 — Staging also served on staging.clossyan.com (v2.17.5)
+
+Traefik now routes `staging.clossyan.com` as well as `bookone.clossyan.com` to the staging web container, and Better Auth trusts both origins via `BETTER_AUTH_TRUSTED_ORIGINS`. Test accounts for agents/QA live on the staging.clossyan.com host. See [CHG-20261125-staging-test-host](changes/CHG-20261125-staging-test-host.md).
+
 ## 2026-11-25 — Stop drizzle push dropping Better Auth tables (v2.17.4)
 
 **Staging incident in v2.17.3:** drizzle-kit 0.31 `push --force` dropped the seven `auth_*` tables (SQL-only, not in the Drizzle schema); migration 005 recreated them empty. Staging logins and sessions were wiped; BookOne users (10), tenants (13) and accounting data are intact. v2.17.4 adds `tablesFilter: ['*', '!auth_*']` to `packages/db/drizzle.config.ts` plus a regression test. See [CHG-20261125-drizzle-push-auth-tables](changes/CHG-20261125-drizzle-push-auth-tables.md). Users re-register with the same email to regain access. No staging DB backup exists. Production must not get v2.17.3 without this fix.

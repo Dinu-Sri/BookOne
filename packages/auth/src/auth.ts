@@ -19,6 +19,12 @@ export const auth = betterAuth({
   database: new Pool(databaseUrl ? { connectionString: databaseUrl } : undefined),
   secret: authSecret,
   baseURL: process.env.BETTER_AUTH_URL ?? process.env.AUTH_URL ?? process.env.APP_URL,
+  // Extra hosts that serve this same app (e.g. staging.clossyan.com beside
+  // bookone.clossyan.com). Comma-separated origins; empty means baseURL only.
+  trustedOrigins: (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   user: {
     modelName: 'auth_users',
   },

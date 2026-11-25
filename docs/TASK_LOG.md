@@ -1,3 +1,7 @@
+## 2026-11-25 — Additive push via pull + generateMigration (v2.17.8)
+
+- v2.17.7 additive push failed: drizzle-kit pushSchema drops bind params. Now pull snapshot + generateMigration + filterAdditive (idempotent IF NOT EXISTS). Verified read-only on staging: 359 → apply 8 no-op index creates, skip 351.
+
 ## 2026-11-25 — Entrypoint uses additive schema push (v2.17.7)
 
 - v2.17.6 entrypoint still ran `drizzle-kit push --force` directly; now runs `scripts/push-additive.ts`. Test locks the entrypoint. See [CHG-20261125-coa-links-additive-push](changes/CHG-20261125-coa-links-additive-push.md).

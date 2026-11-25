@@ -35,7 +35,26 @@ describe('additive drizzle push filter', () => {
       'CREATE INDEX "zz_new_tenant_idx" ON "zz_new" USING btree ("tenant_id");',
       'CREATE UNIQUE INDEX "zz_new_uq" ON "zz_new" USING btree ("tenant_id","id");',
     ];
-    expect(filterAdditive(additive).apply).toEqual(additive);
+    expect(filterAdditive(additive).apply).toEqual([
+      'CREATE TABLE IF NOT EXISTS "zz_new" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL, "tenant_id" uuid NOT NULL);',
+      'ALTER TABLE "parties" ADD COLUMN IF NOT EXISTS "nickname" varchar(80);',
+      'CREATE TYPE "public"."zz_status" AS ENUM(\'a\', \'b\');',
+      'ALTER TYPE "public"."zz_status" ADD VALUE IF NOT EXISTS \'c\';',
+      'CREATE INDEX IF NOT EXISTS "zz_new_tenant_idx" ON "zz_new" USING btree ("tenant_id");',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "zz_new_uq" ON "zz_new" USING btree ("tenant_id","id");',
+    ]);
+  });
+
+  it('turns drizzle "drop + recreate index" pairs into a harmless no-op', () => {
+    // Seen on staging: 8 SQL-created unique indexes whose definition text
+    // differs from src/schema. The drop is skipped; the create must not fail.
+    const { apply } = filterAdditive([
+      'DROP INDEX "tenant_roles_slug_uidx";',
+      'CREATE UNIQUE INDEX "tenant_roles_slug_uidx" ON "tenant_roles" USING btree ("tenant_id","slug");',
+    ]);
+    expect(apply).toEqual([
+      'CREATE UNIQUE INDEX IF NOT EXISTS "tenant_roles_slug_uidx" ON "tenant_roles" USING btree ("tenant_id","slug");',
+    ]);
   });
 
   it('applies constraints only for tables created in the same run', () => {

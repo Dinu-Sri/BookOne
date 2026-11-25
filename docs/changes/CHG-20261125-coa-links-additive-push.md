@@ -46,3 +46,9 @@ No components or CSS changed. Visible effect: account names on Chart of Accounts
 ## Follow-up v2.17.7 — entrypoint still called drizzle-kit directly
 
 Staging v2.17.6 log `[1/3]` still showed `No config path provided, using default 'drizzle.config.ts'` and no `[push-additive]` lines: `docker/entrypoint.sh` calls `pnpm --dir packages/db exec drizzle-kit push --force` directly, not `db:migrate`. v2.17.7 switches the entrypoint to `pnpm --dir packages/db exec tsx scripts/push-additive.ts` and `packages/auth/test/push-filter.test.ts` now locks the entrypoint command. Migration 052 and the link changes were already live in v2.17.6. `scripts/coreguard/run.ts` keeps a full push (throwaway test database).
+
+## Follow-up v2.17.8 — drizzle-kit pushSchema API drops bind parameters
+
+Staging v2.17.7 `[1/3]` failed all 10 retries with `DrizzleQueryError: Failed query: SELECT conname AS primary_key … $1::regnamespace … $2`. drizzle-kit 0.31 `pushSchema` wraps queries as `drizzleInstance.execute(sql.raw(query))` and discards the params, so the composite-primary-key lookup cannot run. The entrypoint continued to SQL migrations as designed (no drops; 376 "already exists" notices).
+
+v2.17.8 `push-additive.ts` instead runs `drizzle-kit pull` (read-only, CLI introspection) into a temp dir, then `generateMigration(prevSnapshot, generateDrizzleJson(schema))`, then `filterAdditive`. Verified read-only in the staging web container before shipping: 359 statements → apply 8, skip 351 (99 drop index, 92 disable rls, 92 drop policy, 35 drop constraint, 33 add constraint on existing table). The 8 are `CREATE UNIQUE INDEX` that drizzle wants to drop+recreate for definition-text differences; additive statements are now rewritten to `IF NOT EXISTS` (`idempotent()`), so they are no-ops. Test added.

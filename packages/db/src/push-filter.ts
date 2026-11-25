@@ -33,6 +33,21 @@ function kindOf(statement: string): string {
   return words.toLowerCase();
 }
 
+/**
+ * Make an additive statement idempotent. drizzle-kit pairs "drop + create"
+ * when it rebuilds an index whose definition text differs; we skip the drop,
+ * so the create must not fail on the existing name.
+ */
+export function idempotent(statement: string): string {
+  return statement
+    .replace(/^CREATE\s+(UNIQUE\s+)?INDEX\s+(?!IF\s+NOT\s+EXISTS)/i, (_m, u) => `CREATE ${u ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS `)
+    .replace(/^CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i, 'CREATE TABLE IF NOT EXISTS ')
+    .replace(/^CREATE\s+SCHEMA\s+(?!IF\s+NOT\s+EXISTS)/i, 'CREATE SCHEMA IF NOT EXISTS ')
+    .replace(/^CREATE\s+SEQUENCE\s+(?!IF\s+NOT\s+EXISTS)/i, 'CREATE SEQUENCE IF NOT EXISTS ')
+    .replace(/\bADD\s+COLUMN\s+(?!IF\s+NOT\s+EXISTS)/i, 'ADD COLUMN IF NOT EXISTS ')
+    .replace(/^(ALTER\s+TYPE\b[\s\S]*?\bADD\s+VALUE)\s+(?!IF\s+NOT\s+EXISTS)/i, '$1 IF NOT EXISTS ');
+}
+
 export function filterAdditive(statements: readonly string[]): PushFilterResult {
   const apply: string[] = [];
   const skipped: PushFilterResult['skipped'] = [];
@@ -53,7 +68,7 @@ export function filterAdditive(statements: readonly string[]): PushFilterResult 
       /^ALTER\s+TYPE\b[\s\S]*\bADD\s+VALUE\b/i.test(s) ||
       /^ALTER\s+TABLE\b[^;]*\bADD\s+COLUMN\b/i.test(s);
     if (additive) {
-      apply.push(s);
+      apply.push(idempotent(s));
       continue;
     }
     const table = s.match(TABLE_IN_ALTER)?.[1]?.toLowerCase();

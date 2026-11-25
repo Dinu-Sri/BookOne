@@ -61,3 +61,6 @@ debug_log.txt
 
 # Old project (archived)
 old-project/
+
+# Local test-account credentials for staging (never commit)
+.env.staging-test

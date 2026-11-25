@@ -1,3 +1,7 @@
+## 2026-11-25 — Dependency security upgrades (v2.17.3)
+
+Candidate **2.17.3** on `fix/v2173-dependency-security-upgrades` from origin/master `05bdd7c` / v2.17.2. Upgrades next 15.5.29, better-auth 1.7.28, drizzle-orm 0.45.4 / drizzle-kit 0.31.11, xlsx 0.20.3 (SheetJS CDN), vitest 4, plus pnpm overrides; `pnpm audit` goes from 68 advisories (7 critical) to 2 (1 moderate, 1 low). No source changes. See [CHG-20261125-dependency-security-upgrades](changes/CHG-20261125-dependency-security-upgrades.md). Deploy to staging first and check the entrypoint drizzle-kit push log. Login, Google OAuth, AgentBridge OAuth and XLSX import remain LIVE-UNVERIFIED. BookOne is not customer-ready.
+
 ## 2026-11-21 — Single-line sidebar nav rows (v2.17.2)
 
 Candidate **2.17.2** on `fix/v2172-sidebar-single-line` from origin/master `b2e6ca2` / v2.17.1. Sidebar children show icon and name on one aligned line. Visible nav subtitles including View only and Opens in a new tab are removed. Documentation still opens in a new tab with an external-link icon and screen-reader announcement. See [CHG-20261121-sidebar-single-line](changes/CHG-20261121-sidebar-single-line.md). Woo live checkout remains not-run. Owner deploys after the Docker web image is green. Independent staging QA pending. Do not replay CONT11 or the POS 118 refund. Restore remains unverified. Backup testing stays last. BookOne is not customer-ready.

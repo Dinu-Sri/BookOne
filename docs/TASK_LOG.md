@@ -1,3 +1,10 @@
+## 2026-11-25 — Dependency security upgrades (v2.17.3)
+
+- Record: [CHG-20261125-dependency-security-upgrades.md](changes/CHG-20261125-dependency-security-upgrades.md). Baseline product `05bdd7c` / v2.17.2.
+- Change: next ^15.5.29, better-auth ^1.7.28, drizzle-orm ^0.45.4, drizzle-kit ^0.31.11, xlsx 0.20.3 from cdn.sheetjs.com, vitest ^4.1.12, sharp ^0.35.5, zod ^4.6.7; root `pnpm.overrides` for postcss, nanoid, js-yaml, image-size, source-map-js, zod, postcss-selector-parser, vite; `@types/node` added to `@bookone/db`. VERSION 2.17.3.
+- Checks: `pnpm typecheck` exit 0; `pnpm test` **673 passed** (5 skipped); `pnpm --filter @bookone/web build` exit 0; `pnpm audit` 2 remaining (esbuild via drizzle-kit dev tooling, fast-xml-parser via AWS SDK). Not run: app against Postgres, drizzle-kit push diff, live login/OAuth/XLSX import.
+- Next: Reviewable PR, CI green, Owner deploys to staging with Re-pull ON, inspect entrypoint `[1/3]` push output, run staging smoke before production.
+
 ## 2026-11-21 — Single-line sidebar nav rows (v2.17.2)
 
 - Record: [CHG-20261121-sidebar-single-line.md](changes/CHG-20261121-sidebar-single-line.md). Baseline product `b2e6ca2` / v2.17.1. Keep existing company flags. Preserve the saved Codex `bookone` entry and original grant. Never replay CONT11, POS 118, Mission1/2, or consumed AgentBridge codes including requests `4b22d15c` and `7bf93de1`.

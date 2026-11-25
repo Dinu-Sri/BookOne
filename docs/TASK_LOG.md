@@ -1,3 +1,11 @@
+## 2026-11-25 — Stop drizzle push dropping Better Auth tables (v2.17.4)
+
+- Record: [CHG-20261125-drizzle-push-auth-tables.md](changes/CHG-20261125-drizzle-push-auth-tables.md). Baseline `debf4f6` / v2.17.3.
+- Incident: staging entrypoint `[1/3]` printed `[✓] Changes applied`; `[2/3]` showed no `already exists` notice for any `auth_*` table while `company_domains` (same file) had one. Staging Postgres: `auth_users`/`auth_accounts`/`auth_sessions`/`auth_members` = 0, `users` = 10, `tenants` = 13.
+- Fix: `tablesFilter: ['*', '!auth_*']` in `packages/db/drizzle.config.ts`. New `packages/auth/test/drizzle-push-table-filter.test.ts` fails if any SQL-only table is left unprotected. VERSION 2.17.4.
+- Checks: new test 3 passed (fails without the filter); `@bookone/auth` 173 passed; db/auth typecheck exit 0.
+- Next: Owner redeploys staging. Verify `auth_*` rows survive a web container restart. Consider a staging pg_dump schedule and dropping `--force`.
+
 ## 2026-11-25 — Dependency security upgrades (v2.17.3)
 
 - Record: [CHG-20261125-dependency-security-upgrades.md](changes/CHG-20261125-dependency-security-upgrades.md). Baseline product `05bdd7c` / v2.17.2.

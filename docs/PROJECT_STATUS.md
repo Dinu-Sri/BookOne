@@ -1,3 +1,7 @@
+## 2026-11-25 — Stop drizzle push dropping Better Auth tables (v2.17.4)
+
+**Staging incident in v2.17.3:** drizzle-kit 0.31 `push --force` dropped the seven `auth_*` tables (SQL-only, not in the Drizzle schema); migration 005 recreated them empty. Staging logins and sessions were wiped; BookOne users (10), tenants (13) and accounting data are intact. v2.17.4 adds `tablesFilter: ['*', '!auth_*']` to `packages/db/drizzle.config.ts` plus a regression test. See [CHG-20261125-drizzle-push-auth-tables](changes/CHG-20261125-drizzle-push-auth-tables.md). Users re-register with the same email to regain access. No staging DB backup exists. Production must not get v2.17.3 without this fix.
+
 ## 2026-11-25 — Dependency security upgrades (v2.17.3)
 
 Candidate **2.17.3** on `fix/v2173-dependency-security-upgrades` from origin/master `05bdd7c` / v2.17.2. Upgrades next 15.5.29, better-auth 1.7.28, drizzle-orm 0.45.4 / drizzle-kit 0.31.11, xlsx 0.20.3 (SheetJS CDN), vitest 4, plus pnpm overrides; `pnpm audit` goes from 68 advisories (7 critical) to 2 (1 moderate, 1 low). No source changes. See [CHG-20261125-dependency-security-upgrades](changes/CHG-20261125-dependency-security-upgrades.md). Deploy to staging first and check the entrypoint drizzle-kit push log. Login, Google OAuth, AgentBridge OAuth and XLSX import remain LIVE-UNVERIFIED. BookOne is not customer-ready.

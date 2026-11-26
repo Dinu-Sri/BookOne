@@ -100,7 +100,7 @@ export function OnboardingClient() {
             <strong>
               <GlossLabel k="company" si={si} /> (Pvt Ltd)
             </strong>
-            <span>Full company ERP — sales, purchase, stock, POS.</span>
+            <span>Company books — sales, purchase, banking, tax. Stock and POS are added on a higher plan.</span>
           </button>
         </div>
 

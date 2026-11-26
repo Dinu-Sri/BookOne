@@ -163,7 +163,8 @@ export async function POST(req: NextRequest) {
         400,
       );
     }
-    return NextResponse.redirect(denial);
+    // 303: the browser must GET the client callback, never re-POST the consent form (QA-1126-01).
+    return NextResponse.redirect(denial, 303);
   }
 
   const flags = await loadAgentBridgeFlags(user.tenantId);
@@ -229,7 +230,7 @@ export async function POST(req: NextRequest) {
         }),
       }),
     });
-    const redirect = NextResponse.redirect(authorizationCallbackUrl(redirectUri, { code, state, issuer }));
+    const redirect = NextResponse.redirect(authorizationCallbackUrl(redirectUri, { code, state, issuer }), 303);
     redirect.headers.set('X-BookOne-OAuth-Request-Id', requestId);
     return redirect;
   } catch {

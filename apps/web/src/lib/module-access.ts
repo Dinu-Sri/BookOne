@@ -1,6 +1,7 @@
 import { SCREEN_DEFS } from '@bookone/auth';
 import { getTenantInfo } from '@/app/actions/workspace';
-import { getMyAccess } from '@/lib/access';
+import { redirect } from 'next/navigation';
+import { getMyAccess, isPermissionError, withFlash } from '@/lib/access';
 import {
   canViewModule,
   canWriteModule,
@@ -62,7 +63,7 @@ export async function probeModuleWriteDetail(module: ModuleWriteKey): Promise<Mo
 export function moduleWriteDenialMessage(module: ModuleWriteKey, reason: ModuleWriteDenial): string {
   if (reason === 'module_off') {
     if (module === 'inventory') {
-      return 'This catalogue is view-only because Inventory is off for this company. Creating products, including rental items, needs Inventory enabled. Rental booking also needs the Rental module. Plan and modules are set in Control Room; this is not a missing Owner job grant.';
+      return 'This catalogue is view-only because Inventory is not part of this company’s plan. Stock, products and rental items come with the Growth or Pro plan; contact BookOne support to upgrade. Your job permissions are not the cause.';
     }
     if (module === 'rental') {
       return 'Rental dispatch and calendar writes need the Rental module enabled for this company. A rental product in the catalogue is not enough for booking, deposit, dispatch or return.';
@@ -73,4 +74,16 @@ export function moduleWriteDenialMessage(module: ModuleWriteKey, reason: ModuleW
     return 'This area is view-only on Sole lite. Upgrade to Sole full (or ask admin) to create or edit.';
   }
   return 'You do not have permission to create or edit here.';
+}
+
+/** `<form action>` variant of assertModuleWrite: refusal redirects with flash=denied_write (QA-1126-09). */
+export async function requireModuleWriteOrRedirect(module: ModuleWriteKey, dest: string): Promise<void> {
+  let denied = false;
+  try {
+    await assertModuleWrite(module);
+  } catch (err) {
+    if (!isPermissionError(err)) throw err;
+    denied = true;
+  }
+  if (denied) redirect(withFlash(dest, 'denied_write'));
 }

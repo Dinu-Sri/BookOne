@@ -13,7 +13,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { pushStatusToast } from '@/components/layout/status-toast';
 import { useRouter } from 'next/navigation';
 
-export function DiscountList({ rows: initialRows }: { rows: DiscountRow[] }) {
+export function DiscountList({ rows: initialRows, canWrite = true }: { rows: DiscountRow[]; canWrite?: boolean }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [rows, setRows] = useState(initialRows);
@@ -86,11 +86,13 @@ export function DiscountList({ rows: initialRows }: { rows: DiscountRow[] }) {
             autoComplete="off"
           />
         </div>
-        <Link href="/sales/discounts/new">
-          <Button variant="primary" type="button">
-            New discount
-          </Button>
-        </Link>
+        {canWrite ? (
+          <Link href="/sales/discounts/new">
+            <Button variant="primary" type="button">
+              New discount
+            </Button>
+          </Link>
+        ) : null}
       </div>
 
       <Card>
@@ -115,7 +117,7 @@ export function DiscountList({ rows: initialRows }: { rows: DiscountRow[] }) {
                     <th>Value</th>
                     <th>Active</th>
                     <th>Dates</th>
-                    <th />
+                    {canWrite ? <th /> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -138,6 +140,7 @@ export function DiscountList({ rows: initialRows }: { rows: DiscountRow[] }) {
                       <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                         {[r.startsOn, r.endsOn].filter(Boolean).join(' → ') || '—'}
                       </td>
+                      {canWrite ? (
                       <td>
                         <div className="party-row-actions">
                           <Link href={`/sales/discounts/${r.id}/edit`}>
@@ -163,6 +166,7 @@ export function DiscountList({ rows: initialRows }: { rows: DiscountRow[] }) {
                           </Button>
                         </div>
                       </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>

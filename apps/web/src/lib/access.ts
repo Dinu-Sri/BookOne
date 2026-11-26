@@ -108,3 +108,50 @@ export async function assertScreenAccessFromHeaders(): Promise<void> {
   const denied = pathname !== '/' && pathname !== dest;
   redirect(denied ? `${dest}?denied=1` : dest);
 }
+
+/** Thrown message for every permission refusal; callers match on it. */
+export const PERMISSION_DENIED_MESSAGE = 'You do not have permission to do that.';
+
+export function isPermissionError(err: unknown): boolean {
+  return err instanceof Error && /permission|view-only|write access/i.test(err.message);
+}
+
+/**
+ * Write gate for `<form action>` server actions: a refused job is sent back to
+ * `dest?flash=denied_write` instead of surfacing as an HTTP 500 (QA-1126-09).
+ */
+export async function requireWriteOrRedirect(key: string, dest: string): Promise<void> {
+  let denied = false;
+  try {
+    await assertPermission(key, 'write');
+  } catch (err) {
+    if (!isPermissionError(err)) throw err;
+    denied = true;
+  }
+  if (denied) redirect(withFlash(dest, 'denied_write'));
+}
+
+export function withFlash(dest: string, flash: string): string {
+  const hashAt = dest.indexOf('#');
+  const path = hashAt >= 0 ? dest.slice(0, hashAt) : dest;
+  const hash = hashAt >= 0 ? dest.slice(hashAt) : '';
+  return `${path}${path.includes('?') ? '&' : '?'}flash=${flash}${hash}`;
+}
+
+/**
+ * Non-throwing write check for server actions that return `{ ok:false, error }`.
+ * `postingAnyOf` additionally requires one posting grant (actions that create a journal).
+ */
+export async function writeDeniedMessage(key: string, postingAnyOf?: string[]): Promise<string | null> {
+  try {
+    await assertPermission(key, 'write');
+    if (postingAnyOf?.length) {
+      const access = await getMyAccess();
+      if (!postingAnyOf.some((k) => access?.allows(k, 'write'))) return PERMISSION_DENIED_MESSAGE;
+    }
+    return null;
+  } catch (err) {
+    if (isPermissionError(err)) return PERMISSION_DENIED_MESSAGE;
+    throw err;
+  }
+}

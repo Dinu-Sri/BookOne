@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
+import { requireWriteOrRedirect } from '@/lib/access';
 import { auditLog, db, eq, and, isNull, desc, salesDiscounts, withTenantContext } from '@bookone/db';
 
 const discountSchema = z.object({
@@ -89,6 +90,7 @@ export async function getDiscount(id: string): Promise<DiscountRow | null> {
 }
 
 export async function createDiscountFromForm(formData: FormData): Promise<void> {
+  await requireWriteOrRedirect('sales.discounts.write', '/sales/discounts');
   const parsed = discountSchema.parse({
     name: String(formData.get('name') ?? ''),
     code: String(formData.get('code') ?? ''),
@@ -134,6 +136,7 @@ export async function createDiscountFromForm(formData: FormData): Promise<void> 
 }
 
 export async function updateDiscountFromForm(formData: FormData): Promise<void> {
+  await requireWriteOrRedirect('sales.discounts.write', '/sales/discounts');
   const parsed = discountSchema.parse({
     id: String(formData.get('id') ?? ''),
     name: String(formData.get('name') ?? ''),
@@ -187,6 +190,7 @@ export async function updateDiscountFromForm(formData: FormData): Promise<void> 
 }
 
 export async function setDiscountActiveFromForm(formData: FormData): Promise<void> {
+  await requireWriteOrRedirect('sales.discounts.write', '/sales/discounts');
   const id = String(formData.get('id') ?? '');
   const active = formData.get('active') === '1';
   if (!id) throw new Error('Discount id required.');
@@ -208,6 +212,7 @@ export async function setDiscountActiveFromForm(formData: FormData): Promise<voi
 }
 
 export async function archiveDiscountFromForm(formData: FormData): Promise<void> {
+  await requireWriteOrRedirect('sales.discounts.write', '/sales/discounts');
   const id = String(formData.get('id') ?? '');
   if (!id) throw new Error('Discount id required.');
 

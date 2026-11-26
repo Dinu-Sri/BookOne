@@ -21,6 +21,8 @@ const FLASH_MAP: Record<string, StatusPayload> = {
   restored: { kind: 'success', message: 'Restored successfully' },
   error: { kind: 'error', message: 'Something went wrong' },
   denied_write: { kind: 'error', message: 'You do not have permission to save that.' },
+  party_merged: { kind: 'success', message: 'Duplicate merged into the original party' },
+  merge_not_found: { kind: 'error', message: 'That duplicate is no longer open for merging' },
 };
 
 /** Fire from any client component: pushStatusToast({ message: 'Saved', kind: 'success' }) */

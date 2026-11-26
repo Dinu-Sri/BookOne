@@ -40,7 +40,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { assertPermission } from '@/lib/access';
-import { assertModuleWrite } from '@/lib/module-access';
+import { assertModuleWrite, requireModuleWriteOrRedirect } from '@/lib/module-access';
 import { assertDimensionScope, columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import { sanitizeProductHtml } from '@/lib/product-html';
 import { normalizeProductUnit } from '@/lib/product-units';
@@ -1377,6 +1377,7 @@ async function updateProductFromFormInner(formData: FormData): Promise<void> {
 }
 
 export async function archiveProductFromForm(formData: FormData): Promise<void> {
+  await requireModuleWriteOrRedirect('inventory', '/inventory/products');
   const id = String(formData.get('id') ?? '');
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
@@ -1389,6 +1390,7 @@ export async function archiveProductFromForm(formData: FormData): Promise<void> 
 }
 
 export async function restoreProductFromForm(formData: FormData): Promise<void> {
+  await requireModuleWriteOrRedirect('inventory', '/inventory/products');
   const id = String(formData.get('id') ?? '');
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
@@ -1407,6 +1409,7 @@ export async function getProductDeleteBlockers(id: string): Promise<{ ok: boolea
 }
 
 export async function deleteProductFromForm(formData: FormData): Promise<void> {
+  await requireModuleWriteOrRedirect('inventory', '/inventory/products');
   const id = String(formData.get('id') ?? '');
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {

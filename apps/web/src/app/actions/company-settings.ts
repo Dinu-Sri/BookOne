@@ -35,7 +35,7 @@ import {
   users,
   withTenantContext,
 } from '@bookone/db';
-import { assertPermission } from '@/lib/access';
+import { assertPermission, requireWriteOrRedirect } from '@/lib/access';
 import { assertModuleWrite } from '@/lib/module-access';
 import { modulesForPlan } from '@/lib/platform-modules';
 import {
@@ -315,7 +315,7 @@ export async function getCompanySettingsData(): Promise<CompanySettingsData> {
 
 export async function saveCompanyProfile(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
-  await assertPermission('company.details.write', 'write');
+  await requireWriteOrRedirect('company.details.write', '/company/details');
   const parsed = companyProfileSchema.parse({
     legalName: String(formData.get('legalName') ?? ''),
     tradingName: String(formData.get('tradingName') ?? ''),
@@ -384,7 +384,7 @@ export async function saveCompanyProfile(formData: FormData): Promise<void> {
 
 export async function saveTaxProfile(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
-  await assertPermission('company.tax.write', 'write');
+  await requireWriteOrRedirect('company.tax.write', '/company/tax');
   const parsed = taxProfileSchema.parse({
     tin: String(formData.get('tin') ?? ''),
     vatNumber: String(formData.get('vatNumber') ?? ''),
@@ -427,7 +427,7 @@ export async function saveTaxProfile(formData: FormData): Promise<void> {
 
 export async function createFinancialYear(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
-  await assertPermission('company.details.write', 'write');
+  await requireWriteOrRedirect('company.details.write', '/company/details');
   const parsed = financialYearSchema.parse({
     label: String(formData.get('label') ?? ''),
     startDate: String(formData.get('startDate') ?? ''),
@@ -443,7 +443,7 @@ export async function createFinancialYear(formData: FormData): Promise<void> {
 
 export async function createBrand(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
-  await assertPermission('company.brands.write', 'write');
+  await requireWriteOrRedirect('company.brands.write', '/company/brands');
   const parsed = brandSchema.parse({
     name: String(formData.get('name') ?? ''),
     code: String(formData.get('code') ?? ''),
@@ -533,7 +533,7 @@ export async function saveBrandForm(_state: CompanyActionState = emptyActionStat
 
 export async function createLocation(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
-  await assertPermission('company.locations.write', 'write');
+  await requireWriteOrRedirect('company.locations.write', '/company/locations');
   const parsed = locationSchema.parse({
     name: String(formData.get('name') ?? ''),
     code: String(formData.get('code') ?? ''),
@@ -869,7 +869,7 @@ export async function deleteLocationFromForm(formData: FormData): Promise<void> 
   if (!id) throw new Error('Location not found.');
 
   const user = await requireTenantContext();
-  await assertPermission('company.locations.write', 'write');
+  await requireWriteOrRedirect('company.locations.write', '/company/locations');
   await withTenantContext(user.tenantId, async () => {
     const [existing] = await db()
       .select({ id: locations.id, name: locations.name })
@@ -905,7 +905,7 @@ export async function deleteLocationFromForm(formData: FormData): Promise<void> 
 
 export async function createCompany(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
-  await assertPermission('company.lifecycle.write', 'write');
+  await requireWriteOrRedirect('company.lifecycle.write', '/');
   const name = String(formData.get('name') ?? '');
   const parsed = createCompanySchema.parse({
     name,

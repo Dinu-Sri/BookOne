@@ -217,7 +217,15 @@ export class AgentBridgeService {
 
   async submitDocument(
     actor: Actor,
-    input: { filename: string; mime: string; bytes: Uint8Array; textHint?: string; idempotencyKey?: string },
+    input: {
+      filename: string;
+      mime: string;
+      bytes: Uint8Array;
+      textHint?: string;
+      idempotencyKey?: string;
+      /** Keep a second document for bytes already received (QA-1126-07). */
+      allowDuplicate?: boolean;
+    },
   ) {
     actor = await this.authorized(actor, 'upload');
     const flags = await this.flags(actor.tenantId);
@@ -259,6 +267,14 @@ export class AgentBridgeService {
       }
     }
     const existing = await this.deps.store.findByHash(actor.tenantId, hash);
+    if (existing && existing.id !== id && existing.status !== 'rejected' && !input.allowDuplicate) {
+      return {
+        ok: false as const,
+        code: 'DUPLICATE_DOCUMENT',
+        error: duplicateDocumentMessage(existing),
+        duplicateOf: existing.id,
+      };
+    }
     const key = ownedStorageKey(actor.tenantId, input.filename, id);
     await this.deps.store.putBlob({
       key,
@@ -562,7 +578,10 @@ export class AgentBridgeService {
     };
   }
 
-  async finalizeUploadSession(actor: Actor, input: { sessionId: string; bytes?: Uint8Array; contentBase64?: string }) {
+  async finalizeUploadSession(
+    actor: Actor,
+    input: { sessionId: string; bytes?: Uint8Array; contentBase64?: string; allowDuplicate?: boolean },
+  ) {
     actor = await this.authorized(actor, 'upload');
     if (!this.deps.store.getUploadSession || !this.deps.store.saveUploadSession) {
       return fail('FEATURE_DISABLED', 'Upload sessions are not available on this store.');
@@ -599,6 +618,7 @@ export class AgentBridgeService {
       mime: session.mime,
       bytes,
       idempotencyKey: session.requestKey,
+      allowDuplicate: input.allowDuplicate,
     });
     if (!submitted.ok) return submitted;
     session.finalizedDocumentId = submitted.document?.id;
@@ -980,6 +1000,9 @@ export class AgentBridgeService {
         receipt.error = message;
         doc.status = 'failed';
       }
+      // Keep the refusal on the document so the inbox explains it (QA-1126-08).
+      doc.lastErrorCode = receipt.status === 'failed' ? 'POST_FAILED' : 'UNKNOWN_OUTCOME';
+      doc.lastErrorMessage = message;
     }
     await this.deps.store.saveOperation({
       id: opId,
@@ -1155,6 +1178,11 @@ export function toolsForActor(actor: { capabilities: Capability[] }): string[] {
   if (actor.capabilities.includes('commerce_read')) names.push(...COMMERCE_READ_TOOL_NAMES);
   if (actor.capabilities.includes('commerce_propose')) names.push(...COMMERCE_PROPOSE_TOOL_NAMES);
   return names;
+}
+
+export function duplicateDocumentMessage(existing: { id: string; status: string; createdAt: string }): string {
+  const day = existing.createdAt ? existing.createdAt.slice(0, 10) : 'an earlier date';
+  return `This file was already received on ${day} (document ${existing.id.slice(0, 8)}, status ${existing.status.replaceAll('_', ' ')}). Open it, or upload again with "upload anyway" to keep a separate document.`;
 }
 
 function fail(code: string, error: string) {

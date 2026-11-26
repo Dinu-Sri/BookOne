@@ -72,13 +72,13 @@ describe('company settings GET after requireTenantContext (BUG-0054 / HTTP-104)'
     expect(body.indexOf('withTenantContext(user.tenantId')).toBeLessThan(body.indexOf('.from(taxProfiles)'));
   });
 
-  it('profile and tax writes still deny via assertPermission', () => {
+  it('profile and tax writes still deny (redirect, QA-1126-09)', () => {
     const source = readRepo('apps/web/src/app/actions/company-settings.ts');
     const profile = functionBody(source, 'saveCompanyProfile');
     const tax = functionBody(source, 'saveTaxProfile');
-    expect(profile).toContain("await assertPermission('company.details.write', 'write')");
+    expect(profile).toContain("await requireWriteOrRedirect('company.details.write', '/company/details')");
     expect(profile).toContain('withTenantContext(user.tenantId');
-    expect(tax).toContain("await assertPermission('company.tax.write', 'write')");
+    expect(tax).toContain("await requireWriteOrRedirect('company.tax.write', '/company/tax')");
     expect(tax).toContain('withTenantContext(user.tenantId');
   });
 });

@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { probeModuleWriteDetail } from '@/lib/module-access';
 import { redirect } from 'next/navigation';
 import { parseScopes, type ConnectionKind, type CommerceEnvironment, type MappingInput } from '@bookone/commerce';
 import { authenticateCommerceRequest, operatorFromSession, withCommerceService } from '@/lib/commerce-runtime';
@@ -57,8 +58,22 @@ function finish(formData: FormData, extra: Record<string, string | undefined> = 
   redirect(commercePath(formData, extra));
 }
 
+/** QA-1126-06/12: a connection posts stock, so it needs Inventory and a stock location. */
+async function commerceConnectionBlocker(formData: FormData): Promise<string | null> {
+  const inventory = await probeModuleWriteDetail('inventory');
+  if (inventory.reason === 'module_off' || inventory.reason === 'tier') {
+    return 'Commerce connections need Inventory, which is not part of this company’s plan. Upgrade to Growth or Pro first.';
+  }
+  if (!String(formData.get('locationId') ?? '').trim()) {
+    return 'Choose the stock location this store sells from. Add one under Company → Locations if the list is empty.';
+  }
+  return null;
+}
+
 export async function createCommerceConnectionFromForm(formData: FormData) {
   const operator = await operatorFromSession();
+  const blocked = await commerceConnectionBlocker(formData);
+  if (blocked) finish(formData, { err: blocked });
   try {
     const row = await withCommerceService(operator.tenantId, (service) =>
       service.createConnection(operator, {
@@ -129,6 +144,9 @@ export async function revokeCommerceCredentialFromForm(formData: FormData) {
 
 export async function updateCommerceConnectionFromForm(formData: FormData) {
   const operator = await operatorFromSession();
+  if (String(formData.get('postingMode') ?? '') === 'posting' && !String(formData.get('locationId') ?? '').trim()) {
+    finish(formData, { err: 'Choose a stock location before turning posting on.' });
+  }
   try {
     await withCommerceService(operator.tenantId, (service) =>
       service.updateConnection(operator, String(formData.get('connectionId') ?? ''), {

@@ -3,6 +3,7 @@ import { getCompanySettingsData } from '@/app/actions/company-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { jobCanWrite } from '@/lib/access';
+import { probeModuleWriteDetail } from '@/lib/module-access';
 import { operatorFromSession, withCommerceService } from '@/lib/commerce-runtime';
 import { CompanyCommerce } from '@/components/commerce/company-commerce';
 import { listProducts } from '@/app/actions/inventory';
@@ -35,12 +36,15 @@ export default async function CompanyCommercePage({
   ]);
   if (productLoad.ok) products = productLoad.rows;
   else productsError = 'Could not load BookOne products.';
+  const inventory = await probeModuleWriteDetail('inventory').catch(() => null);
+  const inventoryOff = inventory?.reason === 'module_off' || inventory?.reason === 'tier';
   const origin = process.env.AUTH_URL ?? process.env.BETTER_AUTH_URL ?? '';
 
   return (
     <BookOneShell active="Commerce Integrations" tenant={tenant}>
       <CompanyCommerce
         canWrite={canWrite}
+        inventoryOff={inventoryOff}
         saved={query.saved === '1'}
         saveError={query.err ? decodeURIComponent(query.err) : null}
         publishedCount={query.published ? Number(query.published) : null}

@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { writeDeniedMessage } from '@/lib/access';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
 import {
@@ -208,6 +209,8 @@ export async function getReconciliationForPeriod(period: string): Promise<{
 }
 
 export async function createBankStatementImport(input: z.infer<typeof createImportSchema>): Promise<{ ok: boolean; error?: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const parsed = createImportSchema.parse(input);
     const user = await requireTenantContext();
@@ -293,6 +296,8 @@ export async function createBankStatementImport(input: z.infer<typeof createImpo
 }
 
 export async function updateBankStatementLineStatus(input: z.infer<typeof updateLineSchema>): Promise<{ ok: boolean; error?: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const parsed = updateLineSchema.parse(input);
     const user = await requireTenantContext();
@@ -337,6 +342,8 @@ export async function updateBankStatementLineStatus(input: z.infer<typeof update
 }
 
 export async function lockPeriod(period: string): Promise<{ ok: boolean; error?: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const parsedPeriod = periodSchema.parse(period);
     const user = await requireTenantContext();

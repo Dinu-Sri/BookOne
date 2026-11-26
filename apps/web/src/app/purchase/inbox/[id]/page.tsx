@@ -14,6 +14,7 @@ import {
 } from '@/app/actions/agent-bridge';
 import { jobCanWrite } from '@/lib/access';
 import { minorToMajor } from '@bookone/agent-bridge';
+import { db, eq, users, withTenantContext } from '@bookone/db';
 
 export default async function InboxDocumentPage({
   params,
@@ -41,6 +42,24 @@ export default async function InboxDocumentPage({
   const preview = proposal?.preview;
   const storeApproval = proposal ? await service.getApprovalForProposal(actor, proposal.id) : null;
   const policy = await service.getPolicyContext(actor);
+  // QA-1126-10: show who approved and when it expires in the company's time.
+  const approverName = storeApproval
+    ? await withTenantContext(tenant.id, async () => {
+        const [row] = await db()
+          .select({ name: users.name, email: users.email })
+          .from(users)
+          .where(eq(users.id, storeApproval.actorUserId))
+          .limit(1);
+        return row?.name || row?.email || 'a team member';
+      }).catch(() => 'a team member')
+    : null;
+  const approvalExpires = storeApproval ? formatApprovalTime(storeApproval.expiresAt, tenant.timezone) : '';
+  // QA-1126-08: say up front why commit will be refused.
+  const commitBlockedReason = flags.postingDisabled
+    ? 'Agent posting is stopped for this company. Turn it back on in Company → AgentBridge to commit this bill.'
+    : flags.draftOnly
+      ? 'This company is in draft-only mode, so bills are not posted. Turn draft-only off in Company → AgentBridge to commit.'
+      : null;
   const awaitingFacts =
     status.document.status === 'awaiting_facts' ||
     status.document.status === 'failed' ||
@@ -360,8 +379,14 @@ export default async function InboxDocumentPage({
 
             {storeApproval ? (
               <p data-testid="inbox-approver">
-                Approved by {storeApproval.actorUserId}
-                {storeApproval.revokedAt ? ' (revoked after a later edit)' : ''}. Expires {storeApproval.expiresAt}.
+                Approved by {approverName}
+                {storeApproval.revokedAt ? ' (revoked after a later edit)' : ''} · expires {approvalExpires}
+              </p>
+            ) : null}
+
+            {storeApproval && canPost && !storeApproval.revokedAt && commitBlockedReason ? (
+              <p role="status" data-testid="inbox-commit-blocked" style={{ fontWeight: 600 }}>
+                {commitBlockedReason}
               </p>
             ) : null}
 
@@ -386,4 +411,18 @@ export default async function InboxDocumentPage({
       </div>
     </BookOneShell>
   );
+}
+
+function formatApprovalTime(iso: string, timeZone?: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: timeZone || 'Asia/Colombo',
+    }).format(at);
+  } catch {
+    return at.toLocaleString('en-GB');
+  }
 }

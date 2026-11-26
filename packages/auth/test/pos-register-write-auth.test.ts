@@ -52,10 +52,11 @@ describe('POS register write authorization (Mission1 P1)', () => {
     const save = functionBody(source, 'savePosRegisterFromForm');
     const archive = functionBody(source, 'archivePosRegisterFromForm');
     expect(source).toContain("const POS_REGISTER_WRITE = 'company.sales_settings.write'");
-    expect(save).toContain('await assertPermission(POS_REGISTER_WRITE, \'write\')');
-    expect(save.indexOf('assertPermission')).toBeLessThan(save.indexOf('withTenantContext'));
-    expect(archive).toContain('await assertPermission(POS_REGISTER_WRITE, \'write\')');
-    expect(archive.indexOf('assertPermission')).toBeLessThan(archive.indexOf('withTenantContext'));
+    // QA-1126-09: still refused before mutating, now as a redirect instead of an HTTP 500.
+    expect(save).toContain('await requireWriteOrRedirect(POS_REGISTER_WRITE, ');
+    expect(save.indexOf('requireWriteOrRedirect')).toBeLessThan(save.indexOf('withTenantContext'));
+    expect(archive).toContain('await requireWriteOrRedirect(POS_REGISTER_WRITE, ');
+    expect(archive.indexOf('requireWriteOrRedirect')).toBeLessThan(archive.indexOf('withTenantContext'));
     expect(archive).toContain('Keep at least one active register.');
   });
 
@@ -67,7 +68,7 @@ describe('POS register write authorization (Mission1 P1)', () => {
 
   it('VAT settings write remains on the same company.sales_settings.write guard', () => {
     const save = functionBody(readRepo('apps/web/src/app/actions/sales-settings.ts'), 'saveSalesSettingsFromForm');
-    expect(save).toContain("await assertPermission('company.sales_settings.write', 'write')");
+    expect(save).toContain("await requireWriteOrRedirect('company.sales_settings.write', '/company/sales')");
   });
 
   it('Owner may write sales settings; Viewer and a custom read-only job may not', () => {

@@ -209,11 +209,11 @@ export class CommerceService {
     const raw = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : authorization?.trim();
     if (!raw) fail('UNAUTHENTICATED', 'A commerce bearer token is required.');
     const parsed = parseToken(raw);
-    if (!parsed) fail('UNAUTHENTICATED', 'The commerce token is not valid.');
+    if (!parsed) fail('UNAUTHENTICATED', 'The commerce token is invalid, revoked or expired.');
     const credential = await this.store.getCredentialByPrefix(parsed.prefix);
-    if (!credential) fail('UNAUTHENTICATED', 'The commerce token is not valid.');
+    if (!credential) fail('UNAUTHENTICATED', 'The commerce token is invalid, revoked or expired.');
     if (!hashesEqual(credential.secretHash, hashSecret(parsed.secret, this.pepper))) {
-      fail('UNAUTHENTICATED', 'The commerce token is not valid.');
+      fail('UNAUTHENTICATED', 'The commerce token is invalid, revoked or expired.');
     }
     if (credential.status === 'revoked') fail('FORBIDDEN', 'This commerce key has been revoked.');
     if (credential.expiresAt && Date.parse(credential.expiresAt) < Date.now()) fail('FORBIDDEN', 'This commerce key has expired.');

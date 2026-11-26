@@ -69,6 +69,13 @@ export function netIncomeFromRows(rows: StatementRow[]): number {
   return roundMoney(revenue - expense);
 }
 
+/** Statement sections list accounts in chart order (QA-1126-14); numeric-aware so 1100 < 1101 < 1200. */
+export function byAccountCode<T extends { accountCode: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) =>
+    String(a.accountCode).localeCompare(String(b.accountCode), 'en', { numeric: true }),
+  );
+}
+
 /**
  * Profit and loss and cash movement stay period-bounded. Balance sheet, trial
  * balance and unclosed earnings use the cumulative snapshot through the cutoff
@@ -90,12 +97,12 @@ export function composeFinancialStatements(
     totalEquity: number;
   };
 } {
-  const revenue = periodRows.filter((row) => row.type === 'revenue');
-  const expense = periodRows.filter((row) => row.type === 'expense');
+  const revenue = byAccountCode(periodRows.filter((row) => row.type === 'revenue'));
+  const expense = byAccountCode(periodRows.filter((row) => row.type === 'expense'));
   const netIncome = netIncomeFromRows(periodRows);
-  const assets = asOfRows.filter((row) => row.type === 'asset');
-  const liabilities = asOfRows.filter((row) => row.type === 'liability');
-  const postedEquity = asOfRows.filter((row) => row.type === 'equity');
+  const assets = byAccountCode(asOfRows.filter((row) => row.type === 'asset'));
+  const liabilities = byAccountCode(asOfRows.filter((row) => row.type === 'liability'));
+  const postedEquity = byAccountCode(asOfRows.filter((row) => row.type === 'equity'));
   const { equity, totalEquity } = withUnclosedEarnings(postedEquity, netIncomeFromRows(asOfRows));
   return {
     trialBalance: asOfRows,

@@ -7,6 +7,7 @@
  */
 
 import { revalidatePath } from 'next/cache';
+import { writeDeniedMessage } from '@/lib/access';
 import { z } from 'zod';
 import {
   comparisonDifference,
@@ -1314,6 +1315,8 @@ async function rebuildSessionSuggestionsInternal(
 export async function rebuildSessionSuggestions(
   sessionId: string,
 ): Promise<{ ok: true; stats?: RebuildSeedStats } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const id = z.string().uuid().parse(sessionId);
     const user = await requireTenantContext();
@@ -1903,6 +1906,8 @@ export async function confirmCaseMatch(input: {
   caseId: string;
   expectedVersion?: number;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const caseId = z.string().uuid().parse(input.caseId);
     const user = await requireTenantContext();
@@ -1990,6 +1995,8 @@ export async function confirmCaseMatch(input: {
 export async function bulkConfirmStrongMatches(
   sessionId: string,
 ): Promise<{ ok: true; confirmed: number } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const id = z.string().uuid().parse(sessionId);
     const user = await requireTenantContext();
@@ -2025,6 +2032,8 @@ export async function bulkConfirmStrongMatches(
 export async function undoCaseMatch(input: {
   caseId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const caseId = z.string().uuid().parse(input.caseId);
     const user = await requireTenantContext();
@@ -2095,6 +2104,8 @@ export async function markCaseOutstanding(input: {
   caseId: string;
   reason?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const caseId = z.string().uuid().parse(input.caseId);
     const user = await requireTenantContext();
@@ -2159,6 +2170,8 @@ export async function createCaseEntry(input: {
   expenseCode?: string;
   incomeCode?: string;
 }): Promise<{ ok: true; transactionId: string } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write', ['accounting.simple_entry.write', 'accounting.cashbook.write']);
+  if (denied) return { ok: false, error: denied };
   try {
     const caseId = z.string().uuid().parse(input.caseId);
     const user = await requireTenantContext();
@@ -2353,6 +2366,8 @@ export async function createCaseEntry(input: {
 export async function finishReconciliationSession(
   sessionId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const id = z.string().uuid().parse(sessionId);
     const user = await requireTenantContext();
@@ -2497,6 +2512,8 @@ export async function confirmTransferCase(input: {
   | { ok: true; transactionId: string; feeTransactionId?: string }
   | { ok: false; error: string }
 > {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write', ['accounting.simple_entry.write', 'accounting.cashbook.write']);
+  if (denied) return { ok: false, error: denied };
   try {
     const caseId = z.string().uuid().parse(input.caseId);
     const counterCode = input.counterpartyAccountCode.trim();
@@ -2755,6 +2772,8 @@ export async function confirmTransferCase(input: {
 export async function rejectTransferCase(input: {
   caseId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const caseId = z.string().uuid().parse(input.caseId);
     const user = await requireTenantContext();
@@ -2935,6 +2954,8 @@ export async function confirmGroupMatch(input: {
   caseId: string;
   transactionIds: string[];
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const caseId = z.string().uuid().parse(input.caseId);
     const ids = z.array(z.string().uuid()).min(1).max(8).parse(input.transactionIds);
@@ -3083,6 +3104,8 @@ export async function excludeCase(input: {
   caseId: string;
   reason: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const caseId = z.string().uuid().parse(input.caseId);
     const reason = input.reason.trim().slice(0, 80) || 'excluded';
@@ -3160,6 +3183,8 @@ export async function excludeCase(input: {
 export async function reopenReconciliationSession(
   sessionId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const id = z.string().uuid().parse(sessionId);
     const user = await requireTenantContext();
@@ -3522,6 +3547,8 @@ export async function matchBankToBook(input: {
   bankLineIds: string[];
   transactionIds: string[];
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const sessionId = z.string().uuid().parse(input.sessionId);
     const bankLineIds = [...new Set(input.bankLineIds.filter(Boolean))];
@@ -3803,6 +3830,8 @@ export async function confirmManyBanksOneBook(input: {
   bankLineIds: string[];
   transactionId: string;
 }): Promise<{ ok: true; caseId: string } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const sessionId = z.string().uuid().parse(input.sessionId);
     const bankLineIds = z.array(z.string().uuid()).min(2).max(12).parse(input.bankLineIds);
@@ -4233,6 +4262,8 @@ export async function getReconciliationReportData(
 export async function voidBankImport(
   importId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const id = z.string().uuid().parse(importId);
     const user = await requireTenantContext();

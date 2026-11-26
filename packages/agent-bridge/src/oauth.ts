@@ -245,7 +245,9 @@ export function protectedResourceMetadata(resource: string, authorizationServers
     resource: mcp ?? base,
     authorization_servers: authorizationServers,
     bearer_methods_supported: ['header'],
-    scopes_supported: [...DEFAULT_CONNECTION_SCOPES, 'post', 'commerce_read', 'commerce_propose'],
+    // OAuth consent issues only these; post/commerce are granted by the Owner in
+    // Company → AgentBridge, so both metadata documents publish the same list (QA-1126-01).
+    scopes_supported: [...DEFAULT_CONNECTION_SCOPES],
     resource_documentation: docs,
     mcp_endpoint: mcp,
   };

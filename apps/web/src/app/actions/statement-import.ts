@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { writeDeniedMessage } from '@/lib/access';
 import { z } from 'zod';
 import {
   annotateBalanceContinuity,
@@ -1205,6 +1206,8 @@ async function commitOneFileBuffer(opts: {
 export async function commitStatementImport(formData: FormData): Promise<
   { ok: true; importId: string; reused?: boolean } | { ok: false; error: string }
 > {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const user = await requireTenantContext();
     const bankAccountId = String(formData.get('bankAccountId') ?? '');
@@ -1258,6 +1261,8 @@ export async function commitStatementBatch(formData: FormData): Promise<
   | { ok: true; batchId: string; items: StatementBatchItem[]; firstImportId: string | null }
   | { ok: false; error: string }
 > {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const user = await requireTenantContext();
     const bankAccountId = String(formData.get('bankAccountId') ?? '');
@@ -1613,6 +1618,8 @@ export async function confirmStatementLinks(input: {
   importId: string;
   lineIds?: string[];
 }): Promise<{ ok: true; linked: number } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const importId = z.string().uuid().parse(input.importId);
     const user = await requireTenantContext();
@@ -1707,6 +1714,8 @@ export async function manualLinkStatementLine(input: {
   lineId: string;
   transactionId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const lineId = z.string().uuid().parse(input.lineId);
     const transactionId = z.string().uuid().parse(input.transactionId);
@@ -1801,6 +1810,8 @@ export async function confirmStatementCreates(input: {
    */
   categoryByLineId?: Record<string, string>;
 }): Promise<{ ok: true; created: number; errors: string[] } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write', ['accounting.simple_entry.write', 'accounting.cashbook.write']);
+  if (denied) return { ok: false, error: denied };
   try {
     const importId = z.string().uuid().parse(input.importId);
     const user = await requireTenantContext();
@@ -2043,6 +2054,8 @@ export async function skipStatementLines(input: {
   importId: string;
   lineIds: string[];
 }): Promise<{ ok: true; skipped: number } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const importId = z.string().uuid().parse(input.importId);
     const lineIds = z.array(z.string().uuid()).min(1).parse(input.lineIds);
@@ -2106,6 +2119,8 @@ export async function skipStatementLines(input: {
 export async function undoStatementCreates(input: {
   importId: string;
 }): Promise<{ ok: true; reversed: number; errors: string[] } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write', ['accounting.simple_entry.write', 'accounting.cashbook.write']);
+  if (denied) return { ok: false, error: denied };
   try {
     const importId = z.string().uuid().parse(input.importId);
     const user = await requireTenantContext();
@@ -2188,6 +2203,8 @@ export async function undoStatementCreates(input: {
 export async function voidStatementImport(importId: string): Promise<
   { ok: true } | { ok: false; error: string }
 > {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const id = z.string().uuid().parse(importId);
     const user = await requireTenantContext();
@@ -2270,6 +2287,8 @@ export async function runStatementMatchPass(importId: string): Promise<
   | { ok: true; view: StatementImportView; stats: MatchPassStats }
   | { ok: false; error: string }
 > {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const id = z.string().uuid().parse(importId);
     const user = await requireTenantContext();
@@ -2607,6 +2626,8 @@ export async function markLinesUnmatched(input: {
   importId: string;
   lineIds: string[];
 }): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const importId = z.string().uuid().parse(input.importId);
     const lineIds = input.lineIds.filter((id) => z.string().uuid().safeParse(id).success);

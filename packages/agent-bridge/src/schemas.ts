@@ -62,6 +62,7 @@ export const SUBMIT_DOCUMENT_SCHEMA: JsonSchema = {
     contentBase64: { type: 'string', minLength: 1, maxLength: 12_000_000 },
     textHint: { type: 'string', maxLength: 20_000 },
     idempotencyKey: { type: 'string', minLength: 1, maxLength: 80 },
+    allowDuplicate: { type: 'boolean' },
   },
 };
 
@@ -163,6 +164,7 @@ export const FINALIZE_UPLOAD_SESSION_SCHEMA: JsonSchema = {
   properties: {
     sessionId: id,
     contentBase64: { type: 'string', minLength: 1, maxLength: 12_000_000 },
+    allowDuplicate: { type: 'boolean' },
   },
 };
 

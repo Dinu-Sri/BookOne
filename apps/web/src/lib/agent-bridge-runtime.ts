@@ -210,11 +210,14 @@ class PostgresStore implements AgentBridgeStore {
   }
   async findByHash(tenantId: string, hash: string) {
     return this.run(tenantId, async () => {
-      const [row] = await db()
+      const rows = await db()
         .select()
         .from(agentBridgeDocuments)
         .where(and(eq(agentBridgeDocuments.tenantId, tenantId), eq(agentBridgeDocuments.contentHash, hash)))
-        .limit(1);
+        .orderBy(desc(agentBridgeDocuments.createdAt))
+        .limit(10);
+      // Prefer a live document so a rejected copy never hides an active one (QA-1126-07).
+      const row = rows.find((r) => r.status !== 'rejected') ?? rows[0];
       return row ? mapDoc(row) : null;
     });
   }

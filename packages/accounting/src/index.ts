@@ -224,6 +224,7 @@ export {
   journalDateWindow,
   netIncomeFromRows,
   composeFinancialStatements,
+  byAccountCode,
   CURRENT_EARNINGS_CODE,
   CURRENT_EARNINGS_NAME,
 } from './statement-sign';

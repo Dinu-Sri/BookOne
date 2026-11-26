@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { writeDeniedMessage } from '@/lib/access';
 import { z } from 'zod';
 import {
   buildOverlapReport,
@@ -55,6 +56,8 @@ export type StudioDraftView = {
 export async function createStudioDraft(formData: FormData): Promise<
   { ok: true; draft: StudioDraftView } | { ok: false; error: string }
 > {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const user = await requireTenantContext();
     const file = formData.get('file');
@@ -242,6 +245,8 @@ export async function saveStudioDraftStep(input: {
   wizardStep: string;
   patch: Record<string, unknown>;
 }): Promise<{ ok: true; draftVersion: number } | { ok: false; error: string }> {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const user = await requireTenantContext();
     const importId = z.string().uuid().parse(input.importId);
@@ -555,6 +560,8 @@ export async function commitStudioImport(formData: FormData): Promise<
     }
   | { ok: false; error: string }
 > {
+  const denied = await writeDeniedMessage('accounting.reconciliation.write');
+  if (denied) return { ok: false, error: denied };
   try {
     const user = await requireTenantContext();
     const importId = String(formData.get('importId') ?? '');

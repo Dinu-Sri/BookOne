@@ -96,6 +96,9 @@ describe('commerce order intake', () => {
     expect(listed[0]?.credentials[0]?.prefix).toBe(issued.prefix);
     await service.revokeCredential(operator, connection.id, listed[0]!.credentials[0]!.id);
     await expect(service.authenticate(`Bearer ${issued.token}`)).rejects.toBeInstanceOf(CommerceError);
+    // QA-1126-13: a malformed or unknown token is called invalid, not "required".
+    await expect(service.authenticate('Bearer bkc_sand_bad_x')).rejects.toThrow(/invalid, revoked or expired/);
+    await expect(service.authenticate(null)).rejects.toThrow(/required/);
   });
 
   it('posts the last unit once, replays the same idempotency key, and reviews a competing claim', async () => {

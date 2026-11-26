@@ -4,7 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireTenantContext } from '@bookone/auth';
 import { withTenantContext } from '@bookone/db';
-import { assertPermission } from '@/lib/access';
+import { assertPermission, requireWriteOrRedirect, writeDeniedMessage } from '@/lib/access';
+import { commitOutcomeMessage } from '@/lib/agent-bridge-commit-outcome';
+import { duplicateSupplierBillMessage, findDuplicateSupplierBill } from '@/lib/agent-bridge-duplicate-bill';
+import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import {
   actorFromSession,
   getAgentBridgeService,
@@ -14,8 +17,38 @@ import {
 import { mintLocalFixtureToken, parseMajorToMinor, parseScopes } from '@bookone/agent-bridge';
 import { agentBridgeTokenSecret } from '@/lib/agent-bridge-runtime';
 
+/** Where a refused inbox action lands: the document it was about, else the inbox. */
+function inboxBack(formData: FormData): string {
+  const id = String(formData.get('documentId') ?? '').trim();
+  return /^[0-9a-f-]{36}$/i.test(id) ? `/purchase/inbox/${id}` : '/purchase/inbox';
+}
+
+async function duplicateBillWarning(
+  service: Awaited<ReturnType<typeof getAgentBridgeService>>['service'],
+  actor: Awaited<ReturnType<typeof getAgentBridgeService>>['actor'],
+  documentId: string,
+  tenantId: string,
+): Promise<string | null> {
+  try {
+    const status = await service.getProcessingStatus(actor, documentId);
+    const facts = status.proposal?.facts;
+    if (!facts?.supplierName || !facts.supplierInvoiceNumber) return null;
+    const dup = await findDuplicateSupplierBill(tenantId, facts.supplierName, facts.supplierInvoiceNumber);
+    if (!dup) return null;
+    const cfg = await getPurchaseSettings().catch(() => ({ blockDuplicateBills: true }));
+    return duplicateSupplierBillMessage(
+      facts.supplierName,
+      facts.supplierInvoiceNumber,
+      dup.documentNumber,
+      cfg.blockDuplicateBills !== false,
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function submitInboxFacts(formData: FormData) {
-  await assertPermission('purchase.inbox.write', 'write');
+  await requireWriteOrRedirect('purchase.inbox.write', inboxBack(formData));
   const user = await requireTenantContext();
   const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   const documentId = String(formData.get('documentId') ?? '');
@@ -62,7 +95,7 @@ export async function submitInboxFacts(formData: FormData) {
 }
 
 export async function retryInboxExtraction(formData: FormData) {
-  await assertPermission('purchase.inbox.write', 'write');
+  await requireWriteOrRedirect('purchase.inbox.write', inboxBack(formData));
   const user = await requireTenantContext();
   const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   const documentId = String(formData.get('documentId') ?? '');
@@ -72,8 +105,8 @@ export async function retryInboxExtraction(formData: FormData) {
 }
 
 export async function setAgentBridgeMappingScopesFromForm(formData: FormData) {
-  await assertPermission('company.purchase_settings.write', 'write');
-  await assertPermission('agent_bridge.commerce_propose', 'write');
+  await requireWriteOrRedirect('company.purchase_settings.write', '/company/agent-bridge');
+  await requireWriteOrRedirect('agent_bridge.commerce_propose', '/company/agent-bridge');
   const user = await requireTenantContext();
   const id = String(formData.get('connectionId') ?? '');
   const enabled = String(formData.get('commerceMapping') ?? '') === 'on';
@@ -84,7 +117,7 @@ export async function setAgentBridgeMappingScopesFromForm(formData: FormData) {
 }
 
 export async function revokeAgentConnection(formData: FormData) {
-  await assertPermission('purchase.inbox.write', 'write');
+  await requireWriteOrRedirect('purchase.inbox.write', inboxBack(formData));
   const user = await requireTenantContext();
   const id = String(formData.get('connectionId') ?? '');
   const { revokeAgentBridgeConnection } = await import('@/lib/agent-bridge-runtime');
@@ -97,7 +130,7 @@ export async function revokeAgentConnection(formData: FormData) {
 }
 
 export async function uploadInboxDocument(formData: FormData) {
-  await assertPermission('purchase.inbox.write', 'write');
+  await requireWriteOrRedirect('purchase.inbox.write', inboxBack(formData));
   const user = await requireTenantContext();
   const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   const file = formData.get('file');
@@ -106,23 +139,26 @@ export async function uploadInboxDocument(formData: FormData) {
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
   const sessionId = String(formData.get('uploadSession') ?? '').trim();
+  const allowDuplicate = formData.get('allowDuplicate') === 'on' || formData.get('allowDuplicate') === '1';
   const result = sessionId
-    ? await service.finalizeUploadSession(actor, { sessionId, bytes })
+    ? await service.finalizeUploadSession(actor, { sessionId, bytes, allowDuplicate })
     : await service.submitDocument(actor, {
         filename: file.name,
         mime: file.type || 'application/pdf',
         bytes,
         textHint: String(formData.get('textHint') ?? ''),
+        allowDuplicate,
       });
   if (!result.ok) {
-    redirect(`/purchase/inbox?err=${encodeURIComponent(result.error)}`);
+    const dup = 'duplicateOf' in result && result.duplicateOf ? `&duplicateOf=${encodeURIComponent(String(result.duplicateOf))}` : '';
+    redirect(`/purchase/inbox?err=${encodeURIComponent(result.error)}${dup}`);
   }
   revalidatePath('/purchase/inbox');
   redirect(`/purchase/inbox/${result.document!.id}`);
 }
 
 export async function answerInboxIssue(formData: FormData) {
-  await assertPermission('purchase.inbox.write', 'write');
+  await requireWriteOrRedirect('purchase.inbox.write', inboxBack(formData));
   const user = await requireTenantContext();
   const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   await service.answerIssue(actor, {
@@ -144,11 +180,13 @@ export async function previewInboxProposal(formData: FormData) {
   await service.getPreview(actor, proposalId);
   const documentId = String(formData.get('documentId') ?? '');
   revalidatePath(`/purchase/inbox/${documentId}`);
+  const warning = await duplicateBillWarning(service, actor, documentId, user.tenantId);
+  if (warning) redirect(`/purchase/inbox/${documentId}?err=${encodeURIComponent(warning)}`);
   redirect(`/purchase/inbox/${documentId}`);
 }
 
 export async function approveInboxProposal(formData: FormData) {
-  await assertPermission('agent_bridge.approve', 'write');
+  await requireWriteOrRedirect('agent_bridge.approve', inboxBack(formData));
   const user = await requireTenantContext();
   const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   await service.grantApproval(actor, String(formData.get('proposalId') ?? ''));
@@ -158,7 +196,7 @@ export async function approveInboxProposal(formData: FormData) {
 }
 
 export async function commitInboxProposal(formData: FormData) {
-  await assertPermission('agent_bridge.post', 'write');
+  await requireWriteOrRedirect('agent_bridge.post', inboxBack(formData));
   const user = await requireTenantContext();
   const { service, actor } = await withTenantContext(user.tenantId, () => getAgentBridgeService());
   const receipt = await service.commitApprovedProposal(actor, {
@@ -169,14 +207,13 @@ export async function commitInboxProposal(formData: FormData) {
   const documentId = String(formData.get('documentId') ?? '');
   revalidatePath('/purchase/inbox');
   revalidatePath('/purchase/purchases');
-  if (receipt && 'ok' in receipt && receipt.ok === false) {
-    redirect(`/purchase/inbox/${documentId}?err=${encodeURIComponent(receipt.error)}`);
-  }
+  const refusal = commitOutcomeMessage(receipt);
+  if (refusal) redirect(`/purchase/inbox/${documentId}?err=${encodeURIComponent(refusal)}`);
   redirect(`/purchase/inbox/${documentId}`);
 }
 
 export async function saveAgentBridgeSettingsFromForm(formData: FormData) {
-  await assertPermission('company.purchase_settings.write', 'write');
+  await requireWriteOrRedirect('company.purchase_settings.write', '/company/agent-bridge');
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, () =>
     saveAgentBridgeFlags(user.tenantId, {
@@ -193,7 +230,8 @@ export async function saveAgentBridgeSettingsFromForm(formData: FormData) {
 }
 
 export async function mintInboxToken(): Promise<{ token?: string; error?: string }> {
-  await assertPermission('company.purchase_settings.write', 'write');
+  const denied = await writeDeniedMessage('company.purchase_settings.write');
+  if (denied) return { error: denied };
   const actor = await actorFromSession();
   const flags = await loadAgentBridgeFlags(actor.tenantId);
   if (!flags.enabled) return { error: 'Turn on Document Inbox before minting a local token.' };

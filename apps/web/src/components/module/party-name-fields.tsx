@@ -32,12 +32,19 @@ export function PartyNameFields({
   const hasOptions = Boolean(partyOptions && partyOptions.length > 0);
   const controlled = typeof onPartyNameChange === 'function';
   const lockedName = (partyName || defaultPartyName || partyOptions?.[0]?.name || '').trim();
+  const [picked, setPicked] = useState(defaultPartyName || partyOptions?.[0]?.name || '');
+  const selectedName = locked ? lockedName : controlled ? (partyName ?? '') : picked;
+  // Submit the picked party's id so posting never matches by display name (QA-1126-04).
+  const nameMatches = partyOptions?.filter((p) => p.name === selectedName) ?? [];
+  const pickedId = override.trim() || nameMatches.length !== 1 ? '' : nameMatches[0]!.id;
+  const partyIdInput = pickedId ? <input type="hidden" name="partyId" value={pickedId} /> : null;
 
   if (locked) {
     return (
       <div className="field field-span-2">
         <label>{label} *</label>
         <input type="hidden" name="partyName" value={lockedName} />
+        {partyIdInput}
         {hasOptions ? (
           <select className="input" disabled value={lockedName} aria-readonly="true">
             {lockedName && !partyOptions!.some((p) => p.name === lockedName) ? (
@@ -62,6 +69,7 @@ export function PartyNameFields({
     <>
       <div className="field field-span-2">
         <label>{label} *</label>
+        {partyIdInput}
         {hasOptions ? (
           <select
             className="input"
@@ -72,7 +80,10 @@ export function PartyNameFields({
                   value: partyName ?? '',
                   onChange: (e: ChangeEvent<HTMLSelectElement>) => onPartyNameChange!(e.target.value),
                 }
-              : { defaultValue: defaultPartyName || partyOptions![0]?.name || '' })}
+              : {
+                  defaultValue: defaultPartyName || partyOptions![0]?.name || '',
+                  onChange: (e: ChangeEvent<HTMLSelectElement>) => setPicked(e.target.value),
+                })}
           >
             {controlled && partyName && !partyOptions!.some((p) => p.name === partyName) ? (
               <option value={partyName}>{partyName}</option>

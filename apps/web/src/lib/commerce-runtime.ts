@@ -144,16 +144,22 @@ export async function withCommerceService<T>(tenantId: string, fn: (service: Com
   return withTenantContext(tenantId, async () => fn(await makeCommerceService()));
 }
 
+export const COMMERCE_TOKEN_INVALID_MESSAGE = 'The commerce token is invalid, revoked or expired.';
+
 export async function authenticateCommerceRequest(authorization: string | null): Promise<CommerceActor> {
   const raw = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : authorization?.trim();
   const parsed = raw ? parseToken(raw) : null;
-  if (!parsed) {
+  if (!raw) {
     throw new CommerceError({ code: 'UNAUTHENTICATED', message: 'A commerce bearer token is required.', httpStatus: 401 });
+  }
+  if (!parsed) {
+    // A token was sent but is malformed: say so (QA-1126-13).
+    throw new CommerceError({ code: 'UNAUTHENTICATED', message: COMMERCE_TOKEN_INVALID_MESSAGE, httpStatus: 401 });
   }
   const store = new PostgresCommerceStore();
   const credential = await store.getCredentialByPrefix(parsed.prefix);
   if (!credential) {
-    throw new CommerceError({ code: 'UNAUTHENTICATED', message: 'The commerce token is not valid.', httpStatus: 401 });
+    throw new CommerceError({ code: 'UNAUTHENTICATED', message: COMMERCE_TOKEN_INVALID_MESSAGE, httpStatus: 401 });
   }
   return withTenantContext(credential.tenantId, async () => {
     const service = await makeCommerceService();

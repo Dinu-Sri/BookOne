@@ -1,8 +1,9 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
-import { listParties, type PartyListFilter } from '@/app/actions/parties';
+import { listParties, listPartyDuplicates, type PartyListFilter } from '@/app/actions/parties';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
+import { PartyDuplicatesCard } from '@/components/parties/party-duplicates-card';
 import { PartyListScreen } from '@/components/parties/party-list';
 import { jobCanWrite } from '@/lib/access';
 
@@ -32,9 +33,12 @@ export default async function VendorsPage({ searchParams }: { searchParams: Prom
   } catch {
     redirect('/login');
   }
+  // Merge needs an Owner/Admin grant; others never see the repair card.
+  const duplicates = jobCanWrite(tenant, 'Team') ? await listPartyDuplicates().catch(() => []) : [];
 
   return (
     <BookOneShell active="Vendors" tenant={tenant}>
+      <PartyDuplicatesCard pairs={duplicates} back="/parties/vendors" />
       <Suspense fallback={<div className="workspace">Loading…</div>}>
         <PartyListScreen role="vendor" rows={rows} filter={filter} canWrite={jobCanWrite(tenant, 'Vendors')} />
       </Suspense>

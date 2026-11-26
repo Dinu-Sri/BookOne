@@ -29,7 +29,7 @@ export type JsonRpcResponse = {
 const TOOL_DESCRIPTIONS: Record<string, string> = {
   get_capabilities: 'List AgentBridge flags, scopes, operations and tools for this connection.',
   get_policy_context: 'Return the company purchase-bill policy in force.',
-  submit_document: 'Upload an owned PDF or image. Pass filename, mime and contentBase64. Never a filesystem path or URL.',
+  submit_document: 'Upload an owned PDF or image. Pass filename, mime and contentBase64. Never a filesystem path or URL. The same file twice is refused with DUPLICATE_DOCUMENT unless allowDuplicate is true.',
   submit_extracted_facts:
     'Submit structured invoice facts against an owned stored document, content hash and expected revision. Works without server OCR.',
   create_upload_session:
@@ -102,7 +102,8 @@ export async function dispatchTool(
   const schema = TOOL_INPUT_SCHEMAS[name];
   if (schema) {
     const checked = validateAgainstSchema(schema, args ?? {});
-    if (!checked.ok) return { ok: false, code: 'STALE_REVISION', error: checked.error };
+    // QA-1126-11: a bad argument is not a changed document.
+    if (!checked.ok) return { ok: false, code: 'INVALID_ARGUMENT', error: checked.error };
     args = checked.value as Record<string, unknown>;
   }
   switch (name) {
@@ -131,6 +132,7 @@ export async function dispatchTool(
         bytes,
         textHint: args.textHint ? String(args.textHint) : undefined,
         idempotencyKey: args.idempotencyKey ? String(args.idempotencyKey) : undefined,
+        allowDuplicate: args.allowDuplicate === true,
       });
     }
     case 'submit_extracted_facts':
@@ -165,6 +167,7 @@ export async function dispatchTool(
       return service.finalizeUploadSession(actor, {
         sessionId: String(args.sessionId ?? ''),
         contentBase64: args.contentBase64 ? String(args.contentBase64) : undefined,
+        allowDuplicate: args.allowDuplicate === true,
       });
     case 'submit_batch_manifest':
       return service.submitBatchManifest(actor, {
@@ -236,7 +239,7 @@ export async function dispatchTool(
         observations: (args.observations as never) ?? [],
       });
     default:
-      return { ok: false, code: 'STALE_REVISION', error: `Unknown tool ${name}.` };
+      return { ok: false, code: 'INVALID_ARGUMENT', error: `Unknown tool ${name}.` };
   }
 }
 

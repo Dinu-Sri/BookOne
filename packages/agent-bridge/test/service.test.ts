@@ -235,10 +235,21 @@ describe('AgentBridgeService', () => {
       bytes: hashed,
     });
     expect(first.ok).toBe(true);
+    // QA-1126-07: the same bytes are refused unless the user asks for a separate copy.
+    const refused = await svc.submitDocument(actor(), {
+      filename: 'dup.pdf',
+      mime: 'application/pdf',
+      bytes: hashed,
+    });
+    expect(refused).toMatchObject({ ok: false, code: 'DUPLICATE_DOCUMENT' });
+    if (refused.ok) throw new Error('duplicate was accepted');
+    expect((refused as { duplicateOf?: string }).duplicateOf).toBe(first.ok ? first.document!.id : undefined);
+    expect(refused.error).toMatch(/already received on .*upload anyway/i);
     const second = await svc.submitDocument(actor(), {
       filename: 'dup.pdf',
       mime: 'application/pdf',
       bytes: hashed,
+      allowDuplicate: true,
     });
     expect(second.ok).toBe(true);
     if (!second.ok) throw new Error('second submit failed');

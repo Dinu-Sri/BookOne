@@ -10,7 +10,7 @@ import { jobCanWrite } from '@/lib/access';
 export default async function DocumentInboxPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ err?: string; uploadSession?: string }>;
+  searchParams?: Promise<{ err?: string; uploadSession?: string; duplicateOf?: string }>;
 }) {
   let tenant;
   try {
@@ -27,6 +27,13 @@ export default async function DocumentInboxPage({
   const query = await searchParams;
   const err = query?.err;
   const uploadSession = query?.uploadSession;
+  const duplicateOf = query?.duplicateOf && /^[0-9a-f-]{36}$/i.test(query.duplicateOf) ? query.duplicateOf : null;
+  // QA-1126-07: mark documents whose bytes match another live document.
+  const hashCounts = new Map<string, number>();
+  for (const d of docs) {
+    if (d.status === 'rejected' || !d.contentHash) continue;
+    hashCounts.set(d.contentHash, (hashCounts.get(d.contentHash) ?? 0) + 1);
+  }
   const canWrite = jobCanWrite(tenant, 'Document Inbox');
 
   return (
@@ -49,6 +56,12 @@ export default async function DocumentInboxPage({
             {err ? (
               <p role="alert" style={{ color: 'var(--danger, #b42318)', fontWeight: 600 }}>
                 {err}
+                {duplicateOf ? (
+                  <>
+                    {' '}
+                    <Link href={`/purchase/inbox/${duplicateOf}`}>Open the earlier document</Link>
+                  </>
+                ) : null}
               </p>
             ) : null}
             {flags.draftOnly ? (
@@ -83,6 +96,12 @@ export default async function DocumentInboxPage({
                   <label htmlFor="inbox-hint">Optional printed text from the invoice</label>
                   <textarea id="inbox-hint" className="input" name="textHint" rows={2} />
                 </div>
+                {duplicateOf ? (
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+                    <input type="checkbox" name="allowDuplicate" value="1" />
+                    Upload anyway as a separate document
+                  </label>
+                ) : null}
                 <Button type="submit">Receive document</Button>
               </form>
             ) : (
@@ -107,7 +126,12 @@ export default async function DocumentInboxPage({
                       <td>
                         <Link href={`/purchase/inbox/${d.id}`}>{d.filename}</Link>
                       </td>
-                      <td>{d.status.replaceAll('_', ' ')}</td>
+                      <td>
+                        {d.status.replaceAll('_', ' ')}
+                        {d.status !== 'rejected' && d.contentHash && (hashCounts.get(d.contentHash) ?? 0) > 1 ? (
+                          <span style={{ marginLeft: 6, fontSize: 12, color: 'var(--danger, #b42318)' }}>· possible duplicate</span>
+                        ) : null}
+                      </td>
                       <td>{d.updatedAt.slice(0, 16).replace('T', ' ')}</td>
                     </tr>
                   ))

@@ -156,6 +156,8 @@ function locationReason(locationType: string) {
 
 export function CompanyCommerce(props: {
   canWrite: boolean;
+  /** QA-1126-06: connections need Inventory; say so before the Owner fills the form. */
+  inventoryOff?: boolean;
   saved: boolean;
   saveError: string | null;
   publishedCount: number | null;
@@ -410,6 +412,12 @@ export function CompanyCommerce(props: {
                 {actionError}
               </p>
             ) : null}
+            {props.inventoryOff ? (
+              <p className="form-error" role="status">
+                Store connections sell BookOne stock, so they need Inventory. Inventory is not part of this
+                company&apos;s plan yet; upgrade to Growth or Pro before creating a connection.
+              </p>
+            ) : null}
             <fieldset className="commerce-fields">
               <legend className="visually-hidden">Connection details</legend>
               <div className="field-full">
@@ -454,7 +462,8 @@ export function CompanyCommerce(props: {
                   })),
                 ]}
                 emptyReason="Add a company location first."
-                help="Choose a shop or warehouse. BookOne does not preselect one."
+                help="Required. Choose a shop or warehouse. BookOne does not preselect one."
+                required
               />
               <SelectField
                 id="conn-currency"

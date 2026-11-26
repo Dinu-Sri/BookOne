@@ -6,7 +6,7 @@ import { requireTenantContext } from '@bookone/auth';
 import { and, asc, db, eq, isNull, locations, posRegisters, withTenantContext } from '@bookone/db';
 import { currentDimensionScope } from '@/lib/dimension-scope';
 import { inDimensionScope } from '@bookone/auth';
-import { assertPermission } from '@/lib/access';
+import { requireWriteOrRedirect } from '@/lib/access';
 
 /** Register master lives on /company/sales with VAT settings. */
 const POS_REGISTER_WRITE = 'company.sales_settings.write';
@@ -89,7 +89,7 @@ export async function savePosRegisterFromForm(formData: FormData): Promise<void>
   });
 
   const user = await requireTenantContext();
-  await assertPermission(POS_REGISTER_WRITE, 'write');
+  await requireWriteOrRedirect(POS_REGISTER_WRITE, '/company/sales#pos-registers');
   await withTenantContext(user.tenantId, async () => {
     if (parsed.locationId) {
       const [loc] = await db()
@@ -154,7 +154,7 @@ export async function archivePosRegisterFromForm(formData: FormData): Promise<vo
   if (!id) throw new Error('Register id required.');
 
   const user = await requireTenantContext();
-  await assertPermission(POS_REGISTER_WRITE, 'write');
+  await requireWriteOrRedirect(POS_REGISTER_WRITE, '/company/sales#pos-registers');
   await withTenantContext(user.tenantId, async () => {
     const active = await db()
       .select({ id: posRegisters.id })

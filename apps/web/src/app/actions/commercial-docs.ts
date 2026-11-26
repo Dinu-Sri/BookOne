@@ -148,6 +148,8 @@ const createSchema = z.object({
     'vendor_bill',
   ]),
   partyName: z.string().min(1).max(255),
+  /** Picked party (QA-1126-04): resolves by id so a display name never creates a duplicate. */
+  partyId: z.string().uuid().optional().nullable(),
   issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
@@ -1243,6 +1245,7 @@ export async function createCommercialDocumentWithUser(
           Boolean(parsed.sourceDocumentId) &&
           (parsed.documentType === 'sales_return' || parsed.documentType === 'purchase_return');
         let partyNameForEnsure = parsed.partyName;
+        let partyIdForEnsure: string | undefined = parsed.partyId ?? undefined;
         if (isLinkedReturnDoc && parsed.sourceDocumentId) {
           const [src] = await db()
             .select({ partyId: businessDocuments.partyId })
@@ -1270,9 +1273,11 @@ export async function createCommercialDocumentWithUser(
             );
           }
           partyNameForEnsure = srcParty.name;
+          partyIdForEnsure = src.partyId ?? undefined;
         }
         const party = await ensureParty(
           {
+            id: partyIdForEnsure,
             name: partyNameForEnsure,
             kind: isSales ? 'customer' : 'vendor',
             isCustomer: isSales,
@@ -2877,6 +2882,10 @@ export async function createCommercialDocumentFromForm(
 
   const selectedParty = String(formData.get('partyName') ?? '').trim();
   const overrideParty = String(formData.get('partyNameOverride') ?? '').trim();
+  const selectedPartyIdRaw = String(formData.get('partyId') ?? '').trim();
+  // The picker's id only counts when the user did not type a new name instead.
+  const selectedPartyId =
+    !overrideParty && selectedParty && /^[0-9a-f-]{36}$/i.test(selectedPartyIdRaw) ? selectedPartyIdRaw : null;
   let partyName =
     overrideParty ||
     (selectedParty && selectedParty !== '__new__' ? selectedParty : '') ||
@@ -2933,6 +2942,7 @@ export async function createCommercialDocumentFromForm(
   const result = await createCommercialDocument({
     documentType,
     partyName,
+    partyId: selectedPartyId,
     issueDate: String(formData.get('issueDate') ?? new Date().toISOString().slice(0, 10)),
     dueDate: String(formData.get('dueDate') ?? ''),
     deliveryDate: String(formData.get('deliveryDate') ?? ''),

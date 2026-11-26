@@ -1,15 +1,18 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { pickPartyByName } from '@/lib/party-match';
 import { z } from 'zod';
 import { requireTenantContext, type SessionUser } from '@bookone/auth';
-import { assertPermission } from '@/lib/access';
+import { assertPermission, requireWriteOrRedirect, withFlash } from '@/lib/access';
 import { AP_BALANCE_TYPES, AR_BALANCE_TYPES, postedObligationSql } from '@/lib/posted-obligations';
 import {
   auditLog,
   businessDocuments,
   db,
+  inventoryProducts,
   parties,
+  partyAdvances,
   transactions,
   eq,
   and,
@@ -717,6 +720,8 @@ export async function getParty(id: string): Promise<PartyRow | null> {
 
 /** Used by sales/purchase free-text create — merges dual roles on match. */
 export async function ensureParty(input: {
+  /** Picked party id; wins over the name (QA-1126-04). */
+  id?: string;
   name: string;
   kind?: 'customer' | 'vendor' | 'both';
   isCustomer?: boolean;
@@ -734,17 +739,25 @@ export async function ensureParty(input: {
   const user = actor ?? (await requireTenantContext());
   return withTenantContext(user.tenantId, async () => {
     const name = input.name.trim();
-    const [existing] = await db()
+    // Pickers show the display name, so a name matches the legal or the display
+    // name; otherwise "Acme" for "Acme Trading (Private) Limited" made a duplicate.
+    const candidates = await db()
       .select(partySelect)
       .from(parties)
       .where(
         and(
           eq(parties.tenantId, user.tenantId),
-          sql`lower(${parties.name}) = lower(${name})`,
+          input.id
+            ? eq(parties.id, input.id)
+            : sql`(lower(${parties.name}) = lower(${name}) or lower(coalesce(${parties.displayName}, '')) = lower(${name}))`,
           isNull(parties.voidedAt),
         ),
       )
-      .limit(1);
+      .limit(5);
+    if (input.id && !candidates[0]) {
+      throw new Error('The selected party was not found in this company. Pick it again.');
+    }
+    const existing = input.id ? candidates[0] : pickPartyByName(candidates, name);
 
     if (existing) {
       const nextCustomer =
@@ -1100,4 +1113,133 @@ export async function getPartyDeleteBlockers(id: string): Promise<{ ok: boolean;
     if (!existing) return { ok: false, reasons: ['Party not found.'] };
     return assertPartyDeletable(user.tenantId, id, existing.name);
   });
+}
+
+export interface PartyDuplicatePair {
+  duplicateId: string;
+  duplicateCode: string | null;
+  duplicateName: string;
+  keepId: string;
+  keepCode: string | null;
+  keepName: string;
+  keepDisplayName: string;
+}
+
+/**
+ * QA-1126-04 data repair: parties that posting auto-created (audit note
+ * "Created party via ensureParty.") whose name is another party's display name.
+ */
+export async function listPartyDuplicates(): Promise<PartyDuplicatePair[]> {
+  const user = await requireTenantContext();
+  return withTenantContext(user.tenantId, async () => {
+    const created = await db()
+      .select({ id: auditLog.recordId })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.tenantId, user.tenantId),
+          eq(auditLog.tableName, 'parties'),
+          eq(auditLog.notes, 'Created party via ensureParty.'),
+        ),
+      );
+    if (created.length === 0) return [];
+    const rows = await db()
+      .select({ id: parties.id, code: parties.code, name: parties.name, displayName: parties.displayName })
+      .from(parties)
+      .where(and(eq(parties.tenantId, user.tenantId), isNull(parties.voidedAt)));
+    const autoIds = new Set(created.map((c) => c.id));
+    const pairs: PartyDuplicatePair[] = [];
+    for (const dup of rows) {
+      if (!autoIds.has(dup.id)) continue;
+      const key = dup.name.trim().toLowerCase();
+      const keeps = rows.filter(
+        (r) => r.id !== dup.id && (r.displayName ?? '').trim().toLowerCase() === key && r.name.trim().toLowerCase() !== key,
+      );
+      if (keeps.length !== 1) continue;
+      const keep = keeps[0]!;
+      pairs.push({
+        duplicateId: dup.id,
+        duplicateCode: dup.code,
+        duplicateName: dup.name,
+        keepId: keep.id,
+        keepCode: keep.code,
+        keepName: keep.name,
+        keepDisplayName: keep.displayName ?? '',
+      });
+    }
+    return pairs;
+  });
+}
+
+/** Owner/Admin merge: moves documents, advances and preferred-vendor links, then voids the duplicate. Posted journals are not rewritten. */
+export async function mergeDuplicatePartyFromForm(formData: FormData): Promise<void> {
+  const duplicateId = String(formData.get('duplicateId') ?? '');
+  const back = String(formData.get('back') ?? '/parties/customers');
+  const dest = back.startsWith('/parties/') ? back : '/parties/customers';
+  await requireWriteOrRedirect('team.people.write', dest);
+  const user = await requireTenantContext();
+  const pair = (await listPartyDuplicates()).find((p) => p.duplicateId === duplicateId);
+  if (!pair) {
+    const { redirect } = await import('next/navigation');
+    redirect(withFlash(dest, 'merge_not_found'));
+  }
+  await withTenantContext(user.tenantId, async () => {
+    await db().transaction(async (tx) => {
+      const [keep] = await tx
+        .select({ isCustomer: parties.isCustomer, isVendor: parties.isVendor, kind: parties.kind })
+        .from(parties)
+        .where(eq(parties.id, pair!.keepId))
+        .limit(1);
+      const [dup] = await tx
+        .select({ isCustomer: parties.isCustomer, isVendor: parties.isVendor, kind: parties.kind })
+        .from(parties)
+        .where(eq(parties.id, pair!.duplicateId))
+        .limit(1);
+      const isCust = [keep, dup].some((p) => p && (p.isCustomer === '1' || p.kind === 'customer' || p.kind === 'both'));
+      const isVend = [keep, dup].some((p) => p && (p.isVendor === '1' || p.kind === 'vendor' || p.kind === 'both'));
+      const moved = await tx
+        .update(businessDocuments)
+        .set({ partyId: pair!.keepId })
+        .where(and(eq(businessDocuments.tenantId, user.tenantId), eq(businessDocuments.partyId, pair!.duplicateId)))
+        .returning({ id: businessDocuments.id });
+      await tx
+        .update(partyAdvances)
+        .set({ partyId: pair!.keepId })
+        .where(and(eq(partyAdvances.tenantId, user.tenantId), eq(partyAdvances.partyId, pair!.duplicateId)));
+      await tx
+        .update(inventoryProducts)
+        .set({ preferredVendorId: pair!.keepId })
+        .where(and(eq(inventoryProducts.tenantId, user.tenantId), eq(inventoryProducts.preferredVendorId, pair!.duplicateId)));
+      await tx
+        .update(parties)
+        .set({ isCustomer: isCust ? '1' : '0', isVendor: isVend ? '1' : '0', kind: kindFromFlags(isCust, isVend), updatedAt: new Date() })
+        .where(eq(parties.id, pair!.keepId));
+      await tx
+        .update(parties)
+        .set({ voidedAt: new Date(), status: 'inactive', updatedAt: new Date() })
+        .where(eq(parties.id, pair!.duplicateId));
+      await tx.insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'UPDATE',
+        tableName: 'parties',
+        recordId: pair!.keepId,
+        newValues: { mergedFrom: pair!.duplicateId, documentsMoved: moved.length },
+        notes: `Merged duplicate party ${pair!.duplicateCode ?? ''} ${pair!.duplicateName} into this party.`.replace(/\s+/g, ' '),
+      });
+      await tx.insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'DELETE',
+        tableName: 'parties',
+        recordId: pair!.duplicateId,
+        newValues: { mergedInto: pair!.keepId },
+        notes: 'Voided duplicate party after merge.',
+      });
+    });
+  });
+  revalidatePath('/parties/customers');
+  revalidatePath('/parties/vendors');
+  const { redirect } = await import('next/navigation');
+  redirect(withFlash(dest, 'party_merged'));
 }

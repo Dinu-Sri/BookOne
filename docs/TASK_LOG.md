@@ -1,3 +1,7 @@
+## 2026-11-26 — QA retest fixes, 15 findings (v2.18.0)
+
+Fixed QA-1126-01..15 from the bookone-qa retest (PR #129): OAuth consent 303; permission gates on discounts, domains, bank import/reconciliation and product archive; display-name duplicate parties plus an owner merge; duplicate file and duplicate supplier-invoice messages; clear AgentBridge commit refusals; permission refusals redirect instead of 500; and P3 copy/order fixes. See [CHG-20261126-qa-retest-fixes](changes/CHG-20261126-qa-retest-fixes.md).
+
 ## 2026-11-26 — Simple Entry ignores rental fleet bays (v2.17.12)
 
 - Record: [CHG-20261126-simple-entry-fleet-locations.md](changes/CHG-20261126-simple-entry-fleet-locations.md). Fresh companies were forced to pick "On rent" as Location. 709 unit tests passed.

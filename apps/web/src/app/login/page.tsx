@@ -3,6 +3,7 @@
 import type { FormEvent, ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { signUpMessage } from '@/lib/sign-up-message';
 import { createAuthClient } from 'better-auth/react';
 import { Eye, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
@@ -108,7 +109,10 @@ function LoginContent() {
           setError(result.error.message ?? 'Could not create account.');
           return;
         }
-        setMessage('Account created. Check your email to verify before signing in.');
+        // QA-1126-15: only ask for verification when the server actually requires it
+        // (sign-up returns no session token then).
+        const signedUpWithSession = Boolean((result.data as { token?: string | null } | null)?.token);
+        setMessage(signUpMessage(signedUpWithSession));
         setMode('signin');
         setPassword('');
         setConfirmPassword('');
@@ -302,3 +306,4 @@ function AuthField({
     </div>
   );
 }
+

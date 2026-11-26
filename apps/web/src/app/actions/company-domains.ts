@@ -5,7 +5,8 @@ import { resolveTxt } from 'node:dns/promises';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
-import { and, asc, companyDomains, db, eq, isNull, withTenantContext } from '@bookone/db';
+import { requireWriteOrRedirect } from '@/lib/access';
+import { and, asc, auditLog, companyDomains, db, eq, isNull, withTenantContext } from '@bookone/db';
 
 const domainSchema = z.object({
   domain: z.string().min(3).max(255).regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i),
@@ -46,15 +47,28 @@ export async function listCompanyDomains(): Promise<CompanyDomainRow[]> {
 
 export async function createCompanyDomain(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
+  await requireWriteOrRedirect('company.domains.write', '/company/domains');
   const parsed = domainSchema.parse({ domain: normalizeDomain(String(formData.get('domain') ?? '')) });
   const token = randomBytes(24).toString('hex');
 
   await withTenantContext(user.tenantId, async () => {
-    await db().insert(companyDomains).values({
+    const [row] = await db()
+      .insert(companyDomains)
+      .values({
+        tenantId: user.tenantId,
+        domain: parsed.domain,
+        verificationToken: token,
+        status: 'pending',
+      })
+      .returning({ id: companyDomains.id });
+    await db().insert(auditLog).values({
       tenantId: user.tenantId,
-      domain: parsed.domain,
-      verificationToken: token,
-      status: 'pending',
+      userId: user.id,
+      action: 'CREATE',
+      tableName: 'company_domains',
+      recordId: row.id,
+      newValues: { domain: parsed.domain },
+      notes: 'Added company verification domain.',
     });
   });
 
@@ -63,6 +77,7 @@ export async function createCompanyDomain(formData: FormData): Promise<void> {
 
 export async function verifyCompanyDomain(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
+  await requireWriteOrRedirect('company.domains.write', '/company/domains');
   const id = String(formData.get('domainId') ?? '');
   if (!id) return;
 
@@ -89,6 +104,15 @@ export async function verifyCompanyDomain(formData: FormData): Promise<void> {
       .update(companyDomains)
       .set({ status: 'verified', verifiedAt: new Date(), updatedAt: new Date() })
       .where(eq(companyDomains.id, domain.id));
+    await db().insert(auditLog).values({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'UPDATE',
+      tableName: 'company_domains',
+      recordId: domain.id,
+      newValues: { domain: domain.domain, status: 'verified' },
+      notes: 'Verified company domain via DNS TXT.',
+    });
   });
 
   revalidatePath('/company/domains');

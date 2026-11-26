@@ -106,7 +106,18 @@ export const COMMERCE_OPENAPI = {
                 sku: { type: 'string' },
                 productId: { type: 'string' },
                 locationId: { type: ['string', 'null'] },
-                quantity: { type: 'string', example: '1' },
+                quantity: {
+                  type: 'string',
+                  example: '12',
+                  description: 'What this channel may sell now: onHand minus committed (same as available).',
+                },
+                onHand: { type: 'string', example: '14', description: 'Physical stock at the connection location.' },
+                committed: {
+                  type: 'string',
+                  example: '2',
+                  description: 'Held for open web orders (cash on delivery, bank transfer) that are not invoiced yet.',
+                },
+                available: { type: 'string', example: '12', description: 'onHand − committed.' },
                 revision: { type: 'integer' },
                 asOf: { type: 'string', format: 'date-time' },
                 stale: { type: 'boolean' },
@@ -115,6 +126,12 @@ export const COMMERCE_OPENAPI = {
           },
           authority: { type: 'string', enum: ['bookone'] },
           mode: { type: 'string', enum: ['absolute'] },
+          scope: {
+            type: 'string',
+            enum: ['mapped'],
+            description:
+              'Items are the SKUs linked (mapped) to this connection, i.e. the products published to this channel. Unlinked BookOne products are not returned.',
+          },
         },
       },
       Changes: {
@@ -128,7 +145,14 @@ export const COMMERCE_OPENAPI = {
               properties: {
                 id: { type: 'string' },
                 revision: { type: 'integer' },
-                kind: { type: 'string', enum: ['catalog', 'inventory'] },
+                kind: {
+                  type: 'string',
+                  enum: ['catalog', 'inventory', 'order', 'mapping', 'publish'],
+                  description:
+                    'order: BookOne-side change to a web order (stock_held, confirmed, paid, dispatched, delivered, cancelled, refunded, posted). mapping: a SKU was linked. publish: a product was queued for publishing or claimed by the store.',
+                },
+                productId: { type: ['string', 'null'] },
+                createdAt: { type: 'string', format: 'date-time' },
                 sku: { type: 'string' },
                 payload: { type: 'object', additionalProperties: true },
               },
@@ -304,8 +328,71 @@ export const COMMERCE_OPENAPI = {
           documentNumber: { type: ['string', 'null'] },
           lastAppliedVersion: { type: ['string', 'null'] },
           settlement: { type: 'string', enum: ['none', 'not_configured', 'settled'] },
+          paymentStatus: { type: ['string', 'null'], enum: ['pending', 'paid', 'failed', null] },
+          stock: {
+            type: 'string',
+            enum: ['none', 'committed', 'released', 'consumed'],
+            description:
+              'committed: stock is held for this unpaid order. consumed: the hold became the invoice stock movement. released: the order was cancelled.',
+          },
+          fulfilment: { $ref: '#/components/schemas/Fulfilment' },
           replayed: { type: 'boolean' },
           httpStatusIsNotAccountingAcceptance: { type: 'boolean', enum: [true] },
+        },
+      },
+      Fulfilment: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['unfulfilled', 'confirmed', 'picking', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'returned', 'cancelled'],
+          },
+          confirmedAt: { type: ['string', 'null'], format: 'date-time' },
+          shipments: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                carrier: { type: 'string', example: 'Courier name' },
+                trackingNumber: { type: 'string', example: 'TRK123456' },
+                trackingUrl: { type: ['string', 'null'] },
+                shippedAt: { type: 'string', format: 'date-time' },
+                deliveredAt: { type: ['string', 'null'], format: 'date-time' },
+              },
+            },
+          },
+          stock: { type: 'string', enum: ['none', 'committed', 'released', 'consumed'] },
+        },
+      },
+      PaymentMethods: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                method: { type: 'string', example: 'cod', description: 'payment.method as your store sends it (lower-cased).' },
+                settlementAccountCode: { type: ['string', 'null'], example: '1201' },
+                settlesOnPaid: { type: 'boolean', description: 'false means a paid order stays open in receivables.' },
+                holdsStockWhilePending: { type: 'boolean' },
+              },
+            },
+          },
+          defaultSettlementAccountCode: { type: ['string', 'null'] },
+          acceptsAnyMethodName: { type: 'boolean', enum: [true] },
+          nextCursor: { type: ['string', 'null'] },
+        },
+        example: {
+          items: [
+            { method: 'bank_transfer', settlementAccountCode: '1100', settlesOnPaid: true, holdsStockWhilePending: true },
+            { method: 'cod', settlementAccountCode: null, settlesOnPaid: false, holdsStockWhilePending: true },
+            { method: 'payhere', settlementAccountCode: '1201', settlesOnPaid: true, holdsStockWhilePending: false },
+          ],
+          defaultSettlementAccountCode: '1201',
+          acceptsAnyMethodName: true,
+          nextCursor: null,
         },
       },
       ValidatePreview: {
@@ -358,11 +445,25 @@ export const COMMERCE_OPENAPI = {
     },
     '/inventory': {
       get: {
-        summary: 'Absolute BookOne availability',
+        summary: 'BookOne availability for the SKUs linked to this channel',
+        description:
+          'quantity = available = onHand − committed. committed is stock held for unpaid cash-on-delivery / bank-transfer orders. Pass up to 100 SKUs as repeated sku= or a comma list.',
         parameters: [{ name: 'sku', in: 'query', schema: { type: 'string' }, style: 'form', explode: true }],
         responses: {
           '200': { description: 'Inventory', content: { 'application/json': { schema: { $ref: '#/components/schemas/Inventory' } } } },
           '409': { description: 'Outbound paused', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    },
+    '/payment-methods': {
+      get: {
+        summary: 'Payment methods this channel uses, where each settles and whether it holds stock while unpaid',
+        description:
+          'Send payment.method as any name your store uses (for example cod, bank_transfer or a gateway id). BookOne maps names to accounts under Commerce Integrations → Payments; a 4-digit account code is still accepted. Methods appear here after the first order that uses them, or when the owner adds them.',
+        responses: {
+          '200': { description: 'Methods', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaymentMethods' } } } },
+          '401': { description: 'Unauthenticated', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '403': { description: 'Key lacks the order scope', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
         },
       },
     },

@@ -101,6 +101,8 @@ export const commerceOrders = pgTable('commerce_orders', {
   documentNumber: varchar('document_number', { length: 50 }),
   /** Account the paid order was settled into; null = left open in receivables. */
   settlementAccountCode: varchar('settlement_account_code', { length: 20 }),
+  /** Staff fulfilment: confirmed/dispatched/delivered, shipments with courier and tracking. */
+  fulfilmentJson: jsonb('fulfilment').notNull().default({}),
   lastEventId: uuid('last_event_id'),
   lastAppliedVersion: varchar('last_applied_version', { length: 80 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -271,6 +273,30 @@ export const commercePublishClaims = pgTable('commerce_publish_claims', {
   externalProductId: varchar('external_product_id', { length: 80 }).notNull().default(''),
   externalVariantId: varchar('external_variant_id', { length: 80 }).notNull().default(''),
   issue: text('issue'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Stock held for a web order before it posts (COD / bank transfer). Active
+ * commitments reduce `available` for every channel and for POS when negative
+ * stock is blocked.
+ */
+export const commerceStockCommitments = pgTable('commerce_stock_commitments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  connectionId: uuid('connection_id')
+    .notNull()
+    .references(() => commerceConnections.id),
+  orderId: uuid('order_id')
+    .notNull()
+    .references(() => commerceOrders.id),
+  productId: uuid('product_id').notNull(),
+  locationId: uuid('location_id'),
+  quantity: varchar('quantity', { length: 32 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

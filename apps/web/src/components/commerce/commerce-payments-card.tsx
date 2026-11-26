@@ -10,6 +10,8 @@ export type CommercePaymentSettingsView = {
   defaultAccountCode: string | null;
   methods: Record<string, string>;
   seenMethods: string[];
+  commitStockMethods?: string[];
+  couriers?: Array<{ name: string; trackingUrlTemplate: string | null }>;
 };
 
 const UNPAID = 'unpaid';
@@ -66,7 +68,7 @@ export function CommercePaymentsCard({
 
       <form action={saveCommercePaymentsFromForm} className="commerce-panel-stack">
         <input type="hidden" name="connectionId" value={connectionId} />
-        <input type="hidden" name="tab" value="connections" />
+        <input type="hidden" name="tab" value="payments" />
         <SelectField
           id={`payments-default-${connectionId}`}
           name="defaultAccountCode"
@@ -151,7 +153,7 @@ export function CommercePaymentsCard({
       {canWrite ? (
         <form action={createCommerceClearingAccountFromForm} className="form-grid" style={{ marginTop: 12 }}>
           <input type="hidden" name="connectionId" value={connectionId} />
-          <input type="hidden" name="tab" value="connections" />
+          <input type="hidden" name="tab" value="payments" />
           <TextField
             id={`payments-gateway-${connectionId}`}
             name="gatewayName"

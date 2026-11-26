@@ -12,6 +12,7 @@ import {
   commerceProductMappings,
   commercePublishClaims,
   commerceRefunds,
+  commerceStockCommitments,
   db,
   asc,
   desc,
@@ -24,6 +25,7 @@ import {
 } from '@bookone/db';
 import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
 import { EMPTY_PAYMENT_SETTINGS, normalizePaymentSettings } from './payments';
+import { EMPTY_FULFILMENT, normalizeFulfilment } from './fulfilment';
 import type {
   ActivityRow,
   ConnectionKind,
@@ -544,6 +546,7 @@ export class PostgresCommerceStore implements CommerceStore {
       documentId: row.documentId,
       documentNumber: row.documentNumber,
       settlementAccountCode: row.settlementAccountCode ?? null,
+      fulfilmentJson: row.fulfilment ?? EMPTY_FULFILMENT,
       lastAppliedVersion: row.lastAppliedVersion,
     });
     if (row.lines.length) {
@@ -576,6 +579,7 @@ export class PostgresCommerceStore implements CommerceStore {
         documentId: row.documentId,
         documentNumber: row.documentNumber,
         settlementAccountCode: row.settlementAccountCode ?? null,
+        fulfilmentJson: row.fulfilment ?? EMPTY_FULFILMENT,
         lastAppliedVersion: row.lastAppliedVersion,
         snapshotJson: row.snapshot,
         updatedAt: new Date(),
@@ -587,6 +591,85 @@ export class PostgresCommerceStore implements CommerceStore {
         .set({ restockedQty: line.restockedQty, refundedAmount: line.refundedAmount })
         .where(eq(commerceOrderLines.id, line.id));
     }
+  }
+
+  async getOrderById(tenantId: string, orderId: string) {
+    const [row] = await db()
+      .select()
+      .from(commerceOrders)
+      .where(and(eq(commerceOrders.tenantId, tenantId), eq(commerceOrders.id, orderId)))
+      .limit(1);
+    if (!row) return null;
+    const lines = await db().select().from(commerceOrderLines).where(eq(commerceOrderLines.orderId, row.id));
+    return orderFrom(row, lines);
+  }
+
+  async committedQty(tenantId: string, productId: string, locationId: string | null) {
+    const [row] = await db()
+      .select({ total: sql<string>`coalesce(sum(${commerceStockCommitments.quantity}::numeric), 0)` })
+      .from(commerceStockCommitments)
+      .where(
+        and(
+          eq(commerceStockCommitments.tenantId, tenantId),
+          eq(commerceStockCommitments.productId, productId),
+          eq(commerceStockCommitments.status, 'active'),
+          locationId
+            ? eq(commerceStockCommitments.locationId, locationId)
+            : sql`${commerceStockCommitments.locationId} is null`,
+        ),
+      );
+    return Number(row?.total ?? 0);
+  }
+
+  async commitStock(input: {
+    tenantId: string;
+    connectionId: string;
+    orderId: string;
+    locationId: string | null;
+    lines: Array<{ productId: string; quantity: number }>;
+  }): Promise<{ ok: true } | { ok: false; short: Array<{ productId: string; available: number; needed: number }> }> {
+    const byProduct = new Map<string, number>();
+    for (const line of input.lines) byProduct.set(line.productId, (byProduct.get(line.productId) ?? 0) + line.quantity);
+    return db().transaction(async (tx) => {
+      const short: Array<{ productId: string; available: number; needed: number }> = [];
+      for (const [productId, needed] of [...byProduct.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        // Same lock key as posting (apps/web lib/inventory-costing lockProductStock).
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`stock:${input.tenantId}:${productId}`}, 0))`);
+        const stock = await this.getStock(input.tenantId, productId, input.locationId);
+        const committed = await this.committedQty(input.tenantId, productId, input.locationId);
+        const available = Number(stock?.quantity ?? 0) - committed;
+        if (available + 1e-9 < needed) short.push({ productId, available: Math.max(0, available), needed });
+      }
+      if (short.length) return { ok: false as const, short };
+      for (const [productId, quantity] of byProduct.entries()) {
+        await tx.insert(commerceStockCommitments).values({
+          tenantId: input.tenantId,
+          connectionId: input.connectionId,
+          orderId: input.orderId,
+          productId,
+          locationId: input.locationId,
+          quantity: String(quantity),
+          status: 'active',
+        });
+      }
+      return { ok: true as const };
+    });
+  }
+
+  async settleCommitments(tenantId: string, orderId: string, status: 'released' | 'consumed' | 'active') {
+    const from = status === 'active' ? 'consumed' : 'active';
+    const rows = await db()
+      .update(commerceStockCommitments)
+      .set({ status, updatedAt: new Date() })
+      .where(
+        and(
+          eq(commerceStockCommitments.tenantId, tenantId),
+          eq(commerceStockCommitments.orderId, orderId),
+          eq(commerceStockCommitments.status, from),
+        ),
+      )
+      .returning({ id: commerceStockCommitments.id });
+    return rows.length;
   }
 
   async listOrders(tenantId: string, connectionId?: string, status?: string) {
@@ -909,6 +992,7 @@ function orderFrom(row: typeof commerceOrders.$inferSelect, lines: (typeof comme
     documentId: row.documentId,
     documentNumber: row.documentNumber,
     settlementAccountCode: row.settlementAccountCode ?? null,
+    fulfilment: normalizeFulfilment(row.fulfilmentJson),
     lastAppliedVersion: row.lastAppliedVersion,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

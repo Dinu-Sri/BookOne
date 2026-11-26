@@ -1,3 +1,7 @@
+## 2026-11-26 — Commerce WP0: web orders, held stock, clearer Commerce screen (v2.20.0)
+
+Web orders now show on a new Orders tab with Confirm, Mark paid, Dispatch (courier + tracking), Delivered, Cancel and Refund. Cash-on-delivery and bank-transfer orders hold stock on receipt (also blocking POS when negative stock is blocked). New GET /payment-methods and order/mapping/publish change events. Commerce Integrations is reorganised into Overview, Orders, Products, Payments, Settings, Developer and Activity. See [CHG-20261126-commerce-wp0-web-orders](changes/CHG-20261126-commerce-wp0-web-orders.md) and the website release note [docs/commerce/RELEASE-WP0.md](commerce/RELEASE-WP0.md).
+
 ## 2026-11-26 — Payments card button layout (v2.19.1)
 
 The Create clearing account button no longer stretches. See [CHG-20261126-commerce-payment-settings](changes/CHG-20261126-commerce-payment-settings.md).

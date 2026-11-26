@@ -85,6 +85,7 @@ export {
   commerceActivity,
   commerceMappingProposals,
   commercePublishClaims,
+  commerceStockCommitments,
 } from './commerce';
 export { posRegisters, posShifts } from './pos';
 export {

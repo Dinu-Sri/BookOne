@@ -23,6 +23,7 @@ export class MemoryCommerceStore implements CommerceStore {
   products: ProductRecord[] = [];
   stock: StockRecord[] = [];
   orders: OrderRow[] = [];
+  commitments: Array<{ tenantId: string; orderId: string; productId: string; locationId: string | null; quantity: number; status: string }> = [];
   idem = new Map<string, IdempotencyRow>();
   events: CommerceEventRow[] = [];
   refunds: CommerceRefundRow[] = [];
@@ -130,6 +131,41 @@ export class MemoryCommerceStore implements CommerceStore {
   async listStock(tenantId: string, locationId: string | null) {
     void tenantId;
     return this.stock.filter((s) => (s.locationId ?? null) === (locationId ?? null));
+  }
+  async getOrderById(tenantId: string, orderId: string) {
+    const row = this.orders.find((o) => o.tenantId === tenantId && o.id === orderId);
+    return row ? structuredClone(row) : null;
+  }
+  async committedQty(tenantId: string, productId: string, locationId: string | null) {
+    return this.commitments
+      .filter((c) => c.tenantId === tenantId && c.productId === productId && c.status === 'active' && (c.locationId ?? null) === (locationId ?? null))
+      .reduce((sum, c) => sum + c.quantity, 0);
+  }
+  async commitStock(input: { tenantId: string; connectionId: string; orderId: string; locationId: string | null; lines: Array<{ productId: string; quantity: number }> }) {
+    const byProduct = new Map<string, number>();
+    for (const line of input.lines) byProduct.set(line.productId, (byProduct.get(line.productId) ?? 0) + line.quantity);
+    const short: Array<{ productId: string; available: number; needed: number }> = [];
+    for (const [productId, needed] of byProduct) {
+      const stock = await this.getStock(input.tenantId, productId, input.locationId);
+      const available = Number(stock?.quantity ?? 0) - (await this.committedQty(input.tenantId, productId, input.locationId));
+      if (available + 1e-9 < needed) short.push({ productId, available: Math.max(0, available), needed });
+    }
+    if (short.length) return { ok: false as const, short };
+    for (const [productId, quantity] of byProduct) {
+      this.commitments.push({ tenantId: input.tenantId, orderId: input.orderId, productId, locationId: input.locationId, quantity, status: 'active' });
+    }
+    return { ok: true as const };
+  }
+  async settleCommitments(tenantId: string, orderId: string, status: 'released' | 'consumed' | 'active') {
+    const from = status === 'active' ? 'consumed' : 'active';
+    let n = 0;
+    for (const c of this.commitments) {
+      if (c.tenantId === tenantId && c.orderId === orderId && c.status === from) {
+        c.status = status;
+        n += 1;
+      }
+    }
+    return n;
   }
   async getOrderByExternalId(tenantId: string, connectionId: string, externalId: string) {
     return this.orders.find((o) => o.tenantId === tenantId && o.connectionId === connectionId && o.externalId === externalId) ?? null;

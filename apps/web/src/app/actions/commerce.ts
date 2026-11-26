@@ -51,13 +51,15 @@ function rethrowNav(error: unknown): void {
 
 function commercePath(formData: FormData, extra: Record<string, string | undefined> = {}) {
   const params = new URLSearchParams();
-  const tab = String(formData.get('tab') ?? extra.tab ?? 'connections');
+  const tab = String(formData.get('tab') ?? extra.tab ?? 'overview');
   const connection = String(formData.get('connectionId') ?? extra.connection ?? '');
   if (tab) params.set('tab', tab);
   if (connection) params.set('connection', connection);
   if (extra.saved) params.set('saved', extra.saved);
   if (extra.err) params.set('err', extra.err);
   if (extra.published) params.set('published', extra.published);
+  const order = String(formData.get('orderId') ?? extra.order ?? '');
+  if (order) params.set('order', order);
   const query = params.toString();
   return query ? `/company/commerce?${query}` : '/company/commerce';
 }
@@ -94,7 +96,7 @@ export async function createCommerceConnectionFromForm(formData: FormData) {
       }),
     );
     revalidatePath('/company/commerce');
-    redirect(commercePath(formData, { saved: '1', connection: row.id, tab: 'connections' }));
+    redirect(commercePath(formData, { saved: '1', connection: row.id, tab: 'developer' }));
   } catch (e) {
     rethrowNav(e);
     finish(formData, { err: e instanceof Error ? e.message : 'Could not create the connection.' });
@@ -390,4 +392,77 @@ export async function createCommerceClearingAccountFromForm(formData: FormData) 
     finish(formData, { err: e instanceof Error ? e.message : 'Could not create the clearing account.' });
   }
   finish(formData, { saved: '1' });
+}
+
+const WEB_ORDER_OPS = ['confirm', 'paid', 'dispatch', 'delivered', 'cancel', 'refund', 'refund_restock'] as const;
+type WebOrderOp = (typeof WEB_ORDER_OPS)[number];
+
+/** Staff actions on a web order (WP0): confirm, mark paid, dispatch, delivered, cancel, refund. */
+export async function webOrderActionFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  const orderId = String(formData.get('orderId') ?? '');
+  const op = String(formData.get('op') ?? '') as WebOrderOp;
+  try {
+    if (!WEB_ORDER_OPS.includes(op)) throw new Error('Unknown order action.');
+    await withCommerceService(operator.tenantId, async (service) => {
+      if (op === 'confirm') return service.confirmWebOrder(operator, connectionId, orderId);
+      if (op === 'paid') return service.markWebOrderPaid(operator, connectionId, orderId);
+      if (op === 'delivered') return service.markWebOrderDelivered(operator, connectionId, orderId);
+      if (op === 'cancel') return service.cancelWebOrder(operator, connectionId, orderId);
+      if (op === 'refund' || op === 'refund_restock') {
+        return service.refundWebOrder(operator, connectionId, orderId, { restock: op === 'refund_restock' });
+      }
+      const view = await service.listOperatorView(operator);
+      const couriers = view.find((v) => v.connection.id === connectionId)?.connection.paymentSettings?.couriers ?? [];
+      const carrier = String(formData.get('carrier') ?? '').trim();
+      return service.dispatchWebOrder(operator, connectionId, orderId, {
+        carrier,
+        trackingNumber: String(formData.get('trackingNumber') ?? ''),
+        trackingUrlTemplate: couriers.find((c) => c.name === carrier)?.trackingUrlTemplate ?? null,
+      });
+    });
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not update the order.', tab: 'orders' });
+  }
+  finish(formData, { saved: '1', tab: 'orders' });
+}
+
+/** Which payment methods hold stock while unpaid, and the courier list for Dispatch. */
+export async function saveCommerceFulfilmentSettingsFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  try {
+    const hold = formData.getAll('holdStock').map((v) => paymentMethodKey(String(v))).filter(Boolean);
+    const extraHold = String(formData.get('holdStockExtra') ?? '')
+      .split(',')
+      .map((v) => paymentMethodKey(v))
+      .filter(Boolean);
+    const names = formData.getAll('courierName').map((v) => String(v).trim());
+    const templates = formData.getAll('courierTemplate').map((v) => String(v).trim());
+    const couriers = names
+      .map((name, i) => ({ name, trackingUrlTemplate: templates[i] || null }))
+      .filter((c) => c.name);
+    for (const c of couriers) {
+      if (c.trackingUrlTemplate && (!/^https:\/\//i.test(c.trackingUrlTemplate) || !c.trackingUrlTemplate.includes('{tracking}'))) {
+        throw new Error(`Tracking link for ${c.name} must start with https:// and contain {tracking}.`);
+      }
+    }
+    await withCommerceService(operator.tenantId, async (service) => {
+      const view = await service.listOperatorView(operator);
+      const current = view.find((v) => v.connection.id === connectionId)?.connection.paymentSettings;
+      return service.updatePaymentSettings(operator, connectionId, {
+        defaultAccountCode: current?.defaultAccountCode ?? null,
+        methods: current?.methods ?? {},
+        seenMethods: [],
+        commitStockMethods: [...new Set([...hold, ...extraHold])],
+        couriers,
+      });
+    });
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not save fulfilment settings.', tab: 'settings' });
+  }
+  finish(formData, { saved: '1', tab: 'settings' });
 }

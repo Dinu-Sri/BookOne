@@ -24,8 +24,9 @@ import type {
   CommerceEnvironment,
 } from './types';
 import { fail, validateEvent, validateOrderInput } from './validate';
-import { normalizePaymentSettings, resolvePaymentAccount, withSeenMethod } from './payments';
-import { UNPAID_METHOD, type PaymentSettings } from './types';
+import { normalizePaymentSettings, paymentMethodKey, resolvePaymentAccount, withSeenMethod } from './payments';
+import { DEFAULT_COMMIT_STOCK_METHODS, UNPAID_METHOD, type PaymentSettings } from './types';
+import { EMPTY_FULFILMENT, normalizeFulfilment, trackingUrlFor } from './fulfilment';
 
 const PAGE_SIZE = 100;
 const CURSOR_WINDOW_REVISIONS = 10_000;
@@ -115,7 +116,11 @@ export class CommerceService {
   async updatePaymentSettings(operator: OperatorActor, connectionId: string, settings: PaymentSettings) {
     this.assertWrite(operator);
     const row = await this.requireConnection(operator.tenantId, connectionId);
-    const clean = normalizePaymentSettings({ ...settings, seenMethods: row.paymentSettings?.seenMethods ?? [] });
+    const clean = normalizePaymentSettings({
+      ...row.paymentSettings,
+      ...settings,
+      seenMethods: row.paymentSettings?.seenMethods ?? [],
+    });
     for (const code of [clean.defaultAccountCode, ...Object.values(clean.methods)]) {
       if (code && code !== UNPAID_METHOD && !/^\d{4}$/.test(code)) fail('VALIDATION', `Account ${code} is not a valid account code.`);
     }
@@ -325,17 +330,23 @@ export class CommerceService {
     for (const mapping of mappings) {
       if (wanted && !wanted.has(mapping.sku) && !wanted.has(mapping.externalProductId)) continue;
       const stock = await this.store.getStock(actor.tenantId, mapping.bookoneProductId, actor.locationId);
+      const onHand = Number(stock?.quantity ?? 0);
+      const committed = (await this.store.committedQty?.(actor.tenantId, mapping.bookoneProductId, actor.locationId)) ?? 0;
       items.push({
         sku: mapping.sku,
         productId: mapping.bookoneProductId,
         locationId: actor.locationId,
-        quantity: stock?.quantity ?? '0',
+        // `quantity` is what this channel may sell: on hand minus stock held for open orders.
+        quantity: qtyString(onHand - committed),
+        onHand: qtyString(onHand),
+        committed: qtyString(committed),
+        available: qtyString(onHand - committed),
         revision: stock?.revision ?? 0,
         asOf: stock?.asOf ?? nowIso(),
         stale: stock?.stale ?? false,
       });
     }
-    return { items, authority: 'bookone', mode: 'absolute' };
+    return { items, authority: 'bookone', mode: 'absolute', scope: 'mapped' };
   }
 
   async changes(actor: CommerceActor, cursor?: string) {
@@ -414,6 +425,13 @@ export class CommerceService {
         sku: product.sku,
         payload: { sku: product.sku, name: product.name, unit: product.unit, revision },
         createdAt: nowIso(),
+      });
+      await this.emitCatalogEvent(operator.tenantId, connectionId, 'mapping', product.id, product.sku, {
+        action: 'applied',
+        sku: product.sku,
+        bookoneProductId: product.id,
+        externalProductId: row.externalProductId,
+        externalVariantId: row.externalVariantId ?? '',
       });
     }
     connection.lastCatalogSyncAt = nowIso();
@@ -640,6 +658,12 @@ export class CommerceService {
         updatedAt: now,
       };
       await this.store.upsertPublishClaim(row);
+      await this.emitCatalogEvent(operator.tenantId, connectionId, 'publish', row.bookoneProductId, row.sku, {
+        action: 'queued',
+        claimId: row.id,
+        sku: row.sku,
+        bookoneProductId: row.bookoneProductId,
+      });
       claims.push(row);
     }
     await this.audit(operator, connectionId, 'catalog.queue', 'mapping', connectionId, { count: claims.length });
@@ -739,6 +763,13 @@ export class CommerceService {
         updatedAt: now,
       };
       await this.store.upsertPublishClaim(nextClaim);
+      await this.emitCatalogEvent(actor.tenantId, actor.connectionId, 'publish', item.bookoneProductId, product.sku, {
+        action: 'claimed',
+        claimId: nextClaim.id,
+        sku: product.sku,
+        bookoneProductId: item.bookoneProductId,
+        externalProductId: item.externalProductId,
+      });
       receipts.push({
         bookoneProductId: item.bookoneProductId,
         status: 'acknowledged',
@@ -862,8 +893,7 @@ export class CommerceService {
     if (status === 'received' && actor.postingMode === 'posting' && preview.ok && input.payment?.status === 'paid') {
       for (const line of preview.mapped) {
         if (!line.productId) continue;
-        const stock = await this.store.getStock(actor.tenantId, line.productId, actor.locationId);
-        const available = Number(stock?.quantity ?? '0');
+        const available = await this.availableQty(actor.tenantId, line.productId, actor.locationId);
         if (available < line.quantity) {
           stockIssues.push(`SKU ${line.sku} needs ${line.quantity}, BookOne has ${available}.`);
         }
@@ -890,6 +920,7 @@ export class CommerceService {
       placedAt: input.placedAt,
       documentId: null,
       documentNumber: null,
+      fulfilment: { ...EMPTY_FULFILMENT, shipments: [] },
       lastAppliedVersion: input.sourceVersion ?? null,
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -908,6 +939,7 @@ export class CommerceService {
     };
 
     await this.store.insertOrder(order);
+    await this.commitOnReceipt(actor, order, preview);
     const claimed = this.orderReceipt(order, 'accepted_for_processing');
     await this.store.putIdempotency(actor.tenantId, actor.connectionId, idempotencyKey, {
       payloadHash,
@@ -1016,6 +1048,8 @@ export class CommerceService {
           order.status = 'cancelled';
           order.reviewReason = null;
         }
+        await this.releaseHold(actor, order);
+        if (order.fulfilment) order.fulfilment.status = 'cancelled';
       } else if (input.kind === 'paid') {
         if (order.status === 'received' || order.status === 'needs_review') {
           order.snapshot.payment = { ...(order.snapshot.payment ?? { status: 'paid' }), status: 'paid' };
@@ -1055,6 +1089,7 @@ export class CommerceService {
     order.lastAppliedVersion = input.sourceVersion ?? order.lastAppliedVersion;
     order.updatedAt = nowIso();
     await this.store.updateOrder(order);
+    await this.emitOrder(actor.tenantId, actor.connectionId, order, `event:${input.kind}`);
     return this.orderReceipt(order, order.status);
   }
 
@@ -1248,6 +1283,343 @@ export class CommerceService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // WP0: web orders in BookOne (list, detail and staff actions)
+  // ---------------------------------------------------------------------------
+
+  /** Every order this connection received, newest first, with what staff need to act. */
+  async listWebOrders(operator: OperatorActor, connectionId: string) {
+    await this.requireConnection(operator.tenantId, connectionId);
+    const orders = await this.store.listOrders(operator.tenantId, connectionId);
+    return orders.map((order) => this.webOrderView(order));
+  }
+
+  async getWebOrder(operator: OperatorActor, connectionId: string, orderId: string) {
+    const order = await this.requireWebOrder(operator, connectionId, orderId);
+    return { ...this.webOrderView(order), snapshot: order.snapshot };
+  }
+
+  /** Staff confirmed the order (stock already held for COD / bank transfer). */
+  async confirmWebOrder(operator: OperatorActor, connectionId: string, orderId: string) {
+    this.assertWrite(operator);
+    const order = await this.requireWebOrder(operator, connectionId, orderId);
+    if (order.status === 'cancelled' || order.status === 'refunded') fail('CONFLICT', 'A cancelled or refunded order cannot be confirmed.');
+    const f = order.fulfilment ?? { ...EMPTY_FULFILMENT, shipments: [] };
+    if (f.status === 'unfulfilled') f.status = 'confirmed';
+    f.confirmedAt = f.confirmedAt ?? nowIso();
+    order.fulfilment = f;
+    return this.saveStaffChange(operator, connectionId, order, 'confirmed');
+  }
+
+  /** Payment arrived (courier remitted COD cash, bank transfer cleared, gateway confirmed). */
+  async markWebOrderPaid(operator: OperatorActor, connectionId: string, orderId: string) {
+    this.assertWrite(operator);
+    const order = await this.requireWebOrder(operator, connectionId, orderId);
+    if (order.snapshot.payment?.status === 'paid') fail('CONFLICT', 'This order is already marked paid.');
+    if (order.status === 'cancelled' || order.status === 'refunded') fail('CONFLICT', 'A cancelled or refunded order cannot be marked paid.');
+    const actor = await this.actorForOperator(operator, connectionId);
+    await this.applyEvent(actor, order.externalId, {
+      externalEventId: `staff-paid:${order.id}`,
+      kind: 'paid',
+      effectiveAt: nowIso(),
+    });
+    await this.audit(operator, connectionId, 'order.paid', 'order', order.id, { externalId: order.externalId });
+    return this.webOrderView((await this.store.getOrderByExternalId(operator.tenantId, connectionId, order.externalId)) ?? order);
+  }
+
+  async dispatchWebOrder(
+    operator: OperatorActor,
+    connectionId: string,
+    orderId: string,
+    input: { carrier: string; trackingNumber: string; trackingUrlTemplate?: string | null },
+  ) {
+    this.assertWrite(operator);
+    const carrier = input.carrier?.trim();
+    const tracking = input.trackingNumber?.trim();
+    if (!carrier) fail('VALIDATION', 'Choose or enter the courier.');
+    if (!tracking) fail('VALIDATION', 'Enter the tracking number.');
+    const order = await this.requireWebOrder(operator, connectionId, orderId);
+    if (order.status === 'cancelled' || order.status === 'refunded') fail('CONFLICT', 'A cancelled or refunded order cannot be dispatched.');
+    const f = order.fulfilment ?? { ...EMPTY_FULFILMENT, shipments: [] };
+    const shippedAt = nowIso();
+    f.shipments = [
+      ...f.shipments,
+      {
+        id: randomUUID(),
+        carrier,
+        trackingNumber: tracking,
+        trackingUrl: trackingUrlFor(input.trackingUrlTemplate, tracking),
+        shippedAt,
+        deliveredAt: null,
+      },
+    ];
+    f.status = 'shipped';
+    f.confirmedAt = f.confirmedAt ?? shippedAt;
+    order.fulfilment = f;
+    return this.saveStaffChange(operator, connectionId, order, 'dispatched');
+  }
+
+  async markWebOrderDelivered(operator: OperatorActor, connectionId: string, orderId: string) {
+    this.assertWrite(operator);
+    const order = await this.requireWebOrder(operator, connectionId, orderId);
+    const f = order.fulfilment ?? { ...EMPTY_FULFILMENT, shipments: [] };
+    if (f.status !== 'shipped' && f.status !== 'out_for_delivery') fail('CONFLICT', 'Dispatch the order before marking it delivered.');
+    const at = nowIso();
+    f.status = 'delivered';
+    f.shipments = f.shipments.map((s) => (s.deliveredAt ? s : { ...s, deliveredAt: at }));
+    order.fulfilment = f;
+    if (order.status === 'posted' || order.status === 'paid') order.status = 'fulfilled';
+    return this.saveStaffChange(operator, connectionId, order, 'delivered');
+  }
+
+  /** Cancel from BookOne: releases held stock; a posted order gets a linked return with restock. */
+  async cancelWebOrder(operator: OperatorActor, connectionId: string, orderId: string) {
+    this.assertWrite(operator);
+    const order = await this.requireWebOrder(operator, connectionId, orderId);
+    if (order.status === 'cancelled') fail('CONFLICT', 'This order is already cancelled.');
+    const actor = await this.actorForOperator(operator, connectionId);
+    const receipt = await this.applyEvent(actor, order.externalId, {
+      externalEventId: `staff-cancel:${order.id}`,
+      kind: 'cancelled',
+      effectiveAt: nowIso(),
+    });
+    await this.audit(operator, connectionId, 'order.cancel', 'order', order.id, { externalId: order.externalId });
+    return receipt;
+  }
+
+  /** Full refund from BookOne, with or without putting the goods back into stock. */
+  async refundWebOrder(operator: OperatorActor, connectionId: string, orderId: string, input: { restock: boolean }) {
+    this.assertWrite(operator);
+    const order = await this.requireWebOrder(operator, connectionId, orderId);
+    if (!order.documentId) fail('CONFLICT', 'Only a posted order can be refunded. Cancel an unposted order instead.');
+    const refunded = order.lines.reduce((sum, line) => sum + Number(line.refundedAmount), 0);
+    const remaining = Number(order.total) - refunded;
+    if (remaining <= 0.005) fail('CONFLICT', 'This order is already fully refunded.');
+    const actor = await this.actorForOperator(operator, connectionId);
+    const stamp = randomUUID();
+    const receipt = await this.applyEvent(actor, order.externalId, {
+      externalEventId: `staff-refund:${stamp}`,
+      externalRefundId: `staff-refund:${stamp}`,
+      kind: 'refunded',
+      effectiveAt: nowIso(),
+      amount: moneyString(remaining),
+      restock: input.restock,
+      ...(input.restock
+        ? {
+            lines: order.lines
+              .filter((line) => Number(line.quantity) - Number(line.restockedQty) > 0)
+              .map((line) => ({
+                externalLineId: line.externalLineId,
+                quantity: String(Number(line.quantity) - Number(line.restockedQty)),
+              })),
+          }
+        : {}),
+    });
+    await this.audit(operator, connectionId, 'order.refund', 'order', order.id, { externalId: order.externalId, restock: input.restock });
+    return receipt;
+  }
+
+  /** Payment methods this channel has used, with where each settles and whether it holds stock (WP0.3 / WP6). */
+  async paymentMethods(actor: CommerceActor) {
+    this.need(actor, 'order');
+    const connection = await this.requireConnection(actor.tenantId, actor.connectionId);
+    const settings = normalizePaymentSettings(connection.paymentSettings);
+    const commit = connection.paymentSettings?.commitStockMethods ?? DEFAULT_COMMIT_STOCK_METHODS;
+    const names = [...new Set([...settings.seenMethods, ...Object.keys(settings.methods), ...commit])].sort();
+    return {
+      items: names.map((method) => {
+        const mapped = settings.methods[method];
+        return {
+          method,
+          settlementAccountCode: mapped && mapped !== UNPAID_METHOD ? mapped : mapped === UNPAID_METHOD ? null : settings.defaultAccountCode,
+          settlesOnPaid: mapped === UNPAID_METHOD ? false : Boolean(mapped || settings.defaultAccountCode),
+          holdsStockWhilePending: commit.includes(method),
+        };
+      }),
+      defaultSettlementAccountCode: settings.defaultAccountCode,
+      acceptsAnyMethodName: true,
+      nextCursor: null,
+    };
+  }
+
+  private webOrderView(order: OrderRow) {
+    const snap = order.snapshot;
+    const f = order.fulfilment ?? EMPTY_FULFILMENT;
+    return {
+      id: order.id,
+      externalId: order.externalId,
+      displayNumber: (snap as { displayNumber?: string }).displayNumber ?? order.externalId,
+      placedAt: order.placedAt,
+      customerName: snap.customer?.name ?? '',
+      customerPhone: (snap.customer as { phone?: string } | undefined)?.phone ?? null,
+      total: order.total,
+      currency: order.currency,
+      paymentMethod: snap.payment?.method ?? null,
+      paymentStatus: snap.payment?.status ?? 'pending',
+      status: order.status,
+      reviewReason: order.reviewReason,
+      fulfilment: f,
+      stock: f.stock ?? 'none',
+      documentNumber: order.documentNumber,
+      settlementAccountCode: order.settlementAccountCode ?? null,
+      lineCount: order.lines.length,
+      lines: order.lines.map((line) => ({
+        sku: line.sku,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        restockedQty: line.restockedQty,
+        refundedAmount: line.refundedAmount,
+      })),
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    };
+  }
+
+  private async requireWebOrder(operator: OperatorActor, connectionId: string, orderId: string) {
+    await this.requireConnection(operator.tenantId, connectionId);
+    const order = this.store.getOrderById
+      ? await this.store.getOrderById(operator.tenantId, orderId)
+      : (await this.store.listOrders(operator.tenantId, connectionId)).find((o) => o.id === orderId) ?? null;
+    if (!order || order.connectionId !== connectionId) fail('NOT_FOUND', 'Web order was not found.');
+    return order;
+  }
+
+  private async saveStaffChange(operator: OperatorActor, connectionId: string, order: OrderRow, action: string) {
+    order.updatedAt = nowIso();
+    await this.store.updateOrder(order);
+    await this.emitOrder(operator.tenantId, connectionId, order, action);
+    await this.audit(operator, connectionId, `order.${action}`, 'order', order.id, { externalId: order.externalId });
+    return this.webOrderView(order);
+  }
+
+  private async actorForOperator(operator: OperatorActor, connectionId: string): Promise<CommerceActor> {
+    const connection = await this.requireConnection(operator.tenantId, connectionId);
+    return {
+      tenantId: operator.tenantId,
+      connectionId: connection.id,
+      credentialId: 'operator',
+      userId: connection.createdByUserId,
+      locationId: connection.locationId,
+      currency: connection.currency,
+      environment: connection.environment,
+      kind: connection.kind,
+      scopes: ['catalog', 'inventory', 'order', 'lifecycle'],
+      postingMode: connection.postingMode,
+      inboundPaused: false,
+      outboundPaused: connection.outboundPaused,
+      oversellPolicy: connection.oversellPolicy,
+      reservationMode: connection.reservationMode,
+      prefix: 'operator',
+    };
+  }
+
+  /** On hand minus stock held for open web orders. */
+  private async availableQty(tenantId: string, productId: string, locationId: string | null): Promise<number> {
+    const stock = await this.store.getStock(tenantId, productId, locationId);
+    const committed = (await this.store.committedQty?.(tenantId, productId, locationId)) ?? 0;
+    return Number(stock?.quantity ?? 0) - committed;
+  }
+
+  /**
+   * WP0: COD / bank-transfer orders hold stock on receipt while payment is
+   * pending, so the unit cannot sell again online or at the POS.
+   */
+  private async commitOnReceipt(
+    actor: CommerceActor,
+    order: OrderRow,
+    preview: { ok: boolean; mapped: Array<{ sku: string; productId: string | null; quantity: number }> },
+  ) {
+    if (!this.store.commitStock || !preview.ok) return;
+    if (order.status !== 'received' || order.snapshot.payment?.status !== 'pending') return;
+    const connection = await this.store.getConnection(actor.tenantId, actor.connectionId);
+    const methods = connection?.paymentSettings?.commitStockMethods ?? DEFAULT_COMMIT_STOCK_METHODS;
+    const method = paymentMethodKey(order.snapshot.payment?.method);
+    if (!method || !methods.includes(method)) return;
+    const lines = preview.mapped
+      .filter((m): m is { sku: string; productId: string; quantity: number } => Boolean(m.productId))
+      .map((m) => ({ productId: m.productId, quantity: m.quantity }));
+    if (!lines.length) return;
+    const held = await this.store.commitStock({
+      tenantId: actor.tenantId,
+      connectionId: actor.connectionId,
+      orderId: order.id,
+      locationId: actor.locationId,
+      lines,
+    });
+    if (held.ok) {
+      order.fulfilment = { ...(order.fulfilment ?? EMPTY_FULFILMENT), stock: 'committed' };
+      order.reviewReason = 'Payment is pending. Stock is held for this order.';
+    } else {
+      const skuOf = (id: string) => preview.mapped.find((m) => m.productId === id)?.sku ?? id;
+      holdForReview(
+        order,
+        `Not enough stock to hold this order: ${held.short
+          .map((x) => `SKU ${skuOf(x.productId)} needs ${x.needed}, available ${x.available}`)
+          .join('; ')}.`,
+      );
+    }
+    order.updatedAt = nowIso();
+    await this.store.updateOrder(order);
+    await this.emitOrder(actor.tenantId, actor.connectionId, order, held.ok ? 'stock_held' : 'needs_review');
+    if (held.ok) await this.emitStock(actor, lines.map((l) => l.productId));
+  }
+
+  private async releaseHold(actor: CommerceActor, order: OrderRow) {
+    const released = (await this.store.settleCommitments?.(actor.tenantId, order.id, 'released')) ?? 0;
+    if (!released) return;
+    order.fulfilment = { ...(order.fulfilment ?? EMPTY_FULFILMENT), stock: 'released' };
+    await this.emitStock(
+      actor,
+      order.lines.map((l) => l.bookoneProductId).filter((id): id is string => Boolean(id)),
+    );
+  }
+
+  /** BookOne-side order change for the feed (`kind: "order"`), so websites can email customers. */
+  private async emitOrder(tenantId: string, connectionId: string, order: OrderRow, action: string) {
+    const revision = await this.store.nextRevision(tenantId, connectionId);
+    await this.store.insertOutbox({
+      id: randomUUID(),
+      tenantId,
+      connectionId,
+      revision,
+      kind: 'order',
+      productId: null,
+      sku: null,
+      payload: {
+        externalId: order.externalId,
+        action,
+        status: order.status,
+        paymentStatus: order.snapshot.payment?.status ?? null,
+        fulfilment: order.fulfilment ?? EMPTY_FULFILMENT,
+        documentNumber: order.documentNumber,
+        revision,
+      },
+      createdAt: nowIso(),
+    });
+  }
+
+  private async emitCatalogEvent(
+    tenantId: string,
+    connectionId: string,
+    kind: 'mapping' | 'publish',
+    productId: string | null,
+    sku: string | null,
+    payload: Record<string, unknown>,
+  ) {
+    const revision = await this.store.nextRevision(tenantId, connectionId);
+    await this.store.insertOutbox({
+      id: randomUUID(),
+      tenantId,
+      connectionId,
+      revision,
+      kind,
+      productId,
+      sku,
+      payload: { ...payload, revision },
+      createdAt: nowIso(),
+    });
+  }
+
   private async emitStock(actor: CommerceActor, productIds?: string[]) {
     const wanted = productIds?.length ? new Set(productIds) : null;
     const connections = await this.store.listConnections(actor.tenantId);
@@ -1258,6 +1630,8 @@ export class CommerceService {
       for (const mapping of mappings) {
         if (wanted && !wanted.has(mapping.bookoneProductId)) continue;
         const stock = await this.store.getStock(actor.tenantId, mapping.bookoneProductId, connection.locationId);
+        const committed = (await this.store.committedQty?.(actor.tenantId, mapping.bookoneProductId, connection.locationId)) ?? 0;
+        const onHand = Number(stock?.quantity ?? 0);
         const revision = await this.store.nextRevision(actor.tenantId, connection.id);
         await this.store.insertOutbox({
           id: randomUUID(),
@@ -1269,7 +1643,10 @@ export class CommerceService {
           sku: mapping.sku,
           payload: {
             sku: mapping.sku,
-            quantity: stock?.quantity ?? '0',
+            quantity: qtyString(onHand - committed),
+            onHand: qtyString(onHand),
+            committed: qtyString(committed),
+            available: qtyString(onHand - committed),
             revision,
             asOf: nowIso(),
             locationId: connection.locationId,
@@ -1319,6 +1696,8 @@ export class CommerceService {
     order: OrderRow,
     preview: { mapped: Array<{ sku: string; productId: string | null; quantity: number; unitPrice: number }> },
   ) {
+    // Held stock becomes the invoice's stock movement; restore the hold if posting fails.
+    const consumed = (await this.store.settleCommitments?.(actor.tenantId, order.id, 'consumed')) ?? 0;
     try {
       const input = order.snapshot;
       const connection = await this.store.getConnection(actor.tenantId, actor.connectionId);
@@ -1350,10 +1729,12 @@ export class CommerceService {
       order.documentId = posted.documentId;
       order.documentNumber = posted.documentNumber;
       order.settlementAccountCode = payment.accountCode;
+      if (consumed && order.fulfilment) order.fulfilment.stock = 'consumed';
       order.status = 'posted';
       order.reviewReason = null;
       order.updatedAt = nowIso();
       await this.store.updateOrder(order);
+      await this.emitOrder(actor.tenantId, actor.connectionId, order, 'posted');
       if (payment.source === 'not_configured') {
         // Paid, but no account chosen for this method: say so in Activity.
         await this.store.insertActivity({
@@ -1378,6 +1759,7 @@ export class CommerceService {
         preview.mapped.map((line) => line.productId).filter((id): id is string => Boolean(id)),
       );
     } catch (error) {
+      if (consumed) await this.store.settleCommitments?.(actor.tenantId, order.id, 'active');
       order.status = 'needs_review';
       order.reviewReason = error instanceof Error ? error.message : 'BookOne posting failed. No duplicate journals were created.';
       order.updatedAt = nowIso();
@@ -1396,6 +1778,10 @@ export class CommerceService {
       documentId: order.documentId,
       documentNumber: order.documentNumber,
       lastAppliedVersion: order.lastAppliedVersion,
+      paymentStatus: order.snapshot.payment?.status ?? null,
+      // WP0: held stock (COD / bank transfer) and BookOne-side fulfilment.
+      stock: order.fulfilment?.stock ?? 'none',
+      fulfilment: order.fulfilment ?? EMPTY_FULFILMENT,
       settlement: order.documentId
         ? (order.settlementAccountCode ?? paymentAccountCode(order.snapshot))
           ? 'settled'
@@ -1449,6 +1835,11 @@ export function holdForReview(order: { status: string; reviewReason: string | nu
   const prior = order.status === 'needs_review' ? order.reviewReason?.trim() : '';
   order.status = 'needs_review';
   order.reviewReason = prior && !prior.includes(reason) ? `${prior} | ${reason}` : reason;
+}
+
+function qtyString(n: number): string {
+  const v = Math.round(n * 10000) / 10000;
+  return String(Object.is(v, -0) ? 0 : v);
 }
 
 function almostEqualRefund(a: number, b: number) {

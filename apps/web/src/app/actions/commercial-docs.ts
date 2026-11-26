@@ -59,6 +59,7 @@ import {
   auditLog,
   businessDocumentLines,
   businessDocuments,
+  commerceStockCommitments,
   db,
   eq,
   and,
@@ -571,6 +572,23 @@ async function nextDocumentNumber(tenantId: string, type: string, date: string) 
   );
 }
 
+async function committedWebOrderQty(tenantId: string, productId: string, locationId: string | null): Promise<number> {
+  const [row] = await db()
+    .select({ total: sql<string>`coalesce(sum(${commerceStockCommitments.quantity}::numeric), 0)` })
+    .from(commerceStockCommitments)
+    .where(
+      and(
+        eq(commerceStockCommitments.tenantId, tenantId),
+        eq(commerceStockCommitments.productId, productId),
+        eq(commerceStockCommitments.status, 'active'),
+        locationId
+          ? eq(commerceStockCommitments.locationId, locationId)
+          : sql`${commerceStockCommitments.locationId} is null`,
+      ),
+    );
+  return Number(row?.total ?? 0);
+}
+
 async function adjustStock(params: {
   tenantId: string;
   userId: string;
@@ -604,8 +622,12 @@ async function adjustStock(params: {
 
   const current = Number(level?.qtyOnHand ?? 0);
   const next = current + params.quantityDelta;
+  // Stock held for open web orders (COD / bank transfer) is not sellable here either.
+  const held = params.blockNegative && params.quantityDelta < 0
+    ? await committedWebOrderQty(params.tenantId, params.productId, params.locationId ?? null)
+    : 0;
 
-  if (params.blockNegative && params.quantityDelta < 0 && next < -0.00005) {
+  if (params.blockNegative && params.quantityDelta < 0 && next - held < -0.00005) {
     const [prod] = await db()
       .select({ sku: inventoryProducts.sku, name: inventoryProducts.name })
       .from(inventoryProducts)
@@ -613,7 +635,9 @@ async function adjustStock(params: {
       .limit(1);
     const label = prod ? `${prod.sku} ${prod.name}` : params.productId;
     throw new Error(
-      `Insufficient stock for ${label}: on hand ${current.toFixed(4)}, need ${Math.abs(params.quantityDelta).toFixed(4)}. Adjust stock or allow negative stock in Inventory Settings.`,
+      held > 0
+        ? `Insufficient stock for ${label}: on hand ${current.toFixed(4)}, of which ${held.toFixed(4)} is held for web orders; need ${Math.abs(params.quantityDelta).toFixed(4)}.`
+        : `Insufficient stock for ${label}: on hand ${current.toFixed(4)}, need ${Math.abs(params.quantityDelta).toFixed(4)}. Adjust stock or allow negative stock in Inventory Settings.`,
     );
   }
 

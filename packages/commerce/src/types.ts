@@ -262,7 +262,48 @@ export type PaymentSettings = {
   defaultAccountCode: string | null;
   methods: Record<string, string>;
   seenMethods: string[];
+  /**
+   * Payment methods whose orders hold stock on receipt while payment is
+   * pending (WP0). Defaults to cod and bank_transfer when not set.
+   */
+  commitStockMethods?: string[];
+  /** Couriers offered when dispatching; `{tracking}` in the template is replaced. */
+  couriers?: Courier[];
 };
+
+export type Courier = { name: string; trackingUrlTemplate: string | null };
+
+export const DEFAULT_COMMIT_STOCK_METHODS = ['cod', 'bank_transfer'];
+
+export type FulfilmentStatus =
+  | 'unfulfilled'
+  | 'confirmed'
+  | 'picking'
+  | 'packed'
+  | 'shipped'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'returned'
+  | 'cancelled';
+
+export type Shipment = {
+  id: string;
+  carrier: string;
+  trackingNumber: string;
+  trackingUrl: string | null;
+  shippedAt: string;
+  deliveredAt: string | null;
+};
+
+export type Fulfilment = {
+  status: FulfilmentStatus;
+  confirmedAt?: string | null;
+  shipments: Shipment[];
+  /** Stock held for this order before it posts. */
+  stock?: 'none' | 'committed' | 'released' | 'consumed';
+};
+
+export type CommitmentLine = { productId: string; quantity: number };
 
 export const UNPAID_METHOD = 'unpaid';
 
@@ -337,6 +378,7 @@ export type OrderRow = {
   documentNumber: string | null;
   /** Account the paid order settled into (null: open in receivables). */
   settlementAccountCode?: string | null;
+  fulfilment?: Fulfilment;
   lastAppliedVersion: string | null;
   createdAt: string;
   updatedAt: string;

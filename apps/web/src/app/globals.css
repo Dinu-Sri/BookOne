@@ -10598,6 +10598,29 @@ a.bih-card:hover {
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
+.commerce-table tr.is-selected td {
+  background: var(--brand-soft);
+}
+.commerce-overview-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.commerce-overview-tiles > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.commerce-overview-tiles dt {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.commerce-overview-tiles dd {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+}
 .commerce-section-title {
   font-size: 15px;
   margin: 0;

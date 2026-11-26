@@ -9,6 +9,8 @@ import { SelectField } from '@/components/ui/select-field';
 import { SearchField, TextField } from '@/components/ui/text-field';
 import { withFormPending } from '@/components/ui/form-busy';
 import { CommercePaymentsCard, type CommercePaymentSettingsView } from '@/components/commerce/commerce-payments-card';
+import { CommerceFulfilmentCard } from '@/components/commerce/commerce-fulfilment-card';
+import { CommerceWebOrders, nextStepFor, type WebOrderView } from '@/components/commerce/commerce-web-orders';
 import { LOCATION_TYPE_LABELS, isFleetLocationType } from '@/lib/rental-locations';
 import {
   applyCommerceMappingFromForm,
@@ -27,10 +29,14 @@ import {
   updateCommerceConnectionFromForm,
 } from '@/app/actions/commerce';
 
-type Tab = 'connections' | 'mapping' | 'activity';
+type Tab = 'overview' | 'orders' | 'mapping' | 'payments' | 'settings' | 'developer' | 'activity';
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'connections', label: 'Connections' },
-  { id: 'mapping', label: 'Mapping' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'mapping', label: 'Products' },
+  { id: 'payments', label: 'Payments' },
+  { id: 'settings', label: 'Settings' },
+  { id: 'developer', label: 'Developer' },
   { id: 'activity', label: 'Activity' },
 ];
 
@@ -97,6 +103,7 @@ type ConnectionView = {
   }>;
   publishClaims: Array<{ id: string; sku: string; status: string; issue: string | null }>;
   paymentSettings: CommercePaymentSettingsView;
+  webOrders: WebOrderView[];
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -173,6 +180,7 @@ export function CompanyCommerce(props: {
   products: Array<{ id: string; sku: string; name: string }>;
   connections: ConnectionView[];
   paymentAccounts: Array<{ code: string; name: string }>;
+  initialOrderId?: string;
 }) {
   const [tab, setTab] = useState<Tab>(props.initialTab);
   const [creating, setCreating] = useState(false);
@@ -234,7 +242,7 @@ export function CompanyCommerce(props: {
 
   function openCreate() {
     setCreating(true);
-    setTab('connections');
+    setTab('overview');
     setActionError(null);
   }
 
@@ -324,6 +332,7 @@ export function CompanyCommerce(props: {
   });
 
   const hasActiveKey = Boolean(selected?.credentials.some((c) => c.status === 'active'));
+  const openOrders = (selected?.webOrders ?? []).filter((o) => nextStepFor(o) !== '—').length;
   const keyUsed = Boolean(selected?.credentials.some((c) => c.lastUsedAt));
   const mapped = (selected?.mappingCount ?? 0) > 0;
   const stockPublished = mapped && Boolean(selected?.lastStock);
@@ -334,8 +343,8 @@ export function CompanyCommerce(props: {
       return {
         title: 'Choose a shop or warehouse',
         detail: `${locationName} cannot hold online store stock. Save a branch or warehouse on this store.`,
-        tab: 'connections' as Tab,
-        label: null,
+        tab: 'settings' as Tab,
+        label: 'Open Settings',
       };
     }
     if (!hasActiveKey) {
@@ -345,16 +354,16 @@ export function CompanyCommerce(props: {
           selected.kind === 'woocommerce'
             ? 'Issue a scoped key, install bookone-commerce-1.2.0.zip with HPOS on, and paste the key in the plugin. An issued key is only a key.'
             : 'Issue a scoped key and store it on your website server with Authorization: Bearer. An issued key is only a key.',
-        tab: 'connections' as Tab,
-        label: null,
+        tab: 'developer' as Tab,
+        label: 'Open Developer',
       };
     }
     if (!keyUsed) {
       return {
         title: 'Test the key',
         detail: 'Paste the key once and use Test connection. A successful test proves authentication, not catalog or stock sync.',
-        tab: 'connections' as Tab,
-        label: null,
+        tab: 'developer' as Tab,
+        label: 'Open Developer',
       };
     }
     if (!mapped) {
@@ -362,7 +371,7 @@ export function CompanyCommerce(props: {
         title: 'Map products and test sync',
         detail: 'Match a BookOne SKU, preview, then apply. Website listings stay intact until you publish stock.',
         tab: 'mapping' as Tab,
-        label: 'Open Mapping',
+        label: 'Open Products',
       };
     }
     if (!stockPublished) {
@@ -370,15 +379,15 @@ export function CompanyCommerce(props: {
         title: 'Publish BookOne stock',
         detail: `Publish absolute BookOne quantities for mapped SKUs at ${locationName}. A publish with no mappings is not a successful publication.`,
         tab: 'mapping' as Tab,
-        label: 'Open Mapping',
+        label: 'Open Products',
       };
     }
     return {
       title: 'Verify stock and orders',
       detail:
         'A paid last-unit order proves intake. Posted invoices can still show amount due until a payment account is configured. HTTP 2xx is not cash settlement.',
-      tab: 'activity' as Tab,
-      label: 'Open Activity',
+      tab: 'orders' as Tab,
+      label: 'Open Orders',
     };
   })();
 
@@ -405,7 +414,7 @@ export function CompanyCommerce(props: {
       <FormShell backHref="/company/details" backParent="Company" size="wide" fillViewport>
         {creating ? (
           <form action={createCommerceConnectionFromForm} className="commerce-create-view">
-            <input type="hidden" name="tab" value="connections" />
+            <input type="hidden" name="tab" value="developer" />
             <header className="commerce-page-head">
               <h1 className="commerce-page-title">Create a connection</h1>
               <p className="commerce-page-lead">
@@ -548,36 +557,6 @@ export function CompanyCommerce(props: {
                   </div>
                 </div>
               ) : null}
-              {selected ? (
-                <ol className="commerce-progress">
-                  <li className="is-done">
-                    <span>1</span> Create a connection
-                  </li>
-                  <li className={keyUsed ? 'is-done' : 'is-current'}>
-                    <span>2</span> Connect your website
-                  </li>
-                  <li className={mapped ? 'is-done' : keyUsed ? 'is-current' : ''}>
-                    <span>3</span> Map products and test sync
-                  </li>
-                  <li className={stockPublished ? 'is-done' : mapped ? 'is-current' : ''}>
-                    <span>4</span> Verify stock and orders
-                  </li>
-                </ol>
-              ) : null}
-              {selected && nextAction ? (
-                <div className="commerce-next">
-                  <div>
-                    <p className="commerce-next-kicker">{stockPublished ? 'Next' : 'Continue setup'}</p>
-                    <strong>{nextAction.title}</strong>
-                    <p>{nextAction.detail}</p>
-                  </div>
-                  {nextAction.label && tab !== nextAction.tab ? (
-                    <Button type="button" variant="primary" onClick={() => changeTab(nextAction.tab)}>
-                      {nextAction.label}
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
             </header>
             {props.saved ? (
               <p className="form-success" role="status">
@@ -691,24 +670,84 @@ export function CompanyCommerce(props: {
                   ))}
                 </div>
 
-                {tab === 'connections' && selected ? (
+                {tab === 'overview' && selected ? (
                   <div
                     className="party-tab-panel"
                     role="tabpanel"
-                    id="commerce-panel-connections"
-                    aria-labelledby="commerce-tab-connections"
+                    id="commerce-panel-overview"
+                    aria-labelledby="commerce-tab-overview"
                   >
-                    <p className="field-help">
-                      Preview means incoming orders are reviewed before they are posted. Posted invoices can still show amount due
-                      until a payment account is configured.
-                    </p>
-                    <dl className="commerce-sync-facts">
+                    <div className="commerce-panel-stack">
+                      <dl className="commerce-overview-tiles">
+                        <div>
+                          <dt>Orders to handle</dt>
+                          <dd>{openOrders}</dd>
+                        </div>
+                        <div>
+                          <dt>Need review</dt>
+                          <dd>{selected.reviewCount}</dd>
+                        </div>
+                        <div>
+                          <dt>Orders received</dt>
+                          <dd>{selected.webOrders.length}</dd>
+                        </div>
+                        <div>
+                          <dt>Linked products</dt>
+                          <dd>{selected.mappingCount}</dd>
+                        </div>
+                      </dl>
+                      {openOrders > 0 ? (
+                        <div className="commerce-next">
+                          <div>
+                            <p className="commerce-next-kicker">Orders</p>
+                            <strong>{openOrders} web order{openOrders === 1 ? '' : 's'} waiting for you</strong>
+                            <p>Confirm, dispatch or mark them paid from the Orders tab.</p>
+                          </div>
+                          <Button type="button" variant="primary" onClick={() => changeTab('orders')}>
+                            Open Orders
+                          </Button>
+                        </div>
+                      ) : null}
+                      <section className="commerce-card">
+                        <h2 className="commerce-section-title">Setup</h2>
+              {selected ? (
+                <ol className="commerce-progress">
+                  <li className="is-done">
+                    <span>1</span> Create a connection
+                  </li>
+                  <li className={keyUsed ? 'is-done' : 'is-current'}>
+                    <span>2</span> Connect your website
+                  </li>
+                  <li className={mapped ? 'is-done' : keyUsed ? 'is-current' : ''}>
+                    <span>3</span> Map products and test sync
+                  </li>
+                  <li className={stockPublished ? 'is-done' : mapped ? 'is-current' : ''}>
+                    <span>4</span> Verify stock and orders
+                  </li>
+                </ol>
+              ) : null}
+              {selected && nextAction ? (
+                <div className="commerce-next">
+                  <div>
+                    <p className="commerce-next-kicker">{stockPublished ? 'Next' : 'Continue setup'}</p>
+                    <strong>{nextAction.title}</strong>
+                    <p>{nextAction.detail}</p>
+                  </div>
+                  {nextAction.label && tab !== nextAction.tab ? (
+                    <Button type="button" variant="primary" onClick={() => changeTab(nextAction.tab)}>
+                      {nextAction.label}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+                      </section>
+                      <dl className="commerce-sync-facts">
                       <div>
                         <dt>BookOne stock publication</dt>
                         <dd>{mapped ? formatWhen(selected.lastStock) : 'No mappings yet'}</dd>
                       </div>
                       <div>
-                        <dt>Orders received</dt>
+                        <dt>Last order received</dt>
                         <dd>{formatWhen(selected.lastOrder)}</dd>
                       </div>
                       <div>
@@ -716,102 +755,63 @@ export function CompanyCommerce(props: {
                         <dd>{formatWhen(selected.lastCatalog)}</dd>
                       </div>
                     </dl>
-                    <div className="commerce-split">
-                      <section className="commerce-card">
-                        <h2 className="commerce-section-title">API credentials</h2>
-                        <p className="field-help">
-                          Keys are shown once. They never appear in the page URL. Rotation keeps the current scopes.
-                        </p>
-                        <div className="commerce-copy-list">
-                          <div className="commerce-copy-row">
-                            <span>API endpoint</span>
-                            <code>{props.apiBase}</code>
-                            <Button type="button" onClick={() => void copyText(props.apiBase, 'Endpoint')}>
-                              Copy endpoint
-                            </Button>
-                          </div>
-                          <div className="commerce-copy-row">
-                            <span>Connection ID</span>
-                            <code>{selected.id}</code>
-                            <Button type="button" onClick={() => void copyText(selected.id, 'Connection ID')}>
-                              Copy connection ID
-                            </Button>
-                          </div>
-                          <p className="field-help" role="status">
-                            {issued ? '' : copyFeedback}
-                          </p>
-                        </div>
-                        {selected.kind === 'woocommerce' ? (
-                          <p className="field-help">
-                            Install `bookone-commerce-1.2.0.zip`, turn HPOS on, then paste the endpoint and sandbox key.
-                          </p>
-                        ) : (
-                          <p className="field-help">
-                            Call this endpoint from your server with `Authorization: Bearer` and an Idempotency-Key on orders.
-                          </p>
-                        )}
-                        <form action={props.canWrite ? onIssue : undefined}>
-                          <input type="hidden" name="connectionId" value={selected.id} />
-                          <input type="hidden" name="tab" value="connections" />
-                          <fieldset className="commerce-scope-list">
-                            <legend>Scopes for a new key</legend>
-                            {SCOPE_OPTIONS.map((scope) => (
-                              <label key={scope.value} className="party-check">
-                                <input type="checkbox" name="scope" value={scope.value} defaultChecked /> {scope.label}
-                                <span className="field-help">{scope.help}</span>
-                              </label>
-                            ))}
-                          </fieldset>
-                          <Button variant="primary" type="submit" disabled={!props.canWrite}>
-                            Issue scoped key
-                          </Button>
-                        </form>
-                        <form action={testCommerceConnectionFromForm} className="commerce-test-form">
-                          <input type="hidden" name="connectionId" value={selected.id} />
-                          <input type="hidden" name="tab" value="connections" />
-                          <TextField
-                            id={`test-token-${selected.id}`}
-                            name="token"
-                            label="Test a key (paste once)"
-                            type="password"
-                            autoComplete="new-password"
-                            help="Confirms this key authenticates the selected store. It does not prove catalog or stock sync, and it does not enable live posting."
-                          />
-                          <Button type="submit">Test connection</Button>
-                        </form>
-                        <ul className="commerce-key-list">
-                          {selected.credentials.length === 0 ? <li>No API keys have been issued.</li> : null}
-                          {selected.credentials.map((cred) => (
-                            <li key={cred.id}>
-                              <span>
-                                Prefix {cred.prefix} · {cred.status} · {cred.scopes.join(', ')} · last used{' '}
-                                {cred.lastUsedAt ? formatWhen(cred.lastUsedAt) : 'never'}
-                                {cred.expiresAt && cred.status === 'rotated'
-                                  ? ` · overlap until ${formatWhen(cred.expiresAt)}`
-                                  : ''}
-                              </span>
-                              {props.canWrite && cred.status === 'active' ? (
-                                <span className="commerce-inline-actions">
-                                  <form action={onRotate}>
-                                    <input type="hidden" name="connectionId" value={selected.id} />
-                                    <input type="hidden" name="credentialId" value={cred.id} />
-                                    <input type="hidden" name="tab" value="connections" />
-                                    <Button type="submit">Rotate</Button>
-                                  </form>
-                                  <Button type="button" onClick={() => setRevokeId(cred.id)}>
-                                    Revoke
-                                  </Button>
-                                </span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
+                      <p className="field-help">
+                        How it works: your website reads products and stock from BookOne and sends orders back. In Preview,
+                        orders wait for you; in Posting, paid orders become invoices automatically. Payments decides which
+                        account the money lands in.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
 
-                      <form action={updateCommerceConnectionFromForm} className="commerce-card">
+                {tab === 'orders' && selected ? (
+                  <div
+                    className="party-tab-panel"
+                    role="tabpanel"
+                    id="commerce-panel-orders"
+                    aria-labelledby="commerce-tab-orders"
+                  >
+                    <CommerceWebOrders
+                      key={`orders-${selected.id}`}
+                      connectionId={selected.id}
+                      canWrite={props.canWrite}
+                      orders={selected.webOrders}
+                      couriers={selected.paymentSettings.couriers ?? []}
+                      initialOrderId={props.initialOrderId}
+                    />
+                  </div>
+                ) : null}
+
+                {tab === 'payments' && selected ? (
+                  <div
+                    className="party-tab-panel"
+                    role="tabpanel"
+                    id="commerce-panel-payments"
+                    aria-labelledby="commerce-tab-payments"
+                  >
+                    <CommercePaymentsCard
+                        key={`payments-${selected.id}`}
+                        connectionId={selected.id}
+                        connectionName={selected.name}
+                        canWrite={props.canWrite}
+                        accounts={props.paymentAccounts}
+                        settings={selected.paymentSettings}
+                      />
+                  </div>
+                ) : null}
+
+                {tab === 'settings' && selected ? (
+                  <div
+                    className="party-tab-panel"
+                    role="tabpanel"
+                    id="commerce-panel-settings"
+                    aria-labelledby="commerce-tab-settings"
+                  >
+                    <div className="commerce-panel-stack">
+                    <form action={updateCommerceConnectionFromForm} className="commerce-card">
                         <h2 className="commerce-section-title">Posting controls</h2>
                         <input type="hidden" name="connectionId" value={selected.id} />
-                        <input type="hidden" name="tab" value="connections" />
+                        <input type="hidden" name="tab" value="settings" />
                         <SelectField
                           id={`posting-location-${selected.id}`}
                           name="locationId"
@@ -875,16 +875,123 @@ export function CompanyCommerce(props: {
                           Save pauses and posting
                         </Button>
                       </form>
-
-                      <CommercePaymentsCard
-                        key={`payments-${selected.id}`}
-                        connectionId={selected.id}
-                        connectionName={selected.name}
-                        canWrite={props.canWrite}
-                        accounts={props.paymentAccounts}
-                        settings={selected.paymentSettings}
-                      />
+                    <CommerceFulfilmentCard
+                      key={`fulfil-${selected.id}`}
+                      connectionId={selected.id}
+                      canWrite={props.canWrite}
+                      seenMethods={selected.paymentSettings.seenMethods}
+                      holdMethods={selected.paymentSettings.commitStockMethods}
+                      couriers={selected.paymentSettings.couriers ?? []}
+                    />
                     </div>
+                  </div>
+                ) : null}
+
+                {tab === 'developer' && selected ? (
+                  <div
+                    className="party-tab-panel"
+                    role="tabpanel"
+                    id="commerce-panel-developer"
+                    aria-labelledby="commerce-tab-developer"
+                  >
+                    <p className="field-help">
+                      For whoever builds or runs your website. Issue a key, paste it into the plugin or your server, then
+                      test it. The API reference is at{' '}
+                      <a href="/docs/developers" target="_blank" rel="noopener noreferrer">
+                        Developers &amp; Integrations
+                      </a>
+                      .
+                    </p>
+                    <section className="commerce-card">
+                        <h2 className="commerce-section-title">API credentials</h2>
+                        <p className="field-help">
+                          Keys are shown once. They never appear in the page URL. Rotation keeps the current scopes.
+                        </p>
+                        <div className="commerce-copy-list">
+                          <div className="commerce-copy-row">
+                            <span>API endpoint</span>
+                            <code>{props.apiBase}</code>
+                            <Button type="button" onClick={() => void copyText(props.apiBase, 'Endpoint')}>
+                              Copy endpoint
+                            </Button>
+                          </div>
+                          <div className="commerce-copy-row">
+                            <span>Connection ID</span>
+                            <code>{selected.id}</code>
+                            <Button type="button" onClick={() => void copyText(selected.id, 'Connection ID')}>
+                              Copy connection ID
+                            </Button>
+                          </div>
+                          <p className="field-help" role="status">
+                            {issued ? '' : copyFeedback}
+                          </p>
+                        </div>
+                        {selected.kind === 'woocommerce' ? (
+                          <p className="field-help">
+                            Install `bookone-commerce-1.2.0.zip`, turn HPOS on, then paste the endpoint and sandbox key.
+                          </p>
+                        ) : (
+                          <p className="field-help">
+                            Call this endpoint from your server with `Authorization: Bearer` and an Idempotency-Key on orders.
+                          </p>
+                        )}
+                        <form action={props.canWrite ? onIssue : undefined}>
+                          <input type="hidden" name="connectionId" value={selected.id} />
+                          <input type="hidden" name="tab" value="developer" />
+                          <fieldset className="commerce-scope-list">
+                            <legend>Scopes for a new key</legend>
+                            {SCOPE_OPTIONS.map((scope) => (
+                              <label key={scope.value} className="party-check">
+                                <input type="checkbox" name="scope" value={scope.value} defaultChecked /> {scope.label}
+                                <span className="field-help">{scope.help}</span>
+                              </label>
+                            ))}
+                          </fieldset>
+                          <Button variant="primary" type="submit" disabled={!props.canWrite}>
+                            Issue scoped key
+                          </Button>
+                        </form>
+                        <form action={testCommerceConnectionFromForm} className="commerce-test-form">
+                          <input type="hidden" name="connectionId" value={selected.id} />
+                          <input type="hidden" name="tab" value="developer" />
+                          <TextField
+                            id={`test-token-${selected.id}`}
+                            name="token"
+                            label="Test a key (paste once)"
+                            type="password"
+                            autoComplete="new-password"
+                            help="Confirms this key authenticates the selected store. It does not prove catalog or stock sync, and it does not enable live posting."
+                          />
+                          <Button type="submit">Test connection</Button>
+                        </form>
+                        <ul className="commerce-key-list">
+                          {selected.credentials.length === 0 ? <li>No API keys have been issued.</li> : null}
+                          {selected.credentials.map((cred) => (
+                            <li key={cred.id}>
+                              <span>
+                                Prefix {cred.prefix} · {cred.status} · {cred.scopes.join(', ')} · last used{' '}
+                                {cred.lastUsedAt ? formatWhen(cred.lastUsedAt) : 'never'}
+                                {cred.expiresAt && cred.status === 'rotated'
+                                  ? ` · overlap until ${formatWhen(cred.expiresAt)}`
+                                  : ''}
+                              </span>
+                              {props.canWrite && cred.status === 'active' ? (
+                                <span className="commerce-inline-actions">
+                                  <form action={onRotate}>
+                                    <input type="hidden" name="connectionId" value={selected.id} />
+                                    <input type="hidden" name="credentialId" value={cred.id} />
+                                    <input type="hidden" name="tab" value="developer" />
+                                    <Button type="submit">Rotate</Button>
+                                  </form>
+                                  <Button type="button" onClick={() => setRevokeId(cred.id)}>
+                                    Revoke
+                                  </Button>
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
                   </div>
                 ) : null}
 
@@ -1208,52 +1315,6 @@ export function CompanyCommerce(props: {
                       </section>
                     ) : (
                       <div key={`act-${selected.id}`} className="commerce-panel-stack">
-                        <section className="commerce-card">
-                          <h2 className="commerce-section-title">Orders needing review</h2>
-                          {selected.reviews.length ? (
-                            <div className="commerce-table-scroll" tabIndex={0} role="region" aria-label="Orders needing review">
-                              <table className="commerce-table">
-                                <thead>
-                                  <tr>
-                                    <th>Order</th>
-                                    <th>Outcome</th>
-                                    <th>Reason</th>
-                                    <th>When (Asia/Colombo)</th>
-                                    <th>Next action</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {selected.reviews.map((row) => (
-                                    <tr key={row.id}>
-                                      <td>{row.externalId}</td>
-                                      <td>{row.status}</td>
-                                      <td>{row.reviewReason ?? 'Needs review'}</td>
-                                      <td>{formatWhen(row.createdAt)}</td>
-                                      <td>
-                                        {props.canWrite ? (
-                                          <form action={retryCommerceReviewFromForm}>
-                                            <input type="hidden" name="connectionId" value={selected.id} />
-                                            <input type="hidden" name="orderId" value={row.id} />
-                                            <input type="hidden" name="tab" value="activity" />
-                                            <Button type="submit">Retry posting</Button>
-                                          </form>
-                                        ) : (
-                                          'Waiting for an owner'
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : (
-                            <p className="field-help">No orders are waiting for review.</p>
-                          )}
-                          <p className="field-help">
-                            Posted invoices can still show amount due until a payment account is configured. That is invoice
-                            posting, not cash settlement. HTTP 2xx is not accounting acceptance.
-                          </p>
-                        </section>
                         <section>
                           <h2 className="commerce-section-title">Audit trail</h2>
                           {selected.activity.length > 5 ? (
@@ -1329,7 +1390,7 @@ export function CompanyCommerce(props: {
           const data = new FormData();
           data.set('connectionId', selected.id);
           data.set('credentialId', revokeId);
-          data.set('tab', 'connections');
+          data.set('tab', 'developer');
           setRevokeId(null);
           void withFormPending(() => revokeCommerceCredentialFromForm(data));
         }}

@@ -12,7 +12,7 @@ import { listProducts } from '@/app/actions/inventory';
 export default async function CompanyCommercePage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; err?: string; tab?: string; connection?: string; published?: string }>;
+  searchParams: Promise<{ saved?: string; err?: string; tab?: string; connection?: string; published?: string; order?: string }>;
 }) {
   let tenant;
   try {
@@ -39,6 +39,14 @@ export default async function CompanyCommercePage({
   else productsError = 'Could not load BookOne products.';
   const inventory = await probeModuleWriteDetail('inventory').catch(() => null);
   const paymentAccounts = await listCommercePaymentAccounts(tenant.id).catch(() => []);
+  const webOrders = new Map(
+    await Promise.all(
+      view.map(async (row) => [
+        row.connection.id,
+        await withCommerceService(operator.tenantId, (service) => service.listWebOrders(operator, row.connection.id)).catch(() => []),
+      ] as const),
+    ),
+  );
   const inventoryOff = inventory?.reason === 'module_off' || inventory?.reason === 'tier';
   const origin = process.env.AUTH_URL ?? process.env.BETTER_AUTH_URL ?? '';
 
@@ -51,7 +59,12 @@ export default async function CompanyCommercePage({
         saved={query.saved === '1'}
         saveError={query.err ? decodeURIComponent(query.err) : null}
         publishedCount={query.published ? Number(query.published) : null}
-        initialTab={query.tab === 'mapping' || query.tab === 'activity' ? query.tab : 'connections'}
+        initialTab={
+          (['overview', 'orders', 'mapping', 'payments', 'settings', 'developer', 'activity'] as const).find(
+            (t) => t === query.tab,
+          ) ?? 'overview'
+        }
+        initialOrderId={query.order}
         initialConnectionId={query.connection ?? ''}
         apiBase={origin ? `${origin.replace(/\/$/, '')}/api/commerce/v1` : '/api/commerce/v1'}
         productsError={productsError}
@@ -72,6 +85,7 @@ export default async function CompanyCommercePage({
           currency: row.connection.currency,
           locationId: row.connection.locationId,
           paymentSettings: row.connection.paymentSettings ?? { defaultAccountCode: null, methods: {}, seenMethods: [] },
+          webOrders: webOrders.get(row.connection.id) ?? [],
           mappingCount: row.mappingCount,
           reviewCount: row.reviewCount,
           lastCatalog: row.connection.lastCatalogSyncAt,

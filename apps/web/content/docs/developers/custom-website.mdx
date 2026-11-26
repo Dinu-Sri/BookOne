@@ -18,7 +18,7 @@ Prerequisites: Owner or Admin job, a stock location whose type is eligible (not 
 1. Open **Company → Commerce Integrations**.
 2. Choose **New connection**.
 3. Kind **Custom Website**, environment **sandbox**, pick the location.
-4. Click **Issue scoped key**. Copy the secret from the one-time dialog. Later visits show only the prefix.
+4. Open the **Developer** tab and click **Issue scoped key**. Copy the secret from the one-time dialog. Later visits show only the prefix.
 5. `GET /connection` must return `apiVersion: v1` and `reservationMode: disabled`.
 
 Rotate keeps the old key for 24 hours. Revoke ends it immediately. Viewer can open the screen and cannot issue, rotate, or revoke.
@@ -29,13 +29,13 @@ Rotate keeps the old key for 24 hours. Revoke ends it immediately. Viewer can op
 
 ### Link existing products
 
-On **Mapping**, use **Link existing products**. Labels: **BookOne product**, **Store product ID**, **Preview mapping**, **Apply mapping**. Apply stays disabled until Preview, and a Store product ID change invalidates the preview.
+On the **Products** tab, use **Link existing products**. Labels: **BookOne product**, **Store product ID**, **Preview mapping**, **Apply mapping**. Apply stays disabled until Preview, and a Store product ID change invalidates the preview.
 
 SKU is a search aid. BookOne stores the BookOne product id plus your `externalProductId` / `externalVariantId`.
 
 ### Publish from BookOne
 
-On **Mapping**, use **Publish from BookOne**. Preview rows are `create`, `already_linked`, `missing`, or `unsupported`. Queue creates durable claims. Your backend then:
+On the **Products** tab, use **Publish from BookOne**. Preview rows are `create`, `already_linked`, `missing`, or `unsupported`. Queue creates durable claims. Your backend then:
 
 1. `GET /catalog/candidates` — empty unless the operator queued products (`bootstrap: queued` or `idle`)
 2. Create listings in your catalog with **your** stable IDs
@@ -58,6 +58,20 @@ curl -sS -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \
 
 Quantities are absolute decimal strings. Checkpoint `nextCursor` after you apply a page. `CURSOR_EXPIRED` means full resync from `/inventory` then `/changes` with no cursor.
 
+**Scope:** `/inventory` returns the SKUs **linked to this connection** (`scope: "mapped"`), which are the products published to this channel. Unlinked BookOne products are not returned. Pass up to 100 SKUs as repeated `sku=` or one comma list.
+
+**Held stock:** `quantity` is what you may sell: `onHand − committed`. `committed` is stock held for unpaid cash-on-delivery and bank-transfer orders (see section 4). The same three numbers (`onHand`, `committed`, `available`) are on every `inventory` change.
+
+**Change kinds** on `/changes`:
+
+| kind | When |
+|------|------|
+| `inventory` | Stock or held stock changed for a linked SKU |
+| `catalog` | A linked product's name or unit changed, or a mapping was applied |
+| `mapping` | A SKU was linked (`action: "applied"`) |
+| `publish` | A product was queued for you to create (`action: "queued"`) or you acknowledged it (`action: "claimed"`) |
+| `order` | BookOne changed a web order: `stock_held`, `confirmed`, `paid`, `dispatched` (with courier and tracking), `delivered`, `cancelled`, `refunded`, `posted`. Use it to email customers |
+
 ## 4. Validate and submit an order
 
 `POST /orders` requires `Idempotency-Key` and a stable store `externalId`. Response is **202**. Read `status`:
@@ -69,7 +83,25 @@ Quantities are absolute decimal strings. Checkpoint `nextCursor` after you apply
 | `posted` | Sales invoice exists. Confirm `documentNumber` and stock |
 | `paid` / `fulfilled` / `cancelled` / `refunded` | Lifecycle after post |
 
-`httpStatusIsNotAccountingAcceptance` is always true on the receipt. Settlement stays `not_configured` until a payment account is configured.
+`httpStatusIsNotAccountingAcceptance` is always true on the receipt.
+
+### Payment methods and settlement
+
+Send `payment.method` as the name your store uses: `cod`, `bank_transfer`, or your gateway's id. Any name is accepted. The owner maps each name to a BookOne account under **Commerce Integrations → Payments**; a paid order then posts as a settled sale into that account (`settlement: "settled"`). Unmapped names use the store default; with no default the invoice stays open (`settlement: "not_configured"`). A 4-digit account code in `payment.method` still works.
+
+`GET /payment-methods` lists the names this channel has used, where each settles, and whether it holds stock while unpaid.
+
+### Cash on delivery and bank transfer hold stock
+
+An order with `payment.status: "pending"` and method `cod` or `bank_transfer` **holds its stock as soon as it is received**. The receipt shows `stock: "committed"` and `/inventory` drops `available` at once, so the unit cannot sell again on the website or at the POS. If not enough stock is available, the order is received with `status: "needs_review"` and nothing is held.
+
+- Cancel (your `cancelled` event or staff in BookOne) releases the hold: `stock: "released"`.
+- When the order is paid (your `paid` event, or staff **Mark paid** when the courier remits the cash) and posting is on, the invoice posts and the hold becomes the stock movement: `stock: "consumed"`.
+- The owner chooses which method names hold stock under **Settings → Orders and delivery**. Card/gateway orders arrive paid and post straight away, so they do not need a hold.
+
+### Fulfilment from BookOne
+
+Staff work web orders on the **Orders** tab: Confirm, Mark paid, Dispatch (courier and tracking number), Mark delivered, Cancel, Refund, Refund and restock. `GET /orders/{externalId}` returns `fulfilment` (`status`, `shipments[]` with `carrier`, `trackingNumber`, `trackingUrl`, `shippedAt`, `deliveredAt`) and every change is an `order` item on `/changes`.
 
 Same key + same payload replays the original receipt. Same key + different payload is `409 CONFLICT`.
 
@@ -84,6 +116,11 @@ node docs/commerce/quickstart-node.mjs
 ```
 
 Placeholders only. Never ship the secret to the shopper browser.
+
+## Changelog
+
+- **2026-11-26 (BookOne 2.20.0)**: Web orders appear in BookOne with staff actions and fulfilment. Cash-on-delivery and bank-transfer orders hold stock on receipt. `/inventory` adds `onHand`, `committed`, `available` and `scope`; `quantity` now excludes held stock. New `GET /payment-methods`. New change kinds `order`, `mapping`, `publish`. `sku` accepts a comma list. All additions are optional for existing clients.
+- **2026-11-26 (BookOne 2.19.0)**: Payment method names map to settlement accounts per connection.
 
 ## Common errors
 

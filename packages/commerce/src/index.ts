@@ -8,4 +8,5 @@ export * from './validate';
 export * from './service';
 export * from './openapi';
 export * from './payments';
+export * from './fulfilment';
 export { PostgresCommerceStore } from './pg-store';

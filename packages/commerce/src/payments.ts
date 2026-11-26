@@ -21,7 +21,23 @@ export function normalizePaymentSettings(raw: unknown): PaymentSettings {
   const seen = Array.isArray(obj.seenMethods)
     ? [...new Set(obj.seenMethods.map((m) => paymentMethodKey(String(m))).filter(Boolean))].slice(0, 50)
     : [];
-  return { defaultAccountCode: code, methods, seenMethods: seen };
+  const out: PaymentSettings = { defaultAccountCode: code, methods, seenMethods: seen };
+  if (Array.isArray(obj.commitStockMethods)) {
+    out.commitStockMethods = [...new Set(obj.commitStockMethods.map((m) => paymentMethodKey(String(m))).filter(Boolean))].slice(0, 50);
+  }
+  if (Array.isArray(obj.couriers)) {
+    out.couriers = (obj.couriers as Array<Record<string, unknown>>)
+      .map((c) => ({
+        name: String(c?.name ?? '').trim().slice(0, 60),
+        trackingUrlTemplate:
+          typeof c?.trackingUrlTemplate === 'string' && /^https:\/\//i.test(c.trackingUrlTemplate.trim())
+            ? c.trackingUrlTemplate.trim().slice(0, 300)
+            : null,
+      }))
+      .filter((c) => c.name)
+      .slice(0, 20);
+  }
+  return out;
 }
 
 export type PaymentResolution =

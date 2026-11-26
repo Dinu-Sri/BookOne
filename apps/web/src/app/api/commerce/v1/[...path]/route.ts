@@ -40,8 +40,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
       if (route === 'catalog/candidates') {
         return json(await service.catalogCandidates(actor));
       }
+      if (route === 'payment-methods') return json(await service.paymentMethods(actor));
       if (route === 'inventory') {
-        const sku = req.nextUrl.searchParams.getAll('sku');
+        // Repeat sku= or pass a comma list (up to 100).
+        const sku = req.nextUrl.searchParams
+          .getAll('sku')
+          .flatMap((v) => v.split(','))
+          .map((v) => v.trim())
+          .filter(Boolean);
         return json(await service.inventory(actor, sku.length ? sku : undefined));
       }
       if (route === 'changes') {

@@ -1,5 +1,6 @@
 import type {
   ActivityRow,
+  CommitmentLine,
   ConnectionRow,
   CredentialRow,
   IdempotencyRow,
@@ -44,6 +45,24 @@ export type CommerceStore = {
   listStock(tenantId: string, locationId: string | null): Promise<StockRecord[]>;
 
   getOrderByExternalId(tenantId: string, connectionId: string, externalId: string): Promise<OrderRow | null>;
+  getOrderById?(tenantId: string, orderId: string): Promise<OrderRow | null>;
+
+  /**
+   * Hold stock for an order: all lines or none. Checks on-hand minus active
+   * commitments under the per-product stock lock. Returns the shortfall per
+   * product when it cannot hold.
+   */
+  commitStock?(input: {
+    tenantId: string;
+    connectionId: string;
+    orderId: string;
+    locationId: string | null;
+    lines: CommitmentLine[];
+  }): Promise<{ ok: true } | { ok: false; short: Array<{ productId: string; available: number; needed: number }> }>;
+  /** Set every active commitment of an order to released or consumed. */
+  settleCommitments?(tenantId: string, orderId: string, status: 'released' | 'consumed' | 'active'): Promise<number>;
+  /** Active committed quantity for a product at a location. */
+  committedQty?(tenantId: string, productId: string, locationId: string | null): Promise<number>;
   insertOrder(row: OrderRow): Promise<void>;
   updateOrder(row: OrderRow): Promise<void>;
   listOrders(tenantId: string, connectionId?: string, status?: string): Promise<OrderRow[]>;

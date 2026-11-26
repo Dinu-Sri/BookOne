@@ -58,6 +58,10 @@ Status: ready-for-QA.
 
 Revert this commit. Migration 055 is additive (a new table and a column); leaving it in place is harmless. Active commitments would then be ignored by the reverted code.
 
+## Follow-up v2.20.1 — CoreGuard browser specs for the new tabs
+
+The Docker web image workflow for `c21978e` failed in "AgentBridge CoreGuard / Pilot custom-bank": `e2e/coreguard-commerce.spec.ts` expected **Issue scoped key** on the first screen and tabs named **Connections** and **Mapping**. The spec now opens **Developer** for the key, walks Overview → Orders → Products with ArrowRight and ends on Activity with End; the mapping-preview invalidation and 390px checks are unchanged. `coreguard-custom-bank.spec.ts` (Viewer) opens Developer and Settings so the disabled Issue/Save checks still run. Commit `6777640` carried only these spec changes: a shell chain stopped before the VERSION bump and this note, so VERSION 2.20.1 and this record were added afterwards (commit `e694b5a` set 2.20.1, the next commit sets 2.20.2).
+
 ## Follow-up v2.20.2 — Commerce page load cost
 
 The v2.20.1 CoreGuard run got past the tabs but failed at "Apply mapping enabled after Preview": the button stayed `aria-busy` (form still pending) for the 5 s window. v2.20.0 made the page load web orders per connection in separate tenant sessions, and `PostgresCommerceStore.listOrders` read every order of the tenant and then queried lines one order at a time. Now `listOrders` filters by connection/status in SQL (latest 500) and loads lines in one query; the page loads the view and all web orders in one tenant session and runs the Inventory probe and payment accounts in parallel. The spec allows 20 s for the busy state to clear and logs the preview line for diagnosis.

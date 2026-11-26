@@ -1,5 +1,7 @@
 ## 2026-11-26 — Faster Commerce page load (v2.20.2)
 
+Also records v2.20.1: CoreGuard commerce specs updated for the new Developer/Products tabs (the v2.20.0 image build failed on the old tab names).
+
 Web orders load in one query per store and one tenant session; CoreGuard mapping check allows the preview to settle. See [CHG-20261126-commerce-wp0-web-orders](changes/CHG-20261126-commerce-wp0-web-orders.md).
 
 ## 2026-11-26 — Commerce WP0: web orders, held stock, clearer Commerce screen (v2.20.0)

@@ -82,3 +82,7 @@ Status: ready-for-QA.
 ## Rollback
 
 Revert the commit. Migration 057 only adds tables, which reverted code ignores. Channels fall back to the BookOne sell price (the `priceListId` key in `channel_settings` is ignored).
+
+## Follow-up v2.22.1 — Apply mapping stayed busy (CoreGuard)
+
+CoreGuard on `a9c866b` failed in the same place as the earlier flake: after **Preview mapping** returned ("ready to apply") both map-form submit buttons kept `aria-busy` (shared `Button` reads `useFormStatus`) with no request in flight, so **Apply mapping** never enabled. The form-action transition did not settle even though the action had returned. **Preview mapping** is now a `type="button"` that calls the same preview handler directly (with its own busy state); the form action still handles Enter, and **Apply mapping** is unchanged (`formAction`, server-side re-preview). Preview is read-only, so the `withFormPending` rule for writes is unaffected. Root cause of the stuck transition is not proven; this removes the dependency.

@@ -193,6 +193,7 @@ export function CompanyCommerce(props: {
   initialOrderId?: string;
 }) {
   const [tab, setTab] = useState<Tab>(props.initialTab);
+  const [previewing, setPreviewing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [kind, setKind] = useState('woocommerce');
   const [environment, setEnvironment] = useState('sandbox');
@@ -1195,7 +1196,18 @@ export function CompanyCommerce(props: {
                                 onChange={(event) => setExternalVariantId(event.target.value)}
                               />
                               <FormFooter>
-                                <Button type="submit" disabled={!productId}>
+                                {/* Called directly (not as the form action) so a stuck form transition cannot keep Apply busy; Enter still submits the form. */}
+                                <Button
+                                  type="button"
+                                  disabled={!productId || previewing}
+                                  aria-busy={previewing || undefined}
+                                  onClick={(event) => {
+                                    const form = event.currentTarget.form;
+                                    if (!form) return;
+                                    setPreviewing(true);
+                                    void onPreviewMapping(new FormData(form)).finally(() => setPreviewing(false));
+                                  }}
+                                >
                                   Preview mapping
                                 </Button>
                                 <Button

@@ -9,7 +9,7 @@ export function mapToAccountingType(entry: SimpleEntry): AccountingType {
     return 'Owner';
   }
   if (entry.direction === 'money_out') {
-    const category = inferCategory(entry.description, entry.party, 'money_out', entry.categoryOverride);
+    const category = inferCategory(entry.description, entry.party, 'money_out', entry.categoryOverride, entry.entityKind);
     if (category.accountCode === '3100') return 'Owner';
     // Principal repayment of personal/business loans payable
     if (category.accountCode === '2500') return 'LoanPay';

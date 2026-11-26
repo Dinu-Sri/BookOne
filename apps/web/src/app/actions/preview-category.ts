@@ -2,6 +2,7 @@
 
 import { inferCategory } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
+import { db, eq, tenants, withTenantContext } from '@bookone/db';
 
 export interface CategoryPreview {
   accountCode: string;
@@ -22,13 +23,23 @@ export async function previewCategory(input: {
   invoiceType?: 'customer_invoice' | 'vendor_bill';
   categoryOverride?: string;
 }): Promise<CategoryPreview | null> {
-  await requireTenantContext();
+  const user = await requireTenantContext();
+  // Category rules follow the chart the workspace was seeded with
+  // (personal 6500 is Healthcare; company 6500 is Office Supplies Expense).
+  const entityKind = await withTenantContext(user.tenantId, async () => {
+    const [row] = await db()
+      .select({ entityKind: tenants.entityKind })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1);
+    return row?.entityKind ?? null;
+  });
 
   // Only money_out and vendor_bill can map to an expense account.
   // For money_in and customer_invoice, the engine does not infer an expense
   // category, so we return null and the UI hides the category preview.
   if (input.direction === 'money_out') {
-    const cat = inferCategory(input.description, input.party, 'money_out', input.categoryOverride);
+    const cat = inferCategory(input.description, input.party, 'money_out', input.categoryOverride, entityKind);
     return {
       accountCode: cat.accountCode,
       accountName: cat.categoryName,
@@ -37,7 +48,7 @@ export async function previewCategory(input: {
     };
   }
   if (input.direction === 'invoice_bill' && input.invoiceType === 'vendor_bill') {
-    const cat = inferCategory(input.description, input.party, 'money_out', input.categoryOverride);
+    const cat = inferCategory(input.description, input.party, 'money_out', input.categoryOverride, entityKind);
     return {
       accountCode: cat.accountCode,
       accountName: cat.categoryName,

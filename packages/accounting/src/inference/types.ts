@@ -53,6 +53,8 @@ export interface BaseSimpleEntry {
   paymentAccount: AccountRef;
   date: string;
   receiptRef?: string;
+  /** Tenant entity kind; picks the chart category rules target (default company). */
+  entityKind?: string;
 }
 
 export type SimpleEntry = BaseSimpleEntry &

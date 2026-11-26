@@ -162,6 +162,7 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
       tenantId: user.tenantId,
       userId: user.id,
       ...parsed,
+      entityKind,
     } as Parameters<typeof inferTransaction>[0];
 
     const { transaction, journal } = inferTransaction(engineEntry);

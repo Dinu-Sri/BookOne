@@ -1,11 +1,22 @@
 import { ACCOUNTS_BY_CODE, DEFAULT_CHART_OF_ACCOUNTS, type Account } from '../chart-of-accounts';
+import { chartOfAccountsForEntity, type CoaPackId } from '../coa-packs';
 import type { CategoryInference, EntryDirection } from './types';
 
 interface CategoryRule {
   accountCode: string;
   patterns: RegExp[];
   defaultTypes: EntryDirection[];
+  /**
+   * Charts this rule applies to. Omitted = every chart. Personal and sole-prop
+   * charts reuse codes 6300/6500/6600 for household spending (Food & Household,
+   * Healthcare, Education), so company rules for those codes must not fire
+   * there ("office supplies" would land on Healthcare).
+   */
+  packs?: CoaPackId[];
 }
+
+const COMPANY: CoaPackId[] = ['company'];
+const HOUSEHOLD: CoaPackId[] = ['personal', 'sole_prop'];
 
 export const CATEGORY_RULES: CategoryRule[] = [
   {
@@ -17,6 +28,7 @@ export const CATEGORY_RULES: CategoryRule[] = [
     accountCode: '6300',
     patterns: [/\bsalary\b/i, /\bwages?\b/i, /\bpayroll\b/i, /staff\s*pay/i],
     defaultTypes: ['money_out'],
+    packs: COMPANY,
   },
   {
     accountCode: '6200',
@@ -37,6 +49,7 @@ export const CATEGORY_RULES: CategoryRule[] = [
     accountCode: '6500',
     patterns: [/\bstationery\b/i, /\bpaper\b/i, /\bpen\b/i, /office\s*supplies/i, /\bprinter\b/i],
     defaultTypes: ['money_out'],
+    packs: COMPANY,
   },
   {
     accountCode: '6700',
@@ -47,6 +60,38 @@ export const CATEGORY_RULES: CategoryRule[] = [
     accountCode: '6600',
     patterns: [/bank\s*charge/i, /bank\s*fee/i, /service\s*charge/i],
     defaultTypes: ['money_out'],
+    packs: COMPANY,
+  },
+  // Personal / sole-prop household categories on the shared codes.
+  {
+    accountCode: '6300',
+    patterns: [/\bfood\b/i, /\bgrocer(y|ies)\b/i, /\bsupermarket\b/i, /\bhousehold\b/i, /\brestaurant\b/i, /\bmeals?\b/i, /\blunch\b/i, /\bdinner\b/i],
+    defaultTypes: ['money_out'],
+    packs: HOUSEHOLD,
+  },
+  {
+    accountCode: '6500',
+    patterns: [/\bdoctor\b/i, /\bhospital\b/i, /\bpharmacy\b/i, /\bmedicines?\b/i, /\bmedical\b/i, /\bclinic\b/i, /\bdental\b/i, /\bchannel+ing\b/i, /\bhealth\s*care\b/i],
+    defaultTypes: ['money_out'],
+    packs: HOUSEHOLD,
+  },
+  {
+    accountCode: '6600',
+    patterns: [/\bschool\b/i, /\btuition\b/i, /\bclass\s*fees?\b/i, /\bcourses?\b/i, /\beducation\b/i, /\buniversity\b/i, /\bbooks?\b/i],
+    defaultTypes: ['money_out'],
+    packs: HOUSEHOLD,
+  },
+  // Business costs these charts have no dedicated account for: General Expense,
+  // never a household account that happens to share the company code.
+  {
+    accountCode: '6800',
+    patterns: [
+      /\bstationery\b/i, /office\s*supplies/i, /\bprinter\b/i,
+      /\bsalary\b/i, /\bwages?\b/i, /\bpayroll\b/i, /staff\s*pay/i,
+      /bank\s*charge/i, /bank\s*fee/i, /service\s*charge/i,
+    ],
+    defaultTypes: ['money_out'],
+    packs: HOUSEHOLD,
   },
   {
     accountCode: '5000',
@@ -98,61 +143,60 @@ export const CATEGORY_RULES: CategoryRule[] = [
 const UNCATEGORIZED_MONEY_OUT = '6800';
 const UNCATEGORIZED_MONEY_IN = '4300';
 
+/** Which chart's rules apply. Unknown or missing kind keeps the company chart. */
+export function categoryPackFor(entityKind?: string | null): CoaPackId {
+  const k = String(entityKind ?? 'company').toLowerCase();
+  // Sign-up seeds the personal pack before an entity kind is chosen.
+  if (k === 'personal' || k === 'pending') return 'personal';
+  if (k === 'sole_prop') return 'sole_prop';
+  return 'company';
+}
+
+function inference(account: Account, confidence: number, source: CategoryInference['source']): CategoryInference {
+  return { categoryId: account.code, categoryName: account.name, accountCode: account.code, account, confidence, source };
+}
+
+/**
+ * Guess the category account for a Simple Entry.
+ *
+ * `entityKind` picks the chart the tenant was seeded with, so rules only point
+ * at codes that chart has and names match what the tenant sees. Postings
+ * resolve by code; a rule for a code the chart lacks would either fail to
+ * resolve or land on an unrelated account that shares the code.
+ */
 export function inferCategory(
   description: string,
   party: string,
   direction: EntryDirection,
   categoryOverride?: string,
+  entityKind?: string | null,
 ): CategoryInference {
+  const pack = categoryPackFor(entityKind);
+  const chart = pack === 'company' ? ACCOUNTS_BY_CODE : Object.fromEntries(chartOfAccountsForEntity(pack).map((a) => [a.code, a]));
+
   if (categoryOverride) {
-    const account = ACCOUNTS_BY_CODE[categoryOverride] ?? null;
-    if (account) {
-      return {
-        categoryId: account.code,
-        categoryName: account.name,
-        accountCode: account.code,
-        account,
-        confidence: 1,
-        source: 'override',
-      };
-    }
+    const account = chart[categoryOverride] ?? ACCOUNTS_BY_CODE[categoryOverride] ?? null;
+    if (account) return inference(account, 1, 'override');
   }
 
   const haystack = `${description} ${party}`.trim();
 
   for (const rule of CATEGORY_RULES) {
-    if (!rule.defaultTypes.includes(direction)) {
-      continue;
-    }
+    if (!rule.defaultTypes.includes(direction)) continue;
+    if (rule.packs && !rule.packs.includes(pack)) continue;
+    const account = chart[rule.accountCode];
+    if (!account) continue;
     if (rule.patterns.some((pattern) => pattern.test(haystack))) {
-      const account = ACCOUNTS_BY_CODE[rule.accountCode];
-      if (account) {
-        return {
-          categoryId: account.code,
-          categoryName: account.name,
-          accountCode: account.code,
-          account,
-          confidence: 0.9,
-          source: 'rule',
-        };
-      }
+      return inference(account, 0.9, 'rule');
     }
   }
 
   const fallbackCode = direction === 'money_in' ? UNCATEGORIZED_MONEY_IN : UNCATEGORIZED_MONEY_OUT;
-  const fallback = ACCOUNTS_BY_CODE[fallbackCode];
+  const fallback = chart[fallbackCode];
   if (!fallback) {
-    throw new Error('Default chart of accounts is missing the uncategorized fallback account.');
+    throw new Error('Chart of accounts is missing the uncategorized fallback account.');
   }
-
-  return {
-    categoryId: fallback.code,
-    categoryName: fallback.name,
-    accountCode: fallback.code,
-    account: fallback,
-    confidence: 0.3,
-    source: 'default',
-  };
+  return inference(fallback, 0.3, 'default');
 }
 
 export function listKnownAccounts(): Account[] {

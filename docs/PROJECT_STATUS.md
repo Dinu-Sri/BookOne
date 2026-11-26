@@ -1,3 +1,7 @@
+## 2026-11-26 — Category guesses follow the workspace chart (v2.17.9)
+
+Simple Entry category suggestions in personal and sole-prop workspaces now use their own chart: business costs without a household account go to General Expense instead of Healthcare/Food & Household/Education, and household words (groceries, pharmacy, tuition) map to the matching personal accounts. Company behaviour is unchanged. See [CHG-20261126-category-inferrer-packs](changes/CHG-20261126-category-inferrer-packs.md).
+
 ## 2026-11-25 — Company CoA names, per-host links, additive schema push (v2.17.6)
 
 Company workspaces created through sign-up no longer keep personal account names (6500 Healthcare → Office Supplies Expense; migration 052 repairs existing unposted accounts). Invite/print/redirect links use the host the user is on (allowlisted). Startup schema sync is additive-only: drizzle-kit 0.31 `push --force` had been dropping 92 RLS policies, disabling RLS on 92 tables and dropping 91 indexes on every boot before SQL migrations rebuilt them. See [CHG-20261125-coa-links-additive-push](changes/CHG-20261125-coa-links-additive-push.md).

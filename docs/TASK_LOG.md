@@ -1,3 +1,9 @@
+## 2026-11-26 — Category guesses follow the workspace chart (v2.17.9)
+
+- Record: [CHG-20261126-category-inferrer-packs.md](changes/CHG-20261126-category-inferrer-packs.md). Baseline `37c3ae7` / v2.17.8.
+- `inferCategory` takes the tenant entity kind; personal/sole-prop no longer map office supplies → Healthcare, salary → Food & Household, bank charges → Education.
+- Checks: typecheck exit 0; 704 unit tests passed.
+
 ## 2026-11-25 — Additive push via pull + generateMigration (v2.17.8)
 
 - v2.17.7 additive push failed: drizzle-kit pushSchema drops bind params. Now pull snapshot + generateMigration + filterAdditive (idempotent IF NOT EXISTS). Verified read-only on staging: 359 → apply 8 no-op index creates, skip 351.

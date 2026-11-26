@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "custom-website",
+    "catalog",
     "woocommerce",
     "agentbridge",
     "errors",

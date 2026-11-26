@@ -225,6 +225,6 @@ export async function authenticateCommerceRequest(authorization: string | null):
         retryAfter: limited.retryAfter,
       });
     }
-    return actor;
+    return { ...actor, rateLimitRemaining: limited.remaining };
   });
 }

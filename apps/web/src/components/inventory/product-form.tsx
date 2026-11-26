@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/bookone-ui';
 import { RichTextEditor, RichTextPopup } from '@/components/ui/rich-text-editor';
 import { categoryOptionLabel } from '@/lib/product-category-display';
 import { normalizeProductUnit, productUnitOptions } from '@/lib/product-units';
+import { ProductCatalogFields } from '@/components/inventory/product-catalog-fields';
+import type { ProductCatalogEditor } from '@/app/actions/product-catalog';
 
 const TABS = [
   { id: 'identity', label: 'Identity' },
@@ -17,6 +19,7 @@ const TABS = [
   { id: 'accounts', label: 'Accounts' },
   { id: 'stock', label: 'Stock' },
   { id: 'kit', label: 'Kit' },
+  { id: 'online', label: 'Online store' },
   { id: 'notes', label: 'Notes' },
 ] as const;
 
@@ -31,6 +34,7 @@ export function ProductForm({
   locations = [],
   canWrite = true,
   writeDeniedMessage,
+  catalogEditor = null,
 }: {
   mode: 'create' | 'edit';
   product?: ProductRow | null;
@@ -40,6 +44,8 @@ export function ProductForm({
   locations?: { id: string; name: string; brandId?: string | null }[];
   canWrite?: boolean;
   writeDeniedMessage?: string;
+  /** Commerce WP1: Online store tab (weights, variants, brand). */
+  catalogEditor?: ProductCatalogEditor | null;
 }) {
   const action = mode === 'edit' ? updateProductFromForm : createProductFromForm;
   const [tab, setTab] = useState<TabId>('identity');
@@ -156,6 +162,7 @@ export function ProductForm({
           {TABS.map((t) => {
             if (t.id === 'stock' && !tracksQty) return null;
             if (t.id === 'kit' && !isRental) return null;
+            if (t.id === 'online' && !catalogEditor) return null;
             return (
               <button
                 key={t.id}
@@ -652,6 +659,12 @@ export function ProductForm({
             >
               Add component
             </Button>
+          </div>
+        ) : null}
+
+        {catalogEditor ? (
+          <div className="party-tab-panel" hidden={tab !== 'online'}>
+            <ProductCatalogFields editor={catalogEditor} disabled={!canWrite} />
           </div>
         ) : null}
 

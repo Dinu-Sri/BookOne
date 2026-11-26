@@ -1,3 +1,4 @@
+import type { CatalogBundle } from './catalog';
 import type {
   ActivityRow,
   CommitmentLine,
@@ -90,6 +91,12 @@ export type CommerceStore = {
 
   insertActivity(row: ActivityRow & { tenantId: string }): Promise<void>;
   listActivity(tenantId: string, connectionId?: string): Promise<ActivityRow[]>;
+
+  /** WP1: everything the catalog API needs for one channel. */
+  catalogBundle?(tenantId: string, connectionId: string): Promise<CatalogBundle>;
+  /** WP1: publish or unpublish products on a channel. Returns rows changed. */
+  setChannelProducts?(tenantId: string, connectionId: string, productIds: string[], published: boolean): Promise<number>;
+  listChannelProductIds?(tenantId: string, connectionId: string): Promise<string[]>;
 };
 
 export type CommerceEventRow = {

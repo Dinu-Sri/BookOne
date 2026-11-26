@@ -89,6 +89,7 @@ import {
 import { ensureParty } from '@/app/actions/parties';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
 import { firstFreeNumber, lockNumberSeries } from '@/lib/numbering-lock';
+import { notifyCommerce } from '@/lib/commerce-notify';
 import {
   INVENTORY_SETTINGS_DEFAULTS,
   PURCHASE_SETTINGS_DEFAULTS,
@@ -2811,6 +2812,14 @@ export async function createCommercialDocumentWithUser(
       });
     });
     committedId = id;
+    // Websites see stock moved by invoices, POS, purchases and returns (commerce posts emit their own).
+    if (parsed.intent !== 'draft' && !opts?.forceBlockNegative) {
+      await notifyCommerce(
+        user.tenantId,
+        parsed.lines.map((line) => line.productId),
+        'inventory',
+      );
+    }
 
     revalidatePath('/sales/quotations');
     revalidatePath('/sales/orders');

@@ -13,6 +13,13 @@ import {
   commercePublishClaims,
   commerceRefunds,
   commerceStockCommitments,
+  commerceChannelProducts,
+  inventoryProductImages,
+  inventoryProductCategories,
+  inventoryProductBrands,
+  inventoryAttributes,
+  salesSettings,
+  isNull,
   db,
   asc,
   desc,
@@ -25,6 +32,7 @@ import {
   sql,
 } from '@bookone/db';
 import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
+import type { CatalogBundle } from './catalog';
 import { EMPTY_PAYMENT_SETTINGS, normalizePaymentSettings } from './payments';
 import { EMPTY_FULFILMENT, normalizeFulfilment } from './fulfilment';
 import type {
@@ -76,6 +84,7 @@ function connectionFrom(row: typeof commerceConnections.$inferSelect): Connectio
     matchingPolicy: row.matchingPolicy,
     taxMode: row.taxMode,
     paymentSettings: normalizePaymentSettings(row.paymentSettingsJson),
+    channelSettings: (row.channelSettingsJson && typeof row.channelSettingsJson === 'object' ? row.channelSettingsJson : {}) as ConnectionRow['channelSettings'],
     status: row.status === 'disconnected' ? 'disconnected' : 'active',
     lastCatalogSyncAt: row.lastCatalogSyncAt?.toISOString() ?? null,
     lastStockSyncAt: row.lastStockSyncAt?.toISOString() ?? null,
@@ -187,6 +196,7 @@ export class PostgresCommerceStore implements CommerceStore {
         outboundPaused: flag(row.outboundPaused),
         locationId: row.locationId,
         paymentSettingsJson: row.paymentSettings ?? EMPTY_PAYMENT_SETTINGS,
+        channelSettingsJson: row.channelSettings ?? {},
         lastCatalogSyncAt: row.lastCatalogSyncAt ? new Date(row.lastCatalogSyncAt) : null,
         lastStockSyncAt: row.lastStockSyncAt ? new Date(row.lastStockSyncAt) : null,
         lastOrderSyncAt: row.lastOrderSyncAt ? new Date(row.lastOrderSyncAt) : null,
@@ -594,6 +604,183 @@ export class PostgresCommerceStore implements CommerceStore {
     }
   }
 
+
+  async catalogBundle(tenantId: string, connectionId: string): Promise<CatalogBundle> {
+    const connection = await this.getConnection(tenantId, connectionId);
+    const locationId = connection?.locationId ?? null;
+    const products = await db()
+      .select()
+      .from(inventoryProducts)
+      .where(and(eq(inventoryProducts.tenantId, tenantId), isNull(inventoryProducts.voidedAt)));
+    const images = await db()
+      .select()
+      .from(inventoryProductImages)
+      .where(and(eq(inventoryProductImages.tenantId, tenantId), isNull(inventoryProductImages.voidedAt)));
+    const categories = await db()
+      .select()
+      .from(inventoryProductCategories)
+      .where(and(eq(inventoryProductCategories.tenantId, tenantId), isNull(inventoryProductCategories.voidedAt)));
+    const brands = await db()
+      .select()
+      .from(inventoryProductBrands)
+      .where(and(eq(inventoryProductBrands.tenantId, tenantId), isNull(inventoryProductBrands.voidedAt)));
+    const attributes = await db()
+      .select()
+      .from(inventoryAttributes)
+      .where(and(eq(inventoryAttributes.tenantId, tenantId), isNull(inventoryAttributes.voidedAt)));
+    const published = await db()
+      .select({ productId: commerceChannelProducts.productId })
+      .from(commerceChannelProducts)
+      .where(and(eq(commerceChannelProducts.tenantId, tenantId), eq(commerceChannelProducts.connectionId, connectionId)));
+    const mappings = await this.listMappings(tenantId, connectionId);
+    const levels = await db().select().from(inventoryStockLevels).where(eq(inventoryStockLevels.tenantId, tenantId));
+    const commitments = await db()
+      .select({ productId: commerceStockCommitments.productId, locationId: commerceStockCommitments.locationId, quantity: commerceStockCommitments.quantity })
+      .from(commerceStockCommitments)
+      .where(and(eq(commerceStockCommitments.tenantId, tenantId), eq(commerceStockCommitments.status, 'active')));
+    const [vat] = await db()
+      .select({ vatRegistered: salesSettings.vatRegistered, vatRatePercent: salesSettings.vatRatePercent })
+      .from(salesSettings)
+      .where(eq(salesSettings.tenantId, tenantId))
+      .limit(1);
+    const onHand = new Map<string, number>();
+    for (const l of levels) {
+      if ((l.locationId ?? null) !== locationId) continue;
+      onHand.set(l.productId, (onHand.get(l.productId) ?? 0) + Number(l.qtyOnHand));
+    }
+    const committed = new Map<string, number>();
+    for (const c of commitments) {
+      if ((c.locationId ?? null) !== locationId) continue;
+      committed.set(c.productId, (committed.get(c.productId) ?? 0) + Number(c.quantity));
+    }
+    const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+    const ch = connection?.channelSettings ?? {};
+    return {
+      products: products.map((r) => ({
+        id: r.id,
+        sku: r.sku,
+        name: r.name,
+        shortName: r.shortName,
+        description: r.description,
+        longDescription: r.longDescription,
+        productType: r.productType,
+        unit: r.unit,
+        sellPrice: String(r.sellPrice),
+        categoryId: r.categoryId,
+        productBrandId: r.productBrandId,
+        barcode: r.barcode,
+        extraBarcodes: arr<string>(r.extraBarcodes).map(String),
+        tags: arr<string>(r.tags).map(String),
+        attributeValues: arr<{ code: string; value: string }>(r.attributeValues),
+        weightGrams: r.weightGrams,
+        lengthMm: r.lengthMm,
+        widthMm: r.widthMm,
+        heightMm: r.heightMm,
+        fragile: r.fragile === '1',
+        taxStatus: r.taxStatus,
+        minOrderQty: r.minOrderQty === null ? null : String(r.minOrderQty),
+        maxOrderQty: r.maxOrderQty === null ? null : String(r.maxOrderQty),
+        orderQtyStep: r.orderQtyStep === null ? null : String(r.orderQtyStep),
+        allowBackorder: r.allowBackorder === '1',
+        parentProductId: r.parentProductId,
+        variantOptions: arr<{ name: string; value: string }>(r.variantOptions),
+        productOptions: arr<{ name: string; values: string[] }>(r.productOptions),
+        swatchHex: r.swatchHex,
+        variantSortOrder: r.variantSortOrder,
+        isDefaultVariant: r.isDefaultVariant === '1',
+        sellable: r.sellable === '1',
+        isActive: r.isActive === '1',
+        archived: r.isActive !== '1',
+        imageKey: r.imageKey,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+      })),
+      images: images.map((i) => ({
+        id: i.id,
+        productId: i.productId,
+        width: i.width,
+        height: i.height,
+        alt: i.alt,
+        position: i.position,
+        checksum: i.checksum,
+        updatedAt: i.updatedAt.toISOString(),
+      })),
+      categories: categories.map((c) => ({
+        id: c.id,
+        parentId: c.parentId,
+        name: c.name,
+        slug: c.slug,
+        description: c.description ?? null,
+        imageUrl: null,
+        sortOrder: c.sortOrder,
+        archived: false,
+        updatedAt: c.updatedAt.toISOString(),
+      })),
+      brands: brands.map((x) => ({
+        id: x.id,
+        name: x.name,
+        slug: x.slug,
+        description: x.description,
+        websiteUrl: x.websiteUrl,
+        logoUrl: null,
+        archived: false,
+        updatedAt: x.updatedAt.toISOString(),
+      })),
+      attributes: attributes.map((a) => ({
+        code: a.code,
+        name: a.name,
+        type: a.type,
+        unit: a.unit,
+        allowedValues: arr<string>(a.allowedValues).map(String),
+        filterable: a.filterable === '1',
+      })),
+      published: new Set(published.map((p) => p.productId)),
+      mapped: new Map(mappings.map((m) => [m.bookoneProductId, { externalProductId: m.externalProductId, externalVariantId: m.externalVariantId }])),
+      onHand,
+      committed,
+      currency: connection?.currency ?? 'LKR',
+      vatRatePercent: Number(vat?.vatRatePercent ?? 18),
+      vatRegistered: vat?.vatRegistered === '1',
+      channel: {
+        safetyBuffer: Math.max(0, Number(ch.safetyBuffer ?? 0) || 0),
+        allowBackorder: Boolean(ch.allowBackorder),
+        timezone: ch.timezone || 'Asia/Colombo',
+      },
+    };
+  }
+
+  async listChannelProductIds(tenantId: string, connectionId: string) {
+    const rows = await db()
+      .select({ productId: commerceChannelProducts.productId })
+      .from(commerceChannelProducts)
+      .where(and(eq(commerceChannelProducts.tenantId, tenantId), eq(commerceChannelProducts.connectionId, connectionId)));
+    return rows.map((r) => r.productId);
+  }
+
+  async setChannelProducts(tenantId: string, connectionId: string, productIds: string[], published: boolean) {
+    const ids = [...new Set(productIds)].filter(Boolean);
+    if (!ids.length) return 0;
+    if (published) {
+      const rows = await db()
+        .insert(commerceChannelProducts)
+        .values(ids.map((productId) => ({ tenantId, connectionId, productId })))
+        .onConflictDoUpdate({ target: [commerceChannelProducts.connectionId, commerceChannelProducts.productId], set: { updatedAt: new Date() } })
+        .returning({ productId: commerceChannelProducts.productId });
+      return rows.length;
+    }
+    const rows = await db()
+      .delete(commerceChannelProducts)
+      .where(
+        and(
+          eq(commerceChannelProducts.tenantId, tenantId),
+          eq(commerceChannelProducts.connectionId, connectionId),
+          inArray(commerceChannelProducts.productId, ids),
+        ),
+      )
+      .returning({ productId: commerceChannelProducts.productId });
+    return rows.length;
+  }
+
   async getOrderById(tenantId: string, orderId: string) {
     const [row] = await db()
       .select()
@@ -949,6 +1136,7 @@ function productFrom(row: typeof inventoryProducts.$inferSelect): ProductRecord 
     archived: Boolean(row.voidedAt),
     sellPrice: String(row.sellPrice),
     revision: Math.floor(row.updatedAt.getTime() / 1000),
+    parentProductId: row.parentProductId ?? null,
   };
 }
 

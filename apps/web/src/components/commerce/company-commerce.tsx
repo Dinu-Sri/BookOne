@@ -10,6 +10,12 @@ import { SearchField, TextField } from '@/components/ui/text-field';
 import { withFormPending } from '@/components/ui/form-busy';
 import { CommercePaymentsCard, type CommercePaymentSettingsView } from '@/components/commerce/commerce-payments-card';
 import { CommerceFulfilmentCard } from '@/components/commerce/commerce-fulfilment-card';
+import {
+  CommerceChannelCatalog,
+  CommerceChannelSettingsCard,
+  SampleCatalogCard,
+  type ChannelCatalogView,
+} from '@/components/commerce/commerce-channel-catalog';
 import { CommerceWebOrders, nextStepFor, type WebOrderView } from '@/components/commerce/commerce-web-orders';
 import { LOCATION_TYPE_LABELS, isFleetLocationType } from '@/lib/rental-locations';
 import {
@@ -104,6 +110,7 @@ type ConnectionView = {
   publishClaims: Array<{ id: string; sku: string; status: string; issue: string | null }>;
   paymentSettings: CommercePaymentSettingsView;
   webOrders: WebOrderView[];
+  channelCatalog: ChannelCatalogView | null;
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -875,6 +882,14 @@ export function CompanyCommerce(props: {
                           Save pauses and posting
                         </Button>
                       </form>
+                    {selected.channelCatalog ? (
+                      <CommerceChannelSettingsCard
+                        key={`chan-${selected.id}`}
+                        connectionId={selected.id}
+                        canWrite={props.canWrite}
+                        channel={selected.channelCatalog.channel}
+                      />
+                    ) : null}
                     <CommerceFulfilmentCard
                       key={`fulfil-${selected.id}`}
                       connectionId={selected.id}
@@ -992,6 +1007,7 @@ export function CompanyCommerce(props: {
                           ))}
                         </ul>
                       </section>
+                    {props.canWrite && selected.environment === 'sandbox' ? <SampleCatalogCard connectionId={selected.id} /> : null}
                   </div>
                 ) : null}
 
@@ -1017,6 +1033,9 @@ export function CompanyCommerce(props: {
                       </section>
                     ) : (
                       <div key={`map-${selected.id}`} className="commerce-panel-stack">
+                        {selected.channelCatalog ? (
+                          <CommerceChannelCatalog connectionId={selected.id} canWrite={props.canWrite} data={selected.channelCatalog} />
+                        ) : null}
                         {props.productsError ? (
                           <section className="commerce-empty-panel" role="alert">
                             <p>{props.productsError} Refresh this page to retry. Do not recreate products until the catalog loads.</p>

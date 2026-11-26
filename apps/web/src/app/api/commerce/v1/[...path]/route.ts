@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { commerceErrorBody, CommerceError, COMMERCE_OPENAPI, CURL_EXAMPLES } from '@bookone/commerce';
+import {
+  commerceErrorBody,
+  CommerceError,
+  COMMERCE_OPENAPI,
+  CURL_EXAMPLES,
+  RATE_LIMIT_PER_MINUTE,
+  etagFor,
+  parseInclude,
+  type CatalogQuery,
+} from '@bookone/commerce';
+import { publicOrigin } from '@/lib/public-origin';
 import { authenticateCommerceRequest, withCommerceService } from '@/lib/commerce-runtime';
 import { withTenantContext } from '@bookone/db';
 
@@ -23,6 +33,62 @@ async function authenticate(req: NextRequest) {
   return authenticateCommerceRequest(req.headers.get('authorization'));
 }
 
+/** G5/G8: every authenticated response carries rate-limit headers; GETs get an ETag and honour If-None-Match. */
+function okJson(req: NextRequest, data: unknown, remaining: number | undefined, status = 200) {
+  const headers: Record<string, string> = {
+    'X-RateLimit-Limit': String(RATE_LIMIT_PER_MINUTE),
+    'X-RateLimit-Remaining': String(remaining ?? RATE_LIMIT_PER_MINUTE),
+  };
+  const requestId = (data as { requestId?: string } | null)?.requestId;
+  if (requestId) headers['X-Request-Id'] = requestId;
+  if (req.method === 'GET' && status === 200) {
+    const etag = etagFor(data);
+    headers.ETag = etag;
+    headers['Cache-Control'] = 'private, no-cache';
+    const match = req.headers.get('if-none-match');
+    if (match && match.split(',').map((v) => v.trim()).includes(etag)) {
+      return new NextResponse(null, { status: 304, headers });
+    }
+  }
+  return json(data, status, headers);
+}
+
+function skuList(req: NextRequest): string[] {
+  return req.nextUrl.searchParams
+    .getAll('sku')
+    .flatMap((v) => v.split(','))
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+async function catalogQuery(req: NextRequest, tenantId: string): Promise<CatalogQuery> {
+  const q = req.nextUrl.searchParams;
+  const skus = skuList(req);
+  if (skus.length > 100) throw new CommerceError({ code: 'VALIDATION', message: 'Pass at most 100 SKUs per call.', httpStatus: 422 });
+  const status = q.get('status');
+  const updatedSince = q.get('updatedSince');
+  if (updatedSince && !Number.isFinite(Date.parse(updatedSince))) {
+    throw new CommerceError({ code: 'VALIDATION', message: 'updatedSince must be an ISO 8601 timestamp.', httpStatus: 422 });
+  }
+  return {
+    cursor: q.get('cursor'),
+    limit: q.get('limit') ? Number(q.get('limit')) : undefined,
+    updatedSince,
+    status: status === 'archived' || status === 'all' ? status : 'active',
+    categoryId: q.get('categoryId'),
+    brandId: q.get('brandId'),
+    skus,
+    include: parseInclude(q.get('include')),
+    scope: q.get('scope') === 'all' ? 'all' : 'published',
+    mediaBase: await mediaBase(tenantId),
+  };
+}
+
+async function mediaBase(tenantId: string): Promise<string> {
+  const origin = await publicOrigin().catch(() => process.env.AUTH_URL ?? '');
+  return `${origin.replace(/\/$/, '')}/api/commerce/media/${tenantId}`;
+}
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   try {
     const { path } = await ctx.params;
@@ -33,14 +99,41 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
     const actor = await authenticate(req);
     return await withTenantContext(actor.tenantId, async () => {
       const service = await (await import('@/lib/commerce-runtime')).makeCommerceService();
-      if (route === 'connection') return json(await service.connection(actor));
+      if (route === 'connection') return okJson(req, await service.connection(actor), actor.rateLimitRemaining);
       if (route === 'products') {
-        return json(await service.products(actor, req.nextUrl.searchParams.get('cursor') ?? undefined));
+        return okJson(req, await service.products(actor, req.nextUrl.searchParams.get('cursor') ?? undefined), actor.rateLimitRemaining);
       }
       if (route === 'catalog/candidates') {
-        return json(await service.catalogCandidates(actor));
+        return okJson(req, await service.catalogCandidates(actor), actor.rateLimitRemaining);
       }
-      if (route === 'payment-methods') return json(await service.paymentMethods(actor));
+      if (route === 'payment-methods') return okJson(req, await service.paymentMethods(actor), actor.rateLimitRemaining);
+      // ---- WP1 catalog read ----
+      if (route === 'catalog/products') {
+        return okJson(req, await service.catalogProducts(actor, await catalogQuery(req, actor.tenantId)), actor.rateLimitRemaining);
+      }
+      if (route.startsWith('catalog/products/')) {
+        const rest = route.slice('catalog/products/'.length);
+        const q = await catalogQuery(req, actor.tenantId);
+        const match = rest.startsWith('by-sku/')
+          ? { sku: decodeURIComponent(rest.slice('by-sku/'.length)) }
+          : { id: decodeURIComponent(rest) };
+        return okJson(
+          req,
+          await service.catalogProduct(actor, match, q.include ?? [], q.mediaBase, q.scope),
+          actor.rateLimitRemaining,
+        );
+      }
+      if (route === 'catalog/categories' || route === 'catalog/brands' || route === 'catalog/attributes') {
+        const q = req.nextUrl.searchParams;
+        const limit = q.get('limit') ? Number(q.get('limit')) : undefined;
+        const out =
+          route === 'catalog/categories'
+            ? await service.catalogCategories(actor, q.get('cursor'), limit)
+            : route === 'catalog/brands'
+              ? await service.catalogBrands(actor, q.get('cursor'), limit)
+              : await service.catalogAttributes(actor, q.get('cursor'), limit);
+        return okJson(req, out, actor.rateLimitRemaining);
+      }
       if (route === 'inventory') {
         // Repeat sku= or pass a comma list (up to 100).
         const sku = req.nextUrl.searchParams
@@ -48,14 +141,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
           .flatMap((v) => v.split(','))
           .map((v) => v.trim())
           .filter(Boolean);
-        return json(await service.inventory(actor, sku.length ? sku : undefined));
+        return okJson(req, await service.inventory(actor, sku.length ? sku : undefined), actor.rateLimitRemaining);
       }
       if (route === 'changes') {
-        return json(await service.changes(actor, req.nextUrl.searchParams.get('cursor') ?? undefined));
+        return okJson(req, await service.changes(actor, req.nextUrl.searchParams.get('cursor') ?? undefined), actor.rateLimitRemaining);
       }
       if (route.startsWith('orders/') && !route.endsWith('/events')) {
         const externalId = decodeURIComponent(route.slice('orders/'.length));
-        return json(await service.getOrder(actor, externalId));
+        return okJson(req, await service.getOrder(actor, externalId), actor.rateLimitRemaining);
       }
       throw new CommerceError({ code: 'NOT_FOUND', message: 'Unknown commerce route.', httpStatus: 404 });
     });

@@ -40,6 +40,9 @@ export {
 } from './company-settings';
 export {
   inventoryProducts,
+  inventoryProductBrands,
+  inventoryProductImages,
+  inventoryAttributes,
   inventoryProductCategories,
   inventoryStockLevels,
   inventoryStockDocs,
@@ -86,6 +89,7 @@ export {
   commerceMappingProposals,
   commercePublishClaims,
   commerceStockCommitments,
+  commerceChannelProducts,
 } from './commerce';
 export { posRegisters, posShifts } from './pos';
 export {

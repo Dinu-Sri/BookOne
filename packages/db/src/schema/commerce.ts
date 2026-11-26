@@ -26,6 +26,8 @@ export const commerceConnections = pgTable('commerce_connections', {
   taxMode: varchar('tax_mode', { length: 40 }).notNull().default('domestic_inclusive'),
   /** Where paid orders are settled: default account, per-method accounts, methods seen. */
   paymentSettingsJson: jsonb('payment_settings').notNull().default({}),
+  /** Channel settings (WP1): safetyBuffer, allowBackorder, timezone, publishAllMapped. */
+  channelSettingsJson: jsonb('channel_settings').notNull().default({}),
   status: varchar('status', { length: 20 }).notNull().default('active'),
   lastCatalogSyncAt: timestamp('last_catalog_sync_at', { withTimezone: true }),
   lastStockSyncAt: timestamp('last_stock_sync_at', { withTimezone: true }),
@@ -300,3 +302,20 @@ export const commerceStockCommitments = pgTable('commerce_stock_commitments', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/** Products published to a sales channel (WP1 C1). Linked (mapped) products also count as published. */
+export const commerceChannelProducts = pgTable(
+  'commerce_channel_products',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => commerceConnections.id),
+    productId: uuid('product_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.connectionId, t.productId] }) }),
+);

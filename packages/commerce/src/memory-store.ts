@@ -1,3 +1,4 @@
+import type { CatalogBundle } from './catalog';
 import { randomUUID } from 'node:crypto';
 import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
 import type {
@@ -23,6 +24,17 @@ export class MemoryCommerceStore implements CommerceStore {
   products: ProductRecord[] = [];
   stock: StockRecord[] = [];
   orders: OrderRow[] = [];
+  /** WP1 test catalog: raw rows override seeded products; plus images, categories, brands. */
+  catalog: Omit<CatalogBundle, 'mapped' | 'onHand' | 'committed' | 'currency' | 'channel' | 'published'> & { published: Set<string> } = {
+    products: [],
+    images: [],
+    categories: [],
+    brands: [],
+    attributes: [],
+    vatRatePercent: 18,
+    vatRegistered: false,
+    published: new Set(),
+  };
   commitments: Array<{ tenantId: string; orderId: string; productId: string; locationId: string | null; quantity: number; status: string }> = [];
   idem = new Map<string, IdempotencyRow>();
   events: CommerceEventRow[] = [];
@@ -131,6 +143,55 @@ export class MemoryCommerceStore implements CommerceStore {
   async listStock(tenantId: string, locationId: string | null) {
     void tenantId;
     return this.stock.filter((s) => (s.locationId ?? null) === (locationId ?? null));
+  }
+  async catalogBundle(tenantId: string, connectionId: string): Promise<CatalogBundle> {
+    const connection = await this.getConnection(tenantId, connectionId);
+    const loc = connection?.locationId ?? null;
+    const mappings = await this.listMappings(tenantId, connectionId);
+    const raw = new Map(this.catalog.products.map((p) => [p.id, p]));
+    for (const p of this.products.values()) {
+      if (raw.has(p.id)) continue;
+      raw.set(p.id, {
+        id: p.id, sku: p.sku, name: p.name, shortName: null, description: null, longDescription: null,
+        productType: p.productType, unit: p.unit, sellPrice: p.sellPrice, categoryId: null, productBrandId: null,
+        barcode: null, extraBarcodes: [], tags: [], attributeValues: [], weightGrams: null, lengthMm: null,
+        widthMm: null, heightMm: null, fragile: false, taxStatus: 'standard', minOrderQty: null, maxOrderQty: null,
+        orderQtyStep: null, allowBackorder: false, parentProductId: null, variantOptions: [], productOptions: [],
+        swatchHex: null, variantSortOrder: 0, isDefaultVariant: false, sellable: true, isActive: p.isActive,
+        archived: p.archived, imageKey: null, createdAt: new Date(0).toISOString(), updatedAt: new Date(p.revision * 1000).toISOString(),
+      });
+    }
+    const onHand = new Map<string, number>();
+    for (const s of this.stock) if ((s.locationId ?? null) === loc) onHand.set(s.productId, (onHand.get(s.productId) ?? 0) + Number(s.quantity));
+    const committed = new Map<string, number>();
+    for (const c of this.commitments) if (c.status === 'active' && (c.locationId ?? null) === loc) committed.set(c.productId, (committed.get(c.productId) ?? 0) + c.quantity);
+    const ch = connection?.channelSettings ?? {};
+    return {
+      ...this.catalog,
+      products: [...raw.values()],
+      published: new Set([...this.catalog.published, ...(this.channelProducts.get(connectionId) ?? [])]),
+      mapped: new Map(mappings.map((m) => [m.bookoneProductId, { externalProductId: m.externalProductId, externalVariantId: m.externalVariantId }])),
+      onHand,
+      committed,
+      currency: connection?.currency ?? 'LKR',
+      channel: { safetyBuffer: Number(ch.safetyBuffer ?? 0) || 0, allowBackorder: Boolean(ch.allowBackorder), timezone: ch.timezone || 'Asia/Colombo' },
+    };
+  }
+  channelProducts = new Map<string, Set<string>>();
+  async listChannelProductIds(tenantId: string, connectionId: string) {
+    void tenantId;
+    return [...(this.channelProducts.get(connectionId) ?? [])];
+  }
+  async setChannelProducts(tenantId: string, connectionId: string, productIds: string[], published: boolean) {
+    void tenantId;
+    const set = this.channelProducts.get(connectionId) ?? new Set<string>();
+    let n = 0;
+    for (const id of productIds) {
+      if (published && !set.has(id)) { set.add(id); n += 1; }
+      if (!published && set.delete(id)) n += 1;
+    }
+    this.channelProducts.set(connectionId, set);
+    return n;
   }
   async getOrderById(tenantId: string, orderId: string) {
     const row = this.orders.find((o) => o.tenantId === tenantId && o.id === orderId);

@@ -33,10 +33,12 @@ export default async function CompanyCommercePage({
     withCommerceService(operator.tenantId, async (service) => {
       const rows = await service.listOperatorView(operator);
       const orders = new Map<string, Awaited<ReturnType<typeof service.listWebOrders>>>();
+      const catalogs = new Map<string, Awaited<ReturnType<typeof service.channelCatalogForOperator>> | null>();
       for (const row of rows) {
         orders.set(row.connection.id, await service.listWebOrders(operator, row.connection.id).catch(() => []));
+        catalogs.set(row.connection.id, await service.channelCatalogForOperator(operator, row.connection.id).catch(() => null));
       }
-      return { rows, orders };
+      return { rows, orders, catalogs };
     }),
     getCompanySettingsData().catch(() => null),
     listProducts()
@@ -45,6 +47,7 @@ export default async function CompanyCommercePage({
   ]);
   const view = viewData.rows;
   const webOrders = viewData.orders;
+  const channelCatalogs = viewData.catalogs;
   if (productLoad.ok) products = productLoad.rows;
   else productsError = 'Could not load BookOne products.';
   const [inventory, paymentAccounts] = await Promise.all([
@@ -90,6 +93,7 @@ export default async function CompanyCommercePage({
           locationId: row.connection.locationId,
           paymentSettings: row.connection.paymentSettings ?? { defaultAccountCode: null, methods: {}, seenMethods: [] },
           webOrders: webOrders.get(row.connection.id) ?? [],
+          channelCatalog: channelCatalogs.get(row.connection.id) ?? null,
           mappingCount: row.mappingCount,
           reviewCount: row.reviewCount,
           lastCatalog: row.connection.lastCatalogSyncAt,

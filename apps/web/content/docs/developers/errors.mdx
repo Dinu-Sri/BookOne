@@ -14,13 +14,17 @@ Every error body includes `ok: false`, `code`, `error`, and `requestId`.
 | `UNAUTHENTICATED` | 401 | Issue or rotate the scoped key. Prefix-only display means the secret was already shown |
 | `FORBIDDEN` | 403 | The key lacks that scope (`catalog`, `inventory`, `order`, `lifecycle`) |
 | `NOT_FOUND` | 404 | Unknown route or order `externalId` |
-| `VALIDATION` | 400 | Fix the payload. Empty acknowledge batches and zero-item publish are refused |
+| `VALIDATION` | 400 / 422 | Fix the payload or query. Empty acknowledge batches and zero-item publish are refused; `updatedSince` must be ISO 8601; at most 100 SKUs per call |
 | `CONFLICT` | 409 | Same idempotency key with a different payload, or a second acknowledge ID for one BookOne product |
-| `RATE_LIMITED` | 429 | Honor `Retry-After` |
+| `RATE_LIMITED` | 429 | Honor `Retry-After`. The limit is 600 requests per minute per key; watch `X-RateLimit-Remaining` |
 | `INBOUND_PAUSED` / `OUTBOUND_PAUSED` | 409 | Operator unpauses inbound orders or outbound stock |
 | `CURSOR_EXPIRED` | 422 | Full `/inventory` snapshot, then `/changes` without the old cursor |
 | `RESERVATION_DISABLED` | 422 | Reservations stay off. Do not retry as a checkout hold |
 | `UNSUPPORTED` | 422 | Feature is out of v1 (FX, kits, Shopify, price export) |
+
+`304 Not Modified` is not an error: your `If-None-Match` ETag still matches, keep your copy.
+
+A `NOT_FOUND` on `/catalog/products/{id}` usually means the product is not published to your channel (staff: **Commerce Integrations → Products**).
 
 HTTP **202** on `POST /orders` means accepted for processing. Confirm `status`, `documentNumber`, and inventory. `httpStatusIsNotAccountingAcceptance` is always true on that receipt.
 

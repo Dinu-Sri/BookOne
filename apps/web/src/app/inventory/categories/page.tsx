@@ -6,6 +6,9 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { CategoryForms } from '@/components/inventory/category-forms';
 import { Card, CardBody, CardHeader } from '@/components/ui/bookone-ui';
+import { ProductBrandsCard } from '@/components/inventory/product-brands-card';
+import { listProductBrands } from '@/app/actions/product-catalog';
+import { probeModuleWrite } from '@/lib/module-access';
 
 export default async function ProductCategoriesPage() {
   let tenant;
@@ -20,6 +23,10 @@ export default async function ProductCategoriesPage() {
   } catch {
     redirect('/login');
   }
+  const [productBrands, canWrite] = await Promise.all([
+    listProductBrands().catch(() => []),
+    probeModuleWrite('inventory').catch(() => false),
+  ]);
 
   return (
     <BookOneShell active="Categories" tenant={tenant}>
@@ -41,6 +48,12 @@ export default async function ProductCategoriesPage() {
                 brandId: l.brandId,
               }))}
             />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader title="Product brands" subtitle="Makers shown on your online stores." />
+          <CardBody>
+            <ProductBrandsCard brands={productBrands} canWrite={canWrite} />
           </CardBody>
         </Card>
       </div>

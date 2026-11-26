@@ -4,6 +4,8 @@ import { listProductCategories } from '@/app/actions/product-categories';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { ProductForm } from '@/components/inventory/product-form';
+import { ProductGallery } from '@/components/inventory/product-gallery';
+import { getProductCatalogEditor } from '@/app/actions/product-catalog';
 import { moduleWriteDenialMessage, probeModuleWriteDetail } from '@/lib/module-access';
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,6 +33,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   } catch {
     redirect('/login');
   }
+  const catalogEditor = await getProductCatalogEditor(id).catch(() => null);
   if (!product) redirect('/inventory/products');
 
   return (
@@ -44,12 +47,16 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           brands={dims.brands}
           locations={dims.locations}
           canWrite={writeProbe.canWrite}
+          catalogEditor={catalogEditor}
           writeDeniedMessage={
             writeProbe.reason === 'ok'
               ? undefined
               : moduleWriteDenialMessage('inventory', writeProbe.reason)
           }
         />
+        {catalogEditor ? (
+          <ProductGallery productId={id} images={catalogEditor.images} canWrite={writeProbe.canWrite} />
+        ) : null}
       </div>
     </BookOneShell>
   );

@@ -1,0 +1,171 @@
+---
+title: Catalog API
+description: Import the products BookOne publishes to your channel, with variants, photos, categories, brands, attributes, prices and stock.
+---
+
+# Catalog API
+
+Read [Custom Website API](/docs/developers/custom-website) first for keys, conventions and the sync loop. All endpoints here need the `catalog` scope and return only what is **published to your channel**.
+
+## What is published
+
+In **Company → Commerce Integrations → Products**, staff choose which products this website may show (filter by category or brand, select, **Publish**).
+
+- Publishing a **listing with variants** publishes all its colours/sizes. A single variant can also be published on its own.
+- Products linked to your existing listings (mapping) also count as published.
+- Add `scope=all` to see every active BookOne product, for example while building. Do not sell unpublished products.
+
+## Endpoints
+
+| Endpoint | Returns |
+|---|---|
+| `GET /catalog/products` | Published products, paged |
+| `GET /catalog/products/{productId}` | One product. A variant id returns its parent |
+| `GET /catalog/products/by-sku/{sku}` | One product by product or variant SKU |
+| `GET /catalog/categories` | Category tree as a flat list |
+| `GET /catalog/brands` | Product brands |
+| `GET /catalog/attributes` | Specification attributes for filters |
+
+### Query parameters for `/catalog/products`
+
+| Parameter | Notes |
+|---|---|
+| `cursor`, `limit` | `limit` default 50, max 250. Follow `nextCursor` until `null` |
+| `updatedSince` | ISO time. Products whose `revision` (any change to the product, a variant or a photo) is later |
+| `status` | `active` (default), `archived`, `all` |
+| `categoryId` | Includes child categories |
+| `brandId` | Product brand id |
+| `sku` | Up to 100, repeated or comma-separated. Matches a product or a variant SKU |
+| `include` | Comma list of `variants`, `images`, `prices`, `inventory`, `attributes`. Without it you get the core fields only |
+| `scope` | `published` (default) or `all` |
+
+Pages are ordered by `revision` then `id`, so you can import everything once and then poll with `updatedSince` (or the change feed) without missing rows.
+
+```bash
+curl -sS -H "Authorization: Bearer $BOOKONE_KEY" \
+  "$BOOKONE_BASE/catalog/products?include=variants,images,prices,inventory,attributes&limit=250"
+```
+
+## Product
+
+```json
+{
+  "id": "6b0c…",
+  "sku": "WN-COT-8ML",
+  "type": "variable",
+  "status": "active",
+  "name": "Winsor & Newton Cotman Watercolour 8ml Tube",
+  "shortName": "Cotman 8ml Tube",
+  "slugHint": "winsor-newton-cotman-watercolour-8ml-tube",
+  "descriptionHtml": "<p>…</p>",
+  "descriptionText": "…",
+  "shortDescriptionHtml": "<p>…</p>",
+  "brand": { "id": "b1…", "name": "Winsor & Newton" },
+  "categories": [{ "id": "c3…", "name": "Watercolour Paints", "path": ["Paints", "Watercolour Paints"], "primary": true }],
+  "unit": { "code": "pcs", "name": "Piece", "decimals": 0 },
+  "barcodes": ["0884955043936"],
+  "tags": ["student-grade"],
+  "attributes": [{ "code": "volume_ml", "name": "Volume ml", "value": "8" }],
+  "shipping": { "weightGrams": 25, "lengthMm": 90, "widthMm": 25, "heightMm": 20, "fragile": false },
+  "tax": { "taxCategory": "standard", "rate": "18.00" },
+  "trackInventory": false,
+  "allowBackorder": false,
+  "minOrderQty": "1",
+  "maxOrderQty": null,
+  "orderQtyStep": "1",
+  "options": [{ "name": "Colour", "values": ["Chinese White", "Lemon Yellow"] }],
+  "images": [ /* see Images */ ],
+  "variants": [ /* see Variant */ ],
+  "externalProductId": null,
+  "revision": 1764150720000,
+  "createdAt": "2026-03-01T04:30:00.000Z",
+  "updatedAt": "2026-11-20T02:42:00.000Z"
+}
+```
+
+- `type`: `simple` (one SKU with its own price and stock), `variable` (price and stock are on each variant), `service` (not stocked).
+- A **simple** product carries `price` and `inventory` itself (with `include=prices,inventory`). A **variable** product carries them on each variant.
+- `shipping.weightGrams` is the packed weight. Sites that charge delivery by weight need it on every product; staff see a **missing weight** list on the Products tab. A variant with no weight of its own uses its listing's weight.
+- `tax.rate` is the company VAT rate for standard-rated products when the company is VAT registered, otherwise `0.00`. Prices are as entered in BookOne (`taxMode` on `/connection` says whether they include tax).
+- `slugHint` is a suggestion; keep your own URLs stable.
+
+## Variant
+
+```json
+{
+  "id": "9f1a…",
+  "sku": "WN-COT-8ML-CHWHITE",
+  "barcodes": ["0884955043943"],
+  "options": [{ "name": "Colour", "value": "Chinese White" }],
+  "swatch": { "hex": "#F7F5EE", "imageId": null },
+  "status": "active",
+  "sortOrder": 1,
+  "isDefault": true,
+  "shipping": { "weightGrams": 25, "lengthMm": null, "widthMm": null, "heightMm": null, "fragile": false },
+  "images": [],
+  "price": { "currency": "LKR", "priceListId": "default", "price": "1119.00", "compareAtPrice": null, "revision": 1764150720000, "updatedAt": "…" },
+  "inventory": { "trackInventory": true, "onHand": "14", "committed": "2", "available": "12", "allowBackorder": false, "revision": 1764150720000, "asOf": "…" },
+  "externalVariantId": null,
+  "revision": 1764150720000,
+  "updatedAt": "…"
+}
+```
+
+Each variant is its own BookOne SKU with its own stock, so POS sales and invoices of that colour reduce exactly that variant's `available`.
+
+## Images
+
+```json
+{ "id": "img_77", "url": "https://host/api/commerce/media/<company>/img_77/9f2c1a7b3d4e.webp",
+  "width": 2000, "height": 2000, "alt": "Cotman Chinese White tube", "position": 1,
+  "checksum": "sha256:9f2c…", "updatedAt": "…" }
+```
+
+- `position: 1` is the main photo.
+- URLs are public and stable, so no key is needed to download them. When a photo changes, its `checksum` (and the last URL segment) changes; re-download only then. Responses are cacheable for a year.
+- Staff upload originals in BookOne; BookOne keeps them up to 2000 px on the long side as WebP. Download and re-host on your CDN rather than hot-linking BookOne in production.
+
+## Categories, brands, attributes
+
+```json
+{ "id": "c3…", "parentId": "c1…", "name": "Watercolour Paints", "slugHint": "watercolour-paints",
+  "description": null, "imageUrl": null, "sortOrder": 0, "status": "active", "updatedAt": "…" }
+```
+
+```json
+{ "id": "b1…", "name": "Winsor & Newton", "slugHint": "winsor-and-newton", "logoUrl": null,
+  "description": null, "websiteUrl": "https://…", "status": "active", "updatedAt": "…" }
+```
+
+```json
+{ "code": "volume_ml", "name": "Volume ml", "type": "text", "unit": null, "allowedValues": [], "filterable": false }
+```
+
+Build the category tree from `parentId`. Product brands are the makers of the goods; they are separate from the company's own trading brands.
+
+## Keeping in sync
+
+- Watch the change feed for `product` items (product, variant or photo changed; published; unpublished) and re-read that product with `GET /catalog/products/{productId}`.
+- A `product` item with `action: "unpublished"` means hide the product. Archived products come back with `status: "archived"` when you ask for `status=all`.
+- Stock arrives as `inventory` items; you do not need to re-read the whole product for a stock change.
+- Use `If-None-Match` with the `ETag` you got last time for cheap re-reads of categories, brands and single products.
+
+## Errors
+
+| HTTP | code | When |
+|---|---|---|
+| 401 | `UNAUTHENTICATED` | Missing, invalid, revoked or expired key |
+| 403 | `FORBIDDEN` | The key lacks the `catalog` scope |
+| 404 | `NOT_FOUND` | The product is not published on your channel |
+| 422 | `VALIDATION` | Bad `updatedSince`, or more than 100 SKUs |
+| 429 | `RATE_LIMITED` | Over 600 requests per minute; wait `Retry-After` seconds |
+
+## Not yet available
+
+Check `capabilities` on `GET /connection`; these are `false` today and will be announced in the changelog:
+
+- price lists per channel and customer group, compare-at and sale prices (`priceLists`);
+- reservations during card checkout (`reservations`);
+- webhooks (`webhooks`; use the change feed);
+- more than one stock location per channel (`multiLocation`);
+- bundles.

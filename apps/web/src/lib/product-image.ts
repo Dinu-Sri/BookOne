@@ -259,3 +259,91 @@ export async function saveRentalInspectPhoto(opts: {
     extraMeta: { bookingLineId: opts.bookingLineId },
   });
 }
+
+/** Gallery original: fit inside 2000×2000 WebP (no crop, no enlargement). */
+export async function processGalleryImage(input: Buffer): Promise<{ webp: Buffer; width: number; height: number }> {
+  const { data, info } = await sharp(input)
+    .rotate()
+    .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 85, effort: 4 })
+    .toBuffer({ resolveWithObject: true });
+  return { webp: data, width: info.width, height: info.height };
+}
+
+/**
+ * Save a product gallery image (Commerce WP1). Keeps the original aspect up to
+ * 2000 px; websites download from the public media URL and re-host.
+ */
+export async function saveProductGalleryImage(opts: {
+  tenantId: string;
+  productId: string;
+  file: File;
+}): Promise<{ storageKey: string; width: number; height: number; checksum: string; thumb: Buffer }> {
+  assertImageFile(opts.file);
+  const raw = Buffer.from(await opts.file.arrayBuffer());
+  const { webp, width, height } = await processGalleryImage(raw);
+  const { createHash } = await import('crypto');
+  const checksum = `sha256:${createHash('sha256').update(webp).digest('hex')}`;
+  const stamp = randomUUID().slice(0, 8);
+  const filename = `${opts.productId}-${stamp}.webp`;
+  const { imageKey } = await storeWebp({
+    tenantId: opts.tenantId,
+    relDir: path.join('products', 'gallery', opts.tenantId),
+    filename,
+    s3Key: `tenants/${opts.tenantId}/products/gallery/${filename}`,
+    webp,
+    processed: '2000-inside-webp',
+    extraMeta: { productId: opts.productId },
+  });
+  return { storageKey: imageKey, width, height, checksum, thumb: await processProductPhoto(raw) };
+}
+
+/** Store a ready 400×400 WebP thumbnail as the product's POS photo. */
+export async function saveProductThumbWebp(opts: { tenantId: string; productId: string; webp: Buffer }): Promise<{ imageKey: string }> {
+  const filename = `${opts.productId}-${randomUUID().slice(0, 8)}.webp`;
+  return storeWebp({
+    tenantId: opts.tenantId,
+    relDir: path.join('products', 'uploads', opts.tenantId),
+    filename,
+    s3Key: `tenants/${opts.tenantId}/products/${filename}`,
+    webp: opts.webp,
+    processed: '400x400-webp',
+    extraMeta: { productId: opts.productId },
+  });
+}
+
+/** Read stored image bytes (S3 key or public/ path) for the public media route. */
+export async function readStoredImage(key: string): Promise<Buffer | null> {
+  if (key.startsWith('http://') || key.startsWith('https://')) return null;
+  if (key.startsWith('/')) {
+    const { readFile } = await import('fs/promises');
+    const abs = path.join(process.cwd(), 'public', key.replace(/^\/+/, ''));
+    const publicRoot = path.join(process.cwd(), 'public');
+    if (!abs.startsWith(publicRoot)) return null;
+    return readFile(abs).catch(() => null);
+  }
+  if (!s3Configured()) return null;
+  try {
+    const client = makeS3Client();
+    const res = await client.send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET!, Key: key }));
+    const bytes = await res.Body?.transformToByteArray();
+    return bytes ? Buffer.from(bytes) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Store an already-encoded gallery WebP (sample catalog). Returns the storage key. */
+export async function storeSampleGalleryWebp(opts: { tenantId: string; productId: string; webp: Buffer }): Promise<string> {
+  const filename = `${opts.productId}-${randomUUID().slice(0, 8)}.webp`;
+  const { imageKey } = await storeWebp({
+    tenantId: opts.tenantId,
+    relDir: path.join('products', 'gallery', opts.tenantId),
+    filename,
+    s3Key: `tenants/${opts.tenantId}/products/gallery/${filename}`,
+    webp: opts.webp,
+    processed: 'sample-1600-webp',
+    extraMeta: { productId: opts.productId },
+  });
+  return imageKey;
+}

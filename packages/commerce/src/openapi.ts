@@ -2,9 +2,9 @@ export const COMMERCE_OPENAPI = {
   openapi: '3.1.0',
   info: {
     title: 'BookOne Commerce API',
-    version: '1.0.0',
+    version: '1.2.0',
     description:
-      'v1 single-store, single-location, single-currency commerce contract. HTTP 2xx means the request was accepted for processing. Accounting and stock effects are confirmed by reading the order, inventory, and journals. Reservation endpoints stay disabled. Keep the bearer token on the server. Never put it in a theme file or shopper HTML. GET /products stays mapped-only. BookOne-first publish uses /catalog/candidates plus /catalog/acknowledge.',
+      'Rate limit: 600 requests per minute per key; every response has X-RateLimit-Limit, X-RateLimit-Remaining and (when known) X-Request-Id. GET responses carry a weak ETag; send If-None-Match to get 304. Money is a 2-dp decimal string, quantities are decimal strings, timestamps are ISO 8601. List endpoints take cursor and limit (default 50, max 250). Full guide: /docs/developers/custom-website. v1 single-store, single-location, single-currency commerce contract. HTTP 2xx means the request was accepted for processing. Accounting and stock effects are confirmed by reading the order, inventory, and journals. Reservation endpoints stay disabled. Keep the bearer token on the server. Never put it in a theme file or shopper HTML. GET /products stays mapped-only. BookOne-first publish uses /catalog/candidates plus /catalog/acknowledge.',
   },
   servers: [{ url: '/api/commerce/v1' }],
   components: {
@@ -54,10 +54,31 @@ export const COMMERCE_OPENAPI = {
           outboundPaused: { type: 'boolean' },
           oversellPolicy: { type: 'string', enum: ['review'] },
           reservationMode: { type: 'string', enum: ['disabled'] },
+          channel: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' } } },
+          priceListId: { type: 'string', example: 'default' },
+          stockLocationIds: { type: 'array', items: { type: 'string' } },
+          taxMode: { type: 'string', enum: ['inclusive', 'exclusive'] },
+          timezone: { type: 'string', example: 'Asia/Colombo' },
+          safetyBuffer: { type: 'integer', example: 0 },
+          allowBackorder: { type: 'boolean' },
           capabilities: {
             type: 'object',
+            additionalProperties: true,
+            description: 'Feature flags. Check before using a feature; false or absent means not available yet.',
             properties: {
               catalog: { type: 'boolean' },
+              catalogProducts: { type: 'boolean' },
+              variants: { type: 'boolean' },
+              images: { type: 'boolean' },
+              channelPublishing: { type: 'boolean' },
+              committedStock: { type: 'boolean' },
+              webOrders: { type: 'boolean' },
+              fulfilment: { type: 'boolean' },
+              paymentMethods: { type: 'boolean' },
+              etag: { type: 'boolean' },
+              priceLists: { type: 'boolean' },
+              webhooks: { type: 'boolean' },
+              changeKinds: { type: 'array', items: { type: 'string' } },
               inventory: { type: 'boolean' },
               orders: { type: 'boolean' },
               lifecycle: { type: 'boolean' },
@@ -147,7 +168,7 @@ export const COMMERCE_OPENAPI = {
                 revision: { type: 'integer' },
                 kind: {
                   type: 'string',
-                  enum: ['catalog', 'inventory', 'order', 'mapping', 'publish'],
+                  enum: ['catalog', 'product', 'inventory', 'order', 'mapping', 'publish'],
                   description:
                     'order: BookOne-side change to a web order (stock_held, confirmed, paid, dispatched, delivered, cancelled, refunded, posted). mapping: a SKU was linked. publish: a product was queued for publishing or claimed by the store.',
                 },
@@ -395,6 +416,132 @@ export const COMMERCE_OPENAPI = {
           nextCursor: null,
         },
       },
+      CatalogImage: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: 'img_77' },
+          url: { type: 'string', description: 'Public, stable. The last segment changes when the bytes change; cache it for as long as you like.' },
+          width: { type: 'integer', example: 2000 },
+          height: { type: 'integer', example: 2000 },
+          alt: { type: ['string', 'null'] },
+          position: { type: 'integer', description: '1 = main image' },
+          checksum: { type: 'string', example: 'sha256:9f2c…', description: 'Re-download when this changes.' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      CatalogPrice: {
+        type: 'object',
+        properties: {
+          currency: { type: 'string', example: 'LKR' },
+          priceListId: { type: 'string', example: 'default' },
+          price: { type: 'string', example: '1250.00' },
+          compareAtPrice: { type: ['string', 'null'] },
+          revision: { type: 'integer' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      CatalogInventory: {
+        type: 'object',
+        properties: {
+          trackInventory: { type: 'boolean' },
+          onHand: { type: ['string', 'null'], example: '14' },
+          committed: { type: ['string', 'null'], example: '2', description: 'Held for open COD / bank-transfer orders.' },
+          available: { type: ['string', 'null'], example: '12', description: 'onHand − committed − channel safety buffer, never below 0.' },
+          allowBackorder: { type: 'boolean' },
+          revision: { type: 'integer' },
+          asOf: { type: 'string', format: 'date-time' },
+        },
+      },
+      CatalogVariant: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          sku: { type: 'string', example: 'WN-COT-8ML-CHWHITE' },
+          barcodes: { type: 'array', items: { type: 'string' } },
+          options: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, value: { type: 'string' } } } },
+          swatch: { type: ['object', 'null'], properties: { hex: { type: 'string' }, imageId: { type: ['string', 'null'] } } },
+          status: { type: 'string', enum: ['active', 'archived'] },
+          sortOrder: { type: 'integer' },
+          isDefault: { type: 'boolean' },
+          shipping: { type: 'object', properties: { weightGrams: { type: ['integer', 'null'] } } },
+          images: { type: 'array', items: { $ref: '#/components/schemas/CatalogImage' } },
+          price: { $ref: '#/components/schemas/CatalogPrice' },
+          inventory: { $ref: '#/components/schemas/CatalogInventory' },
+          externalVariantId: { type: ['string', 'null'] },
+          revision: { type: 'integer' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      CatalogProduct: {
+        type: 'object',
+        description:
+          'A simple product carries price and inventory itself; a variable product carries them on each variant. images, variants, price, inventory and attributes appear only when requested with include=.',
+        properties: {
+          id: { type: 'string' },
+          sku: { type: 'string', example: 'WN-COT-8ML' },
+          type: { type: 'string', enum: ['simple', 'variable', 'service'] },
+          status: { type: 'string', enum: ['active', 'archived'] },
+          name: { type: 'string' },
+          shortName: { type: ['string', 'null'] },
+          slugHint: { type: 'string', example: 'winsor-newton-cotman-8ml-tube' },
+          descriptionHtml: { type: ['string', 'null'] },
+          descriptionText: { type: ['string', 'null'] },
+          shortDescriptionHtml: { type: ['string', 'null'] },
+          brand: { type: ['object', 'null'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
+          categories: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { id: { type: 'string' }, name: { type: 'string' }, path: { type: 'array', items: { type: 'string' } }, primary: { type: 'boolean' } },
+            },
+          },
+          unit: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' }, decimals: { type: 'integer' } } },
+          barcodes: { type: 'array', items: { type: 'string' } },
+          tags: { type: 'array', items: { type: 'string' } },
+          attributes: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' }, value: { type: 'string' } } } },
+          shipping: {
+            type: 'object',
+            properties: {
+              weightGrams: { type: ['integer', 'null'] },
+              lengthMm: { type: ['integer', 'null'] },
+              widthMm: { type: ['integer', 'null'] },
+              heightMm: { type: ['integer', 'null'] },
+              fragile: { type: 'boolean' },
+            },
+          },
+          tax: { type: 'object', properties: { taxCategory: { type: 'string', enum: ['standard', 'zero', 'exempt'] }, rate: { type: 'string', example: '18.00' } } },
+          trackInventory: { type: 'boolean' },
+          allowBackorder: { type: 'boolean' },
+          minOrderQty: { type: 'string' },
+          maxOrderQty: { type: ['string', 'null'] },
+          orderQtyStep: { type: 'string' },
+          options: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, values: { type: 'array', items: { type: 'string' } } } } },
+          images: { type: 'array', items: { $ref: '#/components/schemas/CatalogImage' } },
+          variants: { type: 'array', items: { $ref: '#/components/schemas/CatalogVariant' } },
+          price: { $ref: '#/components/schemas/CatalogPrice' },
+          inventory: { $ref: '#/components/schemas/CatalogInventory' },
+          externalProductId: { type: ['string', 'null'] },
+          revision: { type: 'integer', description: 'Increases on every change to the product, its variants or images.' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      CatalogPage: {
+        type: 'object',
+        properties: {
+          items: { type: 'array', items: { $ref: '#/components/schemas/CatalogProduct' } },
+          nextCursor: { type: ['string', 'null'], description: 'null at the end of the list.' },
+          requestId: { type: 'string' },
+        },
+      },
+      ListPage: {
+        type: 'object',
+        properties: {
+          items: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          nextCursor: { type: ['string', 'null'] },
+          requestId: { type: 'string' },
+        },
+      },
       ValidatePreview: {
         type: 'object',
         properties: {
@@ -423,6 +570,90 @@ export const COMMERCE_OPENAPI = {
         responses: {
           '200': { description: 'Mapped products', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProductPage' } } } },
         },
+      },
+    },
+    '/catalog/products': {
+      get: {
+        summary: 'Products published to this channel (WP1)',
+        description:
+          'Ordered by revision then id, so a client can import everything and then poll with updatedSince. Variants of a variable product are nested. Unpublished products are excluded unless scope=all.',
+        parameters: [
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 250, default: 50 } },
+          { name: 'updatedSince', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'archived', 'all'], default: 'active' } },
+          { name: 'categoryId', in: 'query', schema: { type: 'string' }, description: 'Includes child categories.' },
+          { name: 'brandId', in: 'query', schema: { type: 'string' } },
+          { name: 'sku', in: 'query', schema: { type: 'string' }, description: 'Repeat or comma-separate, up to 100. Matches product or variant SKU.' },
+          { name: 'include', in: 'query', schema: { type: 'string', example: 'variants,images,prices,inventory,attributes' } },
+          { name: 'scope', in: 'query', schema: { type: 'string', enum: ['published', 'all'], default: 'published' } },
+          { name: 'If-None-Match', in: 'header', schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': { description: 'Page', content: { 'application/json': { schema: { $ref: '#/components/schemas/CatalogPage' } } } },
+          '304': { description: 'Not modified (ETag matched)' },
+          '401': { description: 'Unauthenticated', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '403': { description: 'Key lacks the catalog scope', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '422': { description: 'Bad updatedSince or more than 100 SKUs', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '429': { description: 'Rate limited (Retry-After)', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    },
+    '/catalog/products/{productId}': {
+      get: {
+        summary: 'One published product by BookOne id (a variant id returns its parent)',
+        parameters: [
+          { name: 'productId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'include', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': { description: 'Product', content: { 'application/json': { schema: { $ref: '#/components/schemas/CatalogProduct' } } } },
+          '304': { description: 'Not modified' },
+          '404': { description: 'Not published on this channel', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    },
+    '/catalog/products/by-sku/{sku}': {
+      get: {
+        summary: 'One published product by product or variant SKU',
+        parameters: [
+          { name: 'sku', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'include', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': { description: 'Product', content: { 'application/json': { schema: { $ref: '#/components/schemas/CatalogProduct' } } } },
+          '404': { description: 'Not published on this channel', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    },
+    '/catalog/categories': {
+      get: {
+        summary: 'Category tree as a flat list (id, parentId, name, slugHint, description, imageUrl, sortOrder, status, updatedAt)',
+        parameters: [
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 250, default: 50 } },
+        ],
+        responses: { '200': { description: 'Categories', content: { 'application/json': { schema: { $ref: '#/components/schemas/ListPage' } } } } },
+      },
+    },
+    '/catalog/brands': {
+      get: {
+        summary: 'Product brands (id, name, slugHint, logoUrl, description, websiteUrl, status, updatedAt)',
+        parameters: [
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 250, default: 50 } },
+        ],
+        responses: { '200': { description: 'Brands', content: { 'application/json': { schema: { $ref: '#/components/schemas/ListPage' } } } } },
+      },
+    },
+    '/catalog/attributes': {
+      get: {
+        summary: 'Specification attributes (code, name, type, unit, allowedValues, filterable)',
+        parameters: [
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 250, default: 50 } },
+        ],
+        responses: { '200': { description: 'Attributes', content: { 'application/json': { schema: { $ref: '#/components/schemas/ListPage' } } } } },
       },
     },
     '/catalog/candidates': {

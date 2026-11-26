@@ -27,6 +27,19 @@ import { fail, validateEvent, validateOrderInput } from './validate';
 import { normalizePaymentSettings, paymentMethodKey, resolvePaymentAccount, withSeenMethod } from './payments';
 import { DEFAULT_COMMIT_STOCK_METHODS, UNPAID_METHOD, type PaymentSettings } from './types';
 import { EMPTY_FULFILMENT, normalizeFulfilment, trackingUrlFor } from './fulfilment';
+import {
+  attributeList,
+  brandList,
+  catalogPage,
+  categoryList,
+  findCatalogProduct,
+  missingWeight,
+  pageOf,
+  visibleTree,
+  type CatalogBundle,
+  type CatalogInclude,
+  type CatalogQuery,
+} from './catalog';
 
 const PAGE_SIZE = 100;
 const CURSOR_WINDOW_REVISIONS = 10_000;
@@ -281,13 +294,37 @@ export class CommerceService {
       outboundPaused: row.outboundPaused,
       oversellPolicy: row.oversellPolicy,
       reservationMode: row.reservationMode,
+      // WP1 C5: the channel this key belongs to.
+      channel: { id: row.id, name: row.name },
+      priceListId: 'default',
+      stockLocationIds: row.locationId ? [row.locationId] : [],
+      taxMode: row.taxMode.includes('exclusive') ? 'exclusive' : 'inclusive',
+      timezone: row.channelSettings?.timezone || 'Asia/Colombo',
+      safetyBuffer: Number(row.channelSettings?.safetyBuffer ?? 0) || 0,
+      allowBackorder: Boolean(row.channelSettings?.allowBackorder),
       capabilities: {
         catalog: true,
+        catalogProducts: true,
+        catalogCategories: true,
+        catalogBrands: true,
+        catalogAttributes: true,
+        variants: true,
+        images: true,
+        channelPublishing: true,
         inventory: true,
+        committedStock: true,
         orders: true,
+        webOrders: true,
+        fulfilment: true,
+        paymentMethods: true,
         lifecycle: true,
+        changeKinds: ['catalog', 'product', 'inventory', 'order', 'mapping', 'publish'],
+        etag: true,
         reservations: false,
         priceExport: false,
+        priceLists: false,
+        webhooks: false,
+        multiLocation: false,
       },
       serviceTime: nowIso(),
       apiVersion: 'v1',
@@ -323,30 +360,51 @@ export class CommerceService {
   async inventory(actor: CommerceActor, skus?: string[]) {
     this.need(actor, 'inventory');
     if (actor.outboundPaused) fail('OUTBOUND_PAUSED', 'Outbound stock publishing is paused for this connection.');
-    const mappings = await this.store.listMappings(actor.tenantId, actor.connectionId);
     const wanted = skus && skus.length ? new Set(skus) : null;
     if (wanted && wanted.size > 100) fail('VALIDATION', 'Inventory lookup batches are limited to 100 SKUs.');
+    const connection = await this.requireConnection(actor.tenantId, actor.connectionId);
+    const buffer = Number(connection.channelSettings?.safetyBuffer ?? 0) || 0;
+    const channelBackorder = Boolean(connection.channelSettings?.allowBackorder);
+    // Published to the channel: linked (mapped) SKUs plus products/variants published in BookOne (WP1 C1).
+    const rows = new Map<string, { sku: string; productId: string; externalProductId: string | null }>();
+    for (const mapping of await this.store.listMappings(actor.tenantId, actor.connectionId)) {
+      rows.set(mapping.bookoneProductId, { sku: mapping.sku, productId: mapping.bookoneProductId, externalProductId: mapping.externalProductId });
+    }
+    if (this.store.catalogBundle) {
+      const b = await this.store.catalogBundle(actor.tenantId, actor.connectionId);
+      for (const entry of visibleTree(b, 'published')) {
+        const sellables = entry.variants.length ? entry.variants : [entry.product];
+        for (const p of sellables) {
+          if (p.productType === 'variable') continue;
+          if (!rows.has(p.id)) rows.set(p.id, { sku: p.sku, productId: p.id, externalProductId: null });
+        }
+      }
+    }
     const items = [];
-    for (const mapping of mappings) {
-      if (wanted && !wanted.has(mapping.sku) && !wanted.has(mapping.externalProductId)) continue;
-      const stock = await this.store.getStock(actor.tenantId, mapping.bookoneProductId, actor.locationId);
+    for (const row of rows.values()) {
+      if (wanted && !wanted.has(row.sku) && !(row.externalProductId && wanted.has(row.externalProductId))) continue;
+      const stock = await this.store.getStock(actor.tenantId, row.productId, actor.locationId);
       const onHand = Number(stock?.quantity ?? 0);
-      const committed = (await this.store.committedQty?.(actor.tenantId, mapping.bookoneProductId, actor.locationId)) ?? 0;
+      const committed = (await this.store.committedQty?.(actor.tenantId, row.productId, actor.locationId)) ?? 0;
+      const available = Math.max(0, onHand - committed - buffer);
       items.push({
-        sku: mapping.sku,
-        productId: mapping.bookoneProductId,
+        sku: row.sku,
+        productId: row.productId,
         locationId: actor.locationId,
-        // `quantity` is what this channel may sell: on hand minus stock held for open orders.
-        quantity: qtyString(onHand - committed),
+        // `quantity` is what this channel may sell: on hand minus held stock minus the channel safety buffer.
+        quantity: qtyString(available),
         onHand: qtyString(onHand),
         committed: qtyString(committed),
-        available: qtyString(onHand - committed),
+        available: qtyString(available),
+        safetyBuffer: qtyString(buffer),
+        allowBackorder: channelBackorder,
+        locations: [{ locationId: actor.locationId, available: qtyString(available) }],
         revision: stock?.revision ?? 0,
         asOf: stock?.asOf ?? nowIso(),
         stale: stock?.stale ?? false,
       });
     }
-    return { items, authority: 'bookone', mode: 'absolute', scope: 'mapped' };
+    return { items, authority: 'bookone', mode: 'absolute', scope: 'published', nextCursor: null, requestId: randomUUID() };
   }
 
   async changes(actor: CommerceActor, cursor?: string) {
@@ -1284,6 +1342,193 @@ export class CommerceService {
   }
 
   // ---------------------------------------------------------------------------
+  // WP1: catalog read, channel publishing and channel settings
+  // ---------------------------------------------------------------------------
+
+  private async bundle(tenantId: string, connectionId: string): Promise<CatalogBundle> {
+    if (!this.store.catalogBundle) fail('NOT_FOUND', 'The catalog is not available on this store.');
+    return this.store.catalogBundle(tenantId, connectionId);
+  }
+
+  async catalogProducts(actor: CommerceActor, query: CatalogQuery) {
+    this.need(actor, 'catalog');
+    const b = await this.bundle(actor.tenantId, actor.connectionId);
+    return { ...catalogPage(b, query), requestId: randomUUID() };
+  }
+
+  async catalogProduct(
+    actor: CommerceActor,
+    match: { id?: string; sku?: string },
+    include: CatalogInclude[],
+    mediaBase: string,
+    scope: 'published' | 'all' = 'published',
+  ) {
+    this.need(actor, 'catalog');
+    const b = await this.bundle(actor.tenantId, actor.connectionId);
+    const found = findCatalogProduct(b, match, include, mediaBase, scope);
+    if (!found) fail('NOT_FOUND', 'Product was not found on this channel.');
+    return { ...found, requestId: randomUUID() };
+  }
+
+  async catalogCategories(actor: CommerceActor, cursor?: string | null, limit?: number) {
+    this.need(actor, 'catalog');
+    const b = await this.bundle(actor.tenantId, actor.connectionId);
+    return { ...pageOf(categoryList(b), cursor, limit), requestId: randomUUID() };
+  }
+
+  async catalogBrands(actor: CommerceActor, cursor?: string | null, limit?: number) {
+    this.need(actor, 'catalog');
+    const b = await this.bundle(actor.tenantId, actor.connectionId);
+    return { ...pageOf(brandList(b), cursor, limit), requestId: randomUUID() };
+  }
+
+  async catalogAttributes(actor: CommerceActor, cursor?: string | null, limit?: number) {
+    this.need(actor, 'catalog');
+    const b = await this.bundle(actor.tenantId, actor.connectionId);
+    return { ...pageOf(attributeList(b), cursor, limit), requestId: randomUUID() };
+  }
+
+  /** Operator view of the channel catalog for the Products tab (every product, published flag, weight). */
+  async channelCatalogForOperator(operator: OperatorActor, connectionId: string) {
+    await this.requireConnection(operator.tenantId, connectionId);
+    const b = await this.bundle(operator.tenantId, connectionId);
+    const publishedIds = new Set(visibleTree(b, 'published').flatMap((e) => [e.product.id, ...e.variants.map((v) => v.id)]));
+    return {
+      products: b.products
+        .filter((p) => !p.archived)
+        .map((p) => ({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          parentProductId: p.parentProductId,
+          productType: p.productType,
+          categoryId: p.categoryId,
+          productBrandId: p.productBrandId,
+          weightGrams: p.weightGrams,
+          published: publishedIds.has(p.id),
+          explicitlyPublished: b.published.has(p.id),
+          linked: b.mapped.has(p.id),
+        })),
+      categories: categoryList(b).map((c) => ({ id: c.id, name: c.name })),
+      brands: brandList(b).map((x) => ({ id: x.id, name: x.name })),
+      missingWeight: missingWeight(b),
+      channel: b.channel,
+    };
+  }
+
+  /** Publish or unpublish products on a channel (WP1 C1); publishing a parent publishes its variants. */
+  async setChannelPublishing(operator: OperatorActor, connectionId: string, productIds: string[], published: boolean) {
+    this.assertWrite(operator);
+    await this.requireConnection(operator.tenantId, connectionId);
+    if (!this.store.setChannelProducts) fail('NOT_FOUND', 'Channel publishing is not available on this store.');
+    if (!productIds.length) fail('VALIDATION', 'Select at least one product.');
+    if (productIds.length > 1000) fail('VALIDATION', 'Publish at most 1000 products at a time.');
+    const changed = await this.store.setChannelProducts(operator.tenantId, connectionId, productIds, published);
+    for (const id of productIds) {
+      const product = await this.store.getProduct(operator.tenantId, id);
+      await this.emitCatalogEvent(operator.tenantId, connectionId, 'product', id, product?.sku ?? null, {
+        action: published ? 'published' : 'unpublished',
+        productId: id,
+        sku: product?.sku ?? null,
+      });
+    }
+    await this.audit(operator, connectionId, published ? 'catalog.publish' : 'catalog.unpublish', 'mapping', connectionId, {
+      count: productIds.length,
+      changed,
+    });
+    return { changed };
+  }
+
+  async updateChannelSettings(
+    operator: OperatorActor,
+    connectionId: string,
+    input: { safetyBuffer?: number; allowBackorder?: boolean; timezone?: string },
+  ) {
+    this.assertWrite(operator);
+    const row = await this.requireConnection(operator.tenantId, connectionId);
+    const buffer = input.safetyBuffer ?? row.channelSettings?.safetyBuffer ?? 0;
+    if (!Number.isFinite(buffer) || buffer < 0 || buffer > 1000) fail('VALIDATION', 'Safety buffer must be between 0 and 1000.');
+    const next = {
+      ...row,
+      channelSettings: {
+        ...row.channelSettings,
+        safetyBuffer: Math.floor(buffer),
+        allowBackorder: input.allowBackorder ?? Boolean(row.channelSettings?.allowBackorder),
+        timezone: (input.timezone ?? row.channelSettings?.timezone ?? 'Asia/Colombo').slice(0, 60),
+      },
+      updatedAt: nowIso(),
+    };
+    await this.store.updateConnection(next);
+    await this.emitStock(await this.actorForOperator(operator, connectionId));
+    await this.audit(operator, connectionId, 'connection.channel', 'connection', connectionId, next.channelSettings);
+    return next;
+  }
+
+  /**
+   * A BookOne product, image or stock change outside commerce (product form,
+   * POS sale, invoice). Emits `product` / `inventory` changes on every channel
+   * that publishes or links the product.
+   */
+  async notifyProductsChanged(
+    tenantId: string,
+    productIds: string[],
+    kind: 'product' | 'inventory',
+    /** Only channels selling from this location (stock moved there). Omit for all. */
+    atLocation?: string | null,
+  ) {
+    const ids = [...new Set(productIds)].filter(Boolean);
+    if (!ids.length) return;
+    const connections = await this.store.listConnections(tenantId);
+    for (const connection of connections) {
+      if (connection.status !== 'active') continue;
+      if (atLocation !== undefined && (connection.locationId ?? null) !== (atLocation ?? null)) continue;
+      const mappings = await this.store.listMappings(tenantId, connection.id);
+      const channel = new Set((await this.store.listChannelProductIds?.(tenantId, connection.id)) ?? []);
+      for (const id of ids) {
+        const product = await this.store.getProduct(tenantId, id);
+        const parentPublished = product?.parentProductId ? channel.has(product.parentProductId) : false;
+        const mapping = mappings.find((m) => m.bookoneProductId === id);
+        if (!mapping && !channel.has(id) && !parentPublished) continue;
+        if (kind === 'inventory') {
+          if (connection.outboundPaused) continue;
+          const stock = await this.store.getStock(tenantId, id, connection.locationId);
+          const committed = (await this.store.committedQty?.(tenantId, id, connection.locationId)) ?? 0;
+          const onHand = Number(stock?.quantity ?? 0);
+          const buffer = Number(connection.channelSettings?.safetyBuffer ?? 0) || 0;
+          const revision = await this.store.nextRevision(tenantId, connection.id);
+          await this.store.insertOutbox({
+            id: randomUUID(),
+            tenantId,
+            connectionId: connection.id,
+            revision,
+            kind: 'inventory',
+            productId: id,
+            sku: mapping?.sku ?? product?.sku ?? null,
+            payload: {
+              sku: mapping?.sku ?? product?.sku ?? null,
+              quantity: qtyString(Math.max(0, onHand - committed - buffer)),
+              onHand: qtyString(onHand),
+              committed: qtyString(committed),
+              available: qtyString(Math.max(0, onHand - committed - buffer)),
+              revision,
+              asOf: nowIso(),
+              locationId: connection.locationId,
+            },
+            createdAt: nowIso(),
+          });
+        } else {
+          await this.emitCatalogEvent(tenantId, connection.id, 'product', id, product?.sku ?? null, {
+            action: 'updated',
+            productId: product?.parentProductId ?? id,
+            variantId: product?.parentProductId ? id : null,
+            sku: product?.sku ?? null,
+          });
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // WP0: web orders in BookOne (list, detail and staff actions)
   // ---------------------------------------------------------------------------
 
@@ -1601,7 +1846,7 @@ export class CommerceService {
   private async emitCatalogEvent(
     tenantId: string,
     connectionId: string,
-    kind: 'mapping' | 'publish',
+    kind: 'mapping' | 'publish' | 'product',
     productId: string | null,
     sku: string | null,
     payload: Record<string, unknown>,
@@ -1621,40 +1866,13 @@ export class CommerceService {
   }
 
   private async emitStock(actor: CommerceActor, productIds?: string[]) {
-    const wanted = productIds?.length ? new Set(productIds) : null;
-    const connections = await this.store.listConnections(actor.tenantId);
-    for (const connection of connections) {
-      if (connection.outboundPaused) continue;
-      if ((connection.locationId ?? null) !== (actor.locationId ?? null)) continue;
-      const mappings = await this.store.listMappings(actor.tenantId, connection.id);
-      for (const mapping of mappings) {
-        if (wanted && !wanted.has(mapping.bookoneProductId)) continue;
-        const stock = await this.store.getStock(actor.tenantId, mapping.bookoneProductId, connection.locationId);
-        const committed = (await this.store.committedQty?.(actor.tenantId, mapping.bookoneProductId, connection.locationId)) ?? 0;
-        const onHand = Number(stock?.quantity ?? 0);
-        const revision = await this.store.nextRevision(actor.tenantId, connection.id);
-        await this.store.insertOutbox({
-          id: randomUUID(),
-          tenantId: actor.tenantId,
-          connectionId: connection.id,
-          revision,
-          kind: 'inventory',
-          productId: mapping.bookoneProductId,
-          sku: mapping.sku,
-          payload: {
-            sku: mapping.sku,
-            quantity: qtyString(onHand - committed),
-            onHand: qtyString(onHand),
-            committed: qtyString(committed),
-            available: qtyString(onHand - committed),
-            revision,
-            asOf: nowIso(),
-            locationId: connection.locationId,
-          },
-          createdAt: nowIso(),
-        });
-      }
+    let ids = productIds?.length ? productIds : null;
+    if (!ids) {
+      const mapped = (await this.store.listMappings(actor.tenantId, actor.connectionId)).map((m) => m.bookoneProductId);
+      const published = (await this.store.listChannelProductIds?.(actor.tenantId, actor.connectionId)) ?? [];
+      ids = [...mapped, ...published];
     }
+    await this.notifyProductsChanged(actor.tenantId, ids, 'inventory', actor.locationId);
   }
 
   private async finishEligiblePost(actor: CommerceActor, order: OrderRow) {

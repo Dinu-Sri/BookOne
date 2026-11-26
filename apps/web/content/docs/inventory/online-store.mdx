@@ -1,0 +1,53 @@
+---
+title: Selling online
+description: Prepare products for your website - weight, variants, brands, photos - and choose what each website sells.
+---
+
+# Selling online
+
+Your website reads products, prices and stock from BookOne and sends orders back. This page is for the people who keep the catalog in BookOne. Developers connecting a website should read [Custom Website API](/docs/developers/custom-website).
+
+## 1. Product details for websites
+
+Open a product (**Inventory → Products → edit**) and use the **Online store** tab:
+
+| Field | Why it matters |
+|---|---|
+| **Weight (grams)** | Websites charge delivery by parcel weight. Fill it in for every product you sell online. |
+| Length / width / height, Fragile | For couriers that price by size, and careful packing. |
+| **Short name** | Shown on product cards and in the cart. |
+| **Product brand** | The maker (e.g. Winsor & Newton). Add brands under **Inventory → Categories → Product brands**. |
+| Tags, more barcodes | Search and scanning on the website. |
+| Minimum / maximum / step quantity | For example sell in steps of 6. |
+| Website may take orders when out of stock | Backorders for this product. |
+| **Specifications** | One per line as `code=value` (e.g. `volume_ml=8`). Websites use them for filters. |
+
+## 2. Products with colours or sizes (variants)
+
+1. Create the **listing**: a product such as "Cotman 8ml Tube". On **Online store**, tick **This is a listing with variants** and enter the options, e.g. `Colour: Chinese White, Lemon Yellow`. The listing itself is not sold or stocked.
+2. Create each **variant** as a normal product with its own SKU, price and stock (e.g. "Cotman 8ml Chinese White"). On **Online store**, choose the listing under **Variant of** and enter this variant's option, e.g. `Colour=Chinese White`. Optionally set a swatch colour and **Show this variant first**.
+
+Each variant keeps its own stock, so a POS sale of Lemon Yellow reduces only Lemon Yellow on the website.
+
+## 3. Photos
+
+On the product page, under **Photos for online stores**, upload clear photos (at least 1600 px on the long side). The first photo is the main one; use **Make main**, ↑ and ↓ to reorder, and add a short description (alt text) for each. The first photo also becomes the POS photo if the product has none.
+
+## 4. Choose what each website sells
+
+**Company → Commerce Integrations → Products**:
+
+- **Products on this store**: filter by category or brand, tick products, **Publish selected** / **Unpublish selected**. Publishing a listing publishes all its variants.
+- **Missing weight** lists published products without a weight.
+- Products already linked to existing website listings count as published.
+
+**Settings → Stock shown to the website**:
+
+- **Safety buffer**: keep units back from the website (e.g. 1, so the shop keeps the last one).
+- **Backorders**: let the website take orders when stock is 0.
+
+Changes reach the website within seconds through its change feed.
+
+## 5. Web orders
+
+Orders from the website appear on **Commerce Integrations → Orders**. Cash-on-delivery and bank-transfer orders hold their stock as soon as they arrive, so the same item cannot be sold again at the POS. From an order you can **Confirm**, **Mark paid** (e.g. when the courier remits cash), **Dispatch** with courier and tracking number, **Mark delivered**, **Cancel** (releases or restocks), and **Refund** (with or without restock). The customer's website sees each change.

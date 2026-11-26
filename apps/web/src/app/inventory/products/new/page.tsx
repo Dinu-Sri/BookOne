@@ -4,6 +4,8 @@ import { listProductCategories } from '@/app/actions/product-categories';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { ProductForm } from '@/components/inventory/product-form';
+import { ProductGallery } from '@/components/inventory/product-gallery';
+import { getProductCatalogEditor } from '@/app/actions/product-catalog';
 import { moduleWriteDenialMessage, probeModuleWriteDetail } from '@/lib/module-access';
 
 export default async function NewProductPage() {
@@ -28,6 +30,7 @@ export default async function NewProductPage() {
   } catch {
     redirect('/login');
   }
+  const catalogEditor = await getProductCatalogEditor(null).catch(() => null);
 
   return (
     <BookOneShell active="Products" tenant={tenant}>
@@ -39,6 +42,7 @@ export default async function NewProductPage() {
           brands={dims.brands}
           locations={dims.locations}
           canWrite={writeProbe.canWrite}
+          catalogEditor={catalogEditor}
           writeDeniedMessage={
             writeProbe.reason === 'ok'
               ? undefined

@@ -23,6 +23,7 @@ import {
   or,
   inArray,
   inventoryProducts,
+  inventoryProductBrands,
   inventoryProductCategories,
   inventoryStockLevels,
   rentalKitComponents,
@@ -43,6 +44,8 @@ import { assertPermission } from '@/lib/access';
 import { assertModuleWrite, requireModuleWriteOrRedirect } from '@/lib/module-access';
 import { assertDimensionScope, columnInScope, currentDimensionScope } from '@/lib/dimension-scope';
 import { sanitizeProductHtml } from '@/lib/product-html';
+import { catalogColumns, catalogValuesFromForm, type CatalogFieldValues } from '@/lib/product-catalog-fields';
+import { notifyCommerce } from '@/lib/commerce-notify';
 import { normalizeProductUnit } from '@/lib/product-units';
 import {
   consumeCostLayers,
@@ -197,6 +200,31 @@ function normalizeType(t: string): 'physical' | 'digital' | 'service' | 'rental'
   if (t === 'digital') return 'digital';
   if (t === 'rental') return 'rental';
   return 'service';
+}
+
+/** Parent must be this tenant's listing with variants; brand must be this tenant's product brand. */
+async function assertCatalogRefs(tenantId: string, catalog: CatalogFieldValues, selfId: string | null) {
+  if (catalog.parentProductId) {
+    const [parent] = await db()
+      .select({ id: inventoryProducts.id, parentProductId: inventoryProducts.parentProductId, productOptions: inventoryProducts.productOptions })
+      .from(inventoryProducts)
+      .where(and(eq(inventoryProducts.tenantId, tenantId), eq(inventoryProducts.id, catalog.parentProductId), isNull(inventoryProducts.voidedAt)))
+      .limit(1);
+    if (!parent) throw new Error('The parent product was not found.');
+    if (parent.parentProductId) throw new Error('Choose a parent listing, not another variant.');
+    if (!Array.isArray(parent.productOptions) || !(parent.productOptions as unknown[]).length) {
+      throw new Error('The parent must be a listing with variants (tick "Listing with variants" on it first).');
+    }
+  }
+  if (catalog.parentProductId && catalog.parentProductId === selfId) throw new Error('A product cannot be a variant of itself.');
+  if (catalog.productBrandId) {
+    const [brand] = await db()
+      .select({ id: inventoryProductBrands.id })
+      .from(inventoryProductBrands)
+      .where(and(eq(inventoryProductBrands.tenantId, tenantId), eq(inventoryProductBrands.id, catalog.productBrandId), isNull(inventoryProductBrands.voidedAt)))
+      .limit(1);
+    if (!brand) throw new Error('The product brand was not found.');
+  }
 }
 
 function revalidateInventory() {
@@ -1108,12 +1136,16 @@ export async function createProductFromForm(
 async function createProductFromFormInner(formData: FormData): Promise<void> {
   await assertModuleWrite('inventory');
   const parsed = productInputSchema.parse(formToProductInput(formData));
-  const type = normalizeType(parsed.productType);
+  const catalog = catalogValuesFromForm(formData);
+  // A parent listing with variants never holds stock itself (WP1).
+  const type = catalog?.isParentListing ? 'service' : normalizeType(parsed.productType);
   const user = await requireTenantContext();
+  let createdId: string | null = null;
 
   await withTenantContext(user.tenantId, async () => {
     await applyCategory(user.tenantId, parsed);
     await assertProductBrandAndLocation(user.tenantId, parsed.brandId ?? null, parsed.openingLocationId ?? null);
+    if (catalog) await assertCatalogRefs(user.tenantId, catalog, null);
     const [dup] = await db()
       .select({ id: inventoryProducts.id })
       .from(inventoryProducts)
@@ -1129,8 +1161,9 @@ async function createProductFromFormInner(formData: FormData): Promise<void> {
 
     const [product] = await db()
       .insert(inventoryProducts)
-      .values(toProductValues(user.tenantId, { ...parsed, productType: type }))
+      .values({ ...toProductValues(user.tenantId, { ...parsed, productType: type }), ...(catalog ? catalogColumns(catalog) : {}) })
       .returning({ id: inventoryProducts.id });
+    createdId = product.id;
 
     if (type === 'rental') {
       await replaceKitComponents(user.tenantId, product.id, parseKitComponents(formData));
@@ -1291,6 +1324,7 @@ async function createProductFromFormInner(formData: FormData): Promise<void> {
     });
   });
 
+  await notifyCommerce(user.tenantId, [createdId], 'product');
   revalidateInventory();
   const { redirect } = await import('next/navigation');
   redirect('/inventory/products?flash=created');
@@ -1312,11 +1346,13 @@ async function updateProductFromFormInner(formData: FormData): Promise<void> {
   const id = String(formData.get('id') ?? '');
   if (!id) throw new Error('Missing product id.');
   const parsed = productInputSchema.parse(formToProductInput(formData));
-  const type = normalizeType(parsed.productType);
+  const catalog = catalogValuesFromForm(formData, id);
+  const type = catalog?.isParentListing ? 'service' : normalizeType(parsed.productType);
   const user = await requireTenantContext();
 
   await withTenantContext(user.tenantId, async () => {
     await applyCategory(user.tenantId, parsed);
+    if (catalog) await assertCatalogRefs(user.tenantId, catalog, id);
     const [existing] = await db()
       .select()
       .from(inventoryProducts)
@@ -1334,7 +1370,7 @@ async function updateProductFromFormInner(formData: FormData): Promise<void> {
       throw new Error('Cannot change product type after stock movements exist.');
     }
 
-    const values = toProductValues(user.tenantId, { ...parsed, productType: type });
+    const values = { ...toProductValues(user.tenantId, { ...parsed, productType: type }), ...(catalog ? catalogColumns(catalog) : {}) };
     const photo = formData.get('photo');
     if (photo instanceof File && photo.size > 0) {
       const { saveProductPhoto } = await import('@/lib/product-image');
@@ -1371,6 +1407,7 @@ async function updateProductFromFormInner(formData: FormData): Promise<void> {
     });
   });
 
+  await notifyCommerce(user.tenantId, [id], 'product');
   revalidateInventory();
   const { redirect } = await import('next/navigation');
   redirect('/inventory/products?flash=updated');
@@ -1386,6 +1423,7 @@ export async function archiveProductFromForm(formData: FormData): Promise<void> 
       .set({ isActive: '0', updatedAt: new Date() })
       .where(and(eq(inventoryProducts.tenantId, user.tenantId), eq(inventoryProducts.id, id)));
   });
+  await notifyCommerce(user.tenantId, [id], 'product');
   revalidateInventory();
 }
 
@@ -1399,6 +1437,7 @@ export async function restoreProductFromForm(formData: FormData): Promise<void> 
       .set({ isActive: '1', updatedAt: new Date() })
       .where(and(eq(inventoryProducts.tenantId, user.tenantId), eq(inventoryProducts.id, id)));
   });
+  await notifyCommerce(user.tenantId, [id], 'product');
   revalidateInventory();
 }
 
@@ -1428,6 +1467,7 @@ export async function deleteProductFromForm(formData: FormData): Promise<void> {
       notes: 'Soft-voided product.',
     });
   });
+  await notifyCommerce(user.tenantId, [id], 'product');
   revalidateInventory();
 }
 
@@ -1901,6 +1941,7 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
     });
   });
 
+  await notifyCommerce(user.tenantId, lines.map((l) => l.productId), 'inventory');
   revalidateInventory();
   revalidatePath('/journal');
   const { redirect } = await import('next/navigation');

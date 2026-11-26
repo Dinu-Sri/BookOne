@@ -13,7 +13,8 @@ These pages are public. You do not need a BookOne session to read them or to dow
 
 | Goal | Guide |
 |------|--------|
-| Build a custom website that reads stock and submits orders | [Custom Website API](/docs/developers/custom-website) |
+| Build a custom website: import products, keep stock current, send orders, show delivery status | [Custom Website API](/docs/developers/custom-website) |
+| Import products, variants, photos, categories and brands | [Catalog API](/docs/developers/catalog) |
 | Install the packaged WooCommerce plugin | [WooCommerce](/docs/developers/woocommerce) |
 | Connect Codex or Claude for supplier-invoice intake and optional catalog mapping | [AgentBridge / MCP](/docs/developers/agentbridge) |
 | Recover from HTTP, mapping, or MCP errors | [API errors and recovery](/docs/developers/errors) |
@@ -29,12 +30,18 @@ Keep every Commerce bearer token on your server. Never put it in a theme file, s
 
 ## Operator screens
 
-- **Company → Commerce Integrations** — create a sandbox connection, issue a scoped key once, **Link existing products**, **Publish from BookOne**, then review Agent mapping proposals
+- **Company → Commerce Integrations**: tabs **Overview**, **Orders** (web orders: confirm, mark paid, dispatch, deliver, cancel, refund), **Products** (what this website may sell; link or publish), **Payments** (where paid orders settle), **Settings** (posting, safety buffer, stock holds, couriers), **Developer** (keys, test, sample catalog), **Activity**
+- **Inventory → Products → Online store** tab: weight, variants, product brand, specifications; photos for websites on the product page
 - **Company → AgentBridge** — company flags, connected clients, Codex/Claude prompts, and the optional **Allow catalog mapping** grant
 
 AgentBridge purchase grants never include commerce mapping. Mapping apply stays on the BookOne screen.
 
-## Honest status as of BookOne 2.17.0 (2026-11-20)
+## Honest status as of BookOne 2.21.0 (2026-11-26)
+
+- Catalog API, channel publishing, held stock for COD / bank transfer, web orders and fulfilment are covered by unit tests; the website team's sandbox run is pending.
+- Price lists, reservations, webhooks and multi-location channels are not available yet (see `capabilities` on `GET /connection`).
+
+## Earlier status (BookOne 2.17.0, 2026-11-20)
 
 - Commerce HTTP last-unit posting is covered by CoreGuard.
 - Woo live checkout is **not-run**.

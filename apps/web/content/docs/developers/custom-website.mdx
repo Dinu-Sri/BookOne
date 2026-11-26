@@ -1,127 +1,246 @@
 ---
 title: Custom Website API
-description: Commerce API v1 for an independent website backend. Keep the key on the server.
+description: Connect any website to BookOne. BookOne holds products, stock, orders, invoices and payments; your website shows them and sends orders back.
 ---
 
 # Custom Website API
 
-Base path: `/api/commerce/v1`. Version **v1**. Single store, single location, single currency (typically LKR). BookOne is the inventory authority. Website merchandising stays on your site.
+This guide is for developers connecting a website, app or other sales channel to BookOne. It is written for any custom site (Next.js, Laravel, Django, a headless storefront). For WordPress, the packaged plugin is described in [WooCommerce](/docs/developers/woocommerce).
 
-Authentication: `Authorization: Bearer bkc_…`. Scopes on the issued key: `catalog`, `inventory`, `order`, `lifecycle`. Reservations stay disabled (`POST /reservations` → 422 `RESERVATION_DISABLED`).
+**How it works.** BookOne is the single source of truth. Each website is a **connection** (a sales channel) in BookOne. Your server:
 
-Download the spec: [OpenAPI JSON](/api/commerce/v1/openapi.json). Checked-in YAML: `docs/commerce/openapi.yaml`.
+1. imports the products BookOne **publishes** to your channel ([Catalog API](/docs/developers/catalog));
+2. keeps stock and product changes current with the **change feed**;
+3. sends **orders** back; BookOne holds their stock, invoices them, records payment and tracks delivery;
+4. shows customers the order status, courier and tracking number that staff enter in BookOne.
 
-## 1. Create a sandbox connection
+- Base URL: `https://<your-bookone-host>/api/commerce/v1`
+- Spec: [OpenAPI 3.1 JSON](/api/commerce/v1/openapi.json) (public, no key needed)
+- Version: **v1**. Changes are additive; see the [changelog](#changelog).
 
-Prerequisites: Owner or Admin job, a stock location whose type is eligible (not fleet).
+## 1. Set up a sandbox connection
 
-1. Open **Company → Commerce Integrations**.
-2. Choose **New connection**.
-3. Kind **Custom Website**, environment **sandbox**, pick the location.
-4. Open the **Developer** tab and click **Issue scoped key**. Copy the secret from the one-time dialog. Later visits show only the prefix.
-5. `GET /connection` must return `apiVersion: v1` and `reservationMode: disabled`.
+Done by a BookOne Owner or Admin in **Company → Commerce Integrations**:
 
-Rotate keeps the old key for 24 hours. Revoke ends it immediately. Viewer can open the screen and cannot issue, rotate, or revoke.
+1. **New connection**: name the store, choose **Custom website**, environment **Sandbox**, and pick the shop or warehouse whose stock the website sells.
+2. **Developer** tab → **Issue scoped key**. Copy the key from the one-time dialog; BookOne shows only its prefix afterwards.
+3. **Developer** tab → **Add sample catalog** (sandbox only) gives you about 48 sample products to build against: 3 brands, a category tree, paint ranges with 6 colour variants, photos, weights and stock. It posts no accounting.
+4. **Products** tab: publish the products your website may sell.
+5. **Payments** tab: choose the account each payment method settles into.
+6. **Settings** tab: posting mode, safety buffer, which payment methods hold stock while unpaid, couriers.
 
-## 2. Map or publish products
-
-`GET /products` returns **mapped items only**. An empty store cannot bootstrap from that list.
-
-### Link existing products
-
-On the **Products** tab, use **Link existing products**. Labels: **BookOne product**, **Store product ID**, **Preview mapping**, **Apply mapping**. Apply stays disabled until Preview, and a Store product ID change invalidates the preview.
-
-SKU is a search aid. BookOne stores the BookOne product id plus your `externalProductId` / `externalVariantId`.
-
-### Publish from BookOne
-
-On the **Products** tab, use **Publish from BookOne**. Preview rows are `create`, `already_linked`, `missing`, or `unsupported`. Queue creates durable claims. Your backend then:
-
-1. `GET /catalog/candidates` — empty unless the operator queued products (`bootstrap: queued` or `idle`)
-2. Create listings in your catalog with **your** stable IDs
-3. `POST /catalog/acknowledge` with `bookoneProductId` and `externalProductId`
-
-Same IDs replay. A different ID for an already-acknowledged product is `409 CONFLICT`. Do not build a BookOne storefront.
-
-## 3. Stock snapshot and changes
+Check the key:
 
 ```bash
-export BOOKONE_COMMERCE_BASE='https://example/api/commerce/v1'
-export BOOKONE_COMMERCE_TOKEN='bkc_sand_prefix_secret'
+export BOOKONE_BASE='https://your-bookone-host/api/commerce/v1'
+export BOOKONE_KEY='bkc_sand_prefix_secret'   # keep on your server only
 
-curl -sS -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \
-  "$BOOKONE_COMMERCE_BASE/inventory?sku=SKU-1"
-
-curl -sS -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \
-  "$BOOKONE_COMMERCE_BASE/changes"
+curl -sS -H "Authorization: Bearer $BOOKONE_KEY" "$BOOKONE_BASE/connection"
 ```
 
-Quantities are absolute decimal strings. Checkpoint `nextCursor` after you apply a page. `CURSOR_EXPIRED` means full resync from `/inventory` then `/changes` with no cursor.
+`GET /connection` returns the channel (`channel.id`, `channel.name`), stock location, currency, `taxMode`, `timezone`, `safetyBuffer`, `allowBackorder`, the key's `scopes` and a `capabilities` object. **Check `capabilities` before using a feature**; a missing or `false` flag means it is not available yet.
 
-**Scope:** `/inventory` returns the SKUs **linked to this connection** (`scope: "mapped"`), which are the products published to this channel. Unlinked BookOne products are not returned. Pass up to 100 SKUs as repeated `sku=` or one comma list.
+## 2. Conventions
 
-**Held stock:** `quantity` is what you may sell: `onHand − committed`. `committed` is stock held for unpaid cash-on-delivery and bank-transfer orders (see section 4). The same three numbers (`onHand`, `committed`, `available`) are on every `inventory` change.
+| Topic | Rule |
+|---|---|
+| Auth | `Authorization: Bearer bkc_…`. The key is a server secret: never put it in browser code, theme files or logs. Rotate keeps the old key valid for 24 hours; revoke ends it at once. |
+| Scopes | `catalog` (products, changes), `inventory` (stock), `order` (submit and read orders), `lifecycle` (order events). |
+| Money | Decimal string with 2 decimals: `"1250.00"`. |
+| Quantities | Decimal strings: `"2"`, `"0.5"`. |
+| Time | ISO 8601 with offset. |
+| IDs | Opaque strings. Do not parse them. |
+| Paging | `cursor` and `limit` (default 50, max 250). Responses are `{ items, nextCursor }`; `nextCursor` is `null` at the end. |
+| SKU batches | Endpoints that take `sku` accept up to 100: repeat `sku=` or pass a comma list. |
+| Revisions | Products, variants, prices and stock carry a `revision` that only increases. Ignore an update whose revision is lower than the one you hold. |
+| Caching | GET responses carry a weak `ETag`. Send it back as `If-None-Match`; an unchanged response is `304 Not Modified`. |
+| Rate limit | 600 requests per minute per key. Every response has `X-RateLimit-Limit` and `X-RateLimit-Remaining`; `429` carries `Retry-After`. |
+| Request id | Responses include `requestId` (body and `X-Request-Id`). Quote it when asking for support. |
+| Idempotency | `POST /orders` requires `Idempotency-Key`. A replay returns the original receipt with `replayed: true`. Reuse a key only for the same body. |
+| Errors | `{ ok: false, code, error, requestId, details? }`. See [API errors](/docs/developers/errors). |
 
-**Change kinds** on `/changes`:
+## 3. Recommended sync loop
 
-| kind | When |
-|------|------|
-| `inventory` | Stock or held stock changed for a linked SKU |
-| `catalog` | A linked product's name or unit changed, or a mapping was applied |
-| `mapping` | A SKU was linked (`action: "applied"`) |
-| `publish` | A product was queued for you to create (`action: "queued"`) or you acknowledged it (`action: "claimed"`) |
-| `order` | BookOne changed a web order: `stock_held`, `confirmed`, `paid`, `dispatched` (with courier and tracking), `delivered`, `cancelled`, `refunded`, `posted`. Use it to email customers |
+```text
+First run:
+  GET /connection                       -> check capabilities, remember timezone/currency
+  GET /catalog/categories, /catalog/brands, /catalog/attributes
+  GET /catalog/products?include=variants,images,prices,inventory,attributes&limit=250
+      follow nextCursor until null; upsert each product by id; download images
+  GET /changes                          -> keep nextCursor as your change checkpoint
 
-## 4. Validate and submit an order
+Every 30-60 seconds:
+  GET /changes?cursor=<checkpoint>
+      for each item (dedupe on item.id):
+        product / mapping / publish -> GET /catalog/products/{productId}?include=... and upsert
+        inventory                   -> update stock for item.sku from the payload
+        order                       -> update the customer's order view, send emails
+      save nextCursor only after applying the page
+  On 422 CURSOR_EXPIRED: re-import /catalog/products and /inventory, then /changes without a cursor.
 
-`POST /orders` requires `Idempotency-Key` and a stable store `externalId`. Response is **202**. Read `status`:
+Nightly safety net:
+  GET /catalog/products?updatedSince=<last full sync>
+  GET /inventory
+```
+
+## 4. Stock
+
+```bash
+curl -sS -H "Authorization: Bearer $BOOKONE_KEY" "$BOOKONE_BASE/inventory?sku=WC0001,WC0002"
+```
+
+Each item: `sku`, `productId`, `onHand`, `committed`, `available`, `quantity`, `safetyBuffer`, `allowBackorder`, `revision`, `asOf`.
+
+- `available = onHand − committed − safetyBuffer`, never below 0. **Sell against `available`** (`quantity` is the same number, kept for older clients).
+- `committed` is stock held for open web orders that are not invoiced yet (cash on delivery, bank transfer; see section 6).
+- The owner sets the channel **safety buffer** (for example keep 1 unit for the shop) and whether the site may **take backorders** when available is 0. A product can also allow backorders on its own; see `allowBackorder` on the catalog product.
+- `/inventory` covers the products published to your channel (`scope: "published"`). POS sales, invoices, purchases, stock adjustments and web orders all change it, and each change appears on the feed within seconds.
+
+## 5. Change feed
+
+```bash
+curl -sS -H "Authorization: Bearer $BOOKONE_KEY" "$BOOKONE_BASE/changes?cursor=$CHECKPOINT"
+```
+
+Items arrive in `revision` order: `{ id, revision, kind, productId, sku, payload, createdAt }`. Delivery is at least once, so de-duplicate on `id`.
+
+| kind | When | Payload |
+|---|---|---|
+| `product` | A product, variant or its photos changed in BookOne, or it was published or unpublished | `action` (`updated`, `published`, `unpublished`), `productId`, `variantId`, `sku`. Re-read the product |
+| `inventory` | Stock or held stock changed | `sku`, `onHand`, `committed`, `available`, `quantity`, `locationId` |
+| `order` | BookOne changed one of your web orders | `externalId`, `action`, `status`, `paymentStatus`, `fulfilment`, `documentNumber` |
+| `mapping` | A BookOne product was linked to one of your listings | `action: "applied"`, `sku`, `bookoneProductId`, `externalProductId`, `externalVariantId` |
+| `publish` | (legacy publish queue) a product was queued for you, or you acknowledged it | `action` (`queued`, `claimed`), `claimId`, `sku` |
+| `catalog` | (legacy) a linked product changed | `sku`, `name`, `unit` |
+
+`order` actions: `stock_held`, `needs_review`, `confirmed`, `paid`, `posted`, `dispatched`, `delivered`, `cancelled`, `refunded`, and `event:<kind>` for your own events. Use them to email customers ("Your order has been dispatched, tracking …").
+
+## 6. Orders
+
+### Submit
+
+```bash
+curl -sS -X POST "$BOOKONE_BASE/orders" \
+  -H "Authorization: Bearer $BOOKONE_KEY" \
+  -H "Idempotency-Key: order-create-WLK-100245" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "externalId": "WLK-100245",
+    "currency": "LKR",
+    "placedAt": "2026-11-26T10:00:00+05:30",
+    "customer": { "name": "Nimal Perera", "email": "nimal@example.com", "phone": "+94771234567" },
+    "lines": [
+      { "externalLineId": "1", "sku": "WN-COT-8ML-CHWHITE", "quantity": "2", "unitPrice": "1119.00", "discountAmount": "0.00", "taxAmount": "0.00" }
+    ],
+    "shippingAmount": "450.00",
+    "discountAmount": "0.00",
+    "total": "2688.00",
+    "payment": { "status": "pending", "method": "cod", "amount": "2688.00" }
+  }'
+```
+
+- `externalId` is your order number. It is immutable and unique per channel.
+- `total` must equal lines + shipping − discounts + tax, or the order is held for review.
+- The response is **202 Accepted** with a receipt. 202 means BookOne has the order; read `status` to see what happened. Use `POST /orders/validate` with the same body for a side-effect-free check.
+- Lost response? Send the same body with the same `Idempotency-Key`.
+
+### What happens next (`status`)
 
 | status | Meaning |
-|--------|---------|
-| `received` / `accepted` | Taken in. Journals may still be pending |
-| `needs_review` | No unintended journals. Operator reviews |
-| `posted` | Sales invoice exists. Confirm `documentNumber` and stock |
-| `paid` / `fulfilled` / `cancelled` / `refunded` | Lifecycle after post |
+|---|---|
+| `received` | Taken in. Waiting for payment, or the connection is in Preview |
+| `needs_review` | Staff must check it (`reviewReason` says why: stock, totals, tax, unmapped SKU). Nothing was posted |
+| `posted` | A sales invoice exists (`documentNumber`); stock is deducted |
+| `paid`, `fulfilled`, `cancelled`, `refunded`, `partially_refunded` | Later states |
 
-`httpStatusIsNotAccountingAcceptance` is always true on the receipt.
+`GET /orders/{externalId}` returns the same receipt plus `paymentStatus`, `stock` and `fulfilment`.
 
 ### Payment methods and settlement
 
-Send `payment.method` as the name your store uses: `cod`, `bank_transfer`, or your gateway's id. Any name is accepted. The owner maps each name to a BookOne account under **Commerce Integrations → Payments**; a paid order then posts as a settled sale into that account (`settlement: "settled"`). Unmapped names use the store default; with no default the invoice stays open (`settlement: "not_configured"`). A 4-digit account code in `payment.method` still works.
-
-`GET /payment-methods` lists the names this channel has used, where each settles, and whether it holds stock while unpaid.
+Send `payment.method` as the name your site uses: `cod`, `bank_transfer`, or your gateway's id. Any name is accepted. The owner maps each name to a BookOne account under **Payments**. A paid order then posts as a settled sale into that account (`settlement: "settled"`); with no account set, the invoice stays open (`settlement: "not_configured"`). `GET /payment-methods` lists the methods your channel has used, where each settles, and whether it holds stock.
 
 ### Cash on delivery and bank transfer hold stock
 
-An order with `payment.status: "pending"` and method `cod` or `bank_transfer` **holds its stock as soon as it is received**. The receipt shows `stock: "committed"` and `/inventory` drops `available` at once, so the unit cannot sell again on the website or at the POS. If not enough stock is available, the order is received with `status: "needs_review"` and nothing is held.
+An order with `payment.status: "pending"` and a method in the channel's hold list (by default `cod` and `bank_transfer`) **holds its stock on receipt**: `stock: "committed"`, and `available` drops at once on the website and at the POS. If stock is short, the order is `needs_review` and nothing is held.
 
-- Cancel (your `cancelled` event or staff in BookOne) releases the hold: `stock: "released"`.
-- When the order is paid (your `paid` event, or staff **Mark paid** when the courier remits the cash) and posting is on, the invoice posts and the hold becomes the stock movement: `stock: "consumed"`.
-- The owner chooses which method names hold stock under **Settings → Orders and delivery**. Card/gateway orders arrive paid and post straight away, so they do not need a hold.
+- Cancelled (your event or staff in BookOne): the hold is released (`stock: "released"`).
+- Paid (your `paid` event, or staff **Mark paid** when the courier remits the cash) with posting on: the invoice posts and the hold becomes the stock deduction (`stock: "consumed"`).
+- Card and gateway orders arrive `paid` and post at once; they do not need a hold.
+
+### Tax
+
+For a VAT-registered company, send the tax you charged in `taxAmount` (per line or for the order). If it matches the company's VAT rate on the net after discounts, the order posts as a tax invoice. An order with no tax, or a different amount, is held for review rather than posted without VAT. A company that is not VAT registered posts untaxed orders as commercial invoices.
 
 ### Fulfilment from BookOne
 
-Staff work web orders on the **Orders** tab: Confirm, Mark paid, Dispatch (courier and tracking number), Mark delivered, Cancel, Refund, Refund and restock. `GET /orders/{externalId}` returns `fulfilment` (`status`, `shipments[]` with `carrier`, `trackingNumber`, `trackingUrl`, `shippedAt`, `deliveredAt`) and every change is an `order` item on `/changes`.
+Staff work web orders on the **Orders** tab: Confirm, Mark paid, Dispatch (courier and tracking number), Mark delivered, Cancel, Refund, Refund and restock.
 
-Same key + same payload replays the original receipt. Same key + different payload is `409 CONFLICT`.
-
-Supported events on `POST /orders/{externalId}/events`: `paid`, `cancelled`, `fulfilled`, `refunded`. Refunds need `externalRefundId`. `restock: true` restores referenced original line quantities. `restock: false` is money-only.
-
-## 5. Node on the server
-
-```bash
-BOOKONE_COMMERCE_BASE="$BOOKONE_COMMERCE_BASE" \
-BOOKONE_COMMERCE_TOKEN="$BOOKONE_COMMERCE_TOKEN" \
-node docs/commerce/quickstart-node.mjs
+```json
+"fulfilment": {
+  "status": "shipped",
+  "confirmedAt": "2026-11-27T09:10:00Z",
+  "shipments": [
+    { "id": "…", "carrier": "City Courier", "trackingNumber": "TRK123456", "trackingUrl": "https://track.example/TRK123456",
+      "shippedAt": "2026-11-27T15:10:00Z", "deliveredAt": null }
+  ],
+  "stock": "consumed"
+}
 ```
 
-Placeholders only. Never ship the secret to the shopper browser.
+`status` is one of `unfulfilled`, `confirmed`, `shipped`, `delivered`, `returned`, `cancelled` (`picking`, `packed`, `out_for_delivery` are reserved). Every change is an `order` item on the change feed.
+
+### Events from your website
+
+`POST /orders/{externalId}/events` with `externalEventId` (idempotent) and `kind`:
+
+| kind | Use |
+|---|---|
+| `paid` | Payment confirmed after the order was sent (for example a gateway callback) |
+| `cancelled` | The customer or your shop cancelled. Releases held stock; a posted order gets a linked return with restock |
+| `fulfilled` | Your site shipped it (if you fulfil outside BookOne) |
+| `refunded` | `amount`, `externalRefundId`, `restock`, and for restock `lines: [{ externalLineId, quantity }]` |
+
+If BookOne cannot book a cancel or refund, the order moves to **needs review** with the reason and staff use **Retry**; your call still gets a receipt.
+
+## 7. Older integration paths (still supported)
+
+- `GET /products` lists only products **linked** to your listings (mapping). New integrations should import from [`/catalog/products`](/docs/developers/catalog) instead.
+- **Publish queue**: staff queue products under **Products → Publish from BookOne**. Your server reads `GET /catalog/candidates`, creates listings with your own ids, then `POST /catalog/acknowledge` with `bookoneProductId` and `externalProductId`. The same ids replay; a different id for an acknowledged product is `409 CONFLICT`.
+- Linked products count as published, so `/inventory` and the catalog keep working for older sites.
+
+## 8. Node example
+
+```js
+const BASE = process.env.BOOKONE_BASE; // https://host/api/commerce/v1
+const KEY = process.env.BOOKONE_KEY;   // server only
+
+async function bookone(path, init = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', ...init.headers },
+  });
+  if (res.status === 429) {
+    await new Promise((r) => setTimeout(r, Number(res.headers.get('Retry-After') ?? 5) * 1000));
+    return bookone(path, init);
+  }
+  const body = res.status === 304 ? null : await res.json();
+  if (!res.ok && res.status !== 304) throw new Error(`${body.code}: ${body.error} (request ${body.requestId})`);
+  return body;
+}
+
+// Full catalog import
+let cursor = null;
+do {
+  const page = await bookone(`/catalog/products?include=variants,images,prices,inventory,attributes&limit=250${cursor ? `&cursor=${cursor}` : ''}`);
+  for (const product of page.items) await upsertProduct(product); // your code
+  cursor = page.nextCursor;
+} while (cursor);
+```
+
+A longer sample lives at `docs/commerce/quickstart-node.mjs` in the BookOne repository.
 
 ## Changelog
 
-- **2026-11-26 (BookOne 2.20.0)**: Web orders appear in BookOne with staff actions and fulfilment. Cash-on-delivery and bank-transfer orders hold stock on receipt. `/inventory` adds `onHand`, `committed`, `available` and `scope`; `quantity` now excludes held stock. New `GET /payment-methods`. New change kinds `order`, `mapping`, `publish`. `sku` accepts a comma list. All additions are optional for existing clients.
+- **2026-11-26 (BookOne 2.21.0)**: Catalog API (`/catalog/products`, by id and by SKU, `/catalog/categories`, `/catalog/brands`, `/catalog/attributes`) with variants, photos, weights, brands, attributes and channel publishing. `/inventory` covers published products and applies the channel safety buffer and backorder setting. `/connection` adds `channel`, `priceListId`, `stockLocationIds`, `taxMode`, `timezone` and more capabilities. New change kind `product`. ETag / `If-None-Match` on GETs, `X-RateLimit-*` headers, rate limit raised to 600 per minute.
+- **2026-11-26 (BookOne 2.20.0)**: Web orders in BookOne with fulfilment; COD / bank-transfer orders hold stock; `GET /payment-methods`; `/inventory` adds `onHand`, `committed`, `available`; change kinds `order`, `mapping`, `publish`.
 - **2026-11-26 (BookOne 2.19.0)**: Payment method names map to settlement accounts per connection.
-
-## Common errors
-
-See [API errors and recovery](/docs/developers/errors). Typical website mistakes: putting the token in a theme, treating 202 as posted, and calling `/products` on an empty mapping.

@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, numeric, text, integer, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, numeric, text, integer, jsonb, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { users } from './users';
 import { brands, locations } from './company-settings';
@@ -52,6 +52,79 @@ export const inventoryProducts = pgTable('inventory_products', {
   /** 1 = hire units identified by serial (tents, generators) */
   tracksSerials: varchar('tracks_serials', { length: 1 }).notNull().default('0'),
   isActive: varchar('is_active', { length: 1 }).notNull().default('1'),
+  // --- Catalog (Commerce WP1) -------------------------------------------
+  /** Shorter display name for cards and carts. */
+  shortName: varchar('short_name', { length: 120 }),
+  /** Manufacturer / product brand (not the company's own trading brand). */
+  productBrandId: uuid('product_brand_id').references((): AnyPgColumn => inventoryProductBrands.id),
+  /** Variant: the parent "variable" product this SKU belongs to. */
+  parentProductId: uuid('parent_product_id').references((): AnyPgColumn => inventoryProducts.id),
+  /** Variant option values, e.g. [{"name":"Colour","value":"Lemon Yellow"}]. */
+  variantOptions: jsonb('variant_options').notNull().default([]),
+  /** Parent only: option names and values, e.g. [{"name":"Colour","values":["…"]}]. */
+  productOptions: jsonb('product_options').notNull().default([]),
+  swatchHex: varchar('swatch_hex', { length: 9 }),
+  variantSortOrder: integer('variant_sort_order').notNull().default(0),
+  isDefaultVariant: varchar('is_default_variant', { length: 1 }).notNull().default('0'),
+  tags: jsonb('tags').notNull().default([]),
+  extraBarcodes: jsonb('extra_barcodes').notNull().default([]),
+  /** [{"code":"volume_ml","value":"8"}] against inventory_attributes. */
+  attributeValues: jsonb('attribute_values').notNull().default([]),
+  weightGrams: integer('weight_grams'),
+  lengthMm: integer('length_mm'),
+  widthMm: integer('width_mm'),
+  heightMm: integer('height_mm'),
+  fragile: varchar('fragile', { length: 1 }).notNull().default('0'),
+  minOrderQty: numeric('min_order_qty', { precision: 18, scale: 4 }),
+  maxOrderQty: numeric('max_order_qty', { precision: 18, scale: 4 }),
+  orderQtyStep: numeric('order_qty_step', { precision: 18, scale: 4 }),
+  allowBackorder: varchar('allow_backorder', { length: 1 }).notNull().default('0'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+/** Manufacturer / product brands shown on websites (Winsor & Newton, Faber-Castell…). */
+export const inventoryProductBrands = pgTable('inventory_product_brands', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  name: varchar('name', { length: 120 }).notNull(),
+  slug: varchar('slug', { length: 120 }),
+  description: text('description'),
+  websiteUrl: varchar('website_url', { length: 300 }),
+  logoKey: varchar('logo_key', { length: 500 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+/** Product gallery images (originals kept, long side ≤ 2000 px). */
+export const inventoryProductImages = pgTable('inventory_product_images', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  productId: uuid('product_id').notNull().references(() => inventoryProducts.id),
+  storageKey: varchar('storage_key', { length: 500 }).notNull(),
+  contentType: varchar('content_type', { length: 40 }).notNull().default('image/webp'),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  alt: varchar('alt', { length: 255 }),
+  position: integer('position').notNull().default(0),
+  checksum: varchar('checksum', { length: 80 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+/** Attribute definitions for filters and spec tables (code is stable). */
+export const inventoryAttributes = pgTable('inventory_attributes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  code: varchar('code', { length: 60 }).notNull(),
+  name: varchar('name', { length: 120 }).notNull(),
+  type: varchar('type', { length: 20 }).notNull().default('text'),
+  unit: varchar('unit', { length: 20 }),
+  allowedValues: jsonb('allowed_values').notNull().default([]),
+  filterable: varchar('filterable', { length: 1 }).notNull().default('0'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),
@@ -67,6 +140,8 @@ export const inventoryProductCategories = pgTable('inventory_product_categories'
   brandId: uuid('brand_id').references(() => brands.id),
   locationId: uuid('location_id').references(() => locations.id),
   sortOrder: integer('sort_order').notNull().default(0),
+  description: text('description'),
+  imageKey: varchar('image_key', { length: 500 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),

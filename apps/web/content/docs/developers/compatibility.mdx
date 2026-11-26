@@ -5,7 +5,17 @@ description: Dated support matrix for Commerce v1, Woo plugin 1.2.0, and AgentBr
 
 # Compatibility and versions
 
-Claims below are dated **2026-11-20** with BookOne **2.17.0**. Re-read this page after a VERSION bump.
+Claims below are dated **2026-11-26** with BookOne **2.21.0** (earlier rows from 2026-11-20, 2.17.0). Re-read this page after a VERSION bump.
+
+## Added 2026-11-26
+
+| Piece | Evidence |
+|-------|----------|
+| Catalog API (`/catalog/products`, categories, brands, attributes), variants, photos, weights, channel publishing | Unit tests (`wp1-catalog`, `commerce-wp1-catalog`). Migration **056** additive |
+| Web orders, held stock (COD / bank transfer), fulfilment, `GET /payment-methods` | Unit tests (`wp0-web-orders`). Migration **055** additive |
+| Payment method → settlement account | Unit tests (`payments`). Migration **054** additive |
+| Sandbox sample catalog | Implemented; run on staging pending |
+| Website end-to-end on a real site | **not-run** by BookOne; first consumer is testing in sandbox |
 
 ## Supported in this build
 
@@ -28,7 +38,7 @@ Claims below are dated **2026-11-20** with BookOne **2.17.0**. Re-read this page
 
 - Reservation checkout (`RESERVATION_DISABLED`)
 - AgentBridge posting until the owner changes company flags (posting-stop stays on)
-- Price export, FX, kits/bundles, fractional units, multi-location fan-in, Shopify adapter
+- Price lists and sale prices, FX, kits/bundles, multi-location channels, webhooks, Shopify adapter
 
 ## Planned separately
 

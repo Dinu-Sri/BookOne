@@ -1,3 +1,7 @@
+## 2026-11-26 — Commerce WP1: Catalog API, variants, photos, channel publishing (v2.21.0)
+
+Websites can import the products BookOne publishes to them (variants, photos, categories, product brands, weights, specifications, price, stock) through the new Catalog API, with paging, updatedSince, ETags and a public photo URL. Staff get an Online store tab and photo gallery on products, product brands, bulk publishing per website with a missing-weight list, a safety buffer and a sandbox sample catalog. Developer docs rewritten as a full custom-website integration guide plus a Catalog API page. See [CHG-20261126-commerce-wp1-catalog](changes/CHG-20261126-commerce-wp1-catalog.md) and [docs/commerce/RELEASE-WP1.md](commerce/RELEASE-WP1.md).
+
 ## 2026-11-26 — CoreGuard diagnostics for the commerce mapping check (v2.20.3)
 
 Tests only: the commerce spec logs what keeps the Apply button busy; bank-recon uses an exact "Finished" match. See [CHG-20261126-commerce-wp0-web-orders](changes/CHG-20261126-commerce-wp0-web-orders.md).

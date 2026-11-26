@@ -9,4 +9,5 @@ export * from './service';
 export * from './openapi';
 export * from './payments';
 export * from './fulfilment';
+export * from './catalog';
 export { PostgresCommerceStore } from './pg-store';

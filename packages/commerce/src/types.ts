@@ -45,6 +45,8 @@ export type CommerceActor = {
   oversellPolicy: OversellPolicy;
   reservationMode: ReservationMode;
   prefix: string;
+  /** Set by the HTTP layer for X-RateLimit-Remaining. */
+  rateLimitRemaining?: number;
 };
 
 export type OperatorActor = {
@@ -188,6 +190,8 @@ export type ProductRecord = {
   archived: boolean;
   sellPrice: string;
   revision: number;
+  /** WP1: set when this SKU is a variant of a variable product. */
+  parentProductId?: string | null;
 };
 
 export type StockRecord = {
@@ -324,6 +328,8 @@ export type ConnectionRow = {
   matchingPolicy: string;
   taxMode: string;
   paymentSettings?: PaymentSettings;
+  /** WP1 channel settings: safetyBuffer, allowBackorder, timezone. */
+  channelSettings?: { safetyBuffer?: number; allowBackorder?: boolean; timezone?: string };
   status: 'active' | 'disconnected';
   lastCatalogSyncAt: string | null;
   lastStockSyncAt: string | null;

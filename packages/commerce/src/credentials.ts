@@ -76,18 +76,25 @@ export function redactedCredential(row: {
 
 const hits = new Map<string, { count: number; resetAt: number }>();
 
-export function rateLimit(key: string, limit = 120, windowMs = 60_000): { ok: boolean; retryAfter: number } {
+/** Per-key fixed window. Documented limit: 600 requests per minute per key (G8). */
+export const RATE_LIMIT_PER_MINUTE = 600;
+
+export function rateLimit(
+  key: string,
+  limit = RATE_LIMIT_PER_MINUTE,
+  windowMs = 60_000,
+): { ok: boolean; retryAfter: number; remaining: number; limit: number } {
   const now = Date.now();
   const cur = hits.get(key);
   if (!cur || cur.resetAt <= now) {
     hits.set(key, { count: 1, resetAt: now + windowMs });
-    return { ok: true, retryAfter: 0 };
+    return { ok: true, retryAfter: 0, remaining: limit - 1, limit };
   }
   cur.count += 1;
   if (cur.count > limit) {
-    return { ok: false, retryAfter: Math.max(1, Math.ceil((cur.resetAt - now) / 1000)) };
+    return { ok: false, retryAfter: Math.max(1, Math.ceil((cur.resetAt - now) / 1000)), remaining: 0, limit };
   }
-  return { ok: true, retryAfter: 0 };
+  return { ok: true, retryAfter: 0, remaining: Math.max(0, limit - cur.count), limit };
 }
 
 export function resetRateLimitForTests() {

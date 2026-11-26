@@ -65,3 +65,7 @@ The Docker web image workflow for `c21978e` failed in "AgentBridge CoreGuard / P
 ## Follow-up v2.20.2 — Commerce page load cost
 
 The v2.20.1 CoreGuard run got past the tabs but failed at "Apply mapping enabled after Preview": the button stayed `aria-busy` (form still pending) for the 5 s window. v2.20.0 made the page load web orders per connection in separate tenant sessions, and `PostgresCommerceStore.listOrders` read every order of the tenant and then queried lines one order at a time. Now `listOrders` filters by connection/status in SQL (latest 500) and loads lines in one query; the page loads the view and all web orders in one tenant session and runs the Inventory probe and payment accounts in parallel. The spec allows 20 s for the busy state to clear and logs the preview line for diagnosis.
+
+## Follow-up v2.20.3 — CI diagnosis (tests only)
+
+v2.20.2 CoreGuard: the preview showed "SKU-1 · Pilot mug · ready to apply", yet **Apply mapping** stayed `aria-busy` (form pending) for 20 s, so the cause is not page-load time. The mapping form and handlers are byte-identical to v2.19.1 (passing). The spec now logs browser errors, POST responses and requests still in flight when the button stays busy, to find what keeps the form transition open. Separately, `coreguard-bank-recon.spec.ts` matched "Finished" as a substring of "This month is finished…" (strict-mode violation); it now uses an exact match. No product code change.

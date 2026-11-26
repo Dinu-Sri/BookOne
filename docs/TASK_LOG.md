@@ -1,3 +1,7 @@
+## 2026-11-26 — CoreGuard diagnostics for the commerce mapping check (v2.20.3)
+
+Tests only: the commerce spec logs what keeps the Apply button busy; bank-recon uses an exact "Finished" match. See [CHG-20261126-commerce-wp0-web-orders](changes/CHG-20261126-commerce-wp0-web-orders.md).
+
 ## 2026-11-26 — Faster Commerce page load (v2.20.2)
 
 Also records v2.20.1: CoreGuard commerce specs updated for the new Developer/Products tabs (the v2.20.0 image build failed on the old tab names).

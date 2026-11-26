@@ -20,6 +20,21 @@ async function login(page: Page, email: string, password: string) {
 }
 
 test('Commerce settings support keyboard tabs and invalidate an edited mapping preview', async ({ page }) => {
+  // CI diagnostics: browser errors and requests still open when a form stays busy.
+  const inflight = new Map<string, string>();
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' || msg.type() === 'warning') console.log(`[browser ${msg.type()}]`, msg.text().slice(0, 400));
+  });
+  page.on('pageerror', (err) => console.log('[pageerror]', String(err).slice(0, 400)));
+  page.on('request', (req) => inflight.set(req.url() + '#' + req.method(), `${req.method()} ${req.url()} ${new Date().toISOString()}`));
+  page.on('requestfinished', (req) => inflight.delete(req.url() + '#' + req.method()));
+  page.on('requestfailed', (req) => {
+    console.log('[requestfailed]', req.method(), req.url(), req.failure()?.errorText);
+    inflight.delete(req.url() + '#' + req.method());
+  });
+  page.on('response', (res) => {
+    if (res.request().method() === 'POST') console.log('[POST response]', res.status(), res.url(), JSON.stringify(res.headers()).slice(0, 300));
+  });
   await login(page, ownerEmail, ownerPassword);
   await page.goto('/company/commerce');
   await expect(page.getByRole('heading', { name: 'Commerce Integrations' })).toBeVisible();
@@ -47,7 +62,19 @@ test('Commerce settings support keyboard tabs and invalidate an edited mapping p
   // Diagnostic for CI logs: the preview line says "ready to apply" or names the issue.
   console.log('mapping preview:', (await page.getByRole('status').filter({ hasText: 'Mapping preview' }).innerText()).replace(/\s+/g, ' '));
   // The submit stays busy until the server action and any router refresh finish.
-  await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeEnabled({ timeout: 20_000 });
+  try {
+    await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeEnabled({ timeout: 10_000 });
+  } catch (err) {
+    console.log('[still in flight]', JSON.stringify([...inflight.values()]));
+    console.log(
+      '[busy buttons]',
+      await page.evaluate(() =>
+        [...document.querySelectorAll('[aria-busy="true"]')].map((el) => `${el.textContent?.trim()} in form ${el.closest('form')?.className ?? 'none'}`),
+      ),
+    );
+    console.log('[url]', page.url());
+    throw err;
+  }
   await external.fill('changed-after-preview');
   await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeDisabled();
   await page.getByRole('tab', { name: 'Products' }).press('End');

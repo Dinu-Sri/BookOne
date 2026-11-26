@@ -142,7 +142,8 @@ test('ISO import matches existing entries without journals, then finishes after 
   await page.getByTestId('brc-review-finish').click();
   await expect(page.getByTestId('brc-finish-review')).toContainText('Difference LKR 0.00');
   await page.getByRole('button', { name: 'Finish reconciliation' }).click();
-  await expect(page.getByText('Finished')).toBeVisible({ timeout: 15_000 });
+  // Exact: the page also says "This month is finished…", which a substring match also finds.
+  await expect(page.getByText('Finished', { exact: true })).toBeVisible({ timeout: 15_000 });
 
   const afterFinish = openLedger(databaseUrl);
   try {

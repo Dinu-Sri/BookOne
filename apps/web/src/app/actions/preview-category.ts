@@ -1,8 +1,9 @@
 'use server';
 
-import { inferCategory } from '@bookone/accounting';
+import { categoryWithAccountName, inferCategory } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import { db, eq, tenants, withTenantContext } from '@bookone/db';
+import { tenantAccountName } from '@/lib/tenant-account-name';
 
 export interface CategoryPreview {
   accountCode: string;
@@ -39,7 +40,8 @@ export async function previewCategory(input: {
   // For money_in and customer_invoice, the engine does not infer an expense
   // category, so we return null and the UI hides the category preview.
   if (input.direction === 'money_out') {
-    const cat = inferCategory(input.description, input.party, 'money_out', input.categoryOverride, entityKind);
+    const inferred = inferCategory(input.description, input.party, 'money_out', input.categoryOverride, entityKind);
+    const cat = categoryWithAccountName(inferred, await tenantAccountName(user.tenantId, inferred.accountCode));
     return {
       accountCode: cat.accountCode,
       accountName: cat.categoryName,
@@ -48,7 +50,8 @@ export async function previewCategory(input: {
     };
   }
   if (input.direction === 'invoice_bill' && input.invoiceType === 'vendor_bill') {
-    const cat = inferCategory(input.description, input.party, 'money_out', input.categoryOverride, entityKind);
+    const inferred = inferCategory(input.description, input.party, 'money_out', input.categoryOverride, entityKind);
+    const cat = categoryWithAccountName(inferred, await tenantAccountName(user.tenantId, inferred.accountCode));
     return {
       accountCode: cat.accountCode,
       accountName: cat.categoryName,

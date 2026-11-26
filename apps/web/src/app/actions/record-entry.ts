@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { inferTransaction } from '@bookone/accounting';
+import { categoryWithAccountName, inferTransaction } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   db,
@@ -26,6 +26,7 @@ import { entrySchema, type EntryInput } from '@/lib/entry-schema';
 import { resolveDimensions } from '@/lib/dimensions';
 import { assertDimensionScope, currentDimensionScope } from '@/lib/dimension-scope';
 import { parseEntityKind, resolveBookDomain } from '@/lib/entity-kind';
+import { tenantAccountName } from '@/lib/tenant-account-name';
 
 export interface RecordEntryResult {
   success: boolean;
@@ -166,6 +167,13 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
     } as Parameters<typeof inferTransaction>[0];
 
     const { transaction, journal } = inferTransaction(engineEntry);
+    // Store the tenant's own account name (what the ledger shows), not the pack name.
+    if (transaction.category) {
+      transaction.category = categoryWithAccountName(
+        transaction.category,
+        await tenantAccountName(user.tenantId, transaction.category.accountCode),
+      );
+    }
 
     // Resolve account codes to DB IDs for journal line inserts (scoped to this tenant)
     const accountIdMap = new Map<string, string>();

@@ -1,3 +1,7 @@
+## 2026-11-26 — Category name is the tenant's account name (v2.17.10)
+
+The Simple Entry category preview and the stored transaction now name the account the entry actually posts to (the workspace's own account name), not the default chart name. Staging data was reset to empty on owner request; a pre-wipe backup is kept in the postgres volume. See [CHG-20261126-category-inferrer-packs](changes/CHG-20261126-category-inferrer-packs.md).
+
 ## 2026-11-26 — Category guesses follow the workspace chart (v2.17.9)
 
 Simple Entry category suggestions in personal and sole-prop workspaces now use their own chart: business costs without a household account go to General Expense instead of Healthcare/Food & Household/Education, and household words (groceries, pharmacy, tuition) map to the matching personal accounts. Company behaviour is unchanged. See [CHG-20261126-category-inferrer-packs](changes/CHG-20261126-category-inferrer-packs.md).

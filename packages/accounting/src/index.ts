@@ -74,7 +74,7 @@ export type { CoaCsvIssue, CoaCsvRow, CoaImportPlan } from './coa-csv';
 export { openingAlreadyPosted, previewOpeningBalances } from './opening-balances';
 export type { OpeningLineInput, OpeningPreview } from './opening-balances';
 export * from './inference/types';
-export { inferCategory, listKnownAccounts, CATEGORY_RULES } from './inference/category-inferrer';
+export { inferCategory, listKnownAccounts, CATEGORY_RULES, categoryPackFor, categoryWithAccountName } from './inference/category-inferrer';
 export { resolveAccount, accountForPaymentMethod, isLiquidTenderCode } from './inference/account-resolver';
 export { mapToAccountingType, isSettledOnPosting } from './inference/type-mapper';
 export { generateJournal } from './engine/journal-generator';

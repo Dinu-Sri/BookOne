@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CATEGORY_RULES,
+  categoryWithAccountName,
   chartOfAccountsForEntity,
   inferCategory,
   inferTransaction,
@@ -75,5 +76,27 @@ describe('category inference follows the workspace chart', () => {
     } as Parameters<typeof inferTransaction>[0]);
     const debit = journal.lines.find((l) => l.side === 'debit');
     expect(debit?.account.code).toBe('6800');
+  });
+
+  it('shows the tenant account name for the inferred code', () => {
+    const cat = out('office supplies', 'company');
+    // Company tenant whose posted 6500 still carries the personal name.
+    const named = categoryWithAccountName(cat, 'Healthcare');
+    expect(named).toMatchObject({ accountCode: '6500', categoryName: 'Healthcare', confidence: 0.9, source: 'rule' });
+    expect(named.account.name).toBe('Healthcare');
+    expect(cat.categoryName).toBe('Office Supplies Expense'); // input not mutated
+    expect(categoryWithAccountName(cat, null)).toBe(cat);
+    expect(categoryWithAccountName(cat, '  ')).toBe(cat);
+  });
+
+  it('preview and recordEntry both apply the tenant account name', async () => {
+    const { readFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const root = path.resolve(__dirname, '../../../apps/web/src/app/actions');
+    for (const f of ['preview-category.ts', 'record-entry.ts']) {
+      const src = readFileSync(path.join(root, f), 'utf8');
+      expect(src, f).toMatch(/categoryWithAccountName\(/);
+      expect(src, f).toMatch(/tenantAccountName\(user\.tenantId/);
+    }
   });
 });

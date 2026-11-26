@@ -1,3 +1,9 @@
+## 2026-11-26 — Category name is the tenant's account name (v2.17.10)
+
+- Simple Entry preview, `transactions.category_name` and audit now use the tenant's own account name for the inferred code. See [CHG-20261126-category-inferrer-packs](changes/CHG-20261126-category-inferrer-packs.md).
+- Staging DB wiped at owner request (all users/tenants/data); pg_dump backup in the postgres volume `zz_backups/pre-wipe-20261126.dump`.
+- Checks: typecheck exit 0; 706 unit tests passed.
+
 ## 2026-11-26 — Category guesses follow the workspace chart (v2.17.9)
 
 - Record: [CHG-20261126-category-inferrer-packs.md](changes/CHG-20261126-category-inferrer-packs.md). Baseline `37c3ae7` / v2.17.8.

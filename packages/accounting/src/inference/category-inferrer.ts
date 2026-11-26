@@ -202,3 +202,18 @@ export function inferCategory(
 export function listKnownAccounts(): Account[] {
   return [...DEFAULT_CHART_OF_ACCOUNTS];
 }
+
+/**
+ * Show the tenant's own name for the inferred code. Rules return pack names,
+ * but postings resolve by code to the tenant's account, which may be renamed
+ * (or still carry a personal name on a company tenant: 6500 "Healthcare").
+ * The preview, the stored transaction and the ledger must name the same account.
+ */
+export function categoryWithAccountName(
+  category: CategoryInference,
+  tenantAccountName: string | null | undefined,
+): CategoryInference {
+  const name = tenantAccountName?.trim();
+  if (!name || name === category.categoryName) return category;
+  return { ...category, categoryName: name, account: { ...category.account, name } };
+}

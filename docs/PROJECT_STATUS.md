@@ -1,3 +1,7 @@
+## 2026-11-26 — Simple Entry ignores rental fleet bays (v2.17.12)
+
+Simple Entry no longer lists the rental fleet bays (On rent, Repair, Wash) as locations, so companies without real locations are not forced to pick one. See [CHG-20261126-simple-entry-fleet-locations](changes/CHG-20261126-simple-entry-fleet-locations.md).
+
 ## 2026-11-26 — Journal memo uses tenant account name (v2.17.11)
 
 Simple Entry journal lines now carry the workspace's own account name as the memo, matching the preview and stored category. See [CHG-20261126-category-inferrer-packs](changes/CHG-20261126-category-inferrer-packs.md).

@@ -1,3 +1,7 @@
+## 2026-11-26 — Simple Entry ignores rental fleet bays (v2.17.12)
+
+- Record: [CHG-20261126-simple-entry-fleet-locations.md](changes/CHG-20261126-simple-entry-fleet-locations.md). Fresh companies were forced to pick "On rent" as Location. 709 unit tests passed.
+
 ## 2026-11-26 — Journal memo uses tenant account name (v2.17.11)
 
 - Staging found the v2.17.10 debit line memo still had the pack name; `recordEntry` now regenerates the journal after the rename. 707 unit tests passed.

@@ -29,6 +29,7 @@ import {
 } from '@/app/actions/accounts';
 import { getCompanySettingsData } from '@/app/actions/company-settings';
 import { getTenantInfo, type TenantInfo } from '@/app/actions/workspace';
+import { operationalLocations } from '@/lib/rental-locations';
 import { previewCategory, type CategoryPreview } from '@/app/actions/preview-category';
 import { uploadReceipt } from '@/app/actions/upload-receipt';
 import type { EntryInput } from '@/lib/entry-schema';
@@ -196,7 +197,11 @@ export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) 
       .then((data) => {
         if (cancelled) return;
         setBrandList(data.brands.map((brand) => ({ id: brand.id, name: brand.name, code: brand.code })));
-        setLocationList(data.locations.map((location) => ({ id: location.id, name: location.name, code: location.code })));
+        // Rental fleet bays (On rent / Repair / Wash) are not posting locations;
+        // the server ignores them too (lib/dimensions.ts), so never require one.
+        setLocationList(
+          operationalLocations(data.locations).map((location) => ({ id: location.id, name: location.name, code: location.code })),
+        );
       })
       .catch((err) => console.error('Failed to load company dimensions:', err));
     return () => {

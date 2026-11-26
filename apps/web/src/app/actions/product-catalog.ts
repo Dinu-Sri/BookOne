@@ -15,7 +15,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { assertModuleWrite } from '@/lib/module-access';
-import { notifyCommerce } from '@/lib/commerce-notify';
+import { notifyCommerce, notifyCommerceTaxonomy } from '@/lib/commerce-notify';
 import { formatAttributeValues, formatProductOptions, formatVariantOptions } from '@/lib/product-catalog-fields';
 
 /** Commerce WP1: catalog fields, gallery images and product brands for the product form. */
@@ -224,7 +224,7 @@ export async function uploadProductImagesFromForm(formData: FormData): Promise<{
       }
       await db().update(inventoryProducts).set({ updatedAt: new Date() }).where(eq(inventoryProducts.id, productId));
     });
-    await notifyCommerce(user.tenantId, [productId], 'product');
+    await notifyCommerce(user.tenantId, [productId], 'image');
     done(productId);
     return { ok: true, added };
   } catch (error) {
@@ -268,7 +268,7 @@ export async function updateProductImageFromForm(formData: FormData): Promise<{ 
       }
       await db().update(inventoryProducts).set({ updatedAt: now }).where(eq(inventoryProducts.id, productId));
     });
-    await notifyCommerce(user.tenantId, [productId], 'product');
+    await notifyCommerce(user.tenantId, [productId], 'image');
     done(productId);
     return { ok: true };
   } catch (error) {
@@ -304,6 +304,7 @@ export async function saveProductBrandFromForm(formData: FormData): Promise<{ ok
     const archive = formData.get('archive') === '1';
     if (!archive && name.length < 2) return { ok: false, error: 'Enter the brand name.' };
     if (websiteUrl && !/^https?:\/\//i.test(websiteUrl)) return { ok: false, error: 'Website must start with https:// or http://.' };
+    let savedId = id;
     await withTenantContext(user.tenantId, async () => {
       if (id) {
         const set = archive
@@ -332,16 +333,21 @@ export async function saveProductBrandFromForm(formData: FormData): Promise<{ ok
           )
           .limit(1);
         if (dup) throw new Error('A brand with this name already exists.');
-        await db().insert(inventoryProductBrands).values({
-          tenantId: user.tenantId,
-          name,
-          websiteUrl: websiteUrl || null,
-          description: description || null,
-        });
+        const [created] = await db()
+          .insert(inventoryProductBrands)
+          .values({
+            tenantId: user.tenantId,
+            name,
+            websiteUrl: websiteUrl || null,
+            description: description || null,
+          })
+          .returning({ id: inventoryProductBrands.id });
+        savedId = created?.id ?? '';
       }
     });
     revalidatePath('/inventory/categories');
     revalidatePath('/inventory/products');
+    if (savedId) await notifyCommerceTaxonomy(user.tenantId, 'brand', savedId, archive ? 'deleted' : id ? 'updated' : 'created');
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not save the brand.' };

@@ -2,9 +2,9 @@ export const COMMERCE_OPENAPI = {
   openapi: '3.1.0',
   info: {
     title: 'BookOne Commerce API',
-    version: '1.3.0',
+    version: '1.4.0',
     description:
-      'Rate limit: 600 requests per minute per key; every response has X-RateLimit-Limit, X-RateLimit-Remaining and (when known) X-Request-Id. GET responses carry a weak ETag; send If-None-Match to get 304. Money is a 2-dp decimal string, quantities are decimal strings, timestamps are ISO 8601. List endpoints take cursor and limit (default 50, max 250). Full guide: /docs/developers/custom-website. v1 single-store, single-location, single-currency commerce contract. HTTP 2xx means the request was accepted for processing. Accounting and stock effects are confirmed by reading the order, inventory, and journals. Reservation endpoints stay disabled. Keep the bearer token on the server. Never put it in a theme file or shopper HTML. GET /products stays mapped-only. BookOne-first publish uses /catalog/candidates plus /catalog/acknowledge.',
+      'Rate limit: 600 requests per minute per key; every response has X-RateLimit-Limit, X-RateLimit-Remaining and (when known) X-Request-Id. GET responses carry a weak ETag; send If-None-Match to get 304. Money is a 2-dp decimal string, quantities are decimal strings, timestamps are ISO 8601. List endpoints take cursor and limit (default 50, max 250). Full guide: /docs/developers/custom-website. v1 single-store, single-location, single-currency commerce contract. HTTP 2xx means the request was accepted for processing. Accounting and stock effects are confirmed by reading the order, inventory, and journals. Every POST, PUT and PATCH accepts Idempotency-Key; a replay returns the first response with replayed: true. Scopes: catalog, inventory, order, lifecycle; the names catalog:read, pricing:read, webhooks:manage, inventory:read, reservations:write, orders:write, orders:read, customers:read, customers:write are accepted as aliases. Keep the bearer token on the server. Never put it in a theme file or shopper HTML. GET /products stays mapped-only. BookOne-first publish uses /catalog/candidates plus /catalog/acknowledge.',
   },
   servers: [{ url: '/api/commerce/v1' }],
   components: {
@@ -31,7 +31,9 @@ export const COMMERCE_OPENAPI = {
               'RESERVATION_DISABLED',
               'CURSOR_EXPIRED',
               'UNSUPPORTED',
+              'INSUFFICIENT_STOCK',
             ],
+            description: 'INSUFFICIENT_STOCK (409): a reservation change needs more stock than is available; the previous hold is kept.',
           },
           error: { type: 'string' },
           requestId: { type: 'string' },
@@ -49,6 +51,7 @@ export const COMMERCE_OPENAPI = {
           locationId: { type: ['string', 'null'] },
           currency: { type: 'string', example: 'LKR' },
           scopes: { type: 'array', items: { type: 'string', enum: ['catalog', 'inventory', 'order', 'lifecycle'] } },
+          grantedScopes: { type: 'array', items: { type: 'string' }, description: 'Fine-grained names this key grants (WP7 aliases).', example: ['catalog:read', 'pricing:read', 'orders:write'] },
           postingMode: { type: 'string', enum: ['preview', 'posting'] },
           inboundPaused: { type: 'boolean' },
           outboundPaused: { type: 'boolean' },
@@ -85,7 +88,18 @@ export const COMMERCE_OPENAPI = {
               inventory: { type: 'boolean' },
               orders: { type: 'boolean' },
               lifecycle: { type: 'boolean' },
-              reservations: { type: 'boolean', enum: [false] },
+              reservations: { type: 'boolean' },
+              customers: { type: 'boolean' },
+              orderList: { type: 'boolean' },
+              orderInvoice: { type: 'boolean' },
+              returns: { type: 'boolean' },
+              productStats: { type: 'boolean' },
+              relatedProducts: { type: 'boolean' },
+              newArrivals: { type: 'boolean' },
+              incomingStock: { type: 'boolean' },
+              changeKindFilter: { type: 'boolean' },
+              apiCallLog: { type: 'boolean' },
+              ipAllowList: { type: 'boolean' },
               priceExport: { type: 'boolean', description: 'GET /pricing and price changes are available (WP2).' },
             },
           },
@@ -141,7 +155,13 @@ export const COMMERCE_OPENAPI = {
                   example: '2',
                   description: 'Held for open web orders (cash on delivery, bank transfer) that are not invoiced yet.',
                 },
-                available: { type: 'string', example: '12', description: 'onHand − committed.' },
+                available: { type: 'string', example: '12', description: 'onHand − committed − channel safety buffer. committed includes held web orders and active reservations.' },
+                lowStockThreshold: { type: ['string', 'null'], example: '3', description: 'Reorder level from the product (WP3).' },
+                incoming: {
+                  type: 'array',
+                  description: 'Open purchase orders (ordered minus received) with their delivery date (WP3).',
+                  items: { type: 'object', properties: { quantity: { type: 'string', example: '48' }, expectedAt: { type: ['string', 'null'], example: '2026-12-10' } } },
+                },
                 revision: { type: 'integer' },
                 asOf: { type: 'string', format: 'date-time' },
                 stale: { type: 'boolean' },
@@ -171,7 +191,7 @@ export const COMMERCE_OPENAPI = {
                 revision: { type: 'integer' },
                 kind: {
                   type: 'string',
-                  enum: ['catalog', 'product', 'price', 'inventory', 'order', 'mapping', 'publish'],
+                  enum: ['catalog', 'product', 'price', 'image', 'inventory', 'category', 'brand', 'order', 'customer', 'reservation', 'mapping', 'publish'],
                   description:
                     'price: the channel price of a product or variant changed (list price edited, channel list switched, a scheduled sale started or ended); payload.price is the full CatalogPrice. order: BookOne-side change to a web order (stock_held, confirmed, paid, dispatched, delivered, cancelled, refunded, posted). mapping: a SKU was linked. publish: a product was queued for publishing or claimed by the store.',
                 },
@@ -280,9 +300,44 @@ export const COMMERCE_OPENAPI = {
                 taxAmount: { type: 'string' },
                 discountAmount: { type: 'string' },
                 description: { type: 'string' },
+                listPrice: { type: 'string', example: '1250.00' },
+                bundleParentLineId: { type: ['string', 'null'] },
               },
             },
           },
+          displayNumber: { type: 'string', example: 'WLK-100245' },
+          channelCustomerId: { type: 'string', example: 'usr_812' },
+          customerId: { type: 'string', description: 'BookOne customerId from PUT /customers.' },
+          customerGroup: { type: 'string', example: 'wholesale' },
+          shippingAddress: { $ref: '#/components/schemas/Address' },
+          billingAddress: { anyOf: [{ $ref: '#/components/schemas/Address' }, { type: 'null' }] },
+          delivery: {
+            type: ['object', 'null'],
+            properties: {
+              method: { type: 'string', example: 'standard' },
+              carrier: { type: 'string', example: 'fardar' },
+              fee: { type: 'string', example: '450.00' },
+              weightGrams: { type: 'integer', example: 750 },
+              notes: { type: 'string' },
+            },
+          },
+          reservationId: { type: 'string', description: 'Converts this checkout hold into the order; held lines never fail on stock.' },
+          discounts: {
+            type: 'array',
+            description: 'Order-level coupons. When discountAmount is not sent, their sum is used.',
+            items: { type: 'object', properties: { code: { type: 'string' }, type: { type: 'string' }, amount: { type: 'string' }, description: { type: 'string' } } },
+          },
+          fees: {
+            type: 'array',
+            description: 'Shipping, COD and other fees. When shippingAmount is not sent, their sum (or delivery.fee) is posted as shipping.',
+            items: { type: 'object', properties: { kind: { type: 'string', example: 'shipping' }, amount: { type: 'string', example: '450.00' } } },
+          },
+          attachments: {
+            type: 'array',
+            items: { type: 'object', properties: { kind: { type: 'string', example: 'bank_slip' }, url: { type: 'string' }, fileName: { type: 'string' } } },
+          },
+          customerNote: { type: 'string' },
+          marketing: { type: 'object', additionalProperties: { type: 'string' } },
           shippingAmount: { type: 'string' },
           discountAmount: { type: 'string' },
           taxAmount: { type: 'string' },
@@ -294,6 +349,7 @@ export const COMMERCE_OPENAPI = {
               method: { type: 'string', description: 'Payment method or a 4-digit BookOne cash/bank code for settlement.' },
               amount: { type: 'string' },
               externalRef: { type: 'string' },
+              gatewayFee: { type: 'string', example: '77.64', description: 'Shown on the web order; book it when reconciling the gateway payout.' },
             },
           },
           status: { type: 'string', enum: ['pending', 'paid', 'cancelled'] },
@@ -304,7 +360,16 @@ export const COMMERCE_OPENAPI = {
         required: ['externalEventId', 'kind', 'effectiveAt'],
         properties: {
           externalEventId: { type: 'string' },
-          kind: { type: 'string', enum: ['paid', 'cancelled', 'fulfilled', 'refunded'] },
+          kind: {
+            type: 'string',
+            enum: ['paid', 'cancelled', 'fulfilled', 'refunded', 'payment_pending_verification', 'payment_failed', 'address_updated'],
+            description:
+              'payment_pending_verification: bank slip uploaded (attachment). payment_failed: card declined (externalRef, reason); held stock is released. address_updated: new shippingAddress before dispatch (409 after dispatch). Idempotent on externalEventId.',
+          },
+          attachment: { type: 'object', properties: { kind: { type: 'string' }, url: { type: 'string' }, fileName: { type: 'string' } } },
+          externalRef: { type: 'string' },
+          reason: { type: 'string' },
+          shippingAddress: { $ref: '#/components/schemas/Address' },
           sourceVersion: { type: 'string' },
           effectiveAt: { type: 'string', format: 'date-time' },
           amount: { type: 'string' },
@@ -563,6 +628,141 @@ export const COMMERCE_OPENAPI = {
           requestId: { type: 'string' },
         },
       },
+      Address: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          phone: { type: 'string' },
+          line1: { type: 'string' },
+          line2: { type: 'string' },
+          city: { type: 'string' },
+          district: { type: 'string' },
+          province: { type: 'string' },
+          postalCode: { type: 'string' },
+          country: { type: 'string', example: 'LK' },
+        },
+      },
+      OrderView: {
+        type: 'object',
+        description: 'Full order (GET /orders, GET /orders/{externalId}). Includes the OrderReceipt fields.',
+        properties: {
+          externalId: { type: 'string' },
+          displayNumber: { type: 'string' },
+          status: { type: 'string' },
+          placedAt: { type: 'string', format: 'date-time' },
+          total: { type: 'string' },
+          customer: { type: 'object', additionalProperties: true },
+          shippingAddress: { $ref: '#/components/schemas/Address' },
+          delivery: { type: ['object', 'null'], additionalProperties: true },
+          discounts: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          fees: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          lines: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                externalLineId: { type: 'string' },
+                sku: { type: 'string' },
+                quantity: { type: 'string' },
+                unitPrice: { type: 'string' },
+                fulfilledQuantity: { type: 'string' },
+                restockedQuantity: { type: 'string' },
+                refundedAmount: { type: 'string' },
+              },
+            },
+          },
+          payment: {
+            type: 'object',
+            properties: { method: { type: ['string', 'null'] }, status: { type: ['string', 'null'] }, amount: { type: ['string', 'null'] }, externalRef: { type: ['string', 'null'] }, gatewayFee: { type: ['string', 'null'] } },
+          },
+          invoice: { type: ['object', 'null'], properties: { documentId: { type: 'string' }, documentNumber: { type: 'string' } } },
+          fulfilment: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['unfulfilled', 'confirmed', 'picking', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'returned', 'cancelled'] },
+              shipments: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    carrier: { type: 'string', example: 'fardar' },
+                    trackingNumber: { type: 'string', example: 'FE123456789LK' },
+                    trackingUrl: { type: ['string', 'null'] },
+                    shippedAt: { type: 'string', format: 'date-time' },
+                    deliveredAt: { type: ['string', 'null'], format: 'date-time' },
+                    lines: { type: 'array', items: { type: 'object', properties: { externalLineId: { type: 'string' }, quantity: { type: 'string' } } } },
+                  },
+                },
+              },
+            },
+          },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      Reservation: {
+        type: 'object',
+        properties: {
+          reservationId: { type: 'string' },
+          externalId: { type: 'string', description: 'Your checkout id.' },
+          status: { type: 'string', enum: ['active', 'converted', 'released', 'expired'] },
+          held: { type: 'boolean', description: 'POST only: true when the hold is active.' },
+          expiresAt: { type: 'string', format: 'date-time' },
+          partial: { type: 'boolean' },
+          lines: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                sku: { type: 'string' },
+                quantity: { type: 'string' },
+                held: { type: 'string' },
+                available: { type: 'string' },
+                status: { type: 'string', enum: ['held', 'insufficient', 'unknown_sku'] },
+              },
+            },
+          },
+          requestId: { type: 'string' },
+        },
+        example: {
+          reservationId: '6f1c…',
+          externalId: 'chk_812_1',
+          status: 'active',
+          held: true,
+          expiresAt: '2026-11-27T10:15:00.000Z',
+          partial: false,
+          lines: [{ sku: 'WN-COT-8ML-CHWHITE', quantity: '2', held: '2', available: '12', status: 'held' }],
+        },
+      },
+      Webhook: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          url: { type: 'string' },
+          kinds: { type: 'array', items: { type: 'string' } },
+          status: { type: 'string', enum: ['active', 'failing'] },
+          secret: { type: 'string', description: 'Returned once on create and rotate.' },
+          lastSuccessAt: { type: ['string', 'null'] },
+          failingSince: { type: ['string', 'null'] },
+          lastError: { type: ['string', 'null'] },
+          rotationOverlapUntil: { type: ['string', 'null'] },
+        },
+      },
+      Customer: {
+        type: 'object',
+        properties: {
+          customerId: { type: 'string' },
+          channelCustomerId: { type: 'string' },
+          name: { type: 'string' },
+          email: { type: ['string', 'null'] },
+          phone: { type: ['string', 'null'] },
+          addresses: { type: 'array', items: { $ref: '#/components/schemas/Address' } },
+          marketingOptIn: { type: 'boolean' },
+          customerGroup: { type: ['string', 'null'] },
+          matchedExisting: { type: 'boolean', description: 'PUT only: linked to an existing BookOne (e.g. POS) customer by email or phone.' },
+          created: { type: 'boolean' },
+        },
+      },
       ValidatePreview: {
         type: 'object',
         properties: {
@@ -619,7 +819,7 @@ export const COMMERCE_OPENAPI = {
           { name: 'categoryId', in: 'query', schema: { type: 'string' }, description: 'Includes child categories.' },
           { name: 'brandId', in: 'query', schema: { type: 'string' } },
           { name: 'sku', in: 'query', schema: { type: 'string' }, description: 'Repeat or comma-separate, up to 100. Matches product or variant SKU.' },
-          { name: 'include', in: 'query', schema: { type: 'string', example: 'variants,images,prices,inventory,attributes' } },
+          { name: 'include', in: 'query', schema: { type: 'string', example: 'variants,images,prices,inventory,attributes,stats' }, description: 'stats adds unitsSold30d, unitsSold90d, unitsSoldAllTime (all channels incl. POS).' },
           { name: 'scope', in: 'query', schema: { type: 'string', enum: ['published', 'all'], default: 'published' } },
           { name: 'customerGroup', in: 'query', schema: { type: 'string', example: 'wholesale' }, description: 'Use the price list for this customer group when one exists (WP2).' },
           { name: 'If-None-Match', in: 'header', schema: { type: 'string' } },
@@ -780,8 +980,13 @@ export const COMMERCE_OPENAPI = {
     },
     '/changes': {
       get: {
-        summary: 'Resumable catalog and stock changes',
-        parameters: [{ name: 'cursor', in: 'query', schema: { type: 'string' } }],
+        summary: 'Resumable change feed (same items as webhooks)',
+        description:
+          'Items: id, revision, kind, entityId, productId, sku, payload, occurredAt. Kinds: product, variant (product items with variantId), price, image, inventory, category, brand, order, customer, reservation, mapping, publish. Cursors stay valid for at least 7 days; an expired cursor returns CURSOR_EXPIRED with fullResync.',
+        parameters: [
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          { name: 'kinds', in: 'query', schema: { type: 'string', example: 'price,inventory' }, description: 'Comma list. The cursor still advances past other kinds.' },
+        ],
         responses: {
           '200': { description: 'Changes', content: { 'application/json': { schema: { $ref: '#/components/schemas/Changes' } } } },
           '422': { description: 'Cursor expired', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
@@ -800,6 +1005,19 @@ export const COMMERCE_OPENAPI = {
       },
     },
     '/orders': {
+      get: {
+        summary: "This channel's orders for reconciliation (WP5)",
+        parameters: [
+          { name: 'updatedSince', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 250, default: 50 } },
+        ],
+        responses: {
+          '200': { description: 'Orders', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { $ref: '#/components/schemas/OrderView' } }, nextCursor: { type: ['string', 'null'] } } } } } },
+          '422': { description: 'Bad updatedSince', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
       post: {
         summary: 'Durable order submit',
         parameters: [{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string' } }],
@@ -812,17 +1030,17 @@ export const COMMERCE_OPENAPI = {
     },
     '/orders/{externalId}': {
       get: {
-        summary: 'Store-visible order status',
+        summary: 'Order status, lines, payment, invoice and shipments',
         parameters: [{ name: 'externalId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
-          '200': { description: 'Order', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderReceipt' } } } },
+          '200': { description: 'Order', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderView' } } } },
           '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
         },
       },
     },
     '/orders/{externalId}/events': {
       post: {
-        summary: 'Supported lifecycle events: paid, cancelled, fulfilled, refunded',
+        summary: 'Lifecycle events: paid, cancelled, fulfilled, refunded, payment_pending_verification, payment_failed, address_updated',
         parameters: [{ name: 'externalId', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderEvent' } } } },
         responses: {
@@ -830,12 +1048,157 @@ export const COMMERCE_OPENAPI = {
         },
       },
     },
+    '/orders/{externalId}/invoice': {
+      get: {
+        summary: 'Invoice number, date, total and a public link (print or save as PDF)',
+        parameters: [{ name: 'externalId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: 'Invoice', content: { 'application/json': { schema: { type: 'object', properties: { documentNumber: { type: 'string' }, issuedAt: { type: 'string' }, total: { type: 'string' }, pdfUrl: { type: 'string' } } }, example: { documentNumber: 'INV-000245', issuedAt: '2026-11-27', total: '2588.00', pdfUrl: 'https://bookone.lk/i/9f2c1a7b3d4e5f60' } } } },
+          '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    },
+    '/orders/{externalId}/returns': {
+      post: {
+        summary: 'Return lines from an order (with or without restock)',
+        parameters: [{ name: 'externalId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'Idempotency-Key', in: 'header', schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['externalReturnId', 'lines'],
+                properties: {
+                  externalReturnId: { type: 'string' },
+                  restock: { type: 'boolean' },
+                  lines: { type: 'array', items: { type: 'object', properties: { externalLineId: { type: 'string' }, quantity: { type: 'string' }, reason: { type: 'string' }, condition: { type: 'string' } } } },
+                },
+              },
+              example: { externalReturnId: 'RET-1', restock: true, lines: [{ externalLineId: '1', quantity: '1', reason: 'damaged', condition: 'opened' }] },
+            },
+          },
+        },
+        responses: {
+          '202': { description: 'Return recorded (amount = line price less line discount)', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderReceipt' } } } },
+          '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '422': { description: 'Validation failed', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    },
     '/reservations': {
       post: {
-        summary: 'Disabled until a contention test passes',
-        responses: {
-          '422': { description: 'Reservation disabled', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        summary: 'Hold stock during checkout (WP3)',
+        description: 'ttlSeconds 60-3600 (default 900). partial=false (default) holds all lines or none. Held units cannot be sold at the POS. Same externalId while active returns the existing hold.',
+        parameters: [{ name: 'Idempotency-Key', in: 'header', schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', required: ['externalId', 'lines'], properties: { externalId: { type: 'string' }, lines: { type: 'array', items: { type: 'object', properties: { sku: { type: 'string' }, quantity: { type: 'string' } } } }, ttlSeconds: { type: 'integer' }, partial: { type: 'boolean' } } },
+              example: { externalId: 'chk_812_1', ttlSeconds: 900, lines: [{ sku: 'WN-COT-8ML-CHWHITE', quantity: '2' }] },
+            },
+          },
         },
+        responses: {
+          '201': { description: 'Reservation (status released + insufficient lines when it could not hold)', content: { 'application/json': { schema: { $ref: '#/components/schemas/Reservation' } } } },
+          '403': { description: 'Key lacks the scope', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '422': { description: 'Validation failed', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    },
+    '/reservations/{reservationId}': {
+      get: {
+        summary: 'Reservation status: active, converted, released or expired',
+        parameters: [{ name: 'reservationId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Reservation', content: { 'application/json': { schema: { $ref: '#/components/schemas/Reservation' } } } }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+      patch: {
+        summary: 'Extend the time (ttlSeconds from now) or change the lines',
+        parameters: [{ name: 'reservationId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'Idempotency-Key', in: 'header', schema: { type: 'string' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { ttlSeconds: { type: 'integer' }, lines: { type: 'array', items: { type: 'object' } } } }, example: { ttlSeconds: 600 } } } },
+        responses: {
+          '200': { description: 'Reservation', content: { 'application/json': { schema: { $ref: '#/components/schemas/Reservation' } } } },
+          '409': { description: 'Not active, or INSUFFICIENT_STOCK for new quantities', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+      delete: {
+        summary: 'Release the hold',
+        parameters: [{ name: 'reservationId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Released', content: { 'application/json': { schema: { $ref: '#/components/schemas/Reservation' } } } }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+    },
+    '/webhooks': {
+      get: { summary: 'Webhooks on this connection', responses: { '200': { description: 'Webhooks', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { $ref: '#/components/schemas/Webhook' } } } } } } } } },
+      post: {
+        summary: 'Register an HTTPS endpoint (secret returned once)',
+        description:
+          'BookOne POSTs each change-feed item as JSON with X-BookOne-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">. Reject signatures older than 300 seconds. Non-2xx responses are retried with exponential backoff (30 s, 1 min, 2 min … up to 6 h) for 24 hours, then the endpoint is marked failing. Delivery is at least once: de-duplicate on X-BookOne-Event-Id (the item id). Sandbox connections may use http://127.0.0.1 or localhost.',
+        parameters: [{ name: 'Idempotency-Key', in: 'header', schema: { type: 'string' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' }, kinds: { type: 'array', items: { type: 'string' } } } }, example: { url: 'https://staging.watercolor.lk/api/bookone/webhook', kinds: ['product', 'price', 'inventory', 'order'] } } } },
+        responses: { '201': { description: 'Webhook with secret', content: { 'application/json': { schema: { $ref: '#/components/schemas/Webhook' } } } }, '422': { description: 'Validation failed', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+    },
+    '/webhooks/{webhookId}': {
+      delete: { summary: 'Remove a webhook', parameters: [{ name: 'webhookId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Removed' }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } } },
+    },
+    '/webhooks/{webhookId}/test': {
+      post: { summary: 'Queue a signed ping delivery now', parameters: [{ name: 'webhookId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '202': { description: 'Queued' }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } } },
+    },
+    '/webhooks/{webhookId}/rotate': {
+      post: {
+        summary: 'New secret; the old one keeps signing (a second v1=) for 24 hours',
+        parameters: [{ name: 'webhookId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Webhook with new secret', content: { 'application/json': { schema: { $ref: '#/components/schemas/Webhook' } } } }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+    },
+    '/webhooks/{webhookId}/deliveries': {
+      get: { summary: 'Latest deliveries (status, attempts, last HTTP status, next retry)', parameters: [{ name: 'webhookId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Deliveries' }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } } },
+    },
+    '/customers/{channelCustomerId}': {
+      put: {
+        summary: 'Upsert a website customer (matches BookOne customers by email, then phone)',
+        parameters: [{ name: 'channelCustomerId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'Idempotency-Key', in: 'header', schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, addresses: { type: 'array', items: { $ref: '#/components/schemas/Address' } }, marketingOptIn: { type: 'boolean' }, customerGroup: { type: 'string' } } },
+              example: { name: 'Nimal Perera', email: 'nimal@example.com', phone: '+94771234567', addresses: [{ line1: '78/A2, Pattiyagama', city: 'Madampe', country: 'LK' }], marketingOptIn: true },
+            },
+          },
+        },
+        responses: { '200': { description: 'Customer', content: { 'application/json': { schema: { $ref: '#/components/schemas/Customer' } } } }, '422': { description: 'Validation failed', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+      get: {
+        summary: 'A customer by customerId (or channelCustomerId)',
+        parameters: [{ name: 'channelCustomerId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Customer', content: { 'application/json': { schema: { $ref: '#/components/schemas/Customer' } } } }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+    },
+    '/customers/{customerId}/orders': {
+      get: {
+        summary: "The customer's website orders plus in-store (POS / BookOne) invoices",
+        parameters: [{ name: 'customerId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Orders; source is web, pos or store' }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+    },
+    '/catalog/related': {
+      get: {
+        summary: 'Products often bought together with this SKU (all channels)',
+        parameters: [{ name: 'sku', in: 'query', required: true, schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', default: 8, maximum: 24 } }, { name: 'include', in: 'query', schema: { type: 'string' } }],
+        responses: { '200': { description: 'Products', content: { 'application/json': { schema: { $ref: '#/components/schemas/CatalogPage' } } } }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+    },
+    '/catalog/new-arrivals': {
+      get: {
+        summary: 'Published products created in the last N days, newest first',
+        parameters: [{ name: 'days', in: 'query', schema: { type: 'integer', default: 30, minimum: 1, maximum: 365 } }, { name: 'include', in: 'query', schema: { type: 'string' } }, { name: 'cursor', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer' } }],
+        responses: { '200': { description: 'Products', content: { 'application/json': { schema: { $ref: '#/components/schemas/CatalogPage' } } } }, '422': { description: 'Validation failed', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } },
+      },
+    },
+    '/health': {
+      get: {
+        summary: 'Service status and API version (no key needed)',
+        security: [],
+        responses: { '200': { description: 'OK', content: { 'application/json': { example: { ok: true, status: 'ok', apiVersion: 'v1', specVersion: '1.4.0', serviceTime: '2026-11-27T10:00:00.000Z' } } } } },
       },
     },
     '/openapi.json': { get: { summary: 'This document', security: [], responses: { '200': { description: 'OpenAPI' } } } },
@@ -866,4 +1229,16 @@ curl -sS -X POST -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"externalId":"1001","currency":"LKR","placedAt":"2026-11-20T10:00:00Z","customer":{"name":"Walk-in"},"lines":[{"externalLineId":"1001-1","sku":"SKU-1","quantity":"1","unitPrice":"1500.00"}],"total":"1500.00","payment":{"status":"paid","method":"card","amount":"1500.00","externalRef":"pay_1001"}}' \\
   "$BOOKONE_COMMERCE_BASE/orders"
+
+# Hold stock while the customer pays by card (15 minutes)
+curl -sS -X POST -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"externalId":"chk_812_1","ttlSeconds":900,"lines":[{"sku":"SKU-1","quantity":"1"}]}' \\
+  "$BOOKONE_COMMERCE_BASE/reservations"
+
+# Receive changes by webhook
+curl -sS -X POST -H "Authorization: Bearer $BOOKONE_COMMERCE_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url":"https://shop.example/api/bookone/webhook","kinds":["product","price","inventory","order"]}' \\
+  "$BOOKONE_COMMERCE_BASE/webhooks"
 `.trim();

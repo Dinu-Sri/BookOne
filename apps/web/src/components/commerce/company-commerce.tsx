@@ -17,6 +17,14 @@ import {
   type ChannelCatalogView,
 } from '@/components/commerce/commerce-channel-catalog';
 import { CommercePrices, type PricesView } from '@/components/commerce/commerce-prices';
+import {
+  CommerceApiLogCard,
+  CommerceReservationsCard,
+  CommerceWebhooksCard,
+  type ApiCallView,
+  type ReservationView,
+  type WebhookView,
+} from '@/components/commerce/commerce-developer-extras';
 import { CommerceWebOrders, nextStepFor, type WebOrderView } from '@/components/commerce/commerce-web-orders';
 import { LOCATION_TYPE_LABELS, isFleetLocationType } from '@/lib/rental-locations';
 import {
@@ -114,6 +122,9 @@ type ConnectionView = {
   webOrders: WebOrderView[];
   channelCatalog: ChannelCatalogView | null;
   prices: PricesView;
+  webhooks: WebhookView[];
+  reservations: ReservationView[];
+  apiCalls: ApiCallView[];
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -1018,6 +1029,9 @@ export function CompanyCommerce(props: {
                         </ul>
                       </section>
                     {props.canWrite && selected.environment === 'sandbox' ? <SampleCatalogCard connectionId={selected.id} /> : null}
+                    <CommerceWebhooksCard key={`hooks-${selected.id}`} connectionId={selected.id} canWrite={props.canWrite} webhooks={selected.webhooks} />
+                    <CommerceReservationsCard reservations={selected.reservations} />
+                    <CommerceApiLogCard calls={selected.apiCalls} />
                   </div>
                 ) : null}
 

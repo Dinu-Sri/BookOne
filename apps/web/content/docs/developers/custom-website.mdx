@@ -129,7 +129,28 @@ Each item: `sku`, `productId`, `onHand`, `committed`, `available`, `quantity`, `
 - `available = onHand − committed − safetyBuffer`, never below 0. **Sell against `available`** (`quantity` is the same number, kept for older clients).
 - `committed` is stock held for open web orders that are not invoiced yet (cash on delivery, bank transfer; see section 6).
 - The owner sets the channel **safety buffer** (for example keep 1 unit for the shop) and whether the site may **take backorders** when available is 0. A product can also allow backorders on its own; see `allowBackorder` on the catalog product.
+- `committed` also includes active checkout holds (section 4a). `lowStockThreshold` is the product's reorder level, and `incoming` lists open purchase orders (`quantity`, `expectedAt`).
 - `/inventory` covers the products published to your channel (`scope: "published"`). POS sales, invoices, purchases, stock adjustments and web orders all change it, and each change appears on the feed within seconds.
+
+## 4a. Hold stock during card checkout (reservations)
+
+Card payments take a few minutes. Hold the stock when the customer starts paying, so the last unit cannot sell at the POS meanwhile:
+
+```bash
+curl -sS -X POST "$BOOKONE_BASE/reservations" -H "Authorization: Bearer $BOOKONE_KEY" -H "Content-Type: application/json" \
+  -d '{"externalId":"chk_812_1","ttlSeconds":900,"lines":[{"sku":"WN-COT-8ML-CHWHITE","quantity":"2"}]}'
+```
+
+```json
+{ "reservationId": "6f1c…", "externalId": "chk_812_1", "status": "active", "held": true, "expiresAt": "2026-11-27T10:15:00.000Z",
+  "lines": [{ "sku": "WN-COT-8ML-CHWHITE", "quantity": "2", "held": "2", "available": "12", "status": "held" }] }
+```
+
+- `ttlSeconds` is 60 to 3600 (default 900). By default all lines are held or none (`status: "released"`, lines `insufficient` with what is `available`). Send `partial: true` to hold what is there.
+- Held units count in `committed`, so `available` drops at once and the POS cannot sell them.
+- Send the order with `"reservationId": "…"`. The hold becomes the order's hold; held lines never fail on stock.
+- `PATCH /reservations/{id}` with `ttlSeconds` extends the time from now; with `lines` it changes the quantities (`409 INSUFFICIENT_STOCK` keeps the old hold). `DELETE /reservations/{id}` releases it. `GET` shows `active`, `converted`, `released` or `expired`.
+- An expired hold stops counting at `expiresAt`. A `reservation` change (and `inventory` changes) follow within seconds.
 
 ## 5. Change feed
 
@@ -137,19 +158,36 @@ Each item: `sku`, `productId`, `onHand`, `committed`, `available`, `quantity`, `
 curl -sS -H "Authorization: Bearer $BOOKONE_KEY" "$BOOKONE_BASE/changes?cursor=$CHECKPOINT"
 ```
 
-Items arrive in `revision` order: `{ id, revision, kind, productId, sku, payload, createdAt }`. Delivery is at least once, so de-duplicate on `id`.
+Items arrive in `revision` order: `{ id, revision, kind, entityId, productId, sku, payload, occurredAt, createdAt }`. Delivery is at least once, so de-duplicate on `id`.
 
 | kind | When | Payload |
 |---|---|---|
 | `product` | A product, variant or its photos changed in BookOne, or it was published or unpublished | `action` (`updated`, `published`, `unpublished`), `productId`, `variantId`, `sku`. Re-read the product |
 | `price` | The channel price of a product or variant changed (price edited, list switched, sale started or ended) | `productId`, `variantId`, `sku`, `price` (the full price object) |
+| `image` | Photos of a product or variant changed (a `product` change follows too) | `productId`, `variantId`, `sku` |
+| `category` / `brand` | A category or product brand was created, renamed or removed | `categoryId` / `brandId`, `action` |
+| `reservation` | A checkout hold was made, changed, released, converted or expired | `reservationId`, `externalId`, `action`, `status`, `lines` |
+| `customer` | A website customer was created or updated through `PUT /customers` | `customerId`, `channelCustomerId`, `action` |
 | `inventory` | Stock or held stock changed | `sku`, `onHand`, `committed`, `available`, `quantity`, `locationId` |
 | `order` | BookOne changed one of your web orders | `externalId`, `action`, `status`, `paymentStatus`, `fulfilment`, `documentNumber` |
 | `mapping` | A BookOne product was linked to one of your listings | `action: "applied"`, `sku`, `bookoneProductId`, `externalProductId`, `externalVariantId` |
 | `publish` | (legacy publish queue) a product was queued for you, or you acknowledged it | `action` (`queued`, `claimed`), `claimId`, `sku` |
 | `catalog` | (legacy) a linked product changed | `sku`, `name`, `unit` |
 
-`order` actions: `stock_held`, `needs_review`, `confirmed`, `paid`, `posted`, `dispatched`, `delivered`, `cancelled`, `refunded`, and `event:<kind>` for your own events. Use them to email customers ("Your order has been dispatched, tracking …").
+`order` actions: `stock_held`, `needs_review`, `confirmed`, `paid`, `posted`, `dispatched`, `delivered`, `returned`, `cancelled`, `refunded`, and `event:<kind>` for your own events. Use them to email customers ("Your order has been dispatched, tracking …").
+
+Filter with `?kinds=price,inventory` (comma list). `variant` selects `product` items that belong to a variant. The cursor still moves past other kinds. Each item also has `entityId` (the product, order, reservation, customer, category or brand id) and `occurredAt`. Cursors stay valid for at least 7 days.
+
+### Webhooks
+
+Instead of polling, register an HTTPS endpoint. BookOne POSTs each feed item (the same JSON as above) within seconds:
+
+```bash
+curl -sS -X POST "$BOOKONE_BASE/webhooks" -H "Authorization: Bearer $BOOKONE_KEY" -H "Content-Type: application/json" \
+  -d '{"url":"https://shop.example/api/bookone/webhook","kinds":["product","price","inventory","order"]}'
+```
+
+The response includes `secret` (shown once). Verify every delivery; see [Webhooks](/docs/developers/webhooks) for the signature, retries and a Node handler. Staff can also add webhooks and read the delivery log on **Developer → Webhooks**.
 
 ## 6. Orders
 
@@ -180,6 +218,13 @@ curl -sS -X POST "$BOOKONE_BASE/orders" \
 - The response is **202 Accepted** with a receipt. 202 means BookOne has the order; read `status` to see what happened. Use `POST /orders/validate` with the same body for a side-effect-free check.
 - Lost response? Send the same body with the same `Idempotency-Key`.
 
+### More order details (all optional)
+
+`displayNumber`, `channelCustomerId`, `customerId`, `customerGroup`, `shippingAddress` and `billingAddress` (`name`, `phone`, `line1`, `line2`, `city`, `district`, `province`, `postalCode`, `country`), `delivery` (`method`, `carrier`, `fee`, `weightGrams`, `notes`), `reservationId`, `discounts[]` (`code`, `type`, `amount`), `fees[]` (`kind`, `amount`), `attachments[]`, `customerNote`, `marketing`, line `listPrice` and `description`, and `payment.gatewayFee`.
+
+- When you do not send `shippingAmount`, BookOne posts the sum of `fees` (or `delivery.fee`) as shipping. When you do not send `discountAmount`, it posts the sum of `discounts`. The total must still add up.
+- Staff see the address, delivery, coupons, fees, note and bank slips on the web order, print a **Packing slip**, and the invoice prints the ship-to, delivery, coupons and note.
+
 ### What happens next (`status`)
 
 | status | Meaning |
@@ -209,7 +254,7 @@ For a VAT-registered company, send the tax you charged in `taxAmount` (per line 
 
 ### Fulfilment from BookOne
 
-Staff work web orders on the **Orders** tab: Confirm, Mark paid, Dispatch (courier and tracking number), Mark delivered, Cancel, Refund, Refund and restock.
+Staff work web orders on the **Orders** tab: Confirm, Mark paid, Dispatch (courier and tracking number), Mark delivered, Mark returned, Packing slip, Cancel, Refund, Refund and restock.
 
 ```json
 "fulfilment": {
@@ -235,8 +280,40 @@ Staff work web orders on the **Orders** tab: Confirm, Mark paid, Dispatch (couri
 | `cancelled` | The customer or your shop cancelled. Releases held stock; a posted order gets a linked return with restock |
 | `fulfilled` | Your site shipped it (if you fulfil outside BookOne) |
 | `refunded` | `amount`, `externalRefundId`, `restock`, and for restock `lines: [{ externalLineId, quantity }]` |
+| `payment_pending_verification` | A bank-transfer customer uploaded a slip: `attachment: { kind, url, fileName }`. Staff see it and Mark paid |
+| `payment_failed` | Card declined: `externalRef`, `reason`. Held stock is released; nothing is posted |
+| `address_updated` | New `shippingAddress` before dispatch (`409` after dispatch) |
 
 If BookOne cannot book a cancel or refund, the order moves to **needs review** with the reason and staff use **Retry**; your call still gets a receipt.
+
+### Read orders
+
+- `GET /orders/{externalId}` returns the status plus `lines` (with `fulfilledQuantity`, `refundedAmount`), `payment` (`method`, `status`, `externalRef`, `gatewayFee`), `invoice` (`documentNumber`), `shippingAddress`, `delivery`, `discounts`, `fees` and `fulfilment.shipments` (each with its `lines`).
+- `GET /orders?updatedSince=…&status=…&cursor=…` lists this channel's orders for nightly reconciliation.
+- `GET /orders/{externalId}/invoice` returns `{ documentNumber, issuedAt, total, pdfUrl }`. `pdfUrl` is a public page for the invoice that the customer can print or save as PDF. It does not expire.
+
+### Returns
+
+`POST /orders/{externalId}/returns` with `externalReturnId`, `restock` and `lines: [{ externalLineId, quantity, reason, condition }]`. BookOne books a linked sales return for the line price less the line discount (and puts the goods back when `restock` is true). It needs the `lifecycle` scope and is idempotent on `externalReturnId`. The change arrives as an `order` item.
+
+### Customers
+
+`PUT /customers/{channelCustomerId}` on sign-up or profile edit, with `name`, `email`, `phone`, `addresses[]`, `marketingOptIn`, `customerGroup`. BookOne first matches an existing customer by email, then phone, so a shop customer who registers online is not duplicated (`matchedExisting: true`). It returns `customerId`. Send `channelCustomerId` (or `customerId`) on orders.
+
+- `GET /customers/{customerId}` reads it (the website's own id works too).
+- `GET /customers/{customerId}/orders` lists the website orders plus in-store (POS and BookOne) invoices of that customer, with `source` `web`, `pos` or `store`, so "My orders" shows everything.
+
+### Write safety
+
+Every `POST`, `PUT` and `PATCH` accepts `Idempotency-Key`. Repeating a request with the same key and body returns the first response with `replayed: true`; the same key with a different body is `409 CONFLICT`. `POST /orders` requires the key.
+
+### Scopes
+
+Keys carry `catalog`, `inventory`, `order` and `lifecycle`. The fine-grained names are accepted as aliases when a key is issued and are listed in `grantedScopes` on `/connection`: `catalog:read`, `pricing:read`, `webhooks:manage` (catalog), `inventory:read`, `reservations:write` (inventory), `orders:write`, `orders:read`, `customers:read`, `customers:write` (order), `lifecycle`.
+
+### Health
+
+`GET /health` needs no key and returns `{ ok, status, apiVersion, specVersion, serviceTime }` for uptime monitors.
 
 ## 7. Older integration paths (still supported)
 
@@ -277,6 +354,7 @@ A longer sample lives at `docs/commerce/quickstart-node.mjs` in the BookOne repo
 
 ## Changelog
 
+- **2026-11-26 (BookOne 2.23.0)**: Reservations (`/reservations`, `reservationId` on orders), webhooks (`/webhooks`, signed, retried 24 h, delivery log), change-feed `?kinds=`, `entityId`, `occurredAt` and kinds `image`, `category`, `brand`, `reservation`, `customer` (`variant` as a filter). Orders: address, delivery, coupons, fees, attachments, note, `displayNumber`, `gatewayFee`; events `payment_pending_verification`, `payment_failed`, `address_updated`; `GET /orders`, full `GET /orders/{id}`, `/invoice`, `/returns`. Customers (`PUT/GET /customers/{id}`, `/customers/{id}/orders` incl. POS). `/inventory` adds `lowStockThreshold` and `incoming`. `include=stats`, `/catalog/related`, `/catalog/new-arrivals`, `GET /health`, `Idempotency-Key` on every write, scope aliases, API call log.
 - **2026-11-26 (BookOne 2.22.0)**: Pricing. Price lists per channel and per customer group, was prices (`compareAtPrice`), scheduled sales (`sale`), quantity prices (`tiers`) and `effectivePrice` on every price. New `GET /pricing?sku=` for up to 100 SKUs, `customerGroup=` on catalog and pricing calls, change kind `price`. `/orders/validate` adds a non-blocking `PRICE_MISMATCH` issue (the order is still accepted). Capabilities `priceExport`, `priceLists`, `salePrices`, `priceTiers`, `customerGroupPricing` are now `true`.
 - **2026-11-26 (BookOne 2.21.0)**: Catalog API (`/catalog/products`, by id and by SKU, `/catalog/categories`, `/catalog/brands`, `/catalog/attributes`) with variants, photos, weights, brands, attributes and channel publishing. `/inventory` covers published products and applies the channel safety buffer and backorder setting. `/connection` adds `channel`, `priceListId`, `stockLocationIds`, `taxMode`, `timezone` and more capabilities. New change kind `product`. ETag / `If-None-Match` on GETs, `X-RateLimit-*` headers, rate limit raised to 600 per minute.
 - **2026-11-26 (BookOne 2.20.0)**: Web orders in BookOne with fulfilment; COD / bank-transfer orders hold stock; `GET /payment-methods`; `/inventory` adds `onHand`, `committed`, `available`; change kinds `order`, `mapping`, `publish`.

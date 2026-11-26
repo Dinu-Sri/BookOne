@@ -8,6 +8,7 @@ import { listCommercePaymentAccounts } from '@/lib/commerce-payment-accounts';
 import { operatorFromSession, withCommerceService } from '@/lib/commerce-runtime';
 import { CompanyCommerce } from '@/components/commerce/company-commerce';
 import { listProducts } from '@/app/actions/inventory';
+import { startCommerceBackground } from '@/lib/commerce-background';
 
 export default async function CompanyCommercePage({
   searchParams,
@@ -23,6 +24,7 @@ export default async function CompanyCommercePage({
   const level = tenant.accessByLabel?.['Commerce Integrations'] ?? 'none';
   if (level === 'none') redirect(tenant.landingHref ?? '/?denied=1');
 
+  startCommerceBackground();
   const query = await searchParams;
   const canWrite = jobCanWrite(tenant, 'Commerce Integrations');
   const operator = await operatorFromSession();
@@ -35,6 +37,7 @@ export default async function CompanyCommercePage({
       const orders = new Map<string, Awaited<ReturnType<typeof service.listWebOrders>>>();
       const catalogs = new Map<string, Awaited<ReturnType<typeof service.channelCatalogForOperator>> | null>();
       const priceLists = await service.listPriceListsForOperator(operator).catch(() => []);
+      const dev = new Map<string, { webhooks: Awaited<ReturnType<typeof service.webhooksForOperator>>; reservations: Awaited<ReturnType<typeof service.reservationsForOperator>>; apiCalls: Awaited<ReturnType<typeof service.apiCallsForOperator>> }>();
       const prices = new Map<string, { channelPriceListId: string | null; editListId: string | null; rows: Awaited<ReturnType<typeof service.pricesForOperator>>['rows'] }>();
       for (const row of rows) {
         const channelListId = (row.connection.channelSettings?.priceListId as string | null | undefined) ?? null;
@@ -42,10 +45,15 @@ export default async function CompanyCommercePage({
         const editListId = priceLists.some((l) => l.id === wanted) ? wanted ?? null : null;
         const priced = await service.pricesForOperator(operator, row.connection.id, editListId).catch(() => null);
         prices.set(row.connection.id, { channelPriceListId: channelListId, editListId, rows: priced?.rows ?? [] });
+        dev.set(row.connection.id, {
+          webhooks: await service.webhooksForOperator(operator, row.connection.id).catch(() => []),
+          reservations: await service.reservationsForOperator(operator, row.connection.id).catch(() => []),
+          apiCalls: await service.apiCallsForOperator(operator, row.connection.id, 50).catch(() => []),
+        });
         orders.set(row.connection.id, await service.listWebOrders(operator, row.connection.id).catch(() => []));
         catalogs.set(row.connection.id, await service.channelCatalogForOperator(operator, row.connection.id).catch(() => null));
       }
-      return { rows, orders, catalogs, priceLists, prices };
+      return { rows, orders, catalogs, priceLists, prices, dev };
     }),
     getCompanySettingsData().catch(() => null),
     listProducts()
@@ -101,6 +109,9 @@ export default async function CompanyCommercePage({
           paymentSettings: row.connection.paymentSettings ?? { defaultAccountCode: null, methods: {}, seenMethods: [] },
           webOrders: webOrders.get(row.connection.id) ?? [],
           channelCatalog: channelCatalogs.get(row.connection.id) ?? null,
+          webhooks: viewData.dev.get(row.connection.id)?.webhooks ?? [],
+          reservations: viewData.dev.get(row.connection.id)?.reservations ?? [],
+          apiCalls: viewData.dev.get(row.connection.id)?.apiCalls ?? [],
           prices: {
             lists: viewData.priceLists,
             channelPriceListId: viewData.prices.get(row.connection.id)?.channelPriceListId ?? null,

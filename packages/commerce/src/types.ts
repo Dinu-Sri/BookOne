@@ -27,7 +27,27 @@ export type OrderStatus =
 
 export type PaymentStatus = 'pending' | 'paid' | 'failed';
 
-export type OrderEventKind = 'paid' | 'cancelled' | 'fulfilled' | 'refunded';
+export type OrderEventKind =
+  | 'paid'
+  | 'cancelled'
+  | 'fulfilled'
+  | 'refunded'
+  | 'payment_pending_verification'
+  | 'payment_failed'
+  | 'address_updated';
+
+/** WP5: postal address on an order or customer. */
+export type Address = {
+  name?: string;
+  phone?: string;
+  line1?: string;
+  line2?: string;
+  city?: string;
+  district?: string;
+  province?: string;
+  postalCode?: string;
+  country?: string;
+};
 
 export type CommerceActor = {
   tenantId: string;
@@ -63,6 +83,8 @@ export type OrderLineInput = {
   taxAmount?: string;
   discountAmount?: string;
   description?: string;
+  listPrice?: string;
+  bundleParentLineId?: string | null;
 };
 
 export type OrderInput = {
@@ -77,8 +99,22 @@ export type OrderInput = {
   discountAmount?: string;
   taxAmount?: string;
   total: string;
-  payment?: { status: PaymentStatus; method?: string; amount?: string; externalRef?: string };
+  payment?: { status: PaymentStatus; method?: string; amount?: string; externalRef?: string; gatewayFee?: string };
   status?: 'pending' | 'paid' | 'cancelled';
+  // ---- WP5 (all optional) ----
+  displayNumber?: string;
+  channelCustomerId?: string;
+  customerId?: string;
+  customerGroup?: string;
+  shippingAddress?: Address | null;
+  billingAddress?: Address | null;
+  delivery?: { method?: string; carrier?: string; fee?: string; weightGrams?: number; notes?: string } | null;
+  reservationId?: string;
+  discounts?: Array<{ code?: string; type?: string; amount: string; description?: string }>;
+  fees?: Array<{ kind: string; amount: string }>;
+  attachments?: Array<{ kind?: string; url: string; fileName?: string }>;
+  customerNote?: string;
+  marketing?: Record<string, string>;
 };
 
 export type OrderEventInput = {
@@ -90,6 +126,11 @@ export type OrderEventInput = {
   restock?: boolean;
   externalRefundId?: string;
   lines?: Array<{ externalLineId: string; quantity?: string; amount?: string }>;
+  // ---- WP5 ----
+  attachment?: { kind?: string; url: string; fileName?: string };
+  externalRef?: string;
+  reason?: string;
+  shippingAddress?: Address;
 };
 
 export type MappingInput = {
@@ -254,6 +295,24 @@ export type PostingPort = {
     amount: number;
     lines: ReturnPostLine[];
   }): Promise<PostedDocument>;
+  /**
+   * WP6: find or create the BookOne customer (party) for a website customer.
+   * Matches on email, then phone, then name, so POS customers are not duplicated.
+   */
+  upsertCustomerParty?(input: {
+    actor: CommerceActor;
+    partyId: string | null;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+  }): Promise<{ partyId: string; matchedExisting: boolean }>;
+  /** WP6: invoices for a party from every channel (POS, BookOne, web). */
+  partyInvoices?(tenantId: string, partyId: string): Promise<
+    Array<{ documentId: string; documentNumber: string; issueDate: string; total: string; channel: string; status: string }>
+  >;
+  /** WP6: a public link to the invoice (printable / save as PDF). */
+  invoiceLink?(tenantId: string, documentId: string): Promise<{ documentNumber: string; issuedAt: string; total: string; url: string } | null>;
 };
 
 /**
@@ -297,6 +356,8 @@ export type Shipment = {
   trackingUrl: string | null;
   shippedAt: string;
   deliveredAt: string | null;
+  /** WP5: lines in this shipment (all lines when omitted). */
+  lines?: Array<{ externalLineId: string; quantity: string }>;
 };
 
 export type Fulfilment = {

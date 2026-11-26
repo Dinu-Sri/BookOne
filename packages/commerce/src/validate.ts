@@ -121,7 +121,7 @@ function parseMoneySafe(value: string, label: string, push: (code: string, messa
 export function validateEvent(input: OrderEventInput): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!input.externalEventId?.trim()) issues.push({ code: 'missing_event_id', message: 'External event ID is required.', field: 'externalEventId', blocking: true });
-  if (!['paid', 'cancelled', 'fulfilled', 'refunded'].includes(input.kind)) {
+  if (!['paid', 'cancelled', 'fulfilled', 'refunded', 'payment_pending_verification', 'payment_failed', 'address_updated'].includes(input.kind)) {
     issues.push({ code: 'unsupported_event', message: `Event ${input.kind} is not supported in v1.`, field: 'kind', blocking: true });
   }
   if (input.kind === 'refunded' && !input.externalRefundId?.trim()) {

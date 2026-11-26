@@ -1,3 +1,7 @@
+## 2026-11-26 — Commerce WP3–WP7: reservations, webhooks, order details, customers, stats (v2.23.0)
+
+Websites can hold stock during card checkout (the POS cannot sell held units), receive signed webhooks with retries, filter the change feed, send addresses, delivery, coupons and fees with orders, read full orders and invoice links, return lines, sync customers (matched to POS customers), and read sales stats, related products and new arrivals. Staff see webhooks, checkout holds and the API call log on Developer, and order details, Mark returned and a packing slip on Orders. OpenAPI 1.4.0, new Webhooks guide. See [CHG-20261126-commerce-wp3-wp7](changes/CHG-20261126-commerce-wp3-wp7.md) and [docs/commerce/RELEASE-WP3-WP7.md](commerce/RELEASE-WP3-WP7.md).
+
 ## 2026-11-26 — Commerce mapping preview no longer leaves Apply busy (v2.22.1)
 
 Preview mapping runs on its own instead of through the form, so Apply mapping enables as soon as the preview is ready (fixes the CoreGuard failure on v2.22.0). See [CHG-20261126-commerce-wp2-pricing](changes/CHG-20261126-commerce-wp2-pricing.md).

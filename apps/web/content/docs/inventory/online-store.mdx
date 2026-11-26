@@ -59,6 +59,14 @@ Changes reach the website within seconds through its change feed.
 
 Sales start at the beginning of the first day and end at the end of the last day, in the company timezone. Websites see price changes within seconds. If an order arrives at a different price (for example after a coupon), BookOne still accepts it and records the price the customer paid.
 
-## 6. Web orders
+## 6. Checkout holds, webhooks and the API log
 
-Orders from the website appear on **Commerce Integrations → Orders**. Cash-on-delivery and bank-transfer orders hold their stock as soon as they arrive, so the same item cannot be sold again at the POS. From an order you can **Confirm**, **Mark paid** (e.g. when the courier remits cash), **Dispatch** with courier and tracking number, **Mark delivered**, **Cancel** (releases or restocks), and **Refund** (with or without restock). The customer's website sees each change.
+On **Developer**:
+
+- **Stock held for checkouts** lists the website's card-payment holds. Held units cannot be sold at the POS. A hold becomes the order, or is released when it expires (at most 60 minutes).
+- **Webhooks**: add your website's HTTPS address to push changes to it within seconds. **Send test**, **Delivery log**, **New secret** and **Remove** are on each row. A webhook that keeps failing for 24 hours shows **Failing**; fix the site and click **Re-enable**.
+- **API calls** shows the latest requests from the website's keys (kept 30 days).
+
+## 7. Web orders
+
+Orders from the website appear on **Commerce Integrations → Orders**. Cash-on-delivery and bank-transfer orders hold their stock as soon as they arrive, so the same item cannot be sold again at the POS. From an order you can **Confirm**, **Mark paid** (e.g. when the courier remits cash), **Dispatch** with courier and tracking number, **Mark delivered**, **Mark returned** (the parcel came back; then Refund), print a **Packing slip**, **Cancel** (releases or restocks), and **Refund** (with or without restock). The order shows the ship-to address, delivery method, coupons, fees, the customer's note, payment reference and gateway fee, and any bank slip the customer uploaded. The invoice prints the ship-to address, delivery, coupons and note. The customer's website sees each change.

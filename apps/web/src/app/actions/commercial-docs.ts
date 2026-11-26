@@ -582,6 +582,7 @@ async function committedWebOrderQty(tenantId: string, productId: string, locatio
         eq(commerceStockCommitments.tenantId, tenantId),
         eq(commerceStockCommitments.productId, productId),
         eq(commerceStockCommitments.status, 'active'),
+        sql`(${commerceStockCommitments.expiresAt} is null or ${commerceStockCommitments.expiresAt} > now())`,
         locationId
           ? eq(commerceStockCommitments.locationId, locationId)
           : sql`${commerceStockCommitments.locationId} is null`,

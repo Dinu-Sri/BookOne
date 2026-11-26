@@ -16,6 +16,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import { assertModuleWrite } from '@/lib/module-access';
+import { notifyCommerceTaxonomy } from '@/lib/commerce-notify';
 import { sortCategoryTree } from '@/lib/product-category-display';
 
 export type ProductCategoryRow = {
@@ -225,6 +226,7 @@ export async function createProductCategory(
       return row;
     });
     revalidateCategories();
+    await notifyCommerceTaxonomy(user.tenantId, 'category', created.id, 'created');
     return { ok: true, name: created.name, id: created.id };
   } catch (error) {
     if (error instanceof Error && error.message === 'DUPLICATE_NAME') {
@@ -328,6 +330,7 @@ export async function renameProductCategoryFromForm(
   }
 
   revalidateCategories();
+  await notifyCommerceTaxonomy(user.tenantId, 'category', id, 'updated');
   return { ok: true, message: 'Category updated.' };
 }
 
@@ -411,4 +414,5 @@ export async function deleteProductCategoryFromForm(formData: FormData): Promise
   });
 
   revalidateCategories();
+  await notifyCommerceTaxonomy(user.tenantId, 'category', id, 'deleted');
 }

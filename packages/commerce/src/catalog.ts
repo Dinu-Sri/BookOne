@@ -143,6 +143,8 @@ export type CatalogQuery = {
   mediaBase: string;
   /** WP2 PR5: price with this customer group's list when one exists. */
   customerGroup?: string | null;
+  /** WP7: add units-sold stats (include=stats). */
+  stats?: boolean;
 };
 
 export const MAX_PAGE = 250;

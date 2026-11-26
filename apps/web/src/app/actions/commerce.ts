@@ -396,7 +396,7 @@ export async function createCommerceClearingAccountFromForm(formData: FormData) 
   finish(formData, { saved: '1' });
 }
 
-const WEB_ORDER_OPS = ['confirm', 'paid', 'dispatch', 'delivered', 'cancel', 'refund', 'refund_restock'] as const;
+const WEB_ORDER_OPS = ['confirm', 'paid', 'dispatch', 'delivered', 'returned', 'cancel', 'refund', 'refund_restock'] as const;
 type WebOrderOp = (typeof WEB_ORDER_OPS)[number];
 
 /** Staff actions on a web order (WP0): confirm, mark paid, dispatch, delivered, cancel, refund. */
@@ -411,6 +411,7 @@ export async function webOrderActionFromForm(formData: FormData) {
       if (op === 'confirm') return service.confirmWebOrder(operator, connectionId, orderId);
       if (op === 'paid') return service.markWebOrderPaid(operator, connectionId, orderId);
       if (op === 'delivered') return service.markWebOrderDelivered(operator, connectionId, orderId);
+      if (op === 'returned') return service.markWebOrderReturned(operator, connectionId, orderId);
       if (op === 'cancel') return service.cancelWebOrder(operator, connectionId, orderId);
       if (op === 'refund' || op === 'refund_restock') {
         return service.refundWebOrder(operator, connectionId, orderId, { restock: op === 'refund_restock' });
@@ -640,4 +641,59 @@ export async function bulkPriceListFromForm(formData: FormData) {
     finish(formData, { err: e instanceof Error ? e.message : 'Could not update the prices.', tab: 'prices' });
   }
   finish(formData, { saved: '1', tab: 'prices' });
+}
+
+// ---------------------------------------------------------------------------
+// WP4: webhooks (Developer tab). Results return to the client (the secret is shown once).
+// ---------------------------------------------------------------------------
+
+export async function createCommerceWebhookFromForm(formData: FormData): Promise<{ ok: boolean; secret?: string; error?: string }> {
+  const operator = await operatorFromSession();
+  if (!operator.canWrite) return { ok: false, error: 'You do not have permission to change commerce integrations.' };
+  const connectionId = String(formData.get('connectionId') ?? '');
+  try {
+    const kinds = formData.getAll('kinds').map(String).filter(Boolean);
+    const created = await withCommerceService(operator.tenantId, (service) =>
+      service.createWebhook(operator.tenantId, connectionId, { url: String(formData.get('url') ?? ''), kinds }),
+    );
+    revalidatePath('/company/commerce');
+    return { ok: true, secret: created.secret };
+  } catch (e) {
+    rethrowNav(e);
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not add the webhook.' };
+  }
+}
+
+export async function commerceWebhookActionFromForm(formData: FormData): Promise<{ ok: boolean; secret?: string; error?: string; message?: string }> {
+  const operator = await operatorFromSession();
+  if (!operator.canWrite) return { ok: false, error: 'You do not have permission to change commerce integrations.' };
+  const connectionId = String(formData.get('connectionId') ?? '');
+  const id = String(formData.get('webhookId') ?? '');
+  const op = String(formData.get('op') ?? '');
+  try {
+    const out = await withCommerceService(operator.tenantId, async (service) => {
+      if (op === 'test') {
+        await service.testWebhook(operator.tenantId, connectionId, id);
+        return { message: 'Test delivery queued. It is sent within a few seconds; refresh to see the result.' };
+      }
+      if (op === 'rotate') {
+        const r = await service.rotateWebhookSecret(operator.tenantId, connectionId, id);
+        return { secret: r.secret, message: 'New secret created. The old one keeps working for 24 hours.' };
+      }
+      if (op === 'enable') {
+        await service.enableWebhook(operator.tenantId, connectionId, id);
+        return { message: 'Webhook re-enabled.' };
+      }
+      if (op === 'delete') {
+        await service.deleteWebhook(operator.tenantId, connectionId, id);
+        return { message: 'Webhook removed.' };
+      }
+      throw new Error('Unknown webhook action.');
+    });
+    revalidatePath('/company/commerce');
+    return { ok: true, ...out };
+  } catch (e) {
+    rethrowNav(e);
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not update the webhook.' };
+  }
 }

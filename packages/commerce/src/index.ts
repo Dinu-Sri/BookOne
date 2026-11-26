@@ -11,4 +11,6 @@ export * from './payments';
 export * from './fulfilment';
 export * from './catalog';
 export * from './pricing';
+export * from './webhooks';
+export * from './order-view';
 export { PostgresCommerceStore } from './pg-store';

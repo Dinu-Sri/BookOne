@@ -3,6 +3,7 @@ import {
   CommerceError,
   CommerceService,
   PostgresCommerceStore,
+  invoiceNotes,
   parseToken,
   rateLimit,
   type CommerceActor,
@@ -35,7 +36,8 @@ async function postingPort(): Promise<PostingPort> {
           documentType: 'sales_invoice',
           partyName: input.order.customer.name,
           issueDate: input.issueDate,
-          notes: `Commerce ${input.order.externalId}`,
+          // WP5: ship-to, delivery, coupons and the customer note print on the invoice.
+          notes: invoiceNotes(input.order),
           locationId: input.locationId,
           saleChannel: 'local',
           invoiceKind: decision.kind,
@@ -106,6 +108,124 @@ async function postingPort(): Promise<PostingPort> {
       return {
         documentId: result.id,
         documentNumber: await lookupDocumentNumber(result.id, result.id),
+      };
+    },
+    async upsertCustomerParty(input) {
+      const { and, db, eq, isNull, parties, sql } = await import('@bookone/db');
+      const tenantId = input.actor.tenantId;
+      // Match an existing customer first (POS customers): id, email, phone.
+      const match = await withTenantContext(tenantId, async () => {
+        if (input.partyId) {
+          const [row] = await db()
+            .select({ id: parties.id })
+            .from(parties)
+            .where(and(eq(parties.tenantId, tenantId), eq(parties.id, input.partyId), isNull(parties.voidedAt)))
+            .limit(1);
+          if (row) return row.id;
+        }
+        if (input.email) {
+          const [row] = await db()
+            .select({ id: parties.id })
+            .from(parties)
+            .where(and(eq(parties.tenantId, tenantId), sql`lower(${parties.email}) = ${input.email.toLowerCase()}`, isNull(parties.voidedAt)))
+            .limit(1);
+          if (row) return row.id;
+        }
+        const digits = (input.phone ?? '').replace(/\D/g, '').slice(-9);
+        if (digits.length >= 9) {
+          const [row] = await db()
+            .select({ id: parties.id })
+            .from(parties)
+            .where(
+              and(
+                eq(parties.tenantId, tenantId),
+                sql`(right(regexp_replace(coalesce(${parties.phone}, ''), '[^0-9]', '', 'g'), 9) = ${digits} or right(regexp_replace(coalesce(${parties.phoneMobile}, ''), '[^0-9]', '', 'g'), 9) = ${digits})`,
+                isNull(parties.voidedAt),
+              ),
+            )
+            .limit(1);
+          if (row) return row.id;
+        }
+        return null;
+      });
+      if (match) return { partyId: match, matchedExisting: true };
+      const { ensureParty } = await import('@/app/actions/parties');
+      const party = await ensureParty(
+        {
+          name: input.name,
+          kind: 'customer',
+          email: input.email ?? undefined,
+          phone: input.phone ?? undefined,
+          address: input.address ?? undefined,
+        },
+        actorUser(input.actor),
+      );
+      return { partyId: party.id, matchedExisting: false };
+    },
+    async partyInvoices(tenantId, partyId) {
+      const { and, businessDocuments, db, desc, eq, inArray, isNull, sql } = await import('@bookone/db');
+      return withTenantContext(tenantId, async () => {
+        const rows = await db()
+          .select({
+            documentId: businessDocuments.id,
+            documentNumber: businessDocuments.documentNumber,
+            issueDate: businessDocuments.issueDate,
+            total: businessDocuments.total,
+            documentType: businessDocuments.documentType,
+            status: businessDocuments.status,
+          })
+          .from(businessDocuments)
+          .where(
+            and(
+              eq(businessDocuments.tenantId, tenantId),
+              eq(businessDocuments.partyId, partyId),
+              inArray(businessDocuments.documentType, ['sales_invoice', 'pos_sale']),
+              isNull(businessDocuments.voidedAt),
+              sql`${businessDocuments.status} <> 'draft'`,
+            ),
+          )
+          .orderBy(desc(businessDocuments.issueDate))
+          .limit(200);
+        return rows.map((r) => ({
+          documentId: r.documentId,
+          documentNumber: r.documentNumber,
+          issueDate: r.issueDate,
+          total: Number(r.total).toFixed(2),
+          channel: r.documentType === 'pos_sale' ? 'pos' : 'store',
+          status: r.status,
+        }));
+      });
+    },
+    async invoiceLink(tenantId, documentId) {
+      const { and, businessDocuments, db, eq, isNull } = await import('@bookone/db');
+      const { publicOrigin } = await import('@/lib/public-origin');
+      const doc = await withTenantContext(tenantId, async () => {
+        const [row] = await db()
+          .select({
+            id: businessDocuments.id,
+            documentNumber: businessDocuments.documentNumber,
+            issueDate: businessDocuments.issueDate,
+            total: businessDocuments.total,
+            publicToken: businessDocuments.publicToken,
+          })
+          .from(businessDocuments)
+          .where(and(eq(businessDocuments.tenantId, tenantId), eq(businessDocuments.id, documentId), isNull(businessDocuments.voidedAt)))
+          .limit(1);
+        if (!row) return null;
+        let token = row.publicToken;
+        if (!token) {
+          token = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+          await db().update(businessDocuments).set({ publicToken: token, updatedAt: new Date() }).where(eq(businessDocuments.id, row.id));
+        }
+        return { ...row, token };
+      });
+      if (!doc) return null;
+      const origin = (await publicOrigin().catch(() => process.env.AUTH_URL ?? '')).replace(/\/$/, '');
+      return {
+        documentNumber: doc.documentNumber,
+        issuedAt: doc.issueDate,
+        total: Number(doc.total).toFixed(2),
+        url: `${origin}/i/${doc.token}`,
       };
     },
   };

@@ -9,7 +9,8 @@ export type CommerceErrorCode =
   | 'OUTBOUND_PAUSED'
   | 'RESERVATION_DISABLED'
   | 'CURSOR_EXPIRED'
-  | 'UNSUPPORTED';
+  | 'UNSUPPORTED'
+  | 'INSUFFICIENT_STOCK';
 
 export class CommerceError extends Error {
   readonly code: CommerceErrorCode;
@@ -65,6 +66,7 @@ export function httpStatusFor(code: CommerceErrorCode): number {
       return 429;
     case 'INBOUND_PAUSED':
     case 'OUTBOUND_PAUSED':
+    case 'INSUFFICIENT_STOCK':
       return 409;
     default:
       return 400;

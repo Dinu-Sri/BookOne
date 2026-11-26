@@ -15,6 +15,16 @@ export type WebOrderView = {
   placedAt: string;
   customerName: string;
   customerPhone: string | null;
+  customerEmail?: string | null;
+  shippingAddress?: string | null;
+  billingAddress?: string | null;
+  delivery?: { method?: string; carrier?: string; fee?: string; weightGrams?: number; notes?: string } | null;
+  discounts?: Array<{ code?: string; type?: string; amount: string; description?: string }>;
+  fees?: Array<{ kind: string; amount: string }>;
+  customerNote?: string | null;
+  attachments?: Array<{ kind?: string; url: string; fileName?: string }>;
+  paymentRef?: string | null;
+  gatewayFee?: string | null;
   total: string;
   currency: string;
   paymentMethod: string | null;
@@ -29,7 +39,7 @@ export type WebOrderView = {
   stock: string;
   documentNumber: string | null;
   settlementAccountCode: string | null;
-  lines: Array<{ sku: string; quantity: string; unitPrice: string; restockedQty: string; refundedAmount: string }>;
+  lines: Array<{ sku: string; description?: string | null; discountAmount?: string; quantity: string; unitPrice: string; restockedQty: string; refundedAmount: string }>;
   createdAt: string;
   updatedAt: string;
 };
@@ -307,12 +317,68 @@ export function CommerceWebOrders({
               <dd>
                 {open.customerName || '—'}
                 {open.customerPhone ? ` · ${open.customerPhone}` : ''}
+                {open.customerEmail ? ` · ${open.customerEmail}` : ''}
               </dd>
             </div>
+            {open.shippingAddress ? (
+              <div>
+                <dt>Ship to</dt>
+                <dd>{open.shippingAddress}</dd>
+              </div>
+            ) : null}
+            {open.billingAddress && open.billingAddress !== open.shippingAddress ? (
+              <div>
+                <dt>Bill to</dt>
+                <dd>{open.billingAddress}</dd>
+              </div>
+            ) : null}
+            {open.delivery ? (
+              <div>
+                <dt>Delivery</dt>
+                <dd>
+                  {[open.delivery.method, open.delivery.carrier].filter(Boolean).join(' · ') || '—'}
+                  {open.delivery.fee ? ` · fee ${money(open.delivery.fee, open.currency)}` : ''}
+                  {open.delivery.weightGrams ? ` · ${open.delivery.weightGrams} g` : ''}
+                  {open.delivery.notes ? ` · ${open.delivery.notes}` : ''}
+                </dd>
+              </div>
+            ) : null}
+            {open.discounts?.length ? (
+              <div>
+                <dt>Discounts</dt>
+                <dd>{open.discounts.map((d) => `${d.code ?? d.type ?? 'Discount'} ${money(d.amount, open.currency)}`).join(' · ')}</dd>
+              </div>
+            ) : null}
+            {open.fees?.some((f) => Number(f.amount)) ? (
+              <div>
+                <dt>Fees</dt>
+                <dd>{open.fees.filter((f) => Number(f.amount)).map((f) => `${f.kind} ${money(f.amount, open.currency)}`).join(' · ')}</dd>
+              </div>
+            ) : null}
+            {open.customerNote ? (
+              <div>
+                <dt>Customer note</dt>
+                <dd>{open.customerNote}</dd>
+              </div>
+            ) : null}
+            {open.attachments?.length ? (
+              <div>
+                <dt>Attachments</dt>
+                <dd>
+                  {open.attachments.map((a, i) => (
+                    <a key={`${a.url}-${i}`} href={a.url} target="_blank" rel="noopener noreferrer" style={{ marginRight: 8 }}>
+                      {a.fileName || a.kind || `File ${i + 1}`}
+                    </a>
+                  ))}
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt>Payment</dt>
               <dd>
                 {(open.paymentMethod ?? 'unknown').toUpperCase()} · {open.paymentStatus === 'paid' ? 'Paid' : open.paymentStatus}
+                {open.paymentRef ? ` · ref ${open.paymentRef}` : ''}
+                {open.gatewayFee ? ` · gateway fee ${money(open.gatewayFee, open.currency)}` : ''}
                 {open.settlementAccountCode ? ` · settled to ${open.settlementAccountCode}` : ''}
               </dd>
             </div>
@@ -349,7 +415,10 @@ export function CommerceWebOrders({
               <tbody>
                 {open.lines.map((line, i) => (
                   <tr key={`${line.sku}-${i}`}>
-                    <td>{line.sku}</td>
+                    <td>
+                      {line.sku}
+                      {line.description ? <span className="field-help"> · {line.description}</span> : null}
+                    </td>
                     <td>{Number(line.quantity)}</td>
                     <td>{money(line.unitPrice, open.currency)}</td>
                     <td>{money(String(Number(line.quantity) * Number(line.unitPrice)), open.currency)}</td>
@@ -396,6 +465,15 @@ export function CommerceWebOrders({
                 {open.fulfilment.status === 'shipped' || open.fulfilment.status === 'out_for_delivery'
                   ? actionForm('delivered', 'Mark delivered', 'primary')
                   : null}
+                {['shipped', 'out_for_delivery', 'delivered'].includes(open.fulfilment.status) ? actionForm('returned', 'Mark returned') : null}
+                <a
+                  className="button secondary"
+                  href={`/company/commerce/packing-slip?connection=${encodeURIComponent(connectionId)}&order=${encodeURIComponent(open.id)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Packing slip
+                </a>
                 {!closed(open) ? (
                   <Button type="button" variant="ghost" onClick={() => setConfirm({ op: 'cancel', order: open })}>
                     Cancel order

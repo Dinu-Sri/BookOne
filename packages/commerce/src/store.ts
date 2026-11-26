@@ -114,6 +114,142 @@ export type CommerceStore = {
   upsertPriceEntries?(tenantId: string, priceListId: string, rows: PriceEntryInput[]): Promise<number>;
   /** Products on a list whose sale started or ended in (from, to]. */
   saleBoundaryProductIds?(tenantId: string, priceListId: string, fromIso: string, toIso: string): Promise<string[]>;
+
+  /** WP3 reservations. */
+  insertReservation?(row: ReservationRow): Promise<void>;
+  getReservation?(tenantId: string, id: string): Promise<ReservationRow | null>;
+  updateReservation?(row: ReservationRow): Promise<void>;
+  listReservations?(tenantId: string, connectionId: string | null, status?: string): Promise<ReservationRow[]>;
+  /**
+   * Hold stock for a reservation under the per-product lock. All-or-nothing
+   * unless `partial`. Returns what each product could hold.
+   */
+  holdReservation?(input: {
+    tenantId: string;
+    connectionId: string;
+    reservationId: string;
+    locationId: string | null;
+    expiresAt: string;
+    partial: boolean;
+    lines: Array<{ productId: string; quantity: number }>;
+  }): Promise<{ ok: boolean; lines: Array<{ productId: string; needed: number; available: number; held: number }> }>;
+  /** Set a reservation's active holds to released (or consumed). */
+  releaseReservationHolds?(tenantId: string, reservationId: string, status: 'released' | 'consumed'): Promise<number>;
+  extendReservationHolds?(tenantId: string, reservationId: string, expiresAt: string): Promise<number>;
+  /** Move a reservation's holds onto an order (no expiry) — the order then owns them. */
+  transferReservationToOrder?(tenantId: string, reservationId: string, orderId: string): Promise<number>;
+
+  /** WP4 webhooks. */
+  listWebhooks?(tenantId: string, connectionId: string | null): Promise<WebhookRow[]>;
+  insertWebhook?(row: WebhookRow): Promise<void>;
+  updateWebhook?(row: WebhookRow): Promise<void>;
+  insertDeliveries?(rows: DeliveryRow[]): Promise<void>;
+  listDueDeliveries?(tenantId: string, nowIso: string, limit: number): Promise<DeliveryRow[]>;
+  updateDelivery?(row: DeliveryRow): Promise<void>;
+  listDeliveries?(tenantId: string, webhookId: string, limit: number): Promise<DeliveryRow[]>;
+
+  /** WP6 channel customers. */
+  getCustomer?(tenantId: string, connectionId: string, match: { id?: string; channelCustomerId?: string }): Promise<CustomerRow | null>;
+  upsertCustomer?(row: CustomerRow): Promise<void>;
+
+  /** WP7 API call log and sales stats. */
+  insertApiCall?(row: ApiCallRow): Promise<void>;
+  listApiCalls?(tenantId: string, connectionId: string, limit: number): Promise<ApiCallRow[]>;
+  /** Units sold per product (all channels incl. POS) over 30 / 90 days and all time. */
+  salesStats?(tenantId: string, productIds: string[]): Promise<Map<string, { d30: number; d90: number; all: number }>>;
+  /** WP3: reorder level and open purchase orders per product. */
+  stockExtras?(tenantId: string, productIds: string[]): Promise<Map<string, { lowStockThreshold: number | null; incoming: Array<{ quantity: number; expectedAt: string | null }> }>>;
+  /** Products most often sold on the same documents as this one. */
+  relatedProductIds?(tenantId: string, productId: string, limit: number): Promise<string[]>;
+};
+
+export type ReservationLine = {
+  sku: string;
+  productId: string | null;
+  quantity: string;
+  held: string;
+  available: string;
+  status: 'held' | 'insufficient' | 'unknown_sku';
+};
+
+export type ReservationRow = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  externalId: string;
+  status: 'active' | 'converted' | 'released' | 'expired';
+  locationId: string | null;
+  partial: boolean;
+  lines: ReservationLine[];
+  orderId: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WebhookRow = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  url: string;
+  kinds: string[];
+  secretEnc: string;
+  previousSecretEnc: string | null;
+  previousExpiresAt: string | null;
+  status: 'active' | 'failing' | 'disabled';
+  lastRevision: number;
+  failingSince: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  voided?: boolean;
+};
+
+export type DeliveryRow = {
+  id: string;
+  tenantId: string;
+  webhookId: string;
+  itemId: string;
+  revision: number;
+  kind: string;
+  body: string;
+  status: 'pending' | 'delivered' | 'failed';
+  attempts: number;
+  nextAttemptAt: string;
+  firstAttemptAt: string | null;
+  lastStatusCode: number | null;
+  lastError: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+};
+
+export type CustomerRow = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  channelCustomerId: string;
+  partyId: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  addresses: Array<Record<string, unknown>>;
+  marketingOptIn: boolean;
+  customerGroup: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiCallRow = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  keyPrefix: string | null;
+  method: string;
+  path: string;
+  status: number;
+  durationMs: number;
+  requestId: string | null;
+  createdAt: string;
 };
 
 export type CommerceEventRow = {

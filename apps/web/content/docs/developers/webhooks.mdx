@@ -1,0 +1,78 @@
+---
+title: Webhooks
+description: Receive BookOne changes on your server within seconds, signed and retried.
+---
+
+# Webhooks
+
+A webhook sends each [change-feed](/docs/developers/custom-website#5-change-feed) item to your HTTPS endpoint as soon as it happens, so your site does not need to poll. One handler can serve both: the body is exactly a `/changes` item.
+
+## Register
+
+On **Company → Commerce Integrations → Developer → Webhooks**, or with the API (`catalog` / `webhooks:manage` scope):
+
+```bash
+curl -sS -X POST "$BOOKONE_BASE/webhooks" -H "Authorization: Bearer $BOOKONE_KEY" -H "Content-Type: application/json" \
+  -d '{"url":"https://shop.example/api/bookone/webhook","kinds":["product","price","inventory","order"]}'
+```
+
+- `kinds` is optional (none = every kind): `product`, `variant`, `price`, `image`, `inventory`, `category`, `brand`, `order`, `customer`, `reservation`, `mapping`.
+- The response contains `secret` **once**. Keep it on your server.
+- Up to 5 webhooks per connection. URLs must be `https`. Sandbox connections may use `http://127.0.0.1` or `http://localhost` for local testing.
+- `GET /webhooks`, `DELETE /webhooks/{id}`, `POST /webhooks/{id}/test` (sends a `ping`), `POST /webhooks/{id}/rotate`, `GET /webhooks/{id}/deliveries`.
+- A new webhook receives changes from the moment it is created. Use `/changes` to catch up on history.
+
+## What you receive
+
+```http
+POST /api/bookone/webhook
+Content-Type: application/json
+X-BookOne-Signature: t=1764230400,v1=5f2c…
+X-BookOne-Event-Id: 1a2b3c…
+X-BookOne-Kind: price
+X-BookOne-Delivery: 9e8d…
+
+{"id":"1a2b3c…","revision":5123,"kind":"price","entityId":"…","productId":"…","sku":"WN-COT-8ML-CHWHITE","payload":{…},"occurredAt":"2026-11-27T10:00:00.000Z","createdAt":"2026-11-27T10:00:00.000Z"}
+```
+
+## Verify the signature
+
+`v1` is the hex HMAC-SHA256 of `"<t>.<raw body>"` with your secret. Reject the request when no `v1` matches or when `t` is more than **300 seconds** away from your clock (replay). After a rotation, BookOne sends two `v1=` values for 24 hours (new and old secret); accept either.
+
+```ts
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+export function verifyBookOne(secret: string, header: string, rawBody: string): boolean {
+  const parts = header.split(',').map((p) => p.trim().split('='));
+  const t = Number(parts.find(([k]) => k === 't')?.[1]);
+  if (!Number.isFinite(t) || Math.abs(Date.now() / 1000 - t) > 300) return false;
+  const expected = Buffer.from(createHmac('sha256', secret).update(`${t}.${rawBody}`).digest('hex'));
+  return parts
+    .filter(([k]) => k === 'v1')
+    .some(([, v]) => {
+      const got = Buffer.from(v ?? '');
+      return got.length === expected.length && timingSafeEqual(got, expected);
+    });
+}
+
+// Next.js route handler
+export async function POST(req: Request) {
+  const raw = await req.text(); // verify the raw body, before JSON.parse
+  if (!verifyBookOne(process.env.BOOKONE_WEBHOOK_SECRET!, req.headers.get('x-bookone-signature') ?? '', raw)) {
+    return new Response('bad signature', { status: 401 });
+  }
+  const item = JSON.parse(raw);
+  // De-duplicate on item.id, then handle item.kind exactly like a /changes item.
+  return new Response('ok');
+}
+```
+
+## Retries and failures
+
+- Answer with any `2xx` within 10 seconds. Do slow work after answering.
+- Anything else (or a timeout) is retried with exponential backoff: 30 s, 1 min, 2 min … up to 6 hours between tries, for **24 hours**. After that the delivery is dropped and the endpoint is marked **failing** on the Developer tab (staff can **Re-enable** it).
+- Delivery is **at least once** and not strictly ordered between retries. De-duplicate on `id` (also in `X-BookOne-Event-Id`) and ignore items whose `revision` is lower than what you hold.
+
+## Rotate the secret
+
+`POST /webhooks/{id}/rotate` (or **New secret** on the Developer tab) returns a new secret. For 24 hours both secrets sign each delivery, so you can deploy the new one without dropping events.

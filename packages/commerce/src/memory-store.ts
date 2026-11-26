@@ -1,7 +1,7 @@
 import type { PriceEntryInput } from './store';
 import type { CatalogBundle } from './catalog';
 import { randomUUID } from 'node:crypto';
-import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
+import type { ApiCallRow, CommerceEventRow, CommerceRefundRow, CommerceStore, CustomerRow, DeliveryRow, ReservationRow, WebhookRow } from './store';
 import type {
   ActivityRow,
   ConnectionRow,
@@ -37,7 +37,28 @@ export class MemoryCommerceStore implements CommerceStore {
     published: new Set(),
     priceLists: [],
   };
-  commitments: Array<{ tenantId: string; orderId: string; productId: string; locationId: string | null; quantity: number; status: string }> = [];
+  commitments: Array<{
+    tenantId: string;
+    orderId: string | null;
+    reservationId?: string | null;
+    expiresAt?: string | null;
+    productId: string;
+    locationId: string | null;
+    quantity: number;
+    status: string;
+  }> = [];
+  reservations: ReservationRow[] = [];
+  webhooks: WebhookRow[] = [];
+  deliveries: DeliveryRow[] = [];
+  customers: CustomerRow[] = [];
+  apiCalls: ApiCallRow[] = [];
+  /** Test hook: units sold per product id. */
+  sold = new Map<string, { d30: number; d90: number; all: number }>();
+  /** Test hook: wall clock for expiry. */
+  now = () => Date.now();
+  private live(c: { status: string; expiresAt?: string | null }) {
+    return c.status === 'active' && (!c.expiresAt || Date.parse(c.expiresAt) > this.now());
+  }
   idem = new Map<string, IdempotencyRow>();
   events: CommerceEventRow[] = [];
   refunds: CommerceRefundRow[] = [];
@@ -166,7 +187,7 @@ export class MemoryCommerceStore implements CommerceStore {
     const onHand = new Map<string, number>();
     for (const s of this.stock) if ((s.locationId ?? null) === loc) onHand.set(s.productId, (onHand.get(s.productId) ?? 0) + Number(s.quantity));
     const committed = new Map<string, number>();
-    for (const c of this.commitments) if (c.status === 'active' && (c.locationId ?? null) === loc) committed.set(c.productId, (committed.get(c.productId) ?? 0) + c.quantity);
+    for (const c of this.commitments) if (this.live(c) && (c.locationId ?? null) === loc) committed.set(c.productId, (committed.get(c.productId) ?? 0) + c.quantity);
     const ch = connection?.channelSettings ?? {};
     return {
       ...this.catalog,
@@ -250,7 +271,7 @@ export class MemoryCommerceStore implements CommerceStore {
   }
   async committedQty(tenantId: string, productId: string, locationId: string | null) {
     return this.commitments
-      .filter((c) => c.tenantId === tenantId && c.productId === productId && c.status === 'active' && (c.locationId ?? null) === (locationId ?? null))
+      .filter((c) => c.tenantId === tenantId && c.productId === productId && this.live(c) && (c.locationId ?? null) === (locationId ?? null))
       .reduce((sum, c) => sum + c.quantity, 0);
   }
   async commitStock(input: { tenantId: string; connectionId: string; orderId: string; locationId: string | null; lines: Array<{ productId: string; quantity: number }> }) {
@@ -364,5 +385,156 @@ export class MemoryCommerceStore implements CommerceStore {
   }
   async listActivity(tenantId: string, connectionId?: string) {
     return this.activity.filter((a) => a.tenantId === tenantId && (!connectionId || a.connectionId === connectionId));
+  }
+  // ---- WP3 reservations ----
+  async insertReservation(row: ReservationRow) {
+    this.reservations.push(structuredClone(row));
+  }
+  async getReservation(tenantId: string, id: string) {
+    const r = this.reservations.find((x) => x.tenantId === tenantId && x.id === id);
+    return r ? structuredClone(r) : null;
+  }
+  async updateReservation(row: ReservationRow) {
+    const i = this.reservations.findIndex((x) => x.id === row.id);
+    if (i >= 0) this.reservations[i] = structuredClone(row);
+  }
+  async listReservations(tenantId: string, connectionId: string | null, status?: string) {
+    return this.reservations
+      .filter((r) => r.tenantId === tenantId && (!connectionId || r.connectionId === connectionId) && (!status || r.status === status))
+      .map((r) => structuredClone(r));
+  }
+  async holdReservation(input: {
+    tenantId: string;
+    connectionId: string;
+    reservationId: string;
+    locationId: string | null;
+    expiresAt: string;
+    partial: boolean;
+    lines: Array<{ productId: string; quantity: number }>;
+  }) {
+    const byProduct = new Map<string, number>();
+    for (const l of input.lines) byProduct.set(l.productId, (byProduct.get(l.productId) ?? 0) + l.quantity);
+    const lines: Array<{ productId: string; needed: number; available: number; held: number }> = [];
+    for (const [productId, needed] of byProduct) {
+      const stock = await this.getStock(input.tenantId, productId, input.locationId);
+      const available = Math.max(0, Number(stock?.quantity ?? 0) - (await this.committedQty(input.tenantId, productId, input.locationId)));
+      lines.push({ productId, needed, available, held: available + 1e-9 >= needed ? needed : input.partial ? available : 0 });
+    }
+    const ok = lines.every((l) => l.held + 1e-9 >= l.needed);
+    if (!ok && !input.partial) return { ok, lines: lines.map((l) => ({ ...l, held: 0 })) };
+    for (const l of lines) {
+      if (l.held > 0) {
+        this.commitments.push({
+          tenantId: input.tenantId,
+          orderId: null,
+          reservationId: input.reservationId,
+          expiresAt: input.expiresAt,
+          productId: l.productId,
+          locationId: input.locationId,
+          quantity: l.held,
+          status: 'active',
+        });
+      }
+    }
+    return { ok, lines };
+  }
+  async releaseReservationHolds(tenantId: string, reservationId: string, status: 'released' | 'consumed') {
+    let n = 0;
+    for (const c of this.commitments) {
+      if (c.tenantId === tenantId && c.reservationId === reservationId && !c.orderId && c.status === 'active') {
+        c.status = status;
+        n += 1;
+      }
+    }
+    return n;
+  }
+  async extendReservationHolds(tenantId: string, reservationId: string, expiresAt: string) {
+    let n = 0;
+    for (const c of this.commitments) {
+      if (c.tenantId === tenantId && c.reservationId === reservationId && !c.orderId && c.status === 'active') {
+        c.expiresAt = expiresAt;
+        n += 1;
+      }
+    }
+    return n;
+  }
+  async transferReservationToOrder(tenantId: string, reservationId: string, orderId: string) {
+    let n = 0;
+    for (const c of this.commitments) {
+      if (c.tenantId === tenantId && c.reservationId === reservationId && !c.orderId && this.live(c)) {
+        c.orderId = orderId;
+        c.expiresAt = null;
+        n += 1;
+      }
+    }
+    return n;
+  }
+
+  // ---- WP4 webhooks ----
+  async listWebhooks(tenantId: string, connectionId: string | null) {
+    return this.webhooks
+      .filter((w) => w.tenantId === tenantId && !w.voided && (!connectionId || w.connectionId === connectionId))
+      .map((w) => structuredClone(w));
+  }
+  async insertWebhook(row: WebhookRow) {
+    this.webhooks.push(structuredClone(row));
+  }
+  async updateWebhook(row: WebhookRow) {
+    const i = this.webhooks.findIndex((w) => w.id === row.id);
+    if (i >= 0) this.webhooks[i] = structuredClone(row);
+  }
+  async insertDeliveries(rows: DeliveryRow[]) {
+    for (const r of rows) this.deliveries.push(structuredClone(r));
+  }
+  async listDueDeliveries(tenantId: string, nowIso: string, limit: number) {
+    return this.deliveries
+      .filter((d) => d.tenantId === tenantId && d.status === 'pending' && d.nextAttemptAt <= nowIso)
+      .sort((a, b) => a.revision - b.revision)
+      .slice(0, limit)
+      .map((d) => structuredClone(d));
+  }
+  async updateDelivery(row: DeliveryRow) {
+    const i = this.deliveries.findIndex((d) => d.id === row.id);
+    if (i >= 0) this.deliveries[i] = structuredClone(row);
+  }
+  async listDeliveries(tenantId: string, webhookId: string, limit: number) {
+    return this.deliveries
+      .filter((d) => d.tenantId === tenantId && d.webhookId === webhookId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .slice(0, limit)
+      .map((d) => structuredClone(d));
+  }
+
+  // ---- WP6 customers ----
+  async getCustomer(tenantId: string, connectionId: string, match: { id?: string; channelCustomerId?: string }) {
+    const c = this.customers.find(
+      (x) =>
+        x.tenantId === tenantId &&
+        x.connectionId === connectionId &&
+        (match.id ? x.id === match.id : x.channelCustomerId === match.channelCustomerId),
+    );
+    return c ? structuredClone(c) : null;
+  }
+  async upsertCustomer(row: CustomerRow) {
+    const i = this.customers.findIndex((c) => c.id === row.id);
+    if (i >= 0) this.customers[i] = structuredClone(row);
+    else this.customers.push(structuredClone(row));
+  }
+
+  // ---- WP7 ----
+  async insertApiCall(row: ApiCallRow) {
+    this.apiCalls.push(row);
+  }
+  async listApiCalls(tenantId: string, connectionId: string, limit: number) {
+    return this.apiCalls.filter((c) => c.tenantId === tenantId && c.connectionId === connectionId).slice(-limit).reverse();
+  }
+  async salesStats(_tenantId: string, productIds: string[]) {
+    const out = new Map<string, { d30: number; d90: number; all: number }>();
+    for (const id of productIds) out.set(id, this.sold.get(id) ?? { d30: 0, d90: 0, all: 0 });
+    return out;
+  }
+  related = new Map<string, string[]>();
+  async relatedProductIds(_tenantId: string, productId: string, limit: number) {
+    return (this.related.get(productId) ?? []).slice(0, limit);
   }
 }

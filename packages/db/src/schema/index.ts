@@ -92,6 +92,11 @@ export {
   commerceChannelProducts,
   priceLists,
   priceListItems,
+  commerceReservations,
+  commerceWebhooks,
+  commerceWebhookDeliveries,
+  commerceCustomers,
+  commerceApiCalls,
 } from './commerce';
 export { posRegisters, posShifts } from './pos';
 export {

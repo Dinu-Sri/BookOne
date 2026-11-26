@@ -172,11 +172,15 @@ Build the category tree from `parentId`. Product brands are the makers of the go
 | 422 | `VALIDATION` | Bad `updatedSince`, or more than 100 SKUs |
 | 429 | `RATE_LIMITED` | Over 600 requests per minute; wait `Retry-After` seconds |
 
+## Stats, related products and new arrivals
+
+- `include=stats` adds `stats: { unitsSold30d, unitsSold90d, unitsSoldAllTime }` to each product and variant, counting every channel including the POS (a listing sums its variants). Use it for "Best seller" badges.
+- `GET /catalog/related?sku=…&limit=8` returns published products most often sold on the same invoices.
+- `GET /catalog/new-arrivals?days=30` returns published products created in the last N days, newest first.
+
 ## Not yet available
 
 Check `capabilities` on `GET /connection`; these are `false` today and will be announced in the changelog:
 
-- reservations during card checkout (`reservations`);
-- webhooks (`webhooks`; use the change feed);
 - more than one stock location per channel (`multiLocation`);
 - bundles.

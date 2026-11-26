@@ -39,11 +39,36 @@ export function hashesEqual(left: string, right: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+/**
+ * WP7: fine-grained scope names. Each maps onto one stored v1 scope, so old
+ * keys keep working and new names can be sent when issuing a key.
+ */
+export const SCOPE_ALIASES: Record<string, CommerceScope> = {
+  'catalog:read': 'catalog',
+  'pricing:read': 'catalog',
+  'webhooks:manage': 'catalog',
+  'inventory:read': 'inventory',
+  'reservations:write': 'inventory',
+  'orders:write': 'order',
+  'orders:read': 'order',
+  'customers:read': 'order',
+  'customers:write': 'order',
+  lifecycle: 'lifecycle',
+};
+
+/** The fine-grained names a set of v1 scopes grants. */
+export function grantedScopeNames(scopes: CommerceScope[]): string[] {
+  return Object.entries(SCOPE_ALIASES)
+    .filter(([, v]) => scopes.includes(v))
+    .map(([k]) => k);
+}
+
 export function parseScopes(raw: string | string[] | undefined): CommerceScope[] {
   const parts = Array.isArray(raw) ? raw : String(raw ?? '').split(/[,\s]+/);
   const out: CommerceScope[] = [];
   for (const part of parts) {
-    const key = part.trim() as CommerceScope;
+    const trimmed = part.trim();
+    const key = (SCOPE_ALIASES[trimmed] ?? trimmed) as CommerceScope;
     if ((COMMERCE_SCOPES as readonly string[]).includes(key) && !out.includes(key)) out.push(key);
   }
   return out;

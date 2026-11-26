@@ -292,9 +292,11 @@ export const commerceStockCommitments = pgTable('commerce_stock_commitments', {
   connectionId: uuid('connection_id')
     .notNull()
     .references(() => commerceConnections.id),
-  orderId: uuid('order_id')
-    .notNull()
-    .references(() => commerceOrders.id),
+  /** Null for a reservation hold (WP3). */
+  orderId: uuid('order_id').references(() => commerceOrders.id),
+  reservationId: uuid('reservation_id'),
+  /** Reservation holds stop counting at this time. */
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
   productId: uuid('product_id').notNull(),
   locationId: uuid('location_id'),
   quantity: varchar('quantity', { length: 32 }).notNull(),
@@ -358,3 +360,108 @@ export const priceListItems = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
 );
+
+/** WP3: a checkout's stock hold. Lines: [{sku, productId, quantity, status, available}]. */
+export const commerceReservations = pgTable('commerce_reservations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  connectionId: uuid('connection_id')
+    .notNull()
+    .references(() => commerceConnections.id),
+  externalId: varchar('external_id', { length: 120 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('active'),
+  locationId: uuid('location_id'),
+  partial: varchar('partial', { length: 1 }).notNull().default('0'),
+  lines: jsonb('lines').notNull().default([]),
+  orderId: uuid('order_id'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** WP4: an HTTPS endpoint that receives change-feed items. */
+export const commerceWebhooks = pgTable('commerce_webhooks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  connectionId: uuid('connection_id')
+    .notNull()
+    .references(() => commerceConnections.id),
+  url: varchar('url', { length: 500 }).notNull(),
+  kinds: jsonb('kinds').notNull().default([]),
+  secretEnc: text('secret_enc').notNull(),
+  previousSecretEnc: text('previous_secret_enc'),
+  previousExpiresAt: timestamp('previous_expires_at', { withTimezone: true }),
+  status: varchar('status', { length: 20 }).notNull().default('active'),
+  lastRevision: bigint('last_revision', { mode: 'number' }).notNull().default(0),
+  failingSince: timestamp('failing_since', { withTimezone: true }),
+  lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+export const commerceWebhookDeliveries = pgTable('commerce_webhook_deliveries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  webhookId: uuid('webhook_id')
+    .notNull()
+    .references(() => commerceWebhooks.id),
+  itemId: varchar('item_id', { length: 80 }).notNull(),
+  revision: bigint('revision', { mode: 'number' }).notNull().default(0),
+  kind: varchar('kind', { length: 40 }).notNull(),
+  body: text('body').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).defaultNow().notNull(),
+  firstAttemptAt: timestamp('first_attempt_at', { withTimezone: true }),
+  lastStatusCode: integer('last_status_code'),
+  lastError: text('last_error'),
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** WP6: a website customer linked to a BookOne party. */
+export const commerceCustomers = pgTable('commerce_customers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  connectionId: uuid('connection_id')
+    .notNull()
+    .references(() => commerceConnections.id),
+  channelCustomerId: varchar('channel_customer_id', { length: 120 }).notNull(),
+  partyId: uuid('party_id'),
+  name: varchar('name', { length: 200 }).notNull(),
+  email: varchar('email', { length: 200 }),
+  phone: varchar('phone', { length: 60 }),
+  addresses: jsonb('addresses').notNull().default([]),
+  marketingOptIn: varchar('marketing_opt_in', { length: 1 }).notNull().default('0'),
+  customerGroup: varchar('customer_group', { length: 40 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** WP7: API call log per connection. */
+export const commerceApiCalls = pgTable('commerce_api_calls', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  connectionId: uuid('connection_id')
+    .notNull()
+    .references(() => commerceConnections.id),
+  keyPrefix: varchar('key_prefix', { length: 20 }),
+  method: varchar('method', { length: 10 }).notNull(),
+  path: varchar('path', { length: 300 }).notNull(),
+  status: integer('status').notNull(),
+  durationMs: integer('duration_ms').notNull().default(0),
+  requestId: varchar('request_id', { length: 60 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});

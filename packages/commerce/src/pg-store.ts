@@ -14,6 +14,14 @@ import {
   commerceRefunds,
   commerceStockCommitments,
   commerceChannelProducts,
+  commerceReservations,
+  commerceWebhooks,
+  commerceWebhookDeliveries,
+  commerceCustomers,
+  commerceApiCalls,
+  businessDocuments,
+  businessDocumentLines,
+  lte,
   priceLists,
   priceListItems,
   inventoryProductImages,
@@ -33,7 +41,17 @@ import {
   inventoryStockLevels,
   sql,
 } from '@bookone/db';
-import type { CommerceEventRow, CommerceRefundRow, CommerceStore, PriceEntryInput } from './store';
+import type {
+  ApiCallRow,
+  CommerceEventRow,
+  CommerceRefundRow,
+  CommerceStore,
+  CustomerRow,
+  DeliveryRow,
+  PriceEntryInput,
+  ReservationRow,
+  WebhookRow,
+} from './store';
 import type { CatalogBundle } from './catalog';
 import { EMPTY_PAYMENT_SETTINGS, normalizePaymentSettings } from './payments';
 import { EMPTY_FULFILMENT, normalizeFulfilment } from './fulfilment';
@@ -916,6 +934,7 @@ export class PostgresCommerceStore implements CommerceStore {
           eq(commerceStockCommitments.tenantId, tenantId),
           eq(commerceStockCommitments.productId, productId),
           eq(commerceStockCommitments.status, 'active'),
+          sql`(${commerceStockCommitments.expiresAt} is null or ${commerceStockCommitments.expiresAt} > now())`,
           locationId
             ? eq(commerceStockCommitments.locationId, locationId)
             : sql`${commerceStockCommitments.locationId} is null`,
@@ -1238,6 +1257,383 @@ export class PostgresCommerceStore implements CommerceStore {
         }),
       );
   }
+  // ---------------------------------------------------------------------------
+  // WP3 reservations
+  // ---------------------------------------------------------------------------
+  async insertReservation(row: ReservationRow) {
+    await db().insert(commerceReservations).values(reservationValues(row));
+  }
+
+  async getReservation(tenantId: string, id: string) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    const [row] = await db()
+      .select()
+      .from(commerceReservations)
+      .where(and(eq(commerceReservations.tenantId, tenantId), eq(commerceReservations.id, id)))
+      .limit(1);
+    return row ? reservationFrom(row) : null;
+  }
+
+  async updateReservation(row: ReservationRow) {
+    const { id: _id, tenantId: _t, ...rest } = reservationValues(row);
+    await db()
+      .update(commerceReservations)
+      .set({ ...rest, updatedAt: new Date() })
+      .where(and(eq(commerceReservations.tenantId, row.tenantId), eq(commerceReservations.id, row.id)));
+  }
+
+  async listReservations(tenantId: string, connectionId: string | null, status?: string) {
+    const rows = await db()
+      .select()
+      .from(commerceReservations)
+      .where(
+        and(
+          eq(commerceReservations.tenantId, tenantId),
+          connectionId ? eq(commerceReservations.connectionId, connectionId) : undefined,
+          status ? eq(commerceReservations.status, status) : undefined,
+        ),
+      )
+      .orderBy(desc(commerceReservations.createdAt))
+      .limit(500);
+    return rows.map(reservationFrom);
+  }
+
+  async holdReservation(input: {
+    tenantId: string;
+    connectionId: string;
+    reservationId: string;
+    locationId: string | null;
+    expiresAt: string;
+    partial: boolean;
+    lines: Array<{ productId: string; quantity: number }>;
+  }) {
+    const byProduct = new Map<string, number>();
+    for (const l of input.lines) byProduct.set(l.productId, (byProduct.get(l.productId) ?? 0) + l.quantity);
+    return db().transaction(async (tx) => {
+      const lines: Array<{ productId: string; needed: number; available: number; held: number }> = [];
+      for (const [productId, needed] of [...byProduct.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        // Same lock key as posting and web-order holds.
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`stock:${input.tenantId}:${productId}`}, 0))`);
+        const stock = await this.getStock(input.tenantId, productId, input.locationId);
+        const committed = await this.committedQty(input.tenantId, productId, input.locationId);
+        const available = Math.max(0, Number(stock?.quantity ?? 0) - committed);
+        lines.push({ productId, needed, available, held: available + 1e-9 >= needed ? needed : input.partial ? available : 0 });
+      }
+      const ok = lines.every((l) => l.held + 1e-9 >= l.needed);
+      if (!ok && !input.partial) return { ok, lines: lines.map((l) => ({ ...l, held: 0 })) };
+      for (const l of lines) {
+        if (l.held <= 0) continue;
+        await tx.insert(commerceStockCommitments).values({
+          tenantId: input.tenantId,
+          connectionId: input.connectionId,
+          orderId: null,
+          reservationId: input.reservationId,
+          expiresAt: new Date(input.expiresAt),
+          productId: l.productId,
+          locationId: input.locationId,
+          quantity: String(l.held),
+          status: 'active',
+        });
+      }
+      return { ok, lines };
+    });
+  }
+
+  async releaseReservationHolds(tenantId: string, reservationId: string, status: 'released' | 'consumed') {
+    const rows = await db()
+      .update(commerceStockCommitments)
+      .set({ status, updatedAt: new Date() })
+      .where(
+        and(
+          eq(commerceStockCommitments.tenantId, tenantId),
+          eq(commerceStockCommitments.reservationId, reservationId),
+          isNull(commerceStockCommitments.orderId),
+          eq(commerceStockCommitments.status, 'active'),
+        ),
+      )
+      .returning({ id: commerceStockCommitments.id });
+    return rows.length;
+  }
+
+  async extendReservationHolds(tenantId: string, reservationId: string, expiresAt: string) {
+    const rows = await db()
+      .update(commerceStockCommitments)
+      .set({ expiresAt: new Date(expiresAt), updatedAt: new Date() })
+      .where(
+        and(
+          eq(commerceStockCommitments.tenantId, tenantId),
+          eq(commerceStockCommitments.reservationId, reservationId),
+          isNull(commerceStockCommitments.orderId),
+          eq(commerceStockCommitments.status, 'active'),
+        ),
+      )
+      .returning({ id: commerceStockCommitments.id });
+    return rows.length;
+  }
+
+  async transferReservationToOrder(tenantId: string, reservationId: string, orderId: string) {
+    const rows = await db()
+      .update(commerceStockCommitments)
+      .set({ orderId, expiresAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(commerceStockCommitments.tenantId, tenantId),
+          eq(commerceStockCommitments.reservationId, reservationId),
+          isNull(commerceStockCommitments.orderId),
+          eq(commerceStockCommitments.status, 'active'),
+          sql`${commerceStockCommitments.expiresAt} > now()`,
+        ),
+      )
+      .returning({ id: commerceStockCommitments.id });
+    return rows.length;
+  }
+
+  // ---------------------------------------------------------------------------
+  // WP4 webhooks
+  // ---------------------------------------------------------------------------
+  async listWebhooks(tenantId: string, connectionId: string | null) {
+    const rows = await db()
+      .select()
+      .from(commerceWebhooks)
+      .where(
+        and(
+          eq(commerceWebhooks.tenantId, tenantId),
+          connectionId ? eq(commerceWebhooks.connectionId, connectionId) : undefined,
+          isNull(commerceWebhooks.voidedAt),
+        ),
+      )
+      .orderBy(asc(commerceWebhooks.createdAt));
+    return rows.map(webhookFrom);
+  }
+
+  async insertWebhook(row: WebhookRow) {
+    await db().insert(commerceWebhooks).values(webhookValues(row));
+  }
+
+  async updateWebhook(row: WebhookRow) {
+    const { id: _id, tenantId: _t, ...rest } = webhookValues(row);
+    await db()
+      .update(commerceWebhooks)
+      .set({ ...rest, updatedAt: new Date(), voidedAt: row.voided ? new Date() : null })
+      .where(and(eq(commerceWebhooks.tenantId, row.tenantId), eq(commerceWebhooks.id, row.id)));
+  }
+
+  async insertDeliveries(rows: DeliveryRow[]) {
+    if (!rows.length) return;
+    await db().insert(commerceWebhookDeliveries).values(rows.map(deliveryValues));
+  }
+
+  async listDueDeliveries(tenantId: string, nowIso: string, limit: number) {
+    const rows = await db()
+      .select()
+      .from(commerceWebhookDeliveries)
+      .where(
+        and(
+          eq(commerceWebhookDeliveries.tenantId, tenantId),
+          eq(commerceWebhookDeliveries.status, 'pending'),
+          lte(commerceWebhookDeliveries.nextAttemptAt, new Date(nowIso)),
+        ),
+      )
+      .orderBy(asc(commerceWebhookDeliveries.revision))
+      .limit(limit);
+    return rows.map(deliveryFrom);
+  }
+
+  async updateDelivery(row: DeliveryRow) {
+    const { id: _id, tenantId: _t, ...rest } = deliveryValues(row);
+    await db()
+      .update(commerceWebhookDeliveries)
+      .set(rest)
+      .where(and(eq(commerceWebhookDeliveries.tenantId, row.tenantId), eq(commerceWebhookDeliveries.id, row.id)));
+  }
+
+  async listDeliveries(tenantId: string, webhookId: string, limit: number) {
+    const rows = await db()
+      .select()
+      .from(commerceWebhookDeliveries)
+      .where(and(eq(commerceWebhookDeliveries.tenantId, tenantId), eq(commerceWebhookDeliveries.webhookId, webhookId)))
+      .orderBy(desc(commerceWebhookDeliveries.createdAt))
+      .limit(limit);
+    return rows.map(deliveryFrom);
+  }
+
+  // ---------------------------------------------------------------------------
+  // WP6 customers
+  // ---------------------------------------------------------------------------
+  async getCustomer(tenantId: string, connectionId: string, match: { id?: string; channelCustomerId?: string }) {
+    if (match.id && !/^[0-9a-f-]{36}$/i.test(match.id)) return null;
+    const [row] = await db()
+      .select()
+      .from(commerceCustomers)
+      .where(
+        and(
+          eq(commerceCustomers.tenantId, tenantId),
+          eq(commerceCustomers.connectionId, connectionId),
+          match.id ? eq(commerceCustomers.id, match.id) : eq(commerceCustomers.channelCustomerId, match.channelCustomerId ?? ''),
+        ),
+      )
+      .limit(1);
+    return row ? customerFrom(row) : null;
+  }
+
+  async upsertCustomer(row: CustomerRow) {
+    const values = {
+      id: row.id,
+      tenantId: row.tenantId,
+      connectionId: row.connectionId,
+      channelCustomerId: row.channelCustomerId,
+      partyId: row.partyId,
+      name: row.name,
+      email: row.email,
+      phone: row.phone,
+      addresses: row.addresses,
+      marketingOptIn: row.marketingOptIn ? '1' : '0',
+      customerGroup: row.customerGroup,
+      updatedAt: new Date(),
+    };
+    await db()
+      .insert(commerceCustomers)
+      .values(values)
+      .onConflictDoUpdate({
+        target: commerceCustomers.id,
+        set: { ...values, id: undefined, tenantId: undefined, connectionId: undefined } as never,
+      });
+  }
+
+  // ---------------------------------------------------------------------------
+  // WP7
+  // ---------------------------------------------------------------------------
+  async insertApiCall(row: ApiCallRow) {
+    await db().insert(commerceApiCalls).values({
+      id: row.id,
+      tenantId: row.tenantId,
+      connectionId: row.connectionId,
+      keyPrefix: row.keyPrefix,
+      method: row.method,
+      path: row.path.slice(0, 300),
+      status: row.status,
+      durationMs: row.durationMs,
+      requestId: row.requestId,
+    });
+    // Keep 30 days (cheap: only when the minute rolls over).
+    if (new Date().getSeconds() === 0) {
+      await db()
+        .delete(commerceApiCalls)
+        .where(and(eq(commerceApiCalls.tenantId, row.tenantId), sql`${commerceApiCalls.createdAt} < now() - interval '30 days'`));
+    }
+  }
+
+  async listApiCalls(tenantId: string, connectionId: string, limit: number) {
+    const rows = await db()
+      .select()
+      .from(commerceApiCalls)
+      .where(and(eq(commerceApiCalls.tenantId, tenantId), eq(commerceApiCalls.connectionId, connectionId)))
+      .orderBy(desc(commerceApiCalls.createdAt))
+      .limit(limit);
+    return rows.map(
+      (r): ApiCallRow => ({
+        id: r.id,
+        tenantId: r.tenantId,
+        connectionId: r.connectionId,
+        keyPrefix: r.keyPrefix,
+        method: r.method,
+        path: r.path,
+        status: r.status,
+        durationMs: r.durationMs,
+        requestId: r.requestId,
+        createdAt: r.createdAt.toISOString(),
+      }),
+    );
+  }
+
+  async salesStats(tenantId: string, productIds: string[]) {
+    const out = new Map<string, { d30: number; d90: number; all: number }>();
+    for (const id of productIds) out.set(id, { d30: 0, d90: 0, all: 0 });
+    if (!productIds.length) return out;
+    const rows = await db()
+      .select({
+        productId: businessDocumentLines.productId,
+        d30: sql<string>`coalesce(sum(case when ${businessDocuments.issueDate} >= to_char(now() - interval '30 days', 'YYYY-MM-DD') then ${businessDocumentLines.quantity} end), 0)`,
+        d90: sql<string>`coalesce(sum(case when ${businessDocuments.issueDate} >= to_char(now() - interval '90 days', 'YYYY-MM-DD') then ${businessDocumentLines.quantity} end), 0)`,
+        all: sql<string>`coalesce(sum(${businessDocumentLines.quantity}), 0)`,
+      })
+      .from(businessDocumentLines)
+      .innerJoin(businessDocuments, eq(businessDocuments.id, businessDocumentLines.documentId))
+      .where(
+        and(
+          eq(businessDocumentLines.tenantId, tenantId),
+          inArray(businessDocumentLines.productId, productIds),
+          inArray(businessDocuments.documentType, ['sales_invoice', 'pos_sale']),
+          isNull(businessDocuments.voidedAt),
+          sql`${businessDocuments.status} <> 'draft'`,
+        ),
+      )
+      .groupBy(businessDocumentLines.productId);
+    for (const r of rows) {
+      if (r.productId) out.set(r.productId, { d30: Number(r.d30), d90: Number(r.d90), all: Number(r.all) });
+    }
+    return out;
+  }
+
+  async stockExtras(tenantId: string, productIds: string[]) {
+    const out = new Map<string, { lowStockThreshold: number | null; incoming: Array<{ quantity: number; expectedAt: string | null }> }>();
+    if (!productIds.length) return out;
+    const levels = await db()
+      .select({ id: inventoryProducts.id, reorderLevel: inventoryProducts.reorderLevel })
+      .from(inventoryProducts)
+      .where(and(eq(inventoryProducts.tenantId, tenantId), inArray(inventoryProducts.id, productIds)));
+    for (const l of levels) out.set(l.id, { lowStockThreshold: l.reorderLevel != null ? Number(l.reorderLevel) : null, incoming: [] });
+    // Open purchase orders: ordered minus already received on goods receipts from that order.
+    const rows = await db().execute(sql`
+      select pl.product_id as product_id, po.delivery_date as expected_at,
+        sum(pl.quantity) - coalesce((
+          select sum(gl.quantity) from business_document_lines gl
+          join business_documents g on g.id = gl.document_id
+          where g.source_document_id = po.id and g.document_type = 'goods_receipt' and g.voided_at is null
+            and gl.product_id = pl.product_id
+        ), 0) as open_qty
+      from business_document_lines pl
+      join business_documents po on po.id = pl.document_id
+      where po.tenant_id = ${tenantId}
+        and po.document_type = 'purchase_order'
+        and po.voided_at is null
+        and po.status not in ('closed', 'cancelled', 'received', 'draft')
+        and pl.product_id in (${sql.join(productIds.map((id) => sql`${id}::uuid`), sql`, `)})
+      group by pl.product_id, po.id, po.delivery_date
+    `);
+    const list =
+      (rows as unknown as { rows?: Array<{ product_id: string; expected_at: string | null; open_qty: string }> }).rows ??
+      (rows as unknown as Array<{ product_id: string; expected_at: string | null; open_qty: string }>);
+    for (const r of list) {
+      const qty = Number(r.open_qty);
+      if (!(qty > 0)) continue;
+      const slot = out.get(r.product_id) ?? { lowStockThreshold: null, incoming: [] };
+      slot.incoming.push({ quantity: qty, expectedAt: r.expected_at ?? null });
+      out.set(r.product_id, slot);
+    }
+    for (const slot of out.values()) slot.incoming.sort((a, b) => String(a.expectedAt ?? '9').localeCompare(String(b.expectedAt ?? '9')));
+    return out;
+  }
+
+  async relatedProductIds(tenantId: string, productId: string, limit: number) {
+    const rows = await db().execute(sql`
+      select other.product_id as product_id, count(distinct other.document_id) as n
+      from business_document_lines mine
+      join business_documents d on d.id = mine.document_id
+      join business_document_lines other on other.document_id = mine.document_id and other.product_id <> mine.product_id
+      where mine.tenant_id = ${tenantId}
+        and mine.product_id = ${productId}
+        and d.document_type in ('sales_invoice', 'pos_sale')
+        and d.voided_at is null
+        and d.status <> 'draft'
+        and other.product_id is not null
+      group by other.product_id
+      order by n desc
+      limit ${limit}
+    `);
+    const list = (rows as unknown as { rows?: Array<{ product_id: string }> }).rows ?? (rows as unknown as Array<{ product_id: string }>);
+    return list.map((r) => r.product_id);
+  }
 }
 
 function productFrom(row: typeof inventoryProducts.$inferSelect): ProductRecord {
@@ -1325,5 +1721,132 @@ function orderFrom(row: typeof commerceOrders.$inferSelect, lines: (typeof comme
       restockedQty: line.restockedQty,
       refundedAmount: line.refundedAmount,
     })),
+  };
+}
+
+function reservationValues(row: ReservationRow) {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    externalId: row.externalId,
+    status: row.status,
+    locationId: row.locationId,
+    partial: row.partial ? '1' : '0',
+    lines: row.lines,
+    orderId: row.orderId,
+    expiresAt: new Date(row.expiresAt),
+  };
+}
+
+function reservationFrom(row: typeof commerceReservations.$inferSelect): ReservationRow {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    externalId: row.externalId,
+    status: row.status as ReservationRow['status'],
+    locationId: row.locationId,
+    partial: row.partial === '1',
+    lines: (row.lines as ReservationRow['lines']) ?? [],
+    orderId: row.orderId,
+    expiresAt: row.expiresAt.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function webhookValues(row: WebhookRow) {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    url: row.url,
+    kinds: row.kinds,
+    secretEnc: row.secretEnc,
+    previousSecretEnc: row.previousSecretEnc,
+    previousExpiresAt: row.previousExpiresAt ? new Date(row.previousExpiresAt) : null,
+    status: row.status,
+    lastRevision: row.lastRevision,
+    failingSince: row.failingSince ? new Date(row.failingSince) : null,
+    lastSuccessAt: row.lastSuccessAt ? new Date(row.lastSuccessAt) : null,
+    lastError: row.lastError,
+  };
+}
+
+function webhookFrom(row: typeof commerceWebhooks.$inferSelect): WebhookRow {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    url: row.url,
+    kinds: (row.kinds as string[]) ?? [],
+    secretEnc: row.secretEnc,
+    previousSecretEnc: row.previousSecretEnc,
+    previousExpiresAt: row.previousExpiresAt?.toISOString() ?? null,
+    status: row.status as WebhookRow['status'],
+    lastRevision: Number(row.lastRevision),
+    failingSince: row.failingSince?.toISOString() ?? null,
+    lastSuccessAt: row.lastSuccessAt?.toISOString() ?? null,
+    lastError: row.lastError,
+    createdAt: row.createdAt.toISOString(),
+    voided: Boolean(row.voidedAt),
+  };
+}
+
+function deliveryValues(row: DeliveryRow) {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    webhookId: row.webhookId,
+    itemId: row.itemId,
+    revision: row.revision,
+    kind: row.kind,
+    body: row.body,
+    status: row.status,
+    attempts: row.attempts,
+    nextAttemptAt: new Date(row.nextAttemptAt),
+    firstAttemptAt: row.firstAttemptAt ? new Date(row.firstAttemptAt) : null,
+    lastStatusCode: row.lastStatusCode,
+    lastError: row.lastError,
+    deliveredAt: row.deliveredAt ? new Date(row.deliveredAt) : null,
+  };
+}
+
+function deliveryFrom(row: typeof commerceWebhookDeliveries.$inferSelect): DeliveryRow {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    webhookId: row.webhookId,
+    itemId: row.itemId,
+    revision: Number(row.revision),
+    kind: row.kind,
+    body: row.body,
+    status: row.status as DeliveryRow['status'],
+    attempts: row.attempts,
+    nextAttemptAt: row.nextAttemptAt.toISOString(),
+    firstAttemptAt: row.firstAttemptAt?.toISOString() ?? null,
+    lastStatusCode: row.lastStatusCode,
+    lastError: row.lastError,
+    deliveredAt: row.deliveredAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function customerFrom(row: typeof commerceCustomers.$inferSelect): CustomerRow {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    connectionId: row.connectionId,
+    channelCustomerId: row.channelCustomerId,
+    partyId: row.partyId,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    addresses: (row.addresses as Array<Record<string, unknown>>) ?? [],
+    marketingOptIn: row.marketingOptIn === '1',
+    customerGroup: row.customerGroup,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }

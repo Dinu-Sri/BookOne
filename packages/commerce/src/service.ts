@@ -1,8 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { CommerceError } from './errors';
-import { defaultScopes, hashSecret, hashesEqual, issueToken, parseScopes, parseToken, redactedCredential } from './credentials';
+import { defaultScopes, grantedScopeNames, hashSecret, hashesEqual, issueToken, parseScopes, parseToken, redactedCredential } from './credentials';
 import { moneyString, parseMoney, parseQty, stableHash } from './money';
-import type { CommerceStore } from './store';
+import type { ApiCallRow, CommerceStore, CustomerRow, DeliveryRow, ReservationRow, WebhookRow } from './store';
+import {
+  decryptSecret,
+  encryptSecret,
+  kindMatches,
+  newWebhookSecret,
+  parseKinds,
+  retryDelayMs,
+  signWebhook,
+  validateWebhookUrl,
+  WEBHOOK_RETRY_WINDOW_MS,
+  WEBHOOK_ROTATION_OVERLAP_MS,
+} from './webhooks';
+import { addressText, normalizeOrderInput, orderView } from './order-view';
 import type {
   AcknowledgementItem,
   CommerceActor,
@@ -19,6 +32,8 @@ import type {
   OrderInput,
   OrderRow,
   OrderStatus,
+  OutboxRow,
+  Address,
   PostingPort,
   PublishClaimRow,
   CommerceEnvironment,
@@ -33,6 +48,7 @@ import {
   activeList,
   attributeList,
   brandList,
+  buildProduct,
   catalogPage,
   categoryList,
   findCatalogProduct,
@@ -45,7 +61,7 @@ import {
 } from './catalog';
 
 const PAGE_SIZE = 100;
-const CURSOR_WINDOW_REVISIONS = 10_000;
+const CURSOR_WINDOW_REVISIONS = 5_000_000;
 
 function nowIso() {
   return new Date().toISOString();
@@ -292,6 +308,8 @@ export class CommerceService {
       locationId: row.locationId,
       currency: row.currency,
       scopes: actor.scopes,
+      // WP7: fine-grained names this key grants (aliases of the v1 scopes).
+      grantedScopes: grantedScopeNames(actor.scopes),
       postingMode: row.postingMode,
       inboundPaused: row.inboundPaused,
       outboundPaused: row.outboundPaused,
@@ -321,15 +339,26 @@ export class CommerceService {
         fulfilment: true,
         paymentMethods: true,
         lifecycle: true,
-        changeKinds: ['catalog', 'product', 'price', 'inventory', 'order', 'mapping', 'publish'],
+        changeKinds: ['product', 'variant', 'price', 'image', 'inventory', 'category', 'brand', 'order', 'customer', 'reservation', 'mapping', 'publish', 'catalog'],
+        changeKindFilter: true,
         etag: true,
-        reservations: false,
+        reservations: true,
         priceExport: true,
         priceLists: true,
         salePrices: true,
         priceTiers: true,
         customerGroupPricing: true,
-        webhooks: false,
+        webhooks: true,
+        customers: true,
+        orderList: true,
+        orderInvoice: true,
+        returns: true,
+        productStats: true,
+        relatedProducts: true,
+        newArrivals: true,
+        incomingStock: true,
+        apiCallLog: true,
+        ipAllowList: false,
         multiLocation: false,
       },
       serviceTime: nowIso(),
@@ -387,8 +416,10 @@ export class CommerceService {
       }
     }
     const items = [];
+    const extras = (await this.store.stockExtras?.(actor.tenantId, [...rows.keys()])) ?? new Map();
     for (const row of rows.values()) {
       if (wanted && !wanted.has(row.sku) && !(row.externalProductId && wanted.has(row.externalProductId))) continue;
+      const extra = extras.get(row.productId);
       const stock = await this.store.getStock(actor.tenantId, row.productId, actor.locationId);
       const onHand = Number(stock?.quantity ?? 0);
       const committed = (await this.store.committedQty?.(actor.tenantId, row.productId, actor.locationId)) ?? 0;
@@ -404,6 +435,9 @@ export class CommerceService {
         available: qtyString(available),
         safetyBuffer: qtyString(buffer),
         allowBackorder: channelBackorder,
+        // WP3: reorder level from the product, and open purchase orders with a delivery date.
+        lowStockThreshold: extra?.lowStockThreshold != null ? qtyString(extra.lowStockThreshold) : null,
+        incoming: (extra?.incoming ?? []).map((i: { quantity: number; expectedAt: string | null }) => ({ quantity: qtyString(i.quantity), expectedAt: i.expectedAt })),
         locations: [{ locationId: actor.locationId, available: qtyString(available) }],
         revision: stock?.revision ?? 0,
         asOf: stock?.asOf ?? nowIso(),
@@ -413,9 +447,16 @@ export class CommerceService {
     return { items, authority: 'bookone', mode: 'absolute', scope: 'published', nextCursor: null, requestId: randomUUID() };
   }
 
-  async changes(actor: CommerceActor, cursor?: string) {
+  async changes(actor: CommerceActor, cursor?: string, kindsRaw?: string | null) {
     this.need(actor, 'catalog');
+    let kinds: string[] = [];
+    try {
+      kinds = parseKinds(kindsRaw ?? '');
+    } catch (e) {
+      fail('VALIDATION', e instanceof Error ? e.message : 'Unknown change kind.');
+    }
     await this.tickSales(actor).catch(() => undefined);
+    await this.expireReservations(actor.tenantId).catch(() => 0);
     const after = decodeCursor(cursor);
     const max = await this.store.maxRevision(actor.tenantId, actor.connectionId);
     if (after > 0 && max - after > CURSOR_WINDOW_REVISIONS) {
@@ -426,9 +467,11 @@ export class CommerceService {
         details: { fullResync: true },
       });
     }
-    const items = await this.store.listOutbox(actor.tenantId, actor.connectionId, after, PAGE_SIZE);
-    const last = items[items.length - 1]?.revision ?? after;
-    return { items, nextCursor: encodeCursor(last), fullResync: false };
+    const rows = await this.store.listOutbox(actor.tenantId, actor.connectionId, after, PAGE_SIZE);
+    const last = rows[rows.length - 1]?.revision ?? after;
+    // The cursor moves past filtered-out items too, so a filtered client never re-reads them.
+    const items = rows.map((r) => CommerceService.feedItem(r)).filter((i) => kindMatches(kinds, i));
+    return { items, nextCursor: encodeCursor(last), fullResync: false, hasMore: rows.length === PAGE_SIZE, requestId: randomUUID() };
   }
 
   async previewMappings(operator: OperatorActor, connectionId: string, proposed: MappingInput[]) {
@@ -892,6 +935,7 @@ export class CommerceService {
     this.need(actor, 'order');
     const mappings = await this.store.listMappings(actor.tenantId, actor.connectionId);
     const products = await this.store.listSellableProducts(actor.tenantId);
+    input = normalizeOrderInput(input);
     const preview = validateOrderInput(input, { currency: actor.currency, mappings, products });
     // PR8: flag lines whose unit price differs from the channel price; the order is still accepted (coupons are legitimate).
     if (this.store.catalogBundle) {
@@ -922,6 +966,7 @@ export class CommerceService {
     if (actor.inboundPaused) fail('INBOUND_PAUSED', 'Inbound orders are paused for this connection.');
     if (!idempotencyKey?.trim()) fail('VALIDATION', 'Idempotency-Key is required.');
     if (!input.externalId?.trim()) fail('VALIDATION', 'Store order ID is required and is immutable.');
+    input = normalizeOrderInput(input);
     const payloadHash = stableHash(input);
     const existingKey = await this.store.getIdempotency(actor.tenantId, actor.connectionId, idempotencyKey);
     const existingOrder = await this.store.getOrderByExternalId(actor.tenantId, actor.connectionId, input.externalId);
@@ -977,9 +1022,14 @@ export class CommerceService {
     }
 
     const stockIssues: string[] = [];
+    const reservation = input.reservationId ? await this.store.getReservation?.(actor.tenantId, input.reservationId) : null;
+    const reservedLive =
+      reservation && reservation.connectionId === actor.connectionId && reservation.status === 'active' && Date.parse(reservation.expiresAt) > Date.now();
+    const reservedSkus = new Set(reservedLive ? reservation.lines.filter((l) => l.status === 'held').map((l) => l.sku) : []);
     if (status === 'received' && actor.postingMode === 'posting' && preview.ok && input.payment?.status === 'paid') {
       for (const line of preview.mapped) {
         if (!line.productId) continue;
+        if (reservedSkus.has(line.sku)) continue;
         const available = await this.availableQty(actor.tenantId, line.productId, actor.locationId);
         if (available < line.quantity) {
           stockIssues.push(`SKU ${line.sku} needs ${line.quantity}, BookOne has ${available}.`);
@@ -1026,6 +1076,17 @@ export class CommerceService {
     };
 
     await this.store.insertOrder(order);
+    let reservationStatus: string | null = null;
+    if (input.reservationId) {
+      // WP3: the reservation's hold becomes this order's hold, atomically per product row.
+      const converted = await this.convertReservation(actor, order, input.reservationId);
+      reservationStatus = converted.status;
+      if (converted.status === 'converted') {
+        if (order.status === 'received' && input.payment?.status === 'pending') order.reviewReason = 'Payment is pending. Stock is held for this order.';
+        order.updatedAt = nowIso();
+        await this.store.updateOrder(order);
+      }
+    }
     await this.commitOnReceipt(actor, order, preview);
     const claimed = this.orderReceipt(order, 'accepted_for_processing');
     await this.store.putIdempotency(actor.tenantId, actor.connectionId, idempotencyKey, {
@@ -1038,7 +1099,7 @@ export class CommerceService {
       await this.tryPostInvoice(actor, order, preview);
     }
 
-    const receipt = this.orderReceipt(order, 'accepted_for_processing');
+    const receipt = { ...this.orderReceipt(order, 'accepted_for_processing'), ...(input.reservationId ? { reservationId: input.reservationId, reservationStatus } : {}) };
     await this.store.putIdempotency(actor.tenantId, actor.connectionId, idempotencyKey, {
       payloadHash,
       orderId: order.id,
@@ -1056,7 +1117,8 @@ export class CommerceService {
     this.need(actor, 'order');
     const order = await this.store.getOrderByExternalId(actor.tenantId, actor.connectionId, externalId);
     if (!order) fail('NOT_FOUND', 'Order was not found.');
-    return this.orderReceipt(order, order.status);
+    // WP5: the receipt fields plus lines, payment, invoice and shipments.
+    return { ...this.orderReceipt(order, order.status), ...orderView(order) };
   }
 
   async applyEvent(actor: CommerceActor, externalId: string, input: OrderEventInput) {
@@ -1153,6 +1215,27 @@ export class CommerceService {
         }
       } else if (input.kind === 'refunded') {
         await this.applyRefund(actor, order, input);
+      } else if (input.kind === 'payment_pending_verification') {
+        if (input.attachment?.url) {
+          order.snapshot.attachments = [...(order.snapshot.attachments ?? []), input.attachment];
+        }
+        if (order.status === 'received' || order.status === 'needs_review') {
+          order.reviewReason = 'Bank slip uploaded. Check the payment, then Mark paid.';
+        }
+      } else if (input.kind === 'payment_failed') {
+        if (order.documentId) fail('CONFLICT', 'This order is already posted as paid. Send a refund instead.');
+        order.snapshot.payment = {
+          ...(order.snapshot.payment ?? { status: 'failed' }),
+          status: 'failed',
+          externalRef: input.externalRef ?? order.snapshot.payment?.externalRef,
+        };
+        await this.releaseHold(actor, order);
+        order.reviewReason = `Payment failed${input.reason ? `: ${input.reason}` : ''}. Nothing was posted.`;
+      } else if (input.kind === 'address_updated') {
+        const shipped = ['shipped', 'out_for_delivery', 'delivered'].includes(order.fulfilment?.status ?? '');
+        if (shipped) fail('CONFLICT', 'The order has already been dispatched; the address cannot change.');
+        if (!input.shippingAddress) fail('VALIDATION', 'shippingAddress is required.');
+        order.snapshot.shippingAddress = input.shippingAddress;
       } else {
         holdForReview(order, `Unsupported lifecycle event ${input.kind} was staged with no accounting effect.`);
       }
@@ -1371,6 +1454,836 @@ export class CommerceService {
   }
 
   // ---------------------------------------------------------------------------
+  // WP3: reservations
+  // ---------------------------------------------------------------------------
+
+  /** SKU → BookOne product for everything this channel sells (linked or published). */
+  private async sellableSkus(actor: CommerceActor): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    for (const m of await this.store.listMappings(actor.tenantId, actor.connectionId)) {
+      out.set(m.sku, m.bookoneProductId);
+      if (m.externalProductId) out.set(m.externalProductId, m.bookoneProductId);
+    }
+    if (this.store.catalogBundle) {
+      const b = await this.store.catalogBundle(actor.tenantId, actor.connectionId);
+      for (const entry of visibleTree(b, 'published')) {
+        for (const p of entry.variants.length ? entry.variants : [entry.product]) {
+          if (p.productType !== 'variable' && !out.has(p.sku)) out.set(p.sku, p.id);
+        }
+      }
+    }
+    return out;
+  }
+
+  private reservationView(r: ReservationRow) {
+    return {
+      ok: true as const,
+      reservationId: r.id,
+      externalId: r.externalId,
+      status: r.status,
+      expiresAt: r.expiresAt,
+      partial: r.partial,
+      orderId: r.orderId,
+      lines: r.lines,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      requestId: randomUUID(),
+    };
+  }
+
+  private async emitReservation(actor: CommerceActor, r: ReservationRow, action: string) {
+    await this.emitCatalogEvent(actor.tenantId, actor.connectionId, 'reservation', null, null, {
+      reservationId: r.id,
+      externalId: r.externalId,
+      action,
+      status: r.status,
+      expiresAt: r.expiresAt,
+      lines: r.lines.map((l) => ({ sku: l.sku, quantity: l.quantity, held: l.held, status: l.status })),
+    });
+    const ids = r.lines.map((l) => l.productId).filter((id): id is string => Boolean(id));
+    if (ids.length) await this.emitStock(actor, ids);
+  }
+
+  private ttl(raw: unknown): number {
+    if (raw === undefined || raw === null || raw === '') return 900;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 60 || n > 3600) fail('VALIDATION', 'ttlSeconds must be a whole number from 60 to 3600.');
+    return n;
+  }
+
+  private async holdLines(
+    actor: CommerceActor,
+    reservationId: string,
+    rawLines: Array<{ sku: string; quantity: string | number }>,
+    partial: boolean,
+    expiresAt: string,
+  ) {
+    if (!this.store.holdReservation) fail('RESERVATION_DISABLED', 'Reservations are not available on this server.');
+    if (!Array.isArray(rawLines) || !rawLines.length) fail('VALIDATION', 'Pass at least one line.');
+    if (rawLines.length > 100) fail('VALIDATION', 'A reservation can have at most 100 lines.');
+    const skus = await this.sellableSkus(actor);
+    const lines: ReservationRow['lines'] = rawLines.map((l) => {
+      const quantity = parseQty(String(l.quantity), `Quantity for ${l.sku}`);
+      if (quantity <= 0) fail('VALIDATION', `Quantity for ${l.sku} must be more than 0.`);
+      const productId = skus.get(String(l.sku ?? '').trim()) ?? null;
+      return { sku: String(l.sku), productId, quantity: qtyString(quantity), held: '0', available: '0', status: productId ? 'held' : 'unknown_sku' };
+    });
+    const known = lines.filter((l) => l.productId);
+    if (!partial && known.length !== lines.length) {
+      return { ok: false, lines };
+    }
+    const result = await this.store.holdReservation({
+      tenantId: actor.tenantId,
+      connectionId: actor.connectionId,
+      reservationId,
+      locationId: actor.locationId,
+      expiresAt,
+      partial,
+      lines: known.map((l) => ({ productId: l.productId as string, quantity: Number(l.quantity) })),
+    });
+    // Spread each product's held quantity back over its lines.
+    const left = new Map(result.lines.map((x) => [x.productId, { held: x.held, available: x.available }]));
+    for (const l of lines) {
+      if (!l.productId) continue;
+      const slot = left.get(l.productId);
+      const want = Number(l.quantity);
+      const got = Math.min(want, slot?.held ?? 0);
+      if (slot) slot.held -= got;
+      l.held = qtyString(got);
+      l.available = qtyString(slot?.available ?? 0);
+      l.status = got + 1e-9 >= want ? 'held' : 'insufficient';
+    }
+    return { ok: result.ok && known.length === lines.length, lines };
+  }
+
+  /** POST /reservations: hold stock while the customer pays (default 15 minutes, max 60). */
+  async createReservation(
+    actor: CommerceActor,
+    input: { externalId?: string; lines?: Array<{ sku: string; quantity: string | number }>; ttlSeconds?: number; partial?: boolean },
+  ) {
+    this.need(actor, 'inventory');
+    if (!this.store.insertReservation) fail('RESERVATION_DISABLED', 'Reservations are not available on this server.');
+    const externalId = String(input.externalId ?? '').trim();
+    if (!externalId) fail('VALIDATION', 'externalId (your checkout id) is required.');
+    await this.expireReservations(actor.tenantId);
+    const existing = ((await this.store.listReservations?.(actor.tenantId, actor.connectionId, 'active')) ?? []).find(
+      (r) => r.externalId === externalId,
+    );
+    if (existing) return { ...this.reservationView(existing), replayed: true };
+    const ttl = this.ttl(input.ttlSeconds);
+    const expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
+    const partial = Boolean(input.partial);
+    const row: ReservationRow = {
+      id: randomUUID(),
+      tenantId: actor.tenantId,
+      connectionId: actor.connectionId,
+      externalId: externalId.slice(0, 120),
+      status: 'active',
+      locationId: actor.locationId,
+      partial,
+      lines: [],
+      orderId: null,
+      expiresAt,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    await this.store.insertReservation(row);
+    const held = await this.holdLines(actor, row.id, input.lines ?? [], partial, expiresAt);
+    row.lines = held.lines;
+    const anyHeld = held.lines.some((l) => Number(l.held) > 0);
+    if (!anyHeld || (!partial && !held.ok)) {
+      row.status = 'released';
+      await this.store.releaseReservationHolds?.(actor.tenantId, row.id, 'released');
+    }
+    row.updatedAt = nowIso();
+    await this.store.updateReservation?.(row);
+    if (row.status === 'active') await this.emitReservation(actor, row, 'held');
+    return { ...this.reservationView(row), held: row.status === 'active' };
+  }
+
+  async getReservation(actor: CommerceActor, id: string) {
+    this.need(actor, 'inventory');
+    await this.expireReservations(actor.tenantId);
+    const r = await this.store.getReservation?.(actor.tenantId, id);
+    if (!r || r.connectionId !== actor.connectionId) fail('NOT_FOUND', 'Reservation was not found.');
+    return this.reservationView(r);
+  }
+
+  /** PATCH /reservations/{id}: extend the time and/or change the lines. */
+  async updateReservation(
+    actor: CommerceActor,
+    id: string,
+    input: { ttlSeconds?: number; lines?: Array<{ sku: string; quantity: string | number }> },
+  ) {
+    this.need(actor, 'inventory');
+    await this.expireReservations(actor.tenantId);
+    const r = await this.store.getReservation?.(actor.tenantId, id);
+    if (!r || r.connectionId !== actor.connectionId) fail('NOT_FOUND', 'Reservation was not found.');
+    if (r.status !== 'active') fail('CONFLICT', `This reservation is ${r.status}.`);
+    const expiresAt = input.ttlSeconds !== undefined ? new Date(Date.now() + this.ttl(input.ttlSeconds) * 1000).toISOString() : r.expiresAt;
+    if (input.lines) {
+      const before = r.lines;
+      await this.store.releaseReservationHolds?.(actor.tenantId, r.id, 'released');
+      const held = await this.holdLines(actor, r.id, input.lines, r.partial, expiresAt);
+      if (!r.partial && !held.ok) {
+        // Put the old hold back and refuse the change.
+        await this.store.releaseReservationHolds?.(actor.tenantId, r.id, 'released');
+        const back = await this.holdLines(actor, r.id, before.map((l) => ({ sku: l.sku, quantity: l.held })).filter((l) => Number(l.quantity) > 0), true, expiresAt);
+        r.lines = back.lines;
+        r.expiresAt = expiresAt;
+        r.updatedAt = nowIso();
+        await this.store.updateReservation?.(r);
+        fail('INSUFFICIENT_STOCK', 'Not enough stock for the new quantities. The previous hold is kept.', { lines: held.lines });
+      }
+      r.lines = held.lines;
+    } else {
+      await this.store.extendReservationHolds?.(actor.tenantId, r.id, expiresAt);
+    }
+    r.expiresAt = expiresAt;
+    r.updatedAt = nowIso();
+    await this.store.updateReservation?.(r);
+    await this.emitReservation(actor, r, 'updated');
+    return this.reservationView(r);
+  }
+
+  async releaseReservation(actor: CommerceActor, id: string) {
+    this.need(actor, 'inventory');
+    const r = await this.store.getReservation?.(actor.tenantId, id);
+    if (!r || r.connectionId !== actor.connectionId) fail('NOT_FOUND', 'Reservation was not found.');
+    if (r.status !== 'active') return this.reservationView(r);
+    await this.store.releaseReservationHolds?.(actor.tenantId, r.id, 'released');
+    r.status = 'released';
+    r.updatedAt = nowIso();
+    await this.store.updateReservation?.(r);
+    await this.emitReservation(actor, r, 'released');
+    return this.reservationView(r);
+  }
+
+  /** Mark reservations past their time as expired (their holds already stopped counting). */
+  async expireReservations(tenantId: string) {
+    if (!this.store.listReservations) return 0;
+    const now = Date.now();
+    let n = 0;
+    for (const r of await this.store.listReservations(tenantId, null, 'active')) {
+      if (Date.parse(r.expiresAt) > now) continue;
+      await this.store.releaseReservationHolds?.(tenantId, r.id, 'released');
+      r.status = 'expired';
+      r.updatedAt = nowIso();
+      await this.store.updateReservation?.(r);
+      const connection = await this.store.getConnection(tenantId, r.connectionId);
+      if (connection) {
+        const actor = this.actorFromConnection(connection);
+        await this.emitReservation(actor, r, 'expired');
+      }
+      n += 1;
+    }
+    return n;
+  }
+
+  /** Converts an active reservation into this order's hold. Returns the SKUs it covers. */
+  private async convertReservation(actor: CommerceActor, order: OrderRow, reservationId: string) {
+    const r = await this.store.getReservation?.(actor.tenantId, reservationId);
+    if (!r || r.connectionId !== actor.connectionId) return { status: 'not_found' as const, skus: new Set<string>() };
+    if (r.status !== 'active' || Date.parse(r.expiresAt) <= Date.now()) return { status: r.status === 'active' ? 'expired' as const : r.status, skus: new Set<string>() };
+    const moved = (await this.store.transferReservationToOrder?.(actor.tenantId, r.id, order.id)) ?? 0;
+    if (!moved) return { status: 'expired' as const, skus: new Set<string>() };
+    r.status = 'converted';
+    r.orderId = order.id;
+    r.updatedAt = nowIso();
+    await this.store.updateReservation?.(r);
+    order.fulfilment = { ...(order.fulfilment ?? EMPTY_FULFILMENT), stock: 'committed' };
+    await this.emitCatalogEvent(actor.tenantId, actor.connectionId, 'reservation', null, null, {
+      reservationId: r.id,
+      externalId: r.externalId,
+      action: 'converted',
+      status: r.status,
+      orderExternalId: order.externalId,
+    });
+    return { status: 'converted' as const, skus: new Set(r.lines.filter((l) => l.status === 'held').map((l) => l.sku)) };
+  }
+
+  private actorFromConnection(connection: ConnectionRow): CommerceActor {
+    return {
+      tenantId: connection.tenantId,
+      connectionId: connection.id,
+      credentialId: 'system',
+      userId: connection.createdByUserId,
+      locationId: connection.locationId,
+      currency: connection.currency,
+      environment: connection.environment,
+      kind: connection.kind,
+      scopes: ['catalog', 'inventory', 'order', 'lifecycle'],
+      postingMode: connection.postingMode,
+      inboundPaused: false,
+      outboundPaused: connection.outboundPaused,
+      oversellPolicy: connection.oversellPolicy,
+      reservationMode: connection.reservationMode,
+      prefix: 'system',
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // WP4: webhooks
+  // ---------------------------------------------------------------------------
+
+  /** Feed item shape shared by /changes and webhooks. */
+  static feedItem(row: OutboxRow) {
+    const p = row.payload ?? {};
+    const entityId =
+      row.productId ??
+      (p.reservationId as string | undefined) ??
+      (p.customerId as string | undefined) ??
+      (p.externalId as string | undefined) ??
+      (p.categoryId as string | undefined) ??
+      (p.brandId as string | undefined) ??
+      null;
+    return { ...row, entityId, occurredAt: row.createdAt };
+  }
+
+  private webhookView(w: WebhookRow) {
+    return {
+      id: w.id,
+      url: w.url,
+      kinds: w.kinds,
+      status: w.status,
+      lastSuccessAt: w.lastSuccessAt,
+      failingSince: w.failingSince,
+      lastError: w.lastError,
+      rotationOverlapUntil: w.previousExpiresAt && Date.parse(w.previousExpiresAt) > Date.now() ? w.previousExpiresAt : null,
+      createdAt: w.createdAt,
+    };
+  }
+
+  private async requireWebhook(tenantId: string, connectionId: string, id: string) {
+    const w = ((await this.store.listWebhooks?.(tenantId, connectionId)) ?? []).find((x) => x.id === id);
+    if (!w) fail('NOT_FOUND', 'Webhook was not found.');
+    return w;
+  }
+
+  async listWebhooks(tenantId: string, connectionId: string) {
+    return ((await this.store.listWebhooks?.(tenantId, connectionId)) ?? []).map((w) => this.webhookView(w));
+  }
+
+  /** Register an endpoint. The signing secret is returned once. */
+  async createWebhook(tenantId: string, connectionId: string, input: { url?: string; kinds?: unknown }) {
+    if (!this.store.insertWebhook) fail('NOT_FOUND', 'Webhooks are not available on this server.');
+    const connection = await this.requireConnection(tenantId, connectionId);
+    let url: string;
+    let kinds: string[];
+    try {
+      url = validateWebhookUrl(String(input.url ?? ''), connection.environment);
+      kinds = parseKinds(input.kinds ?? []);
+    } catch (e) {
+      fail('VALIDATION', e instanceof Error ? e.message : 'Invalid webhook.');
+    }
+    const existing = (await this.store.listWebhooks?.(tenantId, connectionId)) ?? [];
+    if (existing.length >= 5) fail('VALIDATION', 'A connection can have at most 5 webhooks.');
+    const secret = newWebhookSecret();
+    const row: WebhookRow = {
+      id: randomUUID(),
+      tenantId,
+      connectionId,
+      url,
+      kinds,
+      secretEnc: encryptSecret(secret, this.pepper),
+      previousSecretEnc: null,
+      previousExpiresAt: null,
+      status: 'active',
+      // Only changes from now on; use /changes to catch up on history.
+      lastRevision: await this.store.maxRevision(tenantId, connectionId),
+      failingSince: null,
+      lastSuccessAt: null,
+      lastError: null,
+      createdAt: nowIso(),
+    };
+    await this.store.insertWebhook(row);
+    return { ...this.webhookView(row), secret, requestId: randomUUID() };
+  }
+
+  async deleteWebhook(tenantId: string, connectionId: string, id: string) {
+    const w = await this.requireWebhook(tenantId, connectionId, id);
+    await this.store.updateWebhook?.({ ...w, voided: true, status: 'disabled' });
+    return { ok: true as const, id, deleted: true, requestId: randomUUID() };
+  }
+
+  /** New secret; the old one keeps signing (second v1=) for 24 hours. */
+  async rotateWebhookSecret(tenantId: string, connectionId: string, id: string) {
+    const w = await this.requireWebhook(tenantId, connectionId, id);
+    const secret = newWebhookSecret();
+    const next: WebhookRow = {
+      ...w,
+      previousSecretEnc: w.secretEnc,
+      previousExpiresAt: new Date(Date.now() + WEBHOOK_ROTATION_OVERLAP_MS).toISOString(),
+      secretEnc: encryptSecret(secret, this.pepper),
+    };
+    await this.store.updateWebhook?.(next);
+    return { ...this.webhookView(next), secret, requestId: randomUUID() };
+  }
+
+  /** Re-enable a failing endpoint (pending deliveries are retried now). */
+  async enableWebhook(tenantId: string, connectionId: string, id: string) {
+    const w = await this.requireWebhook(tenantId, connectionId, id);
+    await this.store.updateWebhook?.({ ...w, status: 'active', failingSince: null, lastError: null });
+    return this.webhookView({ ...w, status: 'active', failingSince: null, lastError: null });
+  }
+
+  /** POST /webhooks/{id}/test: queue a `ping` delivery now. */
+  async testWebhook(tenantId: string, connectionId: string, id: string) {
+    const w = await this.requireWebhook(tenantId, connectionId, id);
+    const item = {
+      id: `ping_${randomUUID()}`,
+      revision: 0,
+      kind: 'ping',
+      entityId: null,
+      productId: null,
+      sku: null,
+      payload: { message: 'BookOne webhook test', connectionId },
+      createdAt: nowIso(),
+      occurredAt: nowIso(),
+    };
+    const delivery = this.newDelivery(w, item);
+    await this.store.insertDeliveries?.([delivery]);
+    return { ok: true as const, queued: true, deliveryId: delivery.id, requestId: randomUUID() };
+  }
+
+  async webhookDeliveries(tenantId: string, connectionId: string, id: string, limit = 50) {
+    await this.requireWebhook(tenantId, connectionId, id);
+    const rows = (await this.store.listDeliveries?.(tenantId, id, Math.min(200, limit))) ?? [];
+    return rows.map((d) => ({
+      id: d.id,
+      itemId: d.itemId,
+      kind: d.kind,
+      revision: d.revision,
+      status: d.status,
+      attempts: d.attempts,
+      lastStatusCode: d.lastStatusCode,
+      lastError: d.lastError,
+      nextAttemptAt: d.status === 'pending' ? d.nextAttemptAt : null,
+      deliveredAt: d.deliveredAt,
+      createdAt: d.createdAt,
+    }));
+  }
+
+  private newDelivery(w: WebhookRow, item: { id: string; revision: number; kind: string }): DeliveryRow {
+    return {
+      id: randomUUID(),
+      tenantId: w.tenantId,
+      webhookId: w.id,
+      itemId: item.id,
+      revision: item.revision,
+      kind: item.kind,
+      body: JSON.stringify(item),
+      status: 'pending',
+      attempts: 0,
+      nextAttemptAt: nowIso(),
+      firstAttemptAt: null,
+      lastStatusCode: null,
+      lastError: null,
+      deliveredAt: null,
+      createdAt: nowIso(),
+    };
+  }
+
+  /**
+   * Background step for one company: expire reservations, queue new feed items
+   * for each webhook, and send due deliveries. `send` does the HTTP POST.
+   */
+  async runBackground(
+    tenantId: string,
+    send: (url: string, body: string, headers: Record<string, string>) => Promise<{ status: number; error?: string }>,
+  ) {
+    await this.expireReservations(tenantId).catch(() => 0);
+    if (!this.store.listWebhooks || !this.store.insertDeliveries || !this.store.listDueDeliveries) return { queued: 0, sent: 0 };
+    let queued = 0;
+    const hooks = (await this.store.listWebhooks(tenantId, null)).filter((w) => w.status !== 'disabled');
+    for (const w of hooks) {
+      let after = w.lastRevision;
+      for (let page = 0; page < 10; page++) {
+        const rows = await this.store.listOutbox(tenantId, w.connectionId, after, PAGE_SIZE);
+        if (!rows.length) break;
+        const items = rows.map((r) => CommerceService.feedItem(r)).filter((i) => kindMatches(w.kinds, i));
+        if (items.length) await this.store.insertDeliveries(items.map((i) => this.newDelivery(w, i)));
+        queued += items.length;
+        after = rows[rows.length - 1]!.revision;
+        if (rows.length < PAGE_SIZE) break;
+      }
+      if (after !== w.lastRevision) await this.store.updateWebhook?.({ ...w, lastRevision: after });
+    }
+    let sent = 0;
+    const due = await this.store.listDueDeliveries(tenantId, nowIso(), 50);
+    const byId = new Map(((await this.store.listWebhooks(tenantId, null)) ?? []).map((w) => [w.id, w]));
+    for (const d of due) {
+      const w = byId.get(d.webhookId);
+      if (!w || w.status === 'disabled') {
+        await this.store.updateDelivery?.({ ...d, status: 'failed', lastError: 'Webhook removed.' });
+        continue;
+      }
+      const secrets = [decryptSecret(w.secretEnc, this.pepper)];
+      if (w.previousSecretEnc && w.previousExpiresAt && Date.parse(w.previousExpiresAt) > Date.now()) {
+        secrets.push(decryptSecret(w.previousSecretEnc, this.pepper));
+      }
+      const t = Math.floor(Date.now() / 1000);
+      const result = await send(w.url, d.body, {
+        'Content-Type': 'application/json',
+        'User-Agent': 'BookOne-Webhooks/1',
+        'X-BookOne-Signature': signWebhook(secrets, d.body, t),
+        'X-BookOne-Event-Id': d.itemId,
+        'X-BookOne-Kind': d.kind,
+        'X-BookOne-Delivery': d.id,
+      }).catch((e: unknown) => ({ status: 0, error: e instanceof Error ? e.message : 'Request failed' }));
+      sent += 1;
+      const first = d.firstAttemptAt ?? nowIso();
+      const attempts = d.attempts + 1;
+      if (result.status >= 200 && result.status < 300) {
+        await this.store.updateDelivery?.({ ...d, attempts, firstAttemptAt: first, status: 'delivered', lastStatusCode: result.status, lastError: null, deliveredAt: nowIso() });
+        if (w.status === 'failing' || w.lastError) {
+          w.status = 'active';
+          w.failingSince = null;
+          w.lastError = null;
+        }
+        w.lastSuccessAt = nowIso();
+        await this.store.updateWebhook?.(w);
+      } else {
+        const error = result.error ?? `HTTP ${result.status}`;
+        const gaveUp = Date.now() - Date.parse(first) >= WEBHOOK_RETRY_WINDOW_MS;
+        await this.store.updateDelivery?.({
+          ...d,
+          attempts,
+          firstAttemptAt: first,
+          status: gaveUp ? 'failed' : 'pending',
+          lastStatusCode: result.status || null,
+          lastError: error.slice(0, 500),
+          nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)).toISOString(),
+        });
+        w.lastError = error.slice(0, 500);
+        if (gaveUp) {
+          w.status = 'failing';
+          w.failingSince = w.failingSince ?? nowIso();
+        }
+        await this.store.updateWebhook?.(w);
+      }
+    }
+    return { queued, sent };
+  }
+
+  // ---------------------------------------------------------------------------
+  // WP5: orders
+  // ---------------------------------------------------------------------------
+
+  /** GET /orders: this channel's orders, newest change first, for reconciliation. */
+  async listOrdersForChannel(
+    actor: CommerceActor,
+    query: { updatedSince?: string | null; status?: string | null; cursor?: string | null; limit?: number },
+  ) {
+    this.need(actor, 'order');
+    if (query.updatedSince && !Number.isFinite(Date.parse(query.updatedSince))) fail('VALIDATION', 'updatedSince must be an ISO 8601 timestamp.');
+    const since = query.updatedSince ? Date.parse(query.updatedSince) : 0;
+    const rows = (await this.store.listOrders(actor.tenantId, actor.connectionId, query.status ?? undefined))
+      .filter((o) => Date.parse(o.updatedAt) >= since)
+      .sort((a, b) => (a.updatedAt === b.updatedAt ? a.id.localeCompare(b.id) : a.updatedAt < b.updatedAt ? -1 : 1));
+    const page = pageOf(rows, query.cursor, query.limit);
+    return { items: page.items.map((o) => orderView(o)), nextCursor: page.nextCursor, requestId: randomUUID() };
+  }
+
+  /** GET /orders/{externalId}/invoice: number, date, total and a public link (print or save as PDF). */
+  async orderInvoice(actor: CommerceActor, externalId: string) {
+    this.need(actor, 'order');
+    const order = await this.store.getOrderByExternalId(actor.tenantId, actor.connectionId, externalId);
+    if (!order) fail('NOT_FOUND', 'Order was not found.');
+    if (!order.documentId) fail('NOT_FOUND', 'This order has no invoice yet.');
+    const link = await this.posting.invoiceLink?.(actor.tenantId, order.documentId);
+    if (!link) fail('NOT_FOUND', 'The invoice was not found.');
+    return { documentNumber: link.documentNumber, issuedAt: link.issuedAt, total: link.total, pdfUrl: link.url, url: link.url, requestId: randomUUID() };
+  }
+
+  /** POST /orders/{externalId}/returns: a return with lines, optionally put back into stock. */
+  async createReturn(
+    actor: CommerceActor,
+    externalId: string,
+    input: {
+      externalReturnId?: string;
+      restock?: boolean;
+      effectiveAt?: string;
+      lines?: Array<{ externalLineId: string; quantity: string; reason?: string; condition?: string }>;
+    },
+  ) {
+    this.need(actor, 'lifecycle');
+    const returnId = String(input.externalReturnId ?? '').trim();
+    if (!returnId) fail('VALIDATION', 'externalReturnId is required.');
+    const order = await this.store.getOrderByExternalId(actor.tenantId, actor.connectionId, externalId);
+    if (!order) fail('NOT_FOUND', 'Order was not found.');
+    if (!input.lines?.length) fail('VALIDATION', 'Pass the returned lines.');
+    let amount = 0;
+    const lines = input.lines.map((l) => {
+      const line = order.lines.find((x) => x.externalLineId === l.externalLineId);
+      if (!line) fail('VALIDATION', `Line ${l.externalLineId} is not on this order.`);
+      const qty = parseQty(String(l.quantity), `Quantity for line ${l.externalLineId}`);
+      const perUnit = (Number(line.unitPrice) * Number(line.quantity) - Number(line.discountAmount || 0)) / (Number(line.quantity) || 1);
+      const lineAmount = Math.round(perUnit * qty * 100) / 100;
+      amount += lineAmount;
+      return { externalLineId: l.externalLineId, quantity: qtyString(qty), amount: lineAmount.toFixed(2) };
+    });
+    const receipt = await this.applyEvent(actor, externalId, {
+      externalEventId: `return:${returnId}`,
+      kind: 'refunded',
+      externalRefundId: returnId,
+      effectiveAt: input.effectiveAt ?? nowIso(),
+      restock: Boolean(input.restock),
+      amount: amount.toFixed(2),
+      lines,
+    });
+    return { ...receipt, externalReturnId: returnId, amount: amount.toFixed(2), restock: Boolean(input.restock) };
+  }
+
+  /** Staff: the parcel came back (no accounting; use Refund for money and stock). */
+  async markWebOrderReturned(operator: OperatorActor, connectionId: string, orderId: string) {
+    this.assertWrite(operator);
+    const order = await this.requireWebOrder(operator, connectionId, orderId);
+    const f = order.fulfilment ?? { ...EMPTY_FULFILMENT, shipments: [] };
+    if (!['shipped', 'out_for_delivery', 'delivered'].includes(f.status)) fail('CONFLICT', 'Only a dispatched order can be marked returned.');
+    f.status = 'returned';
+    order.fulfilment = f;
+    return this.saveStaffChange(operator, connectionId, order, 'returned');
+  }
+
+  // ---------------------------------------------------------------------------
+  // WP6: customers
+  // ---------------------------------------------------------------------------
+
+  private customerView(c: CustomerRow) {
+    return {
+      customerId: c.id,
+      channelCustomerId: c.channelCustomerId,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      addresses: c.addresses,
+      marketingOptIn: c.marketingOptIn,
+      customerGroup: c.customerGroup,
+      bookoneCustomer: Boolean(c.partyId),
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+    };
+  }
+
+  /** PUT /customers/{channelCustomerId}: upsert on sign-up or profile edit. */
+  async upsertChannelCustomer(
+    actor: CommerceActor,
+    channelCustomerId: string,
+    input: {
+      name?: string;
+      email?: string | null;
+      phone?: string | null;
+      addresses?: Array<Record<string, unknown>>;
+      marketingOptIn?: boolean;
+      customerGroup?: string | null;
+    },
+  ) {
+    this.need(actor, 'order');
+    if (!this.store.upsertCustomer || !this.store.getCustomer) fail('NOT_FOUND', 'Customers are not available on this server.');
+    const channelId = channelCustomerId.trim();
+    if (!channelId) fail('VALIDATION', 'channelCustomerId is required.');
+    const name = String(input.name ?? '').trim();
+    if (name.length < 1) fail('VALIDATION', 'Customer name is required.');
+    const email = input.email ? String(input.email).trim().toLowerCase() : null;
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail('VALIDATION', 'Email is not valid.');
+    const phone = input.phone ? String(input.phone).trim() : null;
+    const addresses = Array.isArray(input.addresses) ? input.addresses.slice(0, 10) : [];
+    const existing = await this.store.getCustomer(actor.tenantId, actor.connectionId, { channelCustomerId: channelId });
+    const first = addresses[0] as Address | undefined;
+    const party = await this.posting.upsertCustomerParty?.({
+      actor,
+      partyId: existing?.partyId ?? null,
+      name,
+      email,
+      phone,
+      address: first ? addressText(first) : null,
+    });
+    const row: CustomerRow = {
+      id: existing?.id ?? randomUUID(),
+      tenantId: actor.tenantId,
+      connectionId: actor.connectionId,
+      channelCustomerId: channelId.slice(0, 120),
+      partyId: party?.partyId ?? existing?.partyId ?? null,
+      name: name.slice(0, 200),
+      email,
+      phone,
+      addresses,
+      marketingOptIn: Boolean(input.marketingOptIn),
+      customerGroup: input.customerGroup ? String(input.customerGroup).trim().toLowerCase().slice(0, 40) : null,
+      createdAt: existing?.createdAt ?? nowIso(),
+      updatedAt: nowIso(),
+    };
+    await this.store.upsertCustomer(row);
+    await this.emitCatalogEvent(actor.tenantId, actor.connectionId, 'customer', null, null, {
+      customerId: row.id,
+      channelCustomerId: row.channelCustomerId,
+      action: existing ? 'updated' : 'created',
+    });
+    return {
+      ...this.customerView(row),
+      created: !existing,
+      matchedExisting: Boolean(party?.matchedExisting),
+      requestId: randomUUID(),
+    };
+  }
+
+  private async requireCustomer(actor: CommerceActor, id: string) {
+    const c =
+      (await this.store.getCustomer?.(actor.tenantId, actor.connectionId, { id })) ??
+      (await this.store.getCustomer?.(actor.tenantId, actor.connectionId, { channelCustomerId: id }));
+    if (!c) fail('NOT_FOUND', 'Customer was not found.');
+    return c;
+  }
+
+  async getChannelCustomer(actor: CommerceActor, id: string) {
+    this.need(actor, 'order');
+    return { ...this.customerView(await this.requireCustomer(actor, id)), requestId: randomUUID() };
+  }
+
+  /** Website orders plus in-store (POS / BookOne) invoices of the same customer. */
+  async channelCustomerOrders(actor: CommerceActor, id: string) {
+    this.need(actor, 'order');
+    const c = await this.requireCustomer(actor, id);
+    const web = (await this.store.listOrders(actor.tenantId, actor.connectionId)).filter(
+      (o) => o.snapshot.channelCustomerId === c.channelCustomerId || o.snapshot.customerId === c.id,
+    );
+    const webDocs = new Set(web.map((o) => o.documentId).filter(Boolean));
+    const store = c.partyId && this.posting.partyInvoices ? await this.posting.partyInvoices(actor.tenantId, c.partyId) : [];
+    return {
+      items: [
+        ...web.map((o) => ({ source: 'web' as const, ...orderView(o) })),
+        ...store
+          .filter((d) => !webDocs.has(d.documentId))
+          .map((d) => ({
+            source: d.channel === 'pos' ? ('pos' as const) : ('store' as const),
+            documentNumber: d.documentNumber,
+            placedAt: d.issueDate,
+            total: d.total,
+            status: d.status,
+          })),
+      ],
+      nextCursor: null,
+      requestId: randomUUID(),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // WP7: stats, related, new arrivals, API log
+  // ---------------------------------------------------------------------------
+
+  /** include=stats: units sold (all channels incl. POS) on each product; a listing sums its variants. */
+  private async attachStats(tenantId: string, b: CatalogBundle, items: Array<Record<string, unknown>>) {
+    if (!this.store.salesStats || !items.length) return;
+    const tree = new Map(visibleTree(b, 'all').map((e) => [e.product.id, e.variants.map((v) => v.id)]));
+    const ids = new Set<string>();
+    for (const item of items) {
+      ids.add(String(item.id));
+      for (const v of tree.get(String(item.id)) ?? []) ids.add(v);
+    }
+    const stats = await this.store.salesStats(tenantId, [...ids]);
+    const sum = (list: string[]) =>
+      list.reduce(
+        (acc, id) => {
+          const s = stats.get(id);
+          return s ? { d30: acc.d30 + s.d30, d90: acc.d90 + s.d90, all: acc.all + s.all } : acc;
+        },
+        { d30: 0, d90: 0, all: 0 },
+      );
+    for (const item of items) {
+      const variants = tree.get(String(item.id)) ?? [];
+      const s = sum([String(item.id), ...variants]);
+      item.stats = { unitsSold30d: qtyString(s.d30), unitsSold90d: qtyString(s.d90), unitsSoldAllTime: qtyString(s.all) };
+      if (Array.isArray(item.variants)) {
+        for (const v of item.variants as Array<Record<string, unknown>>) {
+          const vs = sum([String(v.id)]);
+          v.stats = { unitsSold30d: qtyString(vs.d30), unitsSold90d: qtyString(vs.d90), unitsSoldAllTime: qtyString(vs.all) };
+        }
+      }
+    }
+  }
+
+  /** GET /catalog/related?sku=: products often bought with this one. */
+  async relatedProducts(actor: CommerceActor, sku: string, include: CatalogInclude[], mediaBase: string, limit = 8) {
+    this.need(actor, 'catalog');
+    const b = await this.bundle(actor.tenantId, actor.connectionId);
+    const self = findCatalogProduct(b, { sku }, [], mediaBase, 'published');
+    if (!self) fail('NOT_FOUND', 'Product was not found on this channel.');
+    const raw = b.products.find((p) => p.sku === sku);
+    const ids = raw ? ((await this.store.relatedProductIds?.(actor.tenantId, raw.id, 50)) ?? []) : [];
+    const seen = new Set<string>([self.id]);
+    const items = [];
+    for (const id of ids) {
+      const found = findCatalogProduct(b, { id }, include, mediaBase, 'published');
+      if (!found || seen.has(found.id)) continue;
+      seen.add(found.id);
+      items.push(found);
+      if (items.length >= Math.min(24, Math.max(1, limit))) break;
+    }
+    return { items, nextCursor: null, requestId: randomUUID() };
+  }
+
+  /** GET /catalog/new-arrivals?days=30: published products created in the last N days. */
+  async newArrivals(actor: CommerceActor, days: number, include: CatalogInclude[], mediaBase: string, cursor?: string | null, limit?: number) {
+    this.need(actor, 'catalog');
+    if (!Number.isFinite(days) || days < 1 || days > 365) fail('VALIDATION', 'days must be from 1 to 365.');
+    const b = await this.bundle(actor.tenantId, actor.connectionId);
+    const since = Date.now() - days * 86_400_000;
+    const entries = visibleTree(b, 'published')
+      .filter((e) => Date.parse(e.product.createdAt) >= since)
+      .sort((a, b2) => (a.product.createdAt < b2.product.createdAt ? 1 : -1));
+    const page = pageOf(entries, cursor, limit);
+    const inc = new Set(include);
+    return { items: page.items.map((e) => buildProduct(e, b, inc, mediaBase)), nextCursor: page.nextCursor, requestId: randomUUID() };
+  }
+
+  /** G4: Idempotency-Key on any write. Returns the stored response for a replay. */
+  async idempotentReplay(actor: CommerceActor, scopeKey: string, body: unknown) {
+    const key = `w:${stableHash(scopeKey).slice(0, 60)}`;
+    const hit = await this.store.getIdempotency(actor.tenantId, actor.connectionId, key);
+    if (!hit) return null;
+    if (hit.payloadHash !== stableHash(body ?? {})) fail('CONFLICT', 'This Idempotency-Key was already used with a different payload.');
+    return { ...hit.receipt, replayed: true };
+  }
+
+  async rememberIdempotent(actor: CommerceActor, scopeKey: string, body: unknown, response: Record<string, unknown>) {
+    const key = `w:${stableHash(scopeKey).slice(0, 60)}`;
+    await this.store.putIdempotency(actor.tenantId, actor.connectionId, key, { payloadHash: stableHash(body ?? {}), orderId: null, receipt: response });
+  }
+
+  async logApiCall(row: Omit<ApiCallRow, 'id' | 'createdAt'>) {
+    await this.store.insertApiCall?.({ ...row, id: randomUUID(), createdAt: nowIso() });
+  }
+
+  /** Developer tab: held checkouts on this connection (active first). */
+  async reservationsForOperator(operator: OperatorActor, connectionId: string) {
+    await this.requireConnection(operator.tenantId, connectionId);
+    await this.expireReservations(operator.tenantId).catch(() => 0);
+    const rows = (await this.store.listReservations?.(operator.tenantId, connectionId)) ?? [];
+    return rows.slice(0, 50).map((r) => ({
+      id: r.id,
+      externalId: r.externalId,
+      status: r.status,
+      expiresAt: r.expiresAt,
+      lines: r.lines.map((l) => ({ sku: l.sku, quantity: l.quantity, held: l.held, status: l.status })),
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /** Developer tab: webhooks with their latest deliveries. */
+  async webhooksForOperator(operator: OperatorActor, connectionId: string) {
+    const hooks = await this.listWebhooks(operator.tenantId, connectionId);
+    const out = [];
+    for (const w of hooks) out.push({ ...w, deliveries: await this.webhookDeliveries(operator.tenantId, connectionId, w.id, 20) });
+    return out;
+  }
+
+  async apiCallsForOperator(operator: OperatorActor, connectionId: string, limit = 100) {
+    await this.requireConnection(operator.tenantId, connectionId);
+    return (await this.store.listApiCalls?.(operator.tenantId, connectionId, Math.min(500, limit))) ?? [];
+  }
+
+  // ---------------------------------------------------------------------------
   // WP2: pricing
   // ---------------------------------------------------------------------------
 
@@ -1529,7 +2442,9 @@ export class CommerceService {
   async catalogProducts(actor: CommerceActor, query: CatalogQuery) {
     this.need(actor, 'catalog');
     const b = await this.bundle(actor.tenantId, actor.connectionId);
-    return { ...catalogPage(b, query), requestId: randomUUID() };
+    const page = catalogPage(b, query);
+    if (query.stats) await this.attachStats(actor.tenantId, b, page.items as unknown as Array<Record<string, unknown>>);
+    return { ...page, requestId: randomUUID() };
   }
 
   async catalogProduct(
@@ -1539,11 +2454,13 @@ export class CommerceService {
     mediaBase: string,
     scope: 'published' | 'all' = 'published',
     customerGroup?: string | null,
+    stats = false,
   ) {
     this.need(actor, 'catalog');
     const b = await this.bundle(actor.tenantId, actor.connectionId);
     const found = findCatalogProduct(b, match, include, mediaBase, scope, customerGroup);
     if (!found) fail('NOT_FOUND', 'Product was not found on this channel.');
+    if (stats) await this.attachStats(actor.tenantId, b, [found as unknown as Record<string, unknown>]);
     return { ...found, requestId: randomUUID() };
   }
 
@@ -1649,7 +2566,7 @@ export class CommerceService {
   async notifyProductsChanged(
     tenantId: string,
     productIds: string[],
-    kind: 'product' | 'inventory' | 'price',
+    kind: 'product' | 'inventory' | 'price' | 'image',
     /** Only channels selling from this location (stock moved there). Omit for all. */
     atLocation?: string | null,
     /** Only these connections. */
@@ -1707,6 +2624,11 @@ export class CommerceService {
             sku: raw.sku,
             price: channelPrice(raw, priceList, priceBundle!.currency),
           });
+        } else if (kind === 'image') {
+          // WP4: photos changed. Also a product change (its revision moved), so clients that only read `product` re-import it.
+          const ref = { productId: product?.parentProductId ?? id, variantId: product?.parentProductId ? id : null, sku: product?.sku ?? null };
+          await this.emitCatalogEvent(tenantId, connection.id, 'image', id, product?.sku ?? null, { action: 'updated', ...ref });
+          await this.emitCatalogEvent(tenantId, connection.id, 'product', id, product?.sku ?? null, { action: 'updated', ...ref });
         } else {
           await this.emitCatalogEvent(tenantId, connection.id, 'product', id, product?.sku ?? null, {
             action: 'updated',
@@ -1716,6 +2638,14 @@ export class CommerceService {
           });
         }
       }
+    }
+  }
+
+  /** WP4: a category or product brand changed; every active channel gets a `category` / `brand` change. */
+  async notifyTaxonomyChanged(tenantId: string, kind: 'category' | 'brand', id: string, action: 'created' | 'updated' | 'deleted') {
+    for (const connection of await this.store.listConnections(tenantId)) {
+      if (connection.status !== 'active') continue;
+      await this.emitCatalogEvent(tenantId, connection.id, kind, null, null, kind === 'category' ? { categoryId: id, action } : { brandId: id, action });
     }
   }
 
@@ -1888,6 +2818,17 @@ export class CommerceService {
       placedAt: order.placedAt,
       customerName: snap.customer?.name ?? '',
       customerPhone: (snap.customer as { phone?: string } | undefined)?.phone ?? null,
+      customerEmail: snap.customer?.email ?? null,
+      // WP5: what staff need to pack and ship.
+      shippingAddress: addressText(snap.shippingAddress) || null,
+      billingAddress: addressText(snap.billingAddress) || null,
+      delivery: snap.delivery ?? null,
+      discounts: snap.discounts ?? [],
+      fees: snap.fees ?? [],
+      customerNote: snap.customerNote ?? null,
+      attachments: snap.attachments ?? [],
+      paymentRef: snap.payment?.externalRef ?? null,
+      gatewayFee: snap.payment?.gatewayFee ?? null,
       total: order.total,
       currency: order.currency,
       paymentMethod: snap.payment?.method ?? null,
@@ -1901,6 +2842,8 @@ export class CommerceService {
       lineCount: order.lines.length,
       lines: order.lines.map((line) => ({
         sku: line.sku,
+        description: snap.lines?.find((l) => l.externalLineId === line.externalLineId)?.description ?? null,
+        discountAmount: line.discountAmount,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         restockedQty: line.restockedQty,
@@ -1966,6 +2909,7 @@ export class CommerceService {
     preview: { ok: boolean; mapped: Array<{ sku: string; productId: string | null; quantity: number }> },
   ) {
     if (!this.store.commitStock || !preview.ok) return;
+    if (order.fulfilment?.stock === 'committed') return; // already held by a converted reservation
     if (order.status !== 'received' || order.snapshot.payment?.status !== 'pending') return;
     const connection = await this.store.getConnection(actor.tenantId, actor.connectionId);
     const methods = connection?.paymentSettings?.commitStockMethods ?? DEFAULT_COMMIT_STOCK_METHODS;
@@ -2037,7 +2981,7 @@ export class CommerceService {
   private async emitCatalogEvent(
     tenantId: string,
     connectionId: string,
-    kind: 'mapping' | 'publish' | 'product' | 'price',
+    kind: 'mapping' | 'publish' | 'product' | 'price' | 'reservation' | 'customer' | 'image' | 'category' | 'brand',
     productId: string | null,
     sku: string | null,
     payload: Record<string, unknown>,

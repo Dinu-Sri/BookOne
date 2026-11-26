@@ -23,6 +23,7 @@ import {
   sql,
 } from '@bookone/db';
 import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
+import { EMPTY_PAYMENT_SETTINGS, normalizePaymentSettings } from './payments';
 import type {
   ActivityRow,
   ConnectionKind,
@@ -71,6 +72,7 @@ function connectionFrom(row: typeof commerceConnections.$inferSelect): Connectio
     reservationMode: 'disabled',
     matchingPolicy: row.matchingPolicy,
     taxMode: row.taxMode,
+    paymentSettings: normalizePaymentSettings(row.paymentSettingsJson),
     status: row.status === 'disconnected' ? 'disconnected' : 'active',
     lastCatalogSyncAt: row.lastCatalogSyncAt?.toISOString() ?? null,
     lastStockSyncAt: row.lastStockSyncAt?.toISOString() ?? null,
@@ -149,6 +151,7 @@ export class PostgresCommerceStore implements CommerceStore {
       reservationMode: row.reservationMode,
       matchingPolicy: row.matchingPolicy,
       taxMode: row.taxMode,
+      paymentSettingsJson: row.paymentSettings ?? EMPTY_PAYMENT_SETTINGS,
       status: row.status,
     });
   }
@@ -180,6 +183,7 @@ export class PostgresCommerceStore implements CommerceStore {
         inboundPaused: flag(row.inboundPaused),
         outboundPaused: flag(row.outboundPaused),
         locationId: row.locationId,
+        paymentSettingsJson: row.paymentSettings ?? EMPTY_PAYMENT_SETTINGS,
         lastCatalogSyncAt: row.lastCatalogSyncAt ? new Date(row.lastCatalogSyncAt) : null,
         lastStockSyncAt: row.lastStockSyncAt ? new Date(row.lastStockSyncAt) : null,
         lastOrderSyncAt: row.lastOrderSyncAt ? new Date(row.lastOrderSyncAt) : null,
@@ -539,6 +543,7 @@ export class PostgresCommerceStore implements CommerceStore {
       placedAt: new Date(row.placedAt),
       documentId: row.documentId,
       documentNumber: row.documentNumber,
+      settlementAccountCode: row.settlementAccountCode ?? null,
       lastAppliedVersion: row.lastAppliedVersion,
     });
     if (row.lines.length) {
@@ -570,6 +575,7 @@ export class PostgresCommerceStore implements CommerceStore {
         reviewReason: row.reviewReason,
         documentId: row.documentId,
         documentNumber: row.documentNumber,
+        settlementAccountCode: row.settlementAccountCode ?? null,
         lastAppliedVersion: row.lastAppliedVersion,
         snapshotJson: row.snapshot,
         updatedAt: new Date(),
@@ -902,6 +908,7 @@ function orderFrom(row: typeof commerceOrders.$inferSelect, lines: (typeof comme
     placedAt: row.placedAt.toISOString(),
     documentId: row.documentId,
     documentNumber: row.documentNumber,
+    settlementAccountCode: row.settlementAccountCode ?? null,
     lastAppliedVersion: row.lastAppliedVersion,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

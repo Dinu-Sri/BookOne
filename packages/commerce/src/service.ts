@@ -24,6 +24,8 @@ import type {
   CommerceEnvironment,
 } from './types';
 import { fail, validateEvent, validateOrderInput } from './validate';
+import { normalizePaymentSettings, resolvePaymentAccount, withSeenMethod } from './payments';
+import { UNPAID_METHOD, type PaymentSettings } from './types';
 
 const PAGE_SIZE = 100;
 const CURSOR_WINDOW_REVISIONS = 10_000;
@@ -82,6 +84,7 @@ export class CommerceService {
       reservationMode: 'disabled',
       matchingPolicy: 'sku',
       taxMode: 'domestic_inclusive',
+      paymentSettings: { defaultAccountCode: null, methods: {}, seenMethods: [] },
       status: 'active',
       lastCatalogSyncAt: null,
       lastStockSyncAt: null,
@@ -105,6 +108,23 @@ export class CommerceService {
     const next = { ...row, ...patch, updatedAt: nowIso() };
     await this.store.updateConnection(next);
     await this.audit(operator, connectionId, 'connection.update', 'connection', connectionId, patch as Record<string, unknown>);
+    return next;
+  }
+
+  /** Where paid orders settle (account codes are validated by the caller against the chart). */
+  async updatePaymentSettings(operator: OperatorActor, connectionId: string, settings: PaymentSettings) {
+    this.assertWrite(operator);
+    const row = await this.requireConnection(operator.tenantId, connectionId);
+    const clean = normalizePaymentSettings({ ...settings, seenMethods: row.paymentSettings?.seenMethods ?? [] });
+    for (const code of [clean.defaultAccountCode, ...Object.values(clean.methods)]) {
+      if (code && code !== UNPAID_METHOD && !/^\d{4}$/.test(code)) fail('VALIDATION', `Account ${code} is not a valid account code.`);
+    }
+    const next = { ...row, paymentSettings: clean, updatedAt: nowIso() };
+    await this.store.updateConnection(next);
+    await this.audit(operator, connectionId, 'connection.payments', 'connection', connectionId, {
+      defaultAccountCode: clean.defaultAccountCode,
+      methods: clean.methods,
+    });
     return next;
   }
 
@@ -907,6 +927,8 @@ export class CommerceService {
     });
     const connection = await this.requireConnection(actor.tenantId, actor.connectionId);
     connection.lastOrderSyncAt = nowIso();
+    const seen = withSeenMethod(connection.paymentSettings, input.payment?.method);
+    if (seen) connection.paymentSettings = seen;
     await this.store.updateConnection(connection);
     return receipt;
   }
@@ -1299,6 +1321,8 @@ export class CommerceService {
   ) {
     try {
       const input = order.snapshot;
+      const connection = await this.store.getConnection(actor.tenantId, actor.connectionId);
+      const payment = resolvePaymentAccount(connection?.paymentSettings, input);
       const posted = await this.posting.postSalesInvoice({
         actor,
         order: input,
@@ -1318,17 +1342,37 @@ export class CommerceService {
         headerDiscount: Number(input.discountAmount ?? 0),
         freightAmount: Number(input.shippingAmount ?? 0),
         invoiceKind: 'commercial',
-        paymentAccountCode: paymentAccountCode(input),
+        paymentAccountCode: payment.accountCode ?? undefined,
         idempotencyKey: `commerce:${actor.connectionId}:${input.externalId}`,
         locationId: actor.locationId,
         issueDate: input.placedAt.slice(0, 10),
       });
       order.documentId = posted.documentId;
       order.documentNumber = posted.documentNumber;
+      order.settlementAccountCode = payment.accountCode;
       order.status = 'posted';
       order.reviewReason = null;
       order.updatedAt = nowIso();
       await this.store.updateOrder(order);
+      if (payment.source === 'not_configured') {
+        // Paid, but no account chosen for this method: say so in Activity.
+        await this.store.insertActivity({
+          id: randomUUID(),
+          tenantId: actor.tenantId,
+          connectionId: actor.connectionId,
+          actorUserId: actor.userId,
+          action: 'order.unsettled',
+          entity: 'order',
+          entityId: order.id,
+          detail: {
+            externalId: order.externalId,
+            documentNumber: order.documentNumber,
+            method: payment.method || null,
+            reason: `Paid order left open in receivables: no payment account is set for ${payment.method ? `method "${payment.method}"` : 'orders without a method'}. Set one under Payments.`,
+          },
+          createdAt: nowIso(),
+        });
+      }
       await this.emitStock(
         actor,
         preview.mapped.map((line) => line.productId).filter((id): id is string => Boolean(id)),
@@ -1353,7 +1397,7 @@ export class CommerceService {
       documentNumber: order.documentNumber,
       lastAppliedVersion: order.lastAppliedVersion,
       settlement: order.documentId
-        ? paymentAccountCode(order.snapshot)
+        ? (order.settlementAccountCode ?? paymentAccountCode(order.snapshot))
           ? 'settled'
           : 'not_configured'
         : 'none',

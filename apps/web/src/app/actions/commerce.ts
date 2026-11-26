@@ -3,8 +3,17 @@
 import { revalidatePath } from 'next/cache';
 import { probeModuleWriteDetail } from '@/lib/module-access';
 import { redirect } from 'next/navigation';
-import { parseScopes, type ConnectionKind, type CommerceEnvironment, type MappingInput } from '@bookone/commerce';
+import {
+  UNPAID_METHOD,
+  parseScopes,
+  paymentMethodKey,
+  type ConnectionKind,
+  type CommerceEnvironment,
+  type MappingInput,
+} from '@bookone/commerce';
 import { authenticateCommerceRequest, operatorFromSession, withCommerceService } from '@/lib/commerce-runtime';
+import { createGatewayClearingAccount, listCommercePaymentAccounts } from '@/lib/commerce-payment-accounts';
+import { writeDeniedMessage } from '@/lib/access';
 
 export type CommerceActionResult =
   | { ok: true; saved?: boolean }
@@ -319,4 +328,66 @@ function mappingFromForm(formData: FormData): MappingInput {
     externalProductId: String(formData.get('externalProductId') ?? ''),
     externalVariantId: String(formData.get('externalVariantId') ?? ''),
   };
+}
+
+/** Payments settings: where paid web orders settle, per store and per payment method. */
+export async function saveCommercePaymentsFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  try {
+    const allowed = new Set((await listCommercePaymentAccounts(operator.tenantId)).map((a) => a.code));
+    const pick = (raw: FormDataEntryValue | null): string | null => {
+      const code = String(raw ?? '').trim();
+      if (!code) return null;
+      if (code === UNPAID_METHOD) return UNPAID_METHOD;
+      if (!allowed.has(code)) throw new Error(`Account ${code} cannot receive payments. Choose a cash, bank or clearing account.`);
+      return code;
+    };
+    const defaultAccountCode = pick(formData.get('defaultAccountCode'));
+    if (defaultAccountCode === UNPAID_METHOD) throw new Error('The default must be an account. Leave it empty to keep orders unpaid.');
+    const names = formData.getAll('methodName').map((v) => paymentMethodKey(String(v)));
+    const values = formData.getAll('methodAccount');
+    const methods: Record<string, string> = {};
+    names.forEach((name, i) => {
+      const code = pick(values[i] ?? null);
+      if (name && code) methods[name] = code;
+    });
+    const newName = paymentMethodKey(String(formData.get('newMethodName') ?? ''));
+    const newCode = pick(formData.get('newMethodAccount'));
+    if (newName && newCode) methods[newName] = newCode;
+    await withCommerceService(operator.tenantId, (service) =>
+      service.updatePaymentSettings(operator, connectionId, { defaultAccountCode, methods, seenMethods: [] }),
+    );
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not save payment settings.' });
+  }
+  finish(formData, { saved: '1' });
+}
+
+/** Creates "<gateway> clearing" (1201–1299) and uses it as the store default when none is set. */
+export async function createCommerceClearingAccountFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  try {
+    if (!operator.canWrite) throw new Error('You do not have permission to change this connection.');
+    const denied = await writeDeniedMessage('accounting.accounts.write');
+    if (denied) throw new Error('Creating an account needs Accounts write access. Ask an Owner or Accountant.');
+    const created = await createGatewayClearingAccount(operator.tenantId, String(formData.get('gatewayName') ?? ''));
+    await withCommerceService(operator.tenantId, async (service) => {
+      const view = await service.listOperatorView(operator);
+      const current = view.find((v) => v.connection.id === connectionId)?.connection.paymentSettings;
+      if (!current?.defaultAccountCode) {
+        await service.updatePaymentSettings(operator, connectionId, {
+          defaultAccountCode: created.code,
+          methods: current?.methods ?? {},
+          seenMethods: [],
+        });
+      }
+    });
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not create the clearing account.' });
+  }
+  finish(formData, { saved: '1' });
 }

@@ -4,6 +4,7 @@ import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { jobCanWrite } from '@/lib/access';
 import { probeModuleWriteDetail } from '@/lib/module-access';
+import { listCommercePaymentAccounts } from '@/lib/commerce-payment-accounts';
 import { operatorFromSession, withCommerceService } from '@/lib/commerce-runtime';
 import { CompanyCommerce } from '@/components/commerce/company-commerce';
 import { listProducts } from '@/app/actions/inventory';
@@ -37,6 +38,7 @@ export default async function CompanyCommercePage({
   if (productLoad.ok) products = productLoad.rows;
   else productsError = 'Could not load BookOne products.';
   const inventory = await probeModuleWriteDetail('inventory').catch(() => null);
+  const paymentAccounts = await listCommercePaymentAccounts(tenant.id).catch(() => []);
   const inventoryOff = inventory?.reason === 'module_off' || inventory?.reason === 'tier';
   const origin = process.env.AUTH_URL ?? process.env.BETTER_AUTH_URL ?? '';
 
@@ -45,6 +47,7 @@ export default async function CompanyCommercePage({
       <CompanyCommerce
         canWrite={canWrite}
         inventoryOff={inventoryOff}
+        paymentAccounts={paymentAccounts}
         saved={query.saved === '1'}
         saveError={query.err ? decodeURIComponent(query.err) : null}
         publishedCount={query.published ? Number(query.published) : null}
@@ -68,6 +71,7 @@ export default async function CompanyCommercePage({
           outboundPaused: row.connection.outboundPaused,
           currency: row.connection.currency,
           locationId: row.connection.locationId,
+          paymentSettings: row.connection.paymentSettings ?? { defaultAccountCode: null, methods: {}, seenMethods: [] },
           mappingCount: row.mappingCount,
           reviewCount: row.reviewCount,
           lastCatalog: row.connection.lastCatalogSyncAt,

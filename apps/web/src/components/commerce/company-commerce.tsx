@@ -8,6 +8,7 @@ import { FormFooter, FormShell } from '@/components/ui/form-shell';
 import { SelectField } from '@/components/ui/select-field';
 import { SearchField, TextField } from '@/components/ui/text-field';
 import { withFormPending } from '@/components/ui/form-busy';
+import { CommercePaymentsCard, type CommercePaymentSettingsView } from '@/components/commerce/commerce-payments-card';
 import { LOCATION_TYPE_LABELS, isFleetLocationType } from '@/lib/rental-locations';
 import {
   applyCommerceMappingFromForm,
@@ -95,6 +96,7 @@ type ConnectionView = {
     items: Array<{ sku: string; kind: string; reason: string; bookoneName: string | null; origin: string }>;
   }>;
   publishClaims: Array<{ id: string; sku: string; status: string; issue: string | null }>;
+  paymentSettings: CommercePaymentSettingsView;
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -109,6 +111,8 @@ const ACTION_LABELS: Record<string, string> = {
   'catalog.queue': 'Queued BookOne-first publish',
   'stock.publish': 'Published stock',
   'order.retry': 'Retried review order',
+  'connection.payments': 'Changed payment accounts',
+  'order.unsettled': 'Paid order left unpaid (payment account not set)',
 };
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -168,6 +172,7 @@ export function CompanyCommerce(props: {
   locations: Array<{ id: string; name: string; locationType: string }>;
   products: Array<{ id: string; sku: string; name: string }>;
   connections: ConnectionView[];
+  paymentAccounts: Array<{ code: string; name: string }>;
 }) {
   const [tab, setTab] = useState<Tab>(props.initialTab);
   const [creating, setCreating] = useState(false);
@@ -846,7 +851,7 @@ export function CompanyCommerce(props: {
                             { value: 'preview', label: 'Preview — review incoming orders before they are posted' },
                             { value: 'posting', label: 'Post supported paid orders' },
                           ]}
-                          help="Choosing posting prepares the setting. Save applies it with the pause checkboxes. A posted invoice is not cash settlement until a payment account is configured."
+                          help="Choosing posting prepares the setting. Save applies it with the pause checkboxes. Paid orders settle into the accounts chosen under Payments."
                         />
                         <label className="party-check">
                           <input
@@ -870,6 +875,15 @@ export function CompanyCommerce(props: {
                           Save pauses and posting
                         </Button>
                       </form>
+
+                      <CommercePaymentsCard
+                        key={`payments-${selected.id}`}
+                        connectionId={selected.id}
+                        connectionName={selected.name}
+                        canWrite={props.canWrite}
+                        accounts={props.paymentAccounts}
+                        settings={selected.paymentSettings}
+                      />
                     </div>
                   </div>
                 ) : null}

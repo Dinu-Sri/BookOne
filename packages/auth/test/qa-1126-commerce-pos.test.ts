@@ -132,3 +132,21 @@ describe('QA-1126-20 commerce VAT', () => {
     expect(commerceTaxDecision({ ...base, vatRegistered: false, storeTax: 180 }).kind).toBe('review');
   });
 });
+
+describe('Commerce Payments settings', () => {
+  it('only cash, bank or clearing accounts can be chosen, and clearing accounts use 1201–1299', () => {
+    const lib = read('apps/web/src/lib/commerce-payment-accounts.ts');
+    expect(lib).toMatch(/isCashUniverseCode\(r\.code\)/);
+    expect(lib).toMatch(/nextSuggestedCode\(\{ from: 1201, to: 1299 \}/);
+    const actions = read('apps/web/src/app/actions/commerce.ts');
+    expect(actions).toMatch(/listCommercePaymentAccounts\(operator\.tenantId\)/);
+    expect(actions).toMatch(/writeDeniedMessage\('accounting\.accounts\.write'\)/);
+  });
+
+  it('the Payments card uses registry fields and names no specific gateway', () => {
+    const card = read('apps/web/src/components/commerce/commerce-payments-card.tsx');
+    expect(card).toMatch(/from '@\/components\/ui\/select-field'/);
+    expect(card).not.toMatch(/<select\b/);
+    expect(card.toLowerCase()).not.toMatch(/payhere|stripe|webxpay|onepay/);
+  });
+});

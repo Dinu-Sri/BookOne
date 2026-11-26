@@ -24,6 +24,8 @@ export const commerceConnections = pgTable('commerce_connections', {
   reservationMode: varchar('reservation_mode', { length: 20 }).notNull().default('disabled'),
   matchingPolicy: varchar('matching_policy', { length: 40 }).notNull().default('sku'),
   taxMode: varchar('tax_mode', { length: 40 }).notNull().default('domestic_inclusive'),
+  /** Where paid orders are settled: default account, per-method accounts, methods seen. */
+  paymentSettingsJson: jsonb('payment_settings').notNull().default({}),
   status: varchar('status', { length: 20 }).notNull().default('active'),
   lastCatalogSyncAt: timestamp('last_catalog_sync_at', { withTimezone: true }),
   lastStockSyncAt: timestamp('last_stock_sync_at', { withTimezone: true }),
@@ -97,6 +99,8 @@ export const commerceOrders = pgTable('commerce_orders', {
   placedAt: timestamp('placed_at', { withTimezone: true }).notNull(),
   documentId: uuid('document_id'),
   documentNumber: varchar('document_number', { length: 50 }),
+  /** Account the paid order was settled into; null = left open in receivables. */
+  settlementAccountCode: varchar('settlement_account_code', { length: 20 }),
   lastEventId: uuid('last_event_id'),
   lastAppliedVersion: varchar('last_applied_version', { length: 80 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

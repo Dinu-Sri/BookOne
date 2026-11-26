@@ -1,3 +1,7 @@
+## 2026-11-26 — Payments settings for store connections (v2.19.0)
+
+Each commerce connection now has a Payments section: a default account for paid orders, an account per payment method the store sends (any gateway, bank transfer or COD), and a button to create a clearing account per gateway. Paid web orders settle there instead of staying open in receivables; unsettled ones show in Activity. See [CHG-20261126-commerce-payment-settings](changes/CHG-20261126-commerce-payment-settings.md).
+
 ## 2026-11-26 — Commerce race, numbering, returns, POS refunds (v2.18.1)
 
 Fixed QA-1126-16..21: concurrent last-unit orders no longer oversell (per-product lock; commerce never goes negative; settings load by tenant); invoice numbers and party codes are allocated under a lock with unique indexes after a repair migration; commerce cancel/refund use the original customer and failures show in Activity with Retry; POS refunds need a manager; commerce VAT posts as a tax invoice when it matches, otherwise review; negative stock defaults to Block. See [CHG-20261126-commerce-race-returns-pos](changes/CHG-20261126-commerce-race-returns-pos.md).

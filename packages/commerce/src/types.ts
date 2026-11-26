@@ -252,6 +252,20 @@ export type PostingPort = {
   }): Promise<PostedDocument>;
 };
 
+/**
+ * Where paid web orders are settled. Keys of `methods` are the payment method
+ * names the store sends (any gateway, bank transfer, COD…), lower-cased. A value
+ * is a BookOne cash/bank/clearing account code, or 'unpaid' to leave the
+ * invoice open in receivables.
+ */
+export type PaymentSettings = {
+  defaultAccountCode: string | null;
+  methods: Record<string, string>;
+  seenMethods: string[];
+};
+
+export const UNPAID_METHOD = 'unpaid';
+
 export type ConnectionRow = {
   id: string;
   tenantId: string;
@@ -268,6 +282,7 @@ export type ConnectionRow = {
   reservationMode: ReservationMode;
   matchingPolicy: string;
   taxMode: string;
+  paymentSettings?: PaymentSettings;
   status: 'active' | 'disconnected';
   lastCatalogSyncAt: string | null;
   lastStockSyncAt: string | null;
@@ -320,6 +335,8 @@ export type OrderRow = {
   placedAt: string;
   documentId: string | null;
   documentNumber: string | null;
+  /** Account the paid order settled into (null: open in receivables). */
+  settlementAccountCode?: string | null;
   lastAppliedVersion: string | null;
   createdAt: string;
   updatedAt: string;

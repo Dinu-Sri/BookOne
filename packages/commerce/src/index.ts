@@ -7,4 +7,5 @@ export * from './memory-store';
 export * from './validate';
 export * from './service';
 export * from './openapi';
+export * from './payments';
 export { PostgresCommerceStore } from './pg-store';

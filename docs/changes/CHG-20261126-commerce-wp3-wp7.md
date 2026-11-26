@@ -117,3 +117,7 @@ Status: ready-for-QA.
 ## Rollback
 
 Revert the commit. Migration 058 only adds tables, columns and a function, and drops NOT NULL on `commerce_stock_commitments.order_id`. Reverted code ignores reservation rows: their `expires_at` is ignored by old code, so release active reservations first (`UPDATE commerce_stock_commitments SET status='released' WHERE reservation_id IS NOT NULL AND status='active'`).
+
+## Follow-up v2.23.1 — CoreGuard cleanup
+
+CoreGuard on `03b578f` passed every browser and HTTP test, including the new WP3–WP7 HTTP test against Postgres. The pilot then failed in teardown: `commerce_api_calls` rows (written by the new API call log) block deleting the test connection, because the schema sync created that foreign key without cascade. `scripts/coreguard/seed.ts` cleanup now deletes the newer commerce tables (API calls, webhook deliveries, webhooks, customers, reservations, stock commitments, channel products, publish claims, mapping proposals) first, each only if the table exists. Test infrastructure only; no product behaviour changes.

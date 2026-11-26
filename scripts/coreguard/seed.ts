@@ -193,6 +193,21 @@ export async function cleanupPilotSeed(databaseUrl: string, seed: PilotSeed): Pr
       await sql`SELECT set_config('app.tenant_id', ${tenantId}, false)`;
       const commerceTable = await sql<{ t: string | null }[]>`SELECT to_regclass('public.commerce_connections')::text AS t`;
       if (commerceTable[0]?.t) {
+        // Newer commerce tables (WP0-WP7); some may not exist on older databases.
+        for (const table of [
+          'commerce_api_calls',
+          'commerce_webhook_deliveries',
+          'commerce_webhooks',
+          'commerce_customers',
+          'commerce_reservations',
+          'commerce_stock_commitments',
+          'commerce_channel_products',
+          'commerce_publish_claims',
+          'commerce_mapping_proposals',
+        ]) {
+          const exists = await sql<{ t: string | null }[]>`SELECT to_regclass(${`public.${table}`})::text AS t`;
+          if (exists[0]?.t) await sql`DELETE FROM ${sql(table)} WHERE tenant_id = ${tenantId}`;
+        }
         await sql`DELETE FROM commerce_order_events WHERE tenant_id = ${tenantId}`;
         await sql`DELETE FROM commerce_order_lines WHERE tenant_id = ${tenantId}`;
         await sql`DELETE FROM commerce_refunds WHERE tenant_id = ${tenantId}`;

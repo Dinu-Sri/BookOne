@@ -90,18 +90,27 @@ export function SelectField({
         triggerRef.current?.focus();
       }
     }
-    function onScroll() {
-      setOpen(false);
+    // Scrolling the option list itself must not close the menu; scrolling the page
+    // moves the menu with its field and closes it only once the field leaves the view.
+    function onScroll(e: Event) {
+      const menu = document.getElementById(listId);
+      if (menu && e.target instanceof Node && menu.contains(e.target)) return;
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect || rect.bottom < 0 || rect.top > window.innerHeight) {
+        setOpen(false);
+        return;
+      }
+      place();
     }
     window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', place);
     window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', place);
       window.removeEventListener('scroll', onScroll, true);
     };
-  }, [open]);
+  }, [open, listId]);
 
   function pick(next: SelectOption) {
     if (next.disabled) return;

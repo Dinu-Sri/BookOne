@@ -88,3 +88,7 @@ Status: ready-for-QA.
 ## Rollback
 
 Revert the commit. Migration 056 only adds columns and tables. Reverted code ignores them, and products created as variants remain normal products.
+
+## Follow-up v2.21.1 — SelectField closes on scroll
+
+CoreGuard (`57c57f9`) timed out picking **BookOne product → SKU-1**: the new "Products on this store" card pushes the link form down the scrollable Products panel, and the shared `SelectField` closed its menu on **any** scroll (capture listener), including the scroll Playwright makes to reach an option and a user scrolling a long option list. Fixed in the shared primitive (`components/ui/select-field.tsx`, 12 consumers): scroll events inside the menu are ignored; page/panel scroll re-positions the menu and closes it only when the field leaves the viewport; resize re-positions. Keyboard, Escape, outside-click and portal/z-index behaviour are unchanged. The spec scrolls the field into view before opening it.

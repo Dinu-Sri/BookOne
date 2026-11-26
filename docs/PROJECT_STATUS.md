@@ -1,3 +1,7 @@
+## 2026-11-26 — Dropdowns stay open while scrolling (v2.21.1)
+
+Shared select menus no longer close when the page or their own list scrolls; they follow the field and close only when it leaves the view (fixes the WP1 CoreGuard failure and the Payments dropdown closing on staging). See [CHG-20261126-commerce-wp1-catalog](changes/CHG-20261126-commerce-wp1-catalog.md).
+
 ## 2026-11-26 — Commerce WP1: Catalog API, variants, photos, channel publishing (v2.21.0)
 
 Websites can import the products BookOne publishes to them (variants, photos, categories, product brands, weights, specifications, price, stock) through the new Catalog API, with paging, updatedSince, ETags and a public photo URL. Staff get an Online store tab and photo gallery on products, product brands, bulk publishing per website with a missing-weight list, a safety buffer and a sandbox sample catalog. Developer docs rewritten as a full custom-website integration guide plus a Catalog API page. See [CHG-20261126-commerce-wp1-catalog](changes/CHG-20261126-commerce-wp1-catalog.md) and [docs/commerce/RELEASE-WP1.md](commerce/RELEASE-WP1.md).

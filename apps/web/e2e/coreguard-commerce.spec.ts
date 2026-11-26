@@ -53,6 +53,8 @@ test('Commerce settings support keyboard tabs and invalidate an edited mapping p
   await expect(page.getByRole('tabpanel', { name: 'Products' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeDisabled();
   const product = page.getByRole('combobox', { name: 'BookOne product' });
+  // v2.21: "Products on this store" sits above the link form, so bring the field into view first.
+  await product.scrollIntoViewIfNeeded();
   await product.click();
   await page.getByRole('option', { name: /^SKU-1 ·/ }).click();
   const external = page.getByRole('textbox', { name: 'Store product ID' });

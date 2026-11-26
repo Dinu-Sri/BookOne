@@ -23,13 +23,19 @@ test('Commerce settings support keyboard tabs and invalidate an edited mapping p
   await login(page, ownerEmail, ownerPassword);
   await page.goto('/company/commerce');
   await expect(page.getByRole('heading', { name: 'Commerce Integrations' })).toBeVisible();
+  // v2.20.0: keys live on the Developer tab; the screen opens on Overview.
+  await page.getByRole('tab', { name: 'Developer' }).click();
   await expect(page.getByRole('button', { name: 'Issue scoped key' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  const connections = page.getByRole('tab', { name: 'Connections' });
-  await expect(connections).toBeVisible();
-  await connections.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Mapping' })).toBeFocused();
-  await expect(page.getByRole('tabpanel', { name: 'Mapping' })).toBeVisible();
+  const overview = page.getByRole('tab', { name: 'Overview' });
+  await expect(overview).toBeVisible();
+  await overview.click();
+  await overview.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Orders' })).toBeFocused();
+  await expect(page.getByRole('tabpanel', { name: 'Orders' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Orders' }).press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Products' })).toBeFocused();
+  await expect(page.getByRole('tabpanel', { name: 'Products' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeDisabled();
   const product = page.getByRole('combobox', { name: 'BookOne product' });
   await product.click();
@@ -41,7 +47,7 @@ test('Commerce settings support keyboard tabs and invalidate an edited mapping p
   await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeEnabled();
   await external.fill('changed-after-preview');
   await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeDisabled();
-  await page.getByRole('tab', { name: 'Mapping' }).press('End');
+  await page.getByRole('tab', { name: 'Products' }).press('End');
   await expect(page.getByRole('tabpanel', { name: 'Activity' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

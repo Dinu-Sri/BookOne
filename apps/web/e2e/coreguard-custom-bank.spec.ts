@@ -119,9 +119,13 @@ test('Viewer sees Chart of Accounts without write actions', async ({ page }) => 
   const commerceTitle = page.getByRole('heading', { name: 'Commerce Integrations' });
   if (new URL(page.url()).pathname === '/company/commerce') {
     await expect(commerceTitle).toBeVisible();
+    // v2.20.0: keys are on Developer, posting controls on Settings.
+    const developerTab = page.getByRole('tab', { name: 'Developer' });
+    if ((await developerTab.count()) > 0) await developerTab.click();
     const issue = page.getByRole('button', { name: 'Issue scoped key' });
     if ((await issue.count()) > 0) {
       await expect(issue).toBeDisabled();
+      await page.getByRole('tab', { name: 'Settings' }).click();
       await expect(page.getByRole('button', { name: 'Save pauses and posting' })).toBeDisabled();
     } else {
       await expect(issue).toHaveCount(0);

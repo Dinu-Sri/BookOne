@@ -1,3 +1,7 @@
+## 2026-11-26 — Commerce race, numbering, returns, POS refunds (v2.18.1)
+
+Fixed QA-1126-16..21: concurrent last-unit orders no longer oversell (per-product lock; commerce never goes negative; settings load by tenant); invoice numbers and party codes are allocated under a lock with unique indexes after a repair migration; commerce cancel/refund use the original customer and failures show in Activity with Retry; POS refunds need a manager; commerce VAT posts as a tax invoice when it matches, otherwise review; negative stock defaults to Block. See [CHG-20261126-commerce-race-returns-pos](changes/CHG-20261126-commerce-race-returns-pos.md).
+
 ## 2026-11-26 — QA retest fixes, 15 findings (v2.18.0)
 
 Fixed QA-1126-01..15 from the bookone-qa retest (PR #129): OAuth consent 303; permission gates on discounts, domains, bank import/reconciliation and product archive; display-name duplicate parties plus an owner merge; duplicate file and duplicate supplier-invoice messages; clear AgentBridge commit refusals; permission refusals redirect instead of 500; and P3 copy/order fixes. See [CHG-20261126-qa-retest-fixes](changes/CHG-20261126-qa-retest-fixes.md).

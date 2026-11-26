@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { pickPartyByName } from '@/lib/party-match';
+import { firstFreeNumber, lockNumberSeries } from '@/lib/numbering-lock';
 import { z } from 'zod';
 import { requireTenantContext, type SessionUser } from '@bookone/auth';
 import { assertPermission, requireWriteOrRedirect, withFlash } from '@/lib/access';
@@ -294,11 +295,23 @@ function revalidateParties() {
 
 async function nextPartyCode(tenantId: string, isCustomer: boolean, isVendor: boolean) {
   const prefix = isCustomer && isVendor ? 'PTR' : isVendor ? 'VEN' : 'CUS';
+  await lockNumberSeries(`${tenantId}:party:${prefix}`);
   const [{ total }] = await db()
     .select({ total: sql<number>`count(*)` })
     .from(parties)
     .where(and(eq(parties.tenantId, tenantId), sql`${parties.code} like ${prefix + '-%'}`));
-  return `${prefix}-${String(Number(total ?? 0) + 1).padStart(4, '0')}`;
+  return firstFreeNumber(
+    Number(total ?? 0) + 1,
+    (n) => `${prefix}-${String(n).padStart(4, '0')}`,
+    async (candidate) => {
+      const [hit] = await db()
+        .select({ id: parties.id })
+        .from(parties)
+        .where(and(eq(parties.tenantId, tenantId), eq(parties.code, candidate)))
+        .limit(1);
+      return Boolean(hit);
+    },
+  );
 }
 
 async function assertPartyDeletable(tenantId: string, partyId: string, partyName: string) {

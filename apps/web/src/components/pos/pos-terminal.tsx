@@ -315,6 +315,10 @@ export function PosTerminal({
 
   function switchMode(next: PosMode) {
     if (next === mode) return;
+    if (next === 'return' && !bootstrap.canRefund) {
+      setError('Refunds need a manager. Ask an Owner or Manager to process this return.');
+      return;
+    }
     if (cart.length > 0 && !window.confirm('Switch mode and clear cart?')) return;
     setMode(next);
     setCart([]);
@@ -886,6 +890,8 @@ export function PosTerminal({
             role="tab"
             className={mode === 'return' ? 'active return' : ''}
             onClick={() => switchMode('return')}
+            disabled={!bootstrap.canRefund}
+            title={bootstrap.canRefund ? undefined : 'Refunds need a manager'}
           >
             Return
           </button>

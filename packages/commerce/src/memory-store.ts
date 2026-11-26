@@ -160,6 +160,10 @@ export class MemoryCommerceStore implements CommerceStore {
     this.events.push({ ...row, payload: { ...row.payload }, result: row.result ? { ...row.result } : null });
     return 'inserted';
   }
+  async listOrderEvents(tenantId: string, connectionId: string, orderId: string) {
+    return this.events.filter((e) => e.tenantId === tenantId && e.connectionId === connectionId && e.orderId === orderId);
+  }
+
   async getEvent(tenantId: string, connectionId: string, externalEventId: string) {
     return (
       this.events.find(

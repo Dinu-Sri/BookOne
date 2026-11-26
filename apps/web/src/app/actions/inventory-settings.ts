@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
 import { db, eq, inventorySettings, withTenantContext } from '@bookone/db';
 import { assertPermission } from '@/lib/access';
+import { INVENTORY_SETTINGS_DEFAULTS, loadInventorySettings } from '@/lib/tenant-settings';
 
 const schema = z.object({
   negativeStockPolicy: z.enum(['allow', 'block']),
@@ -16,27 +17,11 @@ export interface InventorySettingsRow {
   costingMethod: 'last' | 'average' | 'fifo';
 }
 
-const DEFAULTS: InventorySettingsRow = {
-  negativeStockPolicy: 'allow',
-  costingMethod: 'last',
-};
+const DEFAULTS: InventorySettingsRow = INVENTORY_SETTINGS_DEFAULTS;
 
 export async function getInventorySettings(): Promise<InventorySettingsRow> {
   const user = await requireTenantContext();
-  return withTenantContext(user.tenantId, async () => {
-    const [row] = await db()
-      .select()
-      .from(inventorySettings)
-      .where(eq(inventorySettings.tenantId, user.tenantId))
-      .limit(1);
-    if (!row) return { ...DEFAULTS };
-    return {
-      negativeStockPolicy:
-        row.negativeStockPolicy === 'block' ? 'block' : 'allow',
-      costingMethod:
-        row.costingMethod === 'average' ? 'average' : row.costingMethod === 'fifo' ? 'fifo' : 'last',
-    };
-  });
+  return loadInventorySettings(user.tenantId);
 }
 
 export async function saveInventorySettingsFromForm(formData: FormData): Promise<void> {

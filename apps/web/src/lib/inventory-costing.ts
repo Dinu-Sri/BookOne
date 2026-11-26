@@ -126,6 +126,15 @@ export async function receiveCostLayer(opts: {
   });
 }
 
+/**
+ * Serialise stock changes for one product until the posting transaction ends
+ * (QA-1126-16). Concurrent orders for the last unit wait here, then read the
+ * committed quantity, so "block negative" holds under load.
+ */
+export async function lockProductStock(tenantId: string, productId: string): Promise<void> {
+  await db().execute(sql`select pg_advisory_xact_lock(hashtextextended(${`stock:${tenantId}:${productId}`}, 0))`);
+}
+
 export async function consumeCostLayers(opts: {
   tenantId: string;
   productId: string;
@@ -139,6 +148,7 @@ export async function consumeCostLayers(opts: {
 }): Promise<{ unitCost: number; totalCost: number; slices: LotSlice[] }> {
   const need = round4(opts.qty);
   if (need <= 0.0001) return { unitCost: 0, totalCost: 0, slices: [] };
+  await lockProductStock(opts.tenantId, opts.productId);
 
   await seedLotsFromOnHand(opts.tenantId, opts.productId, opts.date);
 

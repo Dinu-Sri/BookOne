@@ -13,6 +13,7 @@ import {
 import { requireTenantContext, type SessionUser } from '@bookone/auth';
 import { jobCanWrite } from '@/lib/access';
 import { getTenantInfo } from '@/app/actions/workspace';
+import { commerceTaxDecision, type CommerceTaxDecision } from '@/lib/commerce-tax';
 
 function pepper(): string {
   return process.env.AUTH_SECRET ?? process.env.BETTER_AUTH_SECRET ?? 'test-secret-for-ci-only';
@@ -21,8 +22,13 @@ function pepper(): string {
 async function postingPort(): Promise<PostingPort> {
   const { createCommercialDocumentWithUser } = await import('@/app/actions/commercial-docs');
   return {
+    handlesStoreTax: true,
     async postSalesInvoice(input) {
       const user = actorUser(input.actor);
+      const decision = await taxDecisionFor(input);
+      if (decision.kind === 'review') {
+        throw new CommerceError({ code: 'VALIDATION', message: decision.reason, httpStatus: 422 });
+      }
       const result = await createCommercialDocumentWithUser(
         user,
         {
@@ -32,7 +38,7 @@ async function postingPort(): Promise<PostingPort> {
           notes: `Commerce ${input.order.externalId}`,
           locationId: input.locationId,
           saleChannel: 'local',
-          invoiceKind: input.invoiceKind ?? 'commercial',
+          invoiceKind: decision.kind,
           headerDiscount: input.headerDiscount ?? 0,
           freightAmount: input.freightAmount ?? 0,
           paymentAccountCode: input.paymentAccountCode,
@@ -47,7 +53,8 @@ async function postingPort(): Promise<PostingPort> {
             sku: line.sku,
           })),
         },
-        { alreadyAuthorized: true },
+        // Commerce never sells below zero, whatever the company policy (QA-1126-16).
+        { alreadyAuthorized: true, forceBlockNegative: true },
       );
       if (!result.ok || !result.id) {
         throw new CommerceError({
@@ -64,11 +71,17 @@ async function postingPort(): Promise<PostingPort> {
     },
     async postSalesReturn(input) {
       const user = actorUser(input.actor);
+      // QA-1126-18: a linked return must name the original invoice's customer.
+      const source = await sourceInvoiceParty(input.actor.tenantId, input.sourceDocumentId);
+      if (!source) {
+        throw new CommerceError({ code: 'VALIDATION', message: 'The original invoice was not found.', httpStatus: 422 });
+      }
       const result = await createCommercialDocumentWithUser(
         user,
         {
           documentType: 'sales_return',
-          partyName: 'Commerce refund',
+          partyName: source.partyName,
+          partyId: source.partyId,
           issueDate: input.issueDate,
           sourceDocumentId: input.sourceDocumentId,
           notes: input.restock ? 'Commerce restock refund' : 'Commerce money-only refund',
@@ -96,6 +109,45 @@ async function postingPort(): Promise<PostingPort> {
       };
     },
   };
+}
+
+async function sourceInvoiceParty(
+  tenantId: string,
+  documentId: string,
+): Promise<{ partyId: string; partyName: string } | null> {
+  const { and, businessDocuments, db, eq, parties } = await import('@bookone/db');
+  return withTenantContext(tenantId, async () => {
+    const [row] = await db()
+      .select({ partyId: parties.id, partyName: parties.name })
+      .from(businessDocuments)
+      .innerJoin(parties, eq(parties.id, businessDocuments.partyId))
+      .where(and(eq(businessDocuments.tenantId, tenantId), eq(businessDocuments.id, documentId)))
+      .limit(1);
+    return row ?? null;
+  });
+}
+
+async function taxDecisionFor(input: Parameters<PostingPort['postSalesInvoice']>[0]): Promise<CommerceTaxDecision> {
+  const { db, eq, salesSettings } = await import('@bookone/db');
+  const settings = await withTenantContext(input.actor.tenantId, async () => {
+    const [row] = await db()
+      .select({ vatRegistered: salesSettings.vatRegistered, vatRatePercent: salesSettings.vatRatePercent })
+      .from(salesSettings)
+      .where(eq(salesSettings.tenantId, input.actor.tenantId))
+      .limit(1);
+    return row ?? null;
+  });
+  const storeTax =
+    Number(input.order.taxAmount ?? 0) +
+    (input.order.lines ?? []).reduce((sum, line) => sum + Number(line.taxAmount ?? 0), 0);
+  return commerceTaxDecision({
+    vatRegistered: settings?.vatRegistered === '1',
+    ratePercent: Number(settings?.vatRatePercent ?? 18),
+    linesNet: input.lines.reduce((sum, line) => sum + line.quantity * line.unitPrice - (line.discountAmount ?? 0), 0),
+    headerDiscount: input.headerDiscount ?? 0,
+    storeTax,
+    lineCount: input.lines.length,
+  });
 }
 
 async function lookupDocumentNumber(id: string, fallback: string): Promise<string> {

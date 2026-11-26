@@ -223,6 +223,12 @@ export type ReturnPostLine = {
 };
 
 export type PostingPort = {
+  /**
+   * When true the port posts store tax itself (tax invoice when it matches the
+   * company VAT rate, review otherwise) instead of the service holding every
+   * taxed order (QA-1126-20).
+   */
+  handlesStoreTax?: boolean;
   postSalesInvoice(input: {
     actor: CommerceActor;
     order: OrderInput;

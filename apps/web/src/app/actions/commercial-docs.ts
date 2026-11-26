@@ -87,11 +87,19 @@ import {
 } from '@bookone/db';
 import { ensureParty } from '@/app/actions/parties';
 import { getPurchaseSettings } from '@/app/actions/purchase-settings';
+import { firstFreeNumber, lockNumberSeries } from '@/lib/numbering-lock';
+import {
+  INVENTORY_SETTINGS_DEFAULTS,
+  PURCHASE_SETTINGS_DEFAULTS,
+  loadInventorySettings,
+  loadPurchaseSettings,
+} from '@/lib/tenant-settings';
 import { getInventorySettings } from '@/app/actions/inventory-settings';
 import { resolveDimensions } from '@/lib/dimensions';
 import { assertDimensionScope, columnInScope, currentDimensionScope, dimensionScopeForUser } from '@/lib/dimension-scope';
 import {
   consumeCostLayers,
+  lockProductStock,
   receiveCostLayer,
   syncFifoMasterCost,
 } from '@/lib/inventory-costing';
@@ -532,11 +540,9 @@ async function nextDocumentNumber(tenantId: string, type: string, date: string) 
   }
   const types = type === 'sales_invoice' ? ['sales_invoice', 'customer_invoice'] : [type];
   const window = numberingWindow(reset, date);
-  const conditions = [
-    eq(businessDocuments.tenantId, tenantId),
-    inArray(businessDocuments.documentType, types),
-    isNull(businessDocuments.voidedAt),
-  ];
+  await lockNumberSeries(`${tenantId}:${types.join('+')}:${window.from ?? 'all'}`);
+  // Count voided documents too, so voiding never frees a number for reuse.
+  const conditions = [eq(businessDocuments.tenantId, tenantId), inArray(businessDocuments.documentType, types)];
   if (window.from && window.to) {
     conditions.push(gte(businessDocuments.issueDate, window.from));
     conditions.push(lte(businessDocuments.issueDate, window.to));
@@ -545,14 +551,24 @@ async function nextDocumentNumber(tenantId: string, type: string, date: string) 
     .select({ total: sql<number>`count(*)` })
     .from(businessDocuments)
     .where(and(...conditions));
-  return formatDocumentNumber({
-    prefix,
-    postfix,
-    pad,
-    reset,
-    date,
-    sequence: Number(total ?? 0) + 1,
-  });
+  return firstFreeNumber(
+    Number(total ?? 0) + 1,
+    (sequence) => formatDocumentNumber({ prefix, postfix, pad, reset, date, sequence }),
+    async (candidate) => {
+      const [hit] = await db()
+        .select({ id: businessDocuments.id })
+        .from(businessDocuments)
+        .where(
+          and(
+            eq(businessDocuments.tenantId, tenantId),
+            inArray(businessDocuments.documentType, types),
+            eq(businessDocuments.documentNumber, candidate),
+          ),
+        )
+        .limit(1);
+      return Boolean(hit);
+    },
+  );
 }
 
 async function adjustStock(params: {
@@ -571,6 +587,7 @@ async function adjustStock(params: {
   /** When true, refuse if this location level would go negative */
   blockNegative?: boolean;
 }) {
+  if (params.quantityDelta < 0) await lockProductStock(params.tenantId, params.productId);
   const [level] = await db()
     .select()
     .from(inventoryStockLevels)
@@ -1142,7 +1159,7 @@ export async function createCommercialDocument(
 export async function createCommercialDocumentWithUser(
   user: Awaited<ReturnType<typeof requireTenantContext>>,
   input: z.input<typeof createSchema>,
-  opts?: { alreadyAuthorized?: boolean },
+  opts?: { alreadyAuthorized?: boolean; forceBlockNegative?: boolean },
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   const started = Date.now();
   let parsedType = 'document';
@@ -1210,20 +1227,11 @@ export async function createCommercialDocumentWithUser(
     }
 
     // Purchase P3 controls (defaults if settings row missing)
-    const purchaseCfg = await getPurchaseSettings().catch(() => ({
-      requireBillApproval: false,
-      requireSupplierInvoiceNo: false,
-      blockDuplicateBills: true,
-      requireGrnBeforeBill: false,
-      postGrniOnReceipt: false,
-      defaultPaymentTerms: 'Net 30',
-      defaultExpenseAccount: '6800',
-    }));
-    const invCfg = await getInventorySettings().catch(() => ({
-      negativeStockPolicy: 'allow' as const,
-      costingMethod: 'last' as const,
-    }));
-    const blockNegative = invCfg.negativeStockPolicy === 'block';
+    // Tenant-scoped: commerce and AgentBridge post without a browser session (QA-1126-16).
+    const purchaseCfg = await loadPurchaseSettings(user.tenantId).catch(() => ({ ...PURCHASE_SETTINGS_DEFAULTS }));
+    const invCfg = await loadInventorySettings(user.tenantId).catch(() => ({ ...INVENTORY_SETTINGS_DEFAULTS }));
+    // Commerce never sells below zero, whatever the company policy (QA-1126-16).
+    const blockNegative = invCfg.negativeStockPolicy === 'block' || Boolean(opts?.forceBlockNegative);
     const costingMethod = invCfg.costingMethod;
 
     const isApBill = isPurchaseBillType(parsed.documentType);

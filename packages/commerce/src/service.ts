@@ -820,7 +820,7 @@ export class CommerceService {
     const preview = await this.validateOrder(actor, input);
     let status: OrderStatus = 'received';
     let reviewReason: string | null = null;
-    const unrepresentable = representabilityIssue(input);
+    const unrepresentable = this.posting.handlesStoreTax ? null : representabilityIssue(input);
     if (!preview.ok) {
       status = 'needs_review';
       reviewReason = preview.issues.filter((i) => i.blocking).map((i) => i.message).join(' ');
@@ -960,6 +960,8 @@ export class CommerceService {
       }
     }
 
+    const linesBefore = order.lines.map((line) => ({ ...line }));
+    const statusBefore = order.status;
     try {
       if (input.kind === 'cancelled') {
         if (order.documentId && (order.status === 'posted' || order.status === 'partially_refunded' || order.status === 'fulfilled' || order.status === 'paid')) {
@@ -972,7 +974,7 @@ export class CommerceService {
             }))
             .filter((line) => line.quantity > 0);
           if (remaining.length) {
-            await this.posting.postSalesReturn({
+            await this.postReturnForEvent('Cancellation', {
               actor,
               sourceDocumentId: order.documentId,
               idempotencyKey: `commerce-cancel:${actor.connectionId}:${order.externalId}`,
@@ -1004,24 +1006,29 @@ export class CommerceService {
       } else if (input.kind === 'fulfilled') {
         if (order.status === 'posted' || order.status === 'paid') order.status = 'fulfilled';
         else {
-          order.status = 'needs_review';
-          order.reviewReason = 'Fulfilment arrived before the order was posted.';
+          holdForReview(order, 'Fulfilment arrived before the order was posted.');
         }
       } else if (input.kind === 'refunded') {
         await this.applyRefund(actor, order, input);
       } else {
-        order.status = 'needs_review';
-        order.reviewReason = `Unsupported lifecycle event ${input.kind} was staged with no accounting effect.`;
+        holdForReview(order, `Unsupported lifecycle event ${input.kind} was staged with no accounting effect.`);
       }
       if (eventId) await this.store.updateEvent(eventId, { status: 'applied', result: { status: order.status } });
     } catch (error) {
       if (eventId) {
         await this.store.updateEvent(eventId, {
           status: 'retryable',
-          result: { error: error instanceof Error ? error.message : 'Event failed' },
+          result: { error: error instanceof Error ? error.message : 'Event failed', previousStatus: statusBefore },
         });
       }
-      throw error;
+      if (!(error instanceof EventPostingError)) throw error;
+      // QA-1126-18: BookOne refused the return. Keep the order visible in
+      // Activity → needs review (with Retry) instead of failing the shop's call.
+      order.lines = linesBefore;
+      holdForReview(order, error.message);
+      order.updatedAt = nowIso();
+      await this.store.updateOrder(order);
+      return this.orderReceipt(order, order.status);
     }
     order.lastAppliedVersion = input.sourceVersion ?? order.lastAppliedVersion;
     order.updatedAt = nowIso();
@@ -1052,13 +1059,41 @@ export class CommerceService {
       reservationMode: connection.reservationMode,
       prefix: 'operator',
     };
-    await this.finishEligiblePost(actor, order);
-    await this.audit(operator, connectionId, 'order.retry', 'order', order.id, { externalId: order.externalId, status: order.status });
-    return this.orderReceipt(order, order.status);
+    if (order.documentId) {
+      // Posted order held by a refused cancel/refund: replay those events (QA-1126-18).
+      const failed = (await this.store.listOrderEvents?.(operator.tenantId, connectionId, order.id)) ?? [];
+      const retryable = failed.filter((e) => e.status === 'retryable');
+      if (retryable.length) {
+        const prior = retryable[0]!.result?.previousStatus;
+        order.status = typeof prior === 'string' && prior !== 'needs_review' ? (prior as OrderStatus) : 'posted';
+        order.reviewReason = null;
+        order.updatedAt = nowIso();
+        await this.store.updateOrder(order);
+        for (const event of retryable) {
+          await this.applyEvent(actor, order.externalId, event.payload as unknown as OrderEventInput);
+        }
+      }
+    } else {
+      await this.finishEligiblePost(actor, order);
+    }
+    const fresh = (await this.store.getOrderByExternalId(operator.tenantId, connectionId, order.externalId)) ?? order;
+    await this.audit(operator, connectionId, 'order.retry', 'order', fresh.id, { externalId: fresh.externalId, status: fresh.status });
+    return this.orderReceipt(fresh, fresh.status);
   }
 
   reservations(): never {
     fail('RESERVATION_DISABLED', 'Reservation mode is disabled until a cross-channel contention test passes.');
+  }
+
+  private async postReturnForEvent(label: string, input: Parameters<PostingPort['postSalesReturn']>[0]) {
+    try {
+      return await this.posting.postSalesReturn(input);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'BookOne could not post the return.';
+      throw new EventPostingError(
+        `${label} was not booked in BookOne: ${message} Fix the cause, then use Retry.`,
+      );
+    }
   }
 
   private async applyRefund(actor: CommerceActor, order: OrderRow, input: OrderEventInput) {
@@ -1093,23 +1128,20 @@ export class CommerceService {
     }
 
     if (!order.documentId) {
-      order.status = 'needs_review';
-      order.reviewReason = 'Refund arrived before its order was posted. No journals were created.';
+      holdForReview(order, 'Refund arrived before its order was posted. No journals were created.');
       return;
     }
 
     const returnLines: Array<{ productId: string | null; description: string; quantity: number; unitPrice: number }> = [];
     if (input.restock) {
       if (!input.lines?.length) {
-        order.status = 'needs_review';
-        order.reviewReason = 'Physical restock requires original line references and quantities.';
+        holdForReview(order, 'Physical restock requires original line references and quantities.');
         return;
       }
       for (const ref of input.lines) {
         const line = order.lines.find((row) => row.externalLineId === ref.externalLineId);
         if (!line) {
-          order.status = 'needs_review';
-          order.reviewReason = `Refund line ${ref.externalLineId} is not on the original order.`;
+          holdForReview(order, `Refund line ${ref.externalLineId} is not on the original order.`);
           return;
         }
         const qty = parseQty(ref.quantity ?? '0', `Restock quantity for ${line.sku}`);
@@ -1138,8 +1170,7 @@ export class CommerceService {
       for (const ref of input.lines) {
         const line = order.lines.find((row) => row.externalLineId === ref.externalLineId);
         if (!line) {
-          order.status = 'needs_review';
-          order.reviewReason = `Refund line ${ref.externalLineId} is not on the original order.`;
+          holdForReview(order, `Refund line ${ref.externalLineId} is not on the original order.`);
           return;
         }
         const lineAmount = parseMoney(ref.amount ?? '0', `Refund amount for ${line.sku}`);
@@ -1175,7 +1206,7 @@ export class CommerceService {
       });
     }
 
-    const posted = await this.posting.postSalesReturn({
+    const posted = await this.postReturnForEvent('Refund', {
       actor,
       sourceDocumentId: order.documentId,
       idempotencyKey: `commerce-refund:${actor.connectionId}:${externalRefundId}`,
@@ -1232,7 +1263,7 @@ export class CommerceService {
     if (actor.postingMode !== 'posting') return;
     const input = order.snapshot;
     if (input.payment?.status !== 'paid') return;
-    const unrepresentable = representabilityIssue(input);
+    const unrepresentable = this.posting.handlesStoreTax ? null : representabilityIssue(input);
     if (unrepresentable) {
       order.status = 'needs_review';
       order.reviewReason = unrepresentable;
@@ -1364,6 +1395,16 @@ export class CommerceService {
       createdAt: nowIso(),
     });
   }
+}
+
+/** A return BookOne refused while applying a store event (QA-1126-18). */
+export class EventPostingError extends Error {}
+
+/** Hold for review without losing an earlier reason (QA-1126-21). */
+export function holdForReview(order: { status: string; reviewReason: string | null }, reason: string) {
+  const prior = order.status === 'needs_review' ? order.reviewReason?.trim() : '';
+  order.status = 'needs_review';
+  order.reviewReason = prior && !prior.includes(reason) ? `${prior} | ${reason}` : reason;
 }
 
 function almostEqualRefund(a: number, b: number) {

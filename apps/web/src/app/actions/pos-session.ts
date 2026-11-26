@@ -21,6 +21,7 @@ import { getSalesSettings } from '@/app/actions/sales-settings';
 import { listPartyOptions } from '@/app/actions/parties';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { assertModuleWrite } from '@/lib/module-access';
+import { getMyAccess } from '@/lib/access';
 import { assertDimensionScope } from '@/lib/dimension-scope';
 
 export interface PosProductLite {
@@ -55,7 +56,12 @@ export interface PosBootstrap {
   partyOptions: { id: string; name: string; code: string | null }[];
   vatRegistered: boolean;
   vatRatePercent: number;
+  /** QA-1126-19: refunds post a sales return, which needs Sales Returns write. */
+  canRefund: boolean;
 }
+
+const POS_REFUND_DENIED_MESSAGE =
+  'Refunds need a manager. Your job can sell at the till but cannot post returns; ask an Owner or Manager, or have them add Sales Returns to your job.';
 
 export async function getPosBootstrap(): Promise<PosBootstrap> {
   const user = await requireTenantContext();
@@ -120,6 +126,7 @@ export async function getPosBootstrap(): Promise<PosBootstrap> {
     partyOptions: partyOptions.map((p) => ({ id: p.id, name: p.name, code: p.code })),
     vatRegistered: settings.vatRegistered,
     vatRatePercent: settings.vatRatePercent,
+    canRefund: Boolean((await getMyAccess())?.allows('sales.returns.write', 'write')),
   };
 }
 
@@ -575,6 +582,9 @@ export async function completePosReturn(
   try {
     const parsed = completeReturnSchema.parse(input);
     const user = await requireTenantContext();
+    if (!(await getMyAccess())?.allows('sales.returns.write', 'write')) {
+      return { ok: false, error: POS_REFUND_DENIED_MESSAGE };
+    }
 
     if (parsed.sourcePosSaleId) {
       const lookup = await lookupPosSale(parsed.sourcePosSaleId);

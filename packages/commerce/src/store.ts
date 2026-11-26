@@ -53,6 +53,8 @@ export type CommerceStore = {
 
   insertEvent(row: CommerceEventRow): Promise<'inserted' | 'duplicate'>;
   getEvent(tenantId: string, connectionId: string, externalEventId: string): Promise<CommerceEventRow | null>;
+  /** Events for one order (retry of refused cancels/refunds, QA-1126-18). */
+  listOrderEvents?(tenantId: string, connectionId: string, orderId: string): Promise<CommerceEventRow[]>;
   updateEvent(
     id: string,
     patch: { status: string; result?: Record<string, unknown> | null },

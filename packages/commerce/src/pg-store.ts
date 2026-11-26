@@ -13,6 +13,7 @@ import {
   commercePublishClaims,
   commerceRefunds,
   db,
+  asc,
   desc,
   eq,
   gt,
@@ -656,6 +657,21 @@ export class PostgresCommerceStore implements CommerceStore {
       if (isUniqueViolation(error, 'commerce_order_events_external_uq')) return 'duplicate';
       throw error;
     }
+  }
+
+  async listOrderEvents(tenantId: string, connectionId: string, orderId: string) {
+    const rows = await db()
+      .select()
+      .from(commerceOrderEvents)
+      .where(
+        and(
+          eq(commerceOrderEvents.tenantId, tenantId),
+          eq(commerceOrderEvents.connectionId, connectionId),
+          eq(commerceOrderEvents.orderId, orderId),
+        ),
+      )
+      .orderBy(asc(commerceOrderEvents.createdAt));
+    return rows.map(eventFrom);
   }
 
   async getEvent(tenantId: string, connectionId: string, externalEventId: string) {

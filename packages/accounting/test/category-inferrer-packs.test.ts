@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CATEGORY_RULES,
   categoryWithAccountName,
+  generateJournal,
   chartOfAccountsForEntity,
   inferCategory,
   inferTransaction,
@@ -98,5 +99,29 @@ describe('category inference follows the workspace chart', () => {
       expect(src, f).toMatch(/categoryWithAccountName\(/);
       expect(src, f).toMatch(/tenantAccountName\(user\.tenantId/);
     }
+  });
+
+  it('a renamed category flows into the journal line memo when the journal is regenerated', () => {
+    const { transaction } = inferTransaction({
+      tenantId: 't',
+      userId: 'u',
+      entityKind: 'company',
+      direction: 'money_out',
+      party: 'Stationers',
+      description: 'office supplies',
+      amount: 1500,
+      paymentMethod: 'Bank',
+      paymentAccount: { kind: 'code', value: '1100' },
+      date: '2026-11-26',
+    } as Parameters<typeof inferTransaction>[0]);
+    const renamed = { ...transaction, category: categoryWithAccountName(transaction.category!, 'ZZ Stationery & Printing') };
+    const debit = generateJournal(renamed).lines.find((l) => l.side === 'debit');
+    expect(debit).toMatchObject({ memo: 'ZZ Stationery & Printing' });
+    expect(debit?.account.code).toBe('6500');
+    const src = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../../apps/web/src/app/actions/record-entry.ts'),
+      'utf8',
+    );
+    expect(src).toMatch(/journal = generateJournal\(transaction\)/);
   });
 });

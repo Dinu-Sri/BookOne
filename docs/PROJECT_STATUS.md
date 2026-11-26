@@ -1,3 +1,7 @@
+## 2026-11-26 — Journal memo uses tenant account name (v2.17.11)
+
+Simple Entry journal lines now carry the workspace's own account name as the memo, matching the preview and stored category. See [CHG-20261126-category-inferrer-packs](changes/CHG-20261126-category-inferrer-packs.md).
+
 ## 2026-11-26 — Category name is the tenant's account name (v2.17.10)
 
 The Simple Entry category preview and the stored transaction now name the account the entry actually posts to (the workspace's own account name), not the default chart name. Staging data was reset to empty on owner request; a pre-wipe backup is kept in the postgres volume. See [CHG-20261126-category-inferrer-packs](changes/CHG-20261126-category-inferrer-packs.md).

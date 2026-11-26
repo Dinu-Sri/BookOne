@@ -1,3 +1,7 @@
+## 2026-11-26 — Journal memo uses tenant account name (v2.17.11)
+
+- Staging found the v2.17.10 debit line memo still had the pack name; `recordEntry` now regenerates the journal after the rename. 707 unit tests passed.
+
 ## 2026-11-26 — Category name is the tenant's account name (v2.17.10)
 
 - Simple Entry preview, `transactions.category_name` and audit now use the tenant's own account name for the inferred code. See [CHG-20261126-category-inferrer-packs](changes/CHG-20261126-category-inferrer-packs.md).

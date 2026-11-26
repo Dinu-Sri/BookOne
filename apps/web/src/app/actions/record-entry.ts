@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { categoryWithAccountName, inferTransaction } from '@bookone/accounting';
+import { categoryWithAccountName, generateJournal, inferTransaction } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   db,
@@ -166,13 +166,20 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
       entityKind,
     } as Parameters<typeof inferTransaction>[0];
 
-    const { transaction, journal } = inferTransaction(engineEntry);
-    // Store the tenant's own account name (what the ledger shows), not the pack name.
+    const inferred = inferTransaction(engineEntry);
+    const transaction = inferred.transaction;
+    let journal = inferred.journal;
+    // Store the tenant's own account name (what the ledger shows), not the pack
+    // name: on the transaction, the audit row and the category journal line memo.
     if (transaction.category) {
-      transaction.category = categoryWithAccountName(
+      const named = categoryWithAccountName(
         transaction.category,
         await tenantAccountName(user.tenantId, transaction.category.accountCode),
       );
+      if (named !== transaction.category) {
+        transaction.category = named;
+        journal = generateJournal(transaction);
+      }
     }
 
     // Resolve account codes to DB IDs for journal line inserts (scoped to this tenant)

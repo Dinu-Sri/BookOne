@@ -38,3 +38,9 @@ Not changed: company workspaces whose 6 posted accounts still carry personal nam
 - After: `categoryWithAccountName()` (accounting) replaces the name with the tenant's live account name for that code; `tenantAccountName()` (`apps/web/src/lib/tenant-account-name.ts`) reads it. Applied in `previewCategory` and in `recordEntry` before the transaction and audit rows are written. Code, confidence and source are unchanged.
 - Tests: +2 in `category-inferrer-packs.test.ts` (name swap, no mutation, blank names ignored; source lock that both actions apply it). Typecheck exit 0; 706 unit tests passed.
 - Staging data was wiped on 2026-11-26 at the owner's request (backup `zz_backups/pre-wipe-20261126.dump` in the postgres volume), so no existing transactions needed a name backfill there.
+
+## Follow-up v2.17.11 — journal line memo uses the tenant name too
+
+- Staging check of v2.17.10 (fresh ZZ-TEST company, 6500 renamed "ZZ Stationery & Printing", Simple Entry "office supplies" LKR 1,500): preview, `transactions.category_name` and the audit row showed the tenant name and the debit hit 6500, but the debit journal line memo still read "Office Supplies Expense" because the journal is generated inside `inferTransaction` before the rename.
+- After: `recordEntry` regenerates the journal with `generateJournal(transaction)` when the name changed. Lines, accounts and amounts are unchanged; only the category memo differs.
+- Tests: +1 (regenerated memo carries the tenant name; source lock on the regenerate call). 707 unit tests passed; typecheck exit 0.

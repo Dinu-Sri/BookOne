@@ -57,3 +57,7 @@ Status: ready-for-QA.
 ## Rollback
 
 Revert this commit. Migration 055 is additive (a new table and a column); leaving it in place is harmless. Active commitments would then be ignored by the reverted code.
+
+## Follow-up v2.20.2 — Commerce page load cost
+
+The v2.20.1 CoreGuard run got past the tabs but failed at "Apply mapping enabled after Preview": the button stayed `aria-busy` (form still pending) for the 5 s window. v2.20.0 made the page load web orders per connection in separate tenant sessions, and `PostgresCommerceStore.listOrders` read every order of the tenant and then queried lines one order at a time. Now `listOrders` filters by connection/status in SQL (latest 500) and loads lines in one query; the page loads the view and all web orders in one tenant session and runs the Inventory probe and payment accounts in parallel. The spec allows 20 s for the busy state to clear and logs the preview line for diagnosis.

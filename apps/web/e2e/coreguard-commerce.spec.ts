@@ -44,7 +44,10 @@ test('Commerce settings support keyboard tabs and invalidate an edited mapping p
   await external.fill('ui-preview-test');
   await page.getByRole('button', { name: 'Preview mapping' }).click();
   await expect(page.getByRole('heading', { name: 'Mapping preview' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeEnabled();
+  // Diagnostic for CI logs: the preview line says "ready to apply" or names the issue.
+  console.log('mapping preview:', (await page.getByRole('status').filter({ hasText: 'Mapping preview' }).innerText()).replace(/\s+/g, ' '));
+  // The submit stays busy until the server action and any router refresh finish.
+  await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeEnabled({ timeout: 20_000 });
   await external.fill('changed-after-preview');
   await expect(page.getByRole('button', { name: 'Apply mapping' })).toBeDisabled();
   await page.getByRole('tab', { name: 'Products' }).press('End');

@@ -18,6 +18,7 @@ import {
   desc,
   eq,
   gt,
+  inArray,
   pgClient,
   inventoryProducts,
   inventoryStockLevels,
@@ -673,18 +674,31 @@ export class PostgresCommerceStore implements CommerceStore {
   }
 
   async listOrders(tenantId: string, connectionId?: string, status?: string) {
+    // Filter in SQL and load all lines in one query (the Orders tab lists every order).
     const rows = await db()
       .select()
       .from(commerceOrders)
-      .where(eq(commerceOrders.tenantId, tenantId))
-      .orderBy(desc(commerceOrders.createdAt));
-    const filtered = rows.filter((r) => (!connectionId || r.connectionId === connectionId) && (!status || r.status === status));
-    const out: OrderRow[] = [];
-    for (const row of filtered) {
-      const lines = await db().select().from(commerceOrderLines).where(eq(commerceOrderLines.orderId, row.id));
-      out.push(orderFrom(row, lines));
+      .where(
+        and(
+          eq(commerceOrders.tenantId, tenantId),
+          connectionId ? eq(commerceOrders.connectionId, connectionId) : undefined,
+          status ? eq(commerceOrders.status, status) : undefined,
+        ),
+      )
+      .orderBy(desc(commerceOrders.createdAt))
+      .limit(500);
+    if (!rows.length) return [];
+    const lines = await db()
+      .select()
+      .from(commerceOrderLines)
+      .where(inArray(commerceOrderLines.orderId, rows.map((r) => r.id)));
+    const byOrder = new Map<string, (typeof commerceOrderLines.$inferSelect)[]>();
+    for (const line of lines) {
+      const list = byOrder.get(line.orderId) ?? [];
+      list.push(line);
+      byOrder.set(line.orderId, list);
     }
-    return out;
+    return rows.map((row) => orderFrom(row, byOrder.get(row.id) ?? []));
   }
 
   async getIdempotency(tenantId: string, connectionId: string, key: string) {

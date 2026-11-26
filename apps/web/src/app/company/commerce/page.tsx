@@ -28,25 +28,29 @@ export default async function CompanyCommercePage({
   const operator = await operatorFromSession();
   let products: Awaited<ReturnType<typeof listProducts>> = [];
   let productsError: string | null = null;
-  const [view, company, productLoad] = await Promise.all([
-    withCommerceService(operator.tenantId, (service) => service.listOperatorView(operator)),
+  const [viewData, company, productLoad] = await Promise.all([
+    // One tenant session for the view and every connection's web orders.
+    withCommerceService(operator.tenantId, async (service) => {
+      const rows = await service.listOperatorView(operator);
+      const orders = new Map<string, Awaited<ReturnType<typeof service.listWebOrders>>>();
+      for (const row of rows) {
+        orders.set(row.connection.id, await service.listWebOrders(operator, row.connection.id).catch(() => []));
+      }
+      return { rows, orders };
+    }),
     getCompanySettingsData().catch(() => null),
     listProducts()
       .then((rows) => ({ ok: true as const, rows }))
       .catch(() => ({ ok: false as const })),
   ]);
+  const view = viewData.rows;
+  const webOrders = viewData.orders;
   if (productLoad.ok) products = productLoad.rows;
   else productsError = 'Could not load BookOne products.';
-  const inventory = await probeModuleWriteDetail('inventory').catch(() => null);
-  const paymentAccounts = await listCommercePaymentAccounts(tenant.id).catch(() => []);
-  const webOrders = new Map(
-    await Promise.all(
-      view.map(async (row) => [
-        row.connection.id,
-        await withCommerceService(operator.tenantId, (service) => service.listWebOrders(operator, row.connection.id)).catch(() => []),
-      ] as const),
-    ),
-  );
+  const [inventory, paymentAccounts] = await Promise.all([
+    probeModuleWriteDetail('inventory').catch(() => null),
+    listCommercePaymentAccounts(tenant.id).catch(() => []),
+  ]);
   const inventoryOff = inventory?.reason === 'module_off' || inventory?.reason === 'tier';
   const origin = process.env.AUTH_URL ?? process.env.BETTER_AUTH_URL ?? '';
 

@@ -10,4 +10,5 @@ export * from './openapi';
 export * from './payments';
 export * from './fulfilment';
 export * from './catalog';
+export * from './pricing';
 export { PostgresCommerceStore } from './pg-store';

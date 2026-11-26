@@ -7,6 +7,7 @@
  * be tested without a database.
  */
 import { createHash } from 'node:crypto';
+import { channelPrice, pickPriceList, type PriceListRaw } from './pricing';
 
 export type CatalogProductRaw = {
   id: string;
@@ -98,9 +99,11 @@ export type ChannelSettings = {
   /** Channel-wide: let the website take orders when available is 0. */
   allowBackorder: boolean;
   timezone: string;
+  /** WP2 C2: the price list this channel sells at; null = BookOne sell price. */
+  priceListId?: string | null;
 };
 
-export const DEFAULT_CHANNEL_SETTINGS: ChannelSettings = { safetyBuffer: 0, allowBackorder: false, timezone: 'Asia/Colombo' };
+export const DEFAULT_CHANNEL_SETTINGS: ChannelSettings = { safetyBuffer: 0, allowBackorder: false, timezone: 'Asia/Colombo', priceListId: null };
 
 export type CatalogBundle = {
   products: CatalogProductRaw[];
@@ -118,6 +121,8 @@ export type CatalogBundle = {
   vatRatePercent: number;
   vatRegistered: boolean;
   channel: ChannelSettings;
+  /** WP2: every active price list with its entries. */
+  priceLists?: PriceListRaw[];
 };
 
 export type CatalogInclude = 'variants' | 'images' | 'prices' | 'inventory' | 'attributes';
@@ -136,6 +141,8 @@ export type CatalogQuery = {
   scope?: 'published' | 'all';
   /** Absolute base for image URLs, e.g. https://host/api/commerce/media/<tenant>. */
   mediaBase: string;
+  /** WP2 PR5: price with this customer group's list when one exists. */
+  customerGroup?: string | null;
 };
 
 export const MAX_PAGE = 250;
@@ -279,15 +286,13 @@ function inventoryFor(p: CatalogProductRaw, b: CatalogBundle) {
   };
 }
 
-function priceFor(p: CatalogProductRaw, b: CatalogBundle) {
-  return {
-    currency: b.currency,
-    priceListId: 'default',
-    price: money(p.sellPrice),
-    compareAtPrice: null,
-    revision: toMs(p.updatedAt),
-    updatedAt: p.updatedAt,
-  };
+/** The list this request prices with (customer group, else the channel's). */
+export function activeList(b: CatalogBundle, customerGroup?: string | null): PriceListRaw | null {
+  return pickPriceList(b.priceLists ?? [], b.channel.priceListId ?? null, customerGroup);
+}
+
+function priceFor(p: CatalogProductRaw, b: CatalogBundle, list: PriceListRaw | null = activeList(b)) {
+  return channelPrice(p, list, b.currency);
 }
 
 function attributesFor(p: CatalogProductRaw, b: CatalogBundle) {
@@ -365,6 +370,7 @@ export function buildProduct(
   b: CatalogBundle,
   include: Set<CatalogInclude>,
   mediaBase: string,
+  list: PriceListRaw | null = activeList(b),
 ): CatalogProduct {
   const p = entry.product;
   const variable = p.productType === 'variable' || p.productOptions.length > 0 || entry.variants.length > 0;
@@ -416,7 +422,7 @@ export function buildProduct(
   if (include.has('attributes')) out.attributes = attributesFor(p, b);
   if (ownImages) out.images = ownImages;
   if (!variable) {
-    if (include.has('prices')) out.price = priceFor(p, b);
+    if (include.has('prices')) out.price = priceFor(p, b, list);
     if (include.has('inventory')) out.inventory = inventoryFor(p, b);
   }
   if (include.has('variants')) {
@@ -437,7 +443,7 @@ export function buildProduct(
         updatedAt: v.updatedAt,
       };
       if (include.has('images')) variant.images = imagesFor(v, b, mediaBase).filter((img) => !img.id.startsWith('p_') || v.imageKey);
-      if (include.has('prices')) variant.price = priceFor(v, b);
+      if (include.has('prices')) variant.price = priceFor(v, b, list);
       if (include.has('inventory')) variant.inventory = inventoryFor(v, b);
       if (include.has('attributes')) variant.attributes = attributesFor(v, b);
       return variant;
@@ -497,8 +503,9 @@ export function catalogPage(b: CatalogBundle, q: CatalogQuery): { items: Catalog
   const skuSet = q.skus?.length ? new Set(q.skus) : null;
   const cats = q.categoryId ? categoryAndDescendants(q.categoryId, b) : null;
   const after = decodeCatalogCursor(q.cursor);
+  const list = activeList(b, q.customerGroup);
   const all = visibleTree(b, q.scope ?? 'published')
-    .map((entry) => buildProduct(entry, b, new Set<CatalogInclude>([...include, 'variants']), q.mediaBase))
+    .map((entry) => buildProduct(entry, b, new Set<CatalogInclude>([...include, 'variants']), q.mediaBase, list))
     .filter((prod) => {
       if (status !== 'all' && prod.status !== status) return false;
       if (Number.isFinite(since) && prod.revision <= since) return false;
@@ -531,6 +538,7 @@ export function findCatalogProduct(
   include: CatalogInclude[],
   mediaBase: string,
   scope: 'published' | 'all' = 'published',
+  customerGroup?: string | null,
 ): CatalogProduct | null {
   const inc = new Set(include);
   for (const entry of visibleTree(b, scope)) {
@@ -538,7 +546,7 @@ export function findCatalogProduct(
       (match.id && (entry.product.id === match.id || entry.variants.some((v) => v.id === match.id))) ||
       (match.sku && (entry.product.sku === match.sku || entry.variants.some((v) => v.sku === match.sku)));
     if (hit) {
-      const built = buildProduct(entry, b, new Set<CatalogInclude>([...inc, 'variants']), mediaBase);
+      const built = buildProduct(entry, b, new Set<CatalogInclude>([...inc, 'variants']), mediaBase, activeList(b, customerGroup));
       return inc.has('variants') ? built : stripVariants(built);
     }
   }

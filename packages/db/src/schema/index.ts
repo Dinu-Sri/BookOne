@@ -90,6 +90,8 @@ export {
   commercePublishClaims,
   commerceStockCommitments,
   commerceChannelProducts,
+  priceLists,
+  priceListItems,
 } from './commerce';
 export { posRegisters, posShifts } from './pos';
 export {

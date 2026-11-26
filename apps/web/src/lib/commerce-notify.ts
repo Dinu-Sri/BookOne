@@ -6,7 +6,7 @@
 export async function notifyCommerce(
   tenantId: string,
   productIds: Array<string | null | undefined>,
-  kind: 'product' | 'inventory',
+  kind: 'product' | 'inventory' | 'price',
 ): Promise<void> {
   const ids = [...new Set(productIds.filter((id): id is string => Boolean(id)))];
   if (!ids.length) return;

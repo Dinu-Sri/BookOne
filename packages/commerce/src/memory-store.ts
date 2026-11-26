@@ -1,3 +1,4 @@
+import type { PriceEntryInput } from './store';
 import type { CatalogBundle } from './catalog';
 import { randomUUID } from 'node:crypto';
 import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
@@ -34,6 +35,7 @@ export class MemoryCommerceStore implements CommerceStore {
     vatRatePercent: 18,
     vatRegistered: false,
     published: new Set(),
+    priceLists: [],
   };
   commitments: Array<{ tenantId: string; orderId: string; productId: string; locationId: string | null; quantity: number; status: string }> = [];
   idem = new Map<string, IdempotencyRow>();
@@ -174,8 +176,57 @@ export class MemoryCommerceStore implements CommerceStore {
       onHand,
       committed,
       currency: connection?.currency ?? 'LKR',
-      channel: { safetyBuffer: Number(ch.safetyBuffer ?? 0) || 0, allowBackorder: Boolean(ch.allowBackorder), timezone: ch.timezone || 'Asia/Colombo' },
+      channel: {
+        safetyBuffer: Number(ch.safetyBuffer ?? 0) || 0,
+        allowBackorder: Boolean(ch.allowBackorder),
+        timezone: ch.timezone || 'Asia/Colombo',
+        priceListId: ch.priceListId ?? null,
+      },
     };
+  }
+  priceListRows: Array<{ id: string; tenantId: string; name: string; currency: string; customerGroup: string | null; voided: boolean }> = [];
+  async listPriceLists(tenantId: string) {
+    return this.priceListRows
+      .filter((l) => l.tenantId === tenantId && !l.voided)
+      .map((l) => ({ id: l.id, name: l.name, currency: l.currency, customerGroup: l.customerGroup, itemCount: this.catalog.priceLists?.find((x) => x.id === l.id)?.entries.size ?? 0 }));
+  }
+  async savePriceList(tenantId: string, input: { id?: string; name: string; currency: string; customerGroup: string | null; archive?: boolean }) {
+    const lists = (this.catalog.priceLists ??= []);
+    if (input.id) {
+      const row = this.priceListRows.find((l) => l.id === input.id);
+      if (row && input.archive) {
+        row.voided = true;
+        this.catalog.priceLists = lists.filter((l) => l.id !== input.id);
+      } else if (row) {
+        Object.assign(row, { name: input.name, currency: input.currency, customerGroup: input.customerGroup });
+        const l = lists.find((x) => x.id === input.id);
+        if (l) Object.assign(l, { name: input.name, currency: input.currency, customerGroup: input.customerGroup });
+      }
+      return input.id;
+    }
+    const id = `pl-${this.priceListRows.length + 1}`;
+    this.priceListRows.push({ id, tenantId, name: input.name, currency: input.currency, customerGroup: input.customerGroup, voided: false });
+    lists.push({ id, name: input.name, currency: input.currency, customerGroup: input.customerGroup, entries: new Map(), updatedAt: new Date().toISOString() });
+    return id;
+  }
+  async upsertPriceEntries(tenantId: string, priceListId: string, rows: PriceEntryInput[]) {
+    void tenantId;
+    const list = this.catalog.priceLists?.find((l) => l.id === priceListId);
+    if (!list) return 0;
+    for (const r of rows) {
+      if (!r.price && !r.compareAtPrice && !r.salePrice && !r.tiers.length) list.entries.delete(r.productId);
+      else list.entries.set(r.productId, { ...r, updatedAt: new Date().toISOString() });
+    }
+    return rows.length;
+  }
+  async saleBoundaryProductIds(tenantId: string, priceListId: string, fromIso: string, toIso: string) {
+    void tenantId;
+    const list = this.catalog.priceLists?.find((l) => l.id === priceListId);
+    if (!list) return [];
+    const from = Date.parse(fromIso);
+    const to = Date.parse(toIso);
+    const crossed = (iso: string | null) => (iso ? Date.parse(iso) > from && Date.parse(iso) <= to : false);
+    return [...list.entries.values()].filter((e) => crossed(e.saleStartsAt) || crossed(e.saleEndsAt)).map((e) => e.productId);
   }
   channelProducts = new Map<string, Set<string>>();
   async listChannelProductIds(tenantId: string, connectionId: string) {

@@ -142,7 +142,7 @@ describe('WP1 catalog', () => {
     const { service, actor } = await setup();
     const conn = await service.connection(actor);
     expect(conn).toMatchObject({ channel: { name: 'watercolor' }, stockLocationIds: [locationId], taxMode: 'inclusive', timezone: 'Asia/Colombo' });
-    expect(conn.capabilities).toMatchObject({ catalogProducts: true, variants: true, channelPublishing: true, priceLists: false });
+    expect(conn.capabilities).toMatchObject({ catalogProducts: true, variants: true, channelPublishing: true, priceLists: true, priceExport: true });
     const a = { items: [{ x: 1, asOf: '2026-01-01' }], requestId: 'a' };
     const b = { items: [{ x: 1, asOf: '2026-02-02' }], requestId: 'b' };
     expect(etagFor(a)).toBe(etagFor(b));

@@ -12,7 +12,7 @@ import { listProducts } from '@/app/actions/inventory';
 export default async function CompanyCommercePage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; err?: string; tab?: string; connection?: string; published?: string; order?: string }>;
+  searchParams: Promise<{ saved?: string; err?: string; tab?: string; connection?: string; published?: string; order?: string; list?: string }>;
 }) {
   let tenant;
   try {
@@ -34,11 +34,18 @@ export default async function CompanyCommercePage({
       const rows = await service.listOperatorView(operator);
       const orders = new Map<string, Awaited<ReturnType<typeof service.listWebOrders>>>();
       const catalogs = new Map<string, Awaited<ReturnType<typeof service.channelCatalogForOperator>> | null>();
+      const priceLists = await service.listPriceListsForOperator(operator).catch(() => []);
+      const prices = new Map<string, { channelPriceListId: string | null; editListId: string | null; rows: Awaited<ReturnType<typeof service.pricesForOperator>>['rows'] }>();
       for (const row of rows) {
+        const channelListId = (row.connection.channelSettings?.priceListId as string | null | undefined) ?? null;
+        const wanted = query.list && (!query.connection || query.connection === row.connection.id) ? query.list : channelListId;
+        const editListId = priceLists.some((l) => l.id === wanted) ? wanted ?? null : null;
+        const priced = await service.pricesForOperator(operator, row.connection.id, editListId).catch(() => null);
+        prices.set(row.connection.id, { channelPriceListId: channelListId, editListId, rows: priced?.rows ?? [] });
         orders.set(row.connection.id, await service.listWebOrders(operator, row.connection.id).catch(() => []));
         catalogs.set(row.connection.id, await service.channelCatalogForOperator(operator, row.connection.id).catch(() => null));
       }
-      return { rows, orders, catalogs };
+      return { rows, orders, catalogs, priceLists, prices };
     }),
     getCompanySettingsData().catch(() => null),
     listProducts()
@@ -67,7 +74,7 @@ export default async function CompanyCommercePage({
         saveError={query.err ? decodeURIComponent(query.err) : null}
         publishedCount={query.published ? Number(query.published) : null}
         initialTab={
-          (['overview', 'orders', 'mapping', 'payments', 'settings', 'developer', 'activity'] as const).find(
+          (['overview', 'orders', 'mapping', 'prices', 'payments', 'settings', 'developer', 'activity'] as const).find(
             (t) => t === query.tab,
           ) ?? 'overview'
         }
@@ -94,6 +101,13 @@ export default async function CompanyCommercePage({
           paymentSettings: row.connection.paymentSettings ?? { defaultAccountCode: null, methods: {}, seenMethods: [] },
           webOrders: webOrders.get(row.connection.id) ?? [],
           channelCatalog: channelCatalogs.get(row.connection.id) ?? null,
+          prices: {
+            lists: viewData.priceLists,
+            channelPriceListId: viewData.prices.get(row.connection.id)?.channelPriceListId ?? null,
+            editListId: viewData.prices.get(row.connection.id)?.editListId ?? null,
+            timezone: tenant.timezone || 'Asia/Colombo',
+            rows: viewData.prices.get(row.connection.id)?.rows ?? [],
+          },
           mappingCount: row.mappingCount,
           reviewCount: row.reviewCount,
           lastCatalog: row.connection.lastCatalogSyncAt,

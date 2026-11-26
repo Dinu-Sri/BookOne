@@ -329,7 +329,7 @@ export type ConnectionRow = {
   taxMode: string;
   paymentSettings?: PaymentSettings;
   /** WP1 channel settings: safetyBuffer, allowBackorder, timezone. */
-  channelSettings?: { safetyBuffer?: number; allowBackorder?: boolean; timezone?: string };
+  channelSettings?: { safetyBuffer?: number; allowBackorder?: boolean; timezone?: string; priceListId?: string | null; priceTickAt?: string };
   status: 'active' | 'disconnected';
   lastCatalogSyncAt: string | null;
   lastStockSyncAt: string | null;

@@ -83,6 +83,41 @@ Nightly safety net:
   GET /inventory
 ```
 
+### Prices
+
+Each product and variant carries a `price` object (with `include=prices`):
+
+```json
+{
+  "currency": "LKR",
+  "priceListId": "3f6c…",
+  "price": "1119.00",
+  "compareAtPrice": "1250.00",
+  "sale": { "price": "999.00", "startsAt": "2026-12-01T00:00:00+05:30", "endsAt": "2026-12-07T23:59:59+05:30", "active": true },
+  "tiers": [{ "minQty": "6", "price": "1050.00" }],
+  "effectivePrice": "999.00",
+  "revision": 1764150720000,
+  "updatedAt": "…"
+}
+```
+
+- Charge `effectivePrice` for one item. It is the sale price while `sale.active` is true, otherwise `price`.
+- For larger quantities, use the highest tier whose `minQty` is at or below the quantity, when it is lower than `effectivePrice`.
+- Show `compareAtPrice` struck through ("was"). It is only sent when it is higher than `price`.
+- `priceListId` is the list this channel sells at (`default` = the BookOne sell price). Products not on the list use their BookOne sell price.
+- Customer groups: add `customerGroup=wholesale` to any catalog or pricing call to get that group's list when one exists. Otherwise you get the channel list.
+- A `price` change arrives on the feed when a price is edited, the channel's list is switched, or a sale starts or ends.
+
+Re-check prices at checkout with `GET /pricing?sku=A,B,C` (1 to 100 product or variant SKUs):
+
+```bash
+curl -sS -H "Authorization: Bearer $BOOKONE_KEY" "$BOOKONE_BASE/pricing?sku=WN-COT-8ML-CHWHITE,WN-COT-8ML-LEMON"
+```
+
+```json
+{ "items": [{ "sku": "WN-COT-8ML-CHWHITE", "productId": "…", "parentProductId": "…", "price": { "effectivePrice": "999.00", "…": "…" } }], "missing": [], "priceListId": "3f6c…", "customerGroup": null }
+```
+
 ## 4. Stock
 
 ```bash
@@ -107,6 +142,7 @@ Items arrive in `revision` order: `{ id, revision, kind, productId, sku, payload
 | kind | When | Payload |
 |---|---|---|
 | `product` | A product, variant or its photos changed in BookOne, or it was published or unpublished | `action` (`updated`, `published`, `unpublished`), `productId`, `variantId`, `sku`. Re-read the product |
+| `price` | The channel price of a product or variant changed (price edited, list switched, sale started or ended) | `productId`, `variantId`, `sku`, `price` (the full price object) |
 | `inventory` | Stock or held stock changed | `sku`, `onHand`, `committed`, `available`, `quantity`, `locationId` |
 | `order` | BookOne changed one of your web orders | `externalId`, `action`, `status`, `paymentStatus`, `fulfilment`, `documentNumber` |
 | `mapping` | A BookOne product was linked to one of your listings | `action: "applied"`, `sku`, `bookoneProductId`, `externalProductId`, `externalVariantId` |
@@ -241,6 +277,7 @@ A longer sample lives at `docs/commerce/quickstart-node.mjs` in the BookOne repo
 
 ## Changelog
 
+- **2026-11-26 (BookOne 2.22.0)**: Pricing. Price lists per channel and per customer group, was prices (`compareAtPrice`), scheduled sales (`sale`), quantity prices (`tiers`) and `effectivePrice` on every price. New `GET /pricing?sku=` for up to 100 SKUs, `customerGroup=` on catalog and pricing calls, change kind `price`. `/orders/validate` adds a non-blocking `PRICE_MISMATCH` issue (the order is still accepted). Capabilities `priceExport`, `priceLists`, `salePrices`, `priceTiers`, `customerGroupPricing` are now `true`.
 - **2026-11-26 (BookOne 2.21.0)**: Catalog API (`/catalog/products`, by id and by SKU, `/catalog/categories`, `/catalog/brands`, `/catalog/attributes`) with variants, photos, weights, brands, attributes and channel publishing. `/inventory` covers published products and applies the channel safety buffer and backorder setting. `/connection` adds `channel`, `priceListId`, `stockLocationIds`, `taxMode`, `timezone` and more capabilities. New change kind `product`. ETag / `If-None-Match` on GETs, `X-RateLimit-*` headers, rate limit raised to 600 per minute.
 - **2026-11-26 (BookOne 2.20.0)**: Web orders in BookOne with fulfilment; COD / bank-transfer orders hold stock; `GET /payment-methods`; `/inventory` adds `onHand`, `committed`, `available`; change kinds `order`, `mapping`, `publish`.
 - **2026-11-26 (BookOne 2.19.0)**: Payment method names map to settlement accounts per connection.

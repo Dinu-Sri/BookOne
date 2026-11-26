@@ -48,6 +48,17 @@ On the product page, under **Photos for online stores**, upload clear photos (at
 
 Changes reach the website within seconds through its change feed.
 
-## 5. Web orders
+## 5. Prices for websites
+
+**Company → Commerce Integrations → Prices**:
+
+- **Prices on this store**: choose the price list this website sells at. With no list, the website uses each product's BookOne sell price.
+- **Price lists**: create a list per channel (e.g. *Online Retail*) or per customer group (e.g. *wholesale*). A website can show a group's prices to signed-in customers of that group.
+- **Edit prices** on a list: set a list price, a **Was price** (shown struck through), a **Sale price** with from/to dates, and **Quantity prices** such as `6=1050; 12=990` (unit price from 6 and from 12). Leave a price empty to use the sell price.
+- **Set every price from the sell price ±%** fills the whole list at once, e.g. `-10` for 10% off. **Clear all prices** empties the list.
+
+Sales start at the beginning of the first day and end at the end of the last day, in the company timezone. Websites see price changes within seconds. If an order arrives at a different price (for example after a coupon), BookOne still accepts it and records the price the customer paid.
+
+## 6. Web orders
 
 Orders from the website appear on **Commerce Integrations → Orders**. Cash-on-delivery and bank-transfer orders hold their stock as soon as they arrive, so the same item cannot be sold again at the POS. From an order you can **Confirm**, **Mark paid** (e.g. when the courier remits cash), **Dispatch** with courier and tracking number, **Mark delivered**, **Cancel** (releases or restocks), and **Refund** (with or without restock). The customer's website sees each change.

@@ -2,7 +2,7 @@ export const COMMERCE_OPENAPI = {
   openapi: '3.1.0',
   info: {
     title: 'BookOne Commerce API',
-    version: '1.2.0',
+    version: '1.3.0',
     description:
       'Rate limit: 600 requests per minute per key; every response has X-RateLimit-Limit, X-RateLimit-Remaining and (when known) X-Request-Id. GET responses carry a weak ETag; send If-None-Match to get 304. Money is a 2-dp decimal string, quantities are decimal strings, timestamps are ISO 8601. List endpoints take cursor and limit (default 50, max 250). Full guide: /docs/developers/custom-website. v1 single-store, single-location, single-currency commerce contract. HTTP 2xx means the request was accepted for processing. Accounting and stock effects are confirmed by reading the order, inventory, and journals. Reservation endpoints stay disabled. Keep the bearer token on the server. Never put it in a theme file or shopper HTML. GET /products stays mapped-only. BookOne-first publish uses /catalog/candidates plus /catalog/acknowledge.',
   },
@@ -55,7 +55,7 @@ export const COMMERCE_OPENAPI = {
           oversellPolicy: { type: 'string', enum: ['review'] },
           reservationMode: { type: 'string', enum: ['disabled'] },
           channel: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' } } },
-          priceListId: { type: 'string', example: 'default' },
+          priceListId: { type: 'string', example: 'default', description: 'The price list this channel sells at; default = BookOne sell price.' },
           stockLocationIds: { type: 'array', items: { type: 'string' } },
           taxMode: { type: 'string', enum: ['inclusive', 'exclusive'] },
           timezone: { type: 'string', example: 'Asia/Colombo' },
@@ -77,13 +77,16 @@ export const COMMERCE_OPENAPI = {
               paymentMethods: { type: 'boolean' },
               etag: { type: 'boolean' },
               priceLists: { type: 'boolean' },
+              salePrices: { type: 'boolean' },
+              priceTiers: { type: 'boolean' },
+              customerGroupPricing: { type: 'boolean' },
               webhooks: { type: 'boolean' },
               changeKinds: { type: 'array', items: { type: 'string' } },
               inventory: { type: 'boolean' },
               orders: { type: 'boolean' },
               lifecycle: { type: 'boolean' },
               reservations: { type: 'boolean', enum: [false] },
-              priceExport: { type: 'boolean', enum: [false] },
+              priceExport: { type: 'boolean', description: 'GET /pricing and price changes are available (WP2).' },
             },
           },
           serviceTime: { type: 'string', format: 'date-time' },
@@ -168,9 +171,9 @@ export const COMMERCE_OPENAPI = {
                 revision: { type: 'integer' },
                 kind: {
                   type: 'string',
-                  enum: ['catalog', 'product', 'inventory', 'order', 'mapping', 'publish'],
+                  enum: ['catalog', 'product', 'price', 'inventory', 'order', 'mapping', 'publish'],
                   description:
-                    'order: BookOne-side change to a web order (stock_held, confirmed, paid, dispatched, delivered, cancelled, refunded, posted). mapping: a SKU was linked. publish: a product was queued for publishing or claimed by the store.',
+                    'price: the channel price of a product or variant changed (list price edited, channel list switched, a scheduled sale started or ended); payload.price is the full CatalogPrice. order: BookOne-side change to a web order (stock_held, confirmed, paid, dispatched, delivered, cancelled, refunded, posted). mapping: a SKU was linked. publish: a product was queued for publishing or claimed by the store.',
                 },
                 productId: { type: ['string', 'null'] },
                 createdAt: { type: 'string', format: 'date-time' },
@@ -431,11 +434,29 @@ export const COMMERCE_OPENAPI = {
       },
       CatalogPrice: {
         type: 'object',
+        description:
+          'Charge effectivePrice for quantity 1. For larger quantities use the highest tier whose minQty <= quantity when it is lower. compareAtPrice is only sent when higher than price (show it struck through).',
         properties: {
           currency: { type: 'string', example: 'LKR' },
           priceListId: { type: 'string', example: 'default' },
-          price: { type: 'string', example: '1250.00' },
+          price: { type: 'string', example: '1250.00', description: 'List price (or BookOne sell price when the product is not on the list).' },
           compareAtPrice: { type: ['string', 'null'] },
+          sale: {
+            type: ['object', 'null'],
+            description: 'Scheduled sale; active tells you whether it applies right now. Day boundaries are in the company timezone.',
+            properties: {
+              price: { type: 'string', example: '999.00' },
+              startsAt: { type: ['string', 'null'], format: 'date-time' },
+              endsAt: { type: ['string', 'null'], format: 'date-time' },
+              active: { type: 'boolean' },
+            },
+          },
+          tiers: {
+            type: 'array',
+            description: 'Quantity prices: unit price from minQty upward.',
+            items: { type: 'object', properties: { minQty: { type: 'string', example: '6' }, price: { type: 'string', example: '1050.00' } } },
+          },
+          effectivePrice: { type: 'string', example: '999.00', description: 'Unit price for one item now (sale when active, else price).' },
           revision: { type: 'integer' },
           updatedAt: { type: 'string', format: 'date-time' },
         },
@@ -546,7 +567,20 @@ export const COMMERCE_OPENAPI = {
         type: 'object',
         properties: {
           ok: { type: 'boolean' },
-          issues: { type: 'array', items: { type: 'string' } },
+          issues: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                code: { type: 'string', example: 'PRICE_MISMATCH' },
+                message: { type: 'string', example: 'PRICE_MISMATCH:WN-COT-10' },
+                field: { type: 'string' },
+                blocking: { type: 'boolean', description: 'false = warning; the order is still accepted (e.g. PRICE_MISMATCH after a coupon).' },
+                expected: { type: 'string' },
+                received: { type: 'string' },
+              },
+            },
+          },
           mapped: { type: 'array', items: { type: 'object', additionalProperties: true } },
         },
       },
@@ -587,6 +621,7 @@ export const COMMERCE_OPENAPI = {
           { name: 'sku', in: 'query', schema: { type: 'string' }, description: 'Repeat or comma-separate, up to 100. Matches product or variant SKU.' },
           { name: 'include', in: 'query', schema: { type: 'string', example: 'variants,images,prices,inventory,attributes' } },
           { name: 'scope', in: 'query', schema: { type: 'string', enum: ['published', 'all'], default: 'published' } },
+          { name: 'customerGroup', in: 'query', schema: { type: 'string', example: 'wholesale' }, description: 'Use the price list for this customer group when one exists (WP2).' },
           { name: 'If-None-Match', in: 'header', schema: { type: 'string' } },
         ],
         responses: {
@@ -619,10 +654,55 @@ export const COMMERCE_OPENAPI = {
         parameters: [
           { name: 'sku', in: 'path', required: true, schema: { type: 'string' } },
           { name: 'include', in: 'query', schema: { type: 'string' } },
+          { name: 'customerGroup', in: 'query', schema: { type: 'string', example: 'wholesale' }, description: 'Use the price list for this customer group when one exists (WP2).' },
         ],
         responses: {
           '200': { description: 'Product', content: { 'application/json': { schema: { $ref: '#/components/schemas/CatalogProduct' } } } },
           '404': { description: 'Not published on this channel', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    },
+    '/pricing': {
+      get: {
+        summary: 'Current channel prices for up to 100 SKUs (WP2)',
+        description:
+          'Fast price re-check, e.g. at cart or checkout. Accepts product or variant SKUs that are published on this channel; unknown or unpublished SKUs are listed in missing.',
+        parameters: [
+          { name: 'sku', in: 'query', required: true, schema: { type: 'string' }, description: 'Repeat or comma-separate, 1 to 100.' },
+          { name: 'customerGroup', in: 'query', schema: { type: 'string', example: 'wholesale' }, description: 'Use the price list for this customer group when one exists (WP2).' },
+        ],
+        responses: {
+          '200': {
+            description: 'Prices',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    items: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          sku: { type: 'string' },
+                          productId: { type: 'string' },
+                          parentProductId: { type: ['string', 'null'] },
+                          price: { $ref: '#/components/schemas/CatalogPrice' },
+                        },
+                      },
+                    },
+                    missing: { type: 'array', items: { type: 'string' } },
+                    priceListId: { type: 'string' },
+                    customerGroup: { type: ['string', 'null'] },
+                    requestId: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          '401': { description: 'Unauthenticated', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '403': { description: 'Key lacks the catalog scope', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '422': { description: 'No SKU or more than 100', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
         },
       },
     },
@@ -711,6 +791,8 @@ export const COMMERCE_OPENAPI = {
     '/orders/validate': {
       post: {
         summary: 'Side-effect-free order preview',
+        description:
+          'Flags lines whose unitPrice differs from the channel price with a non-blocking PRICE_MISMATCH issue (expected, received). The order is still accepted because coupons and manual discounts are legitimate. Send customerGroup in the body to compare against that group list.',
         requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/Order' } } } },
         responses: {
           '200': { description: 'Preview', content: { 'application/json': { schema: { $ref: '#/components/schemas/ValidatePreview' } } } },

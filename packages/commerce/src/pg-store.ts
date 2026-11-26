@@ -14,6 +14,8 @@ import {
   commerceRefunds,
   commerceStockCommitments,
   commerceChannelProducts,
+  priceLists,
+  priceListItems,
   inventoryProductImages,
   inventoryProductCategories,
   inventoryProductBrands,
@@ -31,7 +33,7 @@ import {
   inventoryStockLevels,
   sql,
 } from '@bookone/db';
-import type { CommerceEventRow, CommerceRefundRow, CommerceStore } from './store';
+import type { CommerceEventRow, CommerceRefundRow, CommerceStore, PriceEntryInput } from './store';
 import type { CatalogBundle } from './catalog';
 import { EMPTY_PAYMENT_SETTINGS, normalizePaymentSettings } from './payments';
 import { EMPTY_FULFILMENT, normalizeFulfilment } from './fulfilment';
@@ -638,6 +640,13 @@ export class PostgresCommerceStore implements CommerceStore {
       .select({ productId: commerceStockCommitments.productId, locationId: commerceStockCommitments.locationId, quantity: commerceStockCommitments.quantity })
       .from(commerceStockCommitments)
       .where(and(eq(commerceStockCommitments.tenantId, tenantId), eq(commerceStockCommitments.status, 'active')));
+    const lists = await db()
+      .select()
+      .from(priceLists)
+      .where(and(eq(priceLists.tenantId, tenantId), isNull(priceLists.voidedAt)));
+    const items = lists.length
+      ? await db().select().from(priceListItems).where(eq(priceListItems.tenantId, tenantId))
+      : [];
     const [vat] = await db()
       .select({ vatRegistered: salesSettings.vatRegistered, vatRatePercent: salesSettings.vatRatePercent })
       .from(salesSettings)
@@ -745,8 +754,114 @@ export class PostgresCommerceStore implements CommerceStore {
         safetyBuffer: Math.max(0, Number(ch.safetyBuffer ?? 0) || 0),
         allowBackorder: Boolean(ch.allowBackorder),
         timezone: ch.timezone || 'Asia/Colombo',
+        priceListId: ch.priceListId ?? null,
       },
+      priceLists: lists.map((l) => ({
+        id: l.id,
+        name: l.name,
+        currency: l.currency,
+        customerGroup: l.customerGroup,
+        updatedAt: l.updatedAt.toISOString(),
+        entries: new Map(
+          items
+            .filter((i) => i.priceListId === l.id)
+            .map((i) => [
+              i.productId,
+              {
+                productId: i.productId,
+                price: i.price,
+                compareAtPrice: i.compareAtPrice,
+                salePrice: i.salePrice,
+                saleStartsAt: i.saleStartsAt?.toISOString() ?? null,
+                saleEndsAt: i.saleEndsAt?.toISOString() ?? null,
+                tiers: arr<{ minQty: string; price: string }>(i.tiers),
+                updatedAt: i.updatedAt.toISOString(),
+              },
+            ]),
+        ),
+      })),
     };
+  }
+
+
+  async listPriceLists(tenantId: string) {
+    const rows = await db()
+      .select({
+        id: priceLists.id,
+        name: priceLists.name,
+        currency: priceLists.currency,
+        customerGroup: priceLists.customerGroup,
+        itemCount: sql<number>`(select count(*) from price_list_items i where i.price_list_id = ${priceLists.id})`,
+      })
+      .from(priceLists)
+      .where(and(eq(priceLists.tenantId, tenantId), isNull(priceLists.voidedAt)))
+      .orderBy(asc(priceLists.name));
+    return rows.map((r) => ({ ...r, itemCount: Number(r.itemCount ?? 0) }));
+  }
+
+  async savePriceList(tenantId: string, input: { id?: string; name: string; currency: string; customerGroup: string | null; archive?: boolean }) {
+    if (input.id) {
+      await db()
+        .update(priceLists)
+        .set(
+          input.archive
+            ? { voidedAt: new Date(), updatedAt: new Date() }
+            : { name: input.name, currency: input.currency, customerGroup: input.customerGroup, updatedAt: new Date() },
+        )
+        .where(and(eq(priceLists.tenantId, tenantId), eq(priceLists.id, input.id)));
+      return input.id;
+    }
+    const [row] = await db()
+      .insert(priceLists)
+      .values({ tenantId, name: input.name, currency: input.currency, customerGroup: input.customerGroup })
+      .returning({ id: priceLists.id });
+    return row!.id;
+  }
+
+  async upsertPriceEntries(tenantId: string, priceListId: string, rows: PriceEntryInput[]) {
+    let n = 0;
+    for (const r of rows) {
+      const empty = !r.price && !r.compareAtPrice && !r.salePrice && !r.tiers.length;
+      if (empty) {
+        const del = await db()
+          .delete(priceListItems)
+          .where(and(eq(priceListItems.tenantId, tenantId), eq(priceListItems.priceListId, priceListId), eq(priceListItems.productId, r.productId)))
+          .returning({ id: priceListItems.id });
+        n += del.length;
+        continue;
+      }
+      const values = {
+        price: r.price,
+        compareAtPrice: r.compareAtPrice,
+        salePrice: r.salePrice,
+        saleStartsAt: r.saleStartsAt ? new Date(r.saleStartsAt) : null,
+        saleEndsAt: r.saleEndsAt ? new Date(r.saleEndsAt) : null,
+        tiers: r.tiers,
+        updatedAt: new Date(),
+      };
+      await db()
+        .insert(priceListItems)
+        .values({ tenantId, priceListId, productId: r.productId, ...values })
+        .onConflictDoUpdate({ target: [priceListItems.priceListId, priceListItems.productId], set: values });
+      n += 1;
+    }
+    return n;
+  }
+
+  async saleBoundaryProductIds(tenantId: string, priceListId: string, fromIso: string, toIso: string) {
+    const from = new Date(fromIso);
+    const to = new Date(toIso);
+    const rows = await db()
+      .select({ productId: priceListItems.productId })
+      .from(priceListItems)
+      .where(
+        and(
+          eq(priceListItems.tenantId, tenantId),
+          eq(priceListItems.priceListId, priceListId),
+          sql`((${priceListItems.saleStartsAt} > ${from} and ${priceListItems.saleStartsAt} <= ${to}) or (${priceListItems.saleEndsAt} > ${from} and ${priceListItems.saleEndsAt} <= ${to}))`,
+        ),
+      );
+    return rows.map((r) => r.productId);
   }
 
   async listChannelProductIds(tenantId: string, connectionId: string) {

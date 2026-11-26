@@ -27,7 +27,10 @@ import { fail, validateEvent, validateOrderInput } from './validate';
 import { normalizePaymentSettings, paymentMethodKey, resolvePaymentAccount, withSeenMethod } from './payments';
 import { DEFAULT_COMMIT_STOCK_METHODS, UNPAID_METHOD, type PaymentSettings } from './types';
 import { EMPTY_FULFILMENT, normalizeFulfilment, trackingUrlFor } from './fulfilment';
+import { channelPrice, unitPriceFor } from './pricing';
+import type { PriceEntryInput } from './store';
 import {
+  activeList,
   attributeList,
   brandList,
   catalogPage,
@@ -296,7 +299,7 @@ export class CommerceService {
       reservationMode: row.reservationMode,
       // WP1 C5: the channel this key belongs to.
       channel: { id: row.id, name: row.name },
-      priceListId: 'default',
+      priceListId: row.channelSettings?.priceListId ?? 'default',
       stockLocationIds: row.locationId ? [row.locationId] : [],
       taxMode: row.taxMode.includes('exclusive') ? 'exclusive' : 'inclusive',
       timezone: row.channelSettings?.timezone || 'Asia/Colombo',
@@ -318,11 +321,14 @@ export class CommerceService {
         fulfilment: true,
         paymentMethods: true,
         lifecycle: true,
-        changeKinds: ['catalog', 'product', 'inventory', 'order', 'mapping', 'publish'],
+        changeKinds: ['catalog', 'product', 'price', 'inventory', 'order', 'mapping', 'publish'],
         etag: true,
         reservations: false,
-        priceExport: false,
-        priceLists: false,
+        priceExport: true,
+        priceLists: true,
+        salePrices: true,
+        priceTiers: true,
+        customerGroupPricing: true,
         webhooks: false,
         multiLocation: false,
       },
@@ -409,6 +415,7 @@ export class CommerceService {
 
   async changes(actor: CommerceActor, cursor?: string) {
     this.need(actor, 'catalog');
+    await this.tickSales(actor).catch(() => undefined);
     const after = decodeCursor(cursor);
     const max = await this.store.maxRevision(actor.tenantId, actor.connectionId);
     if (after > 0 && max - after > CURSOR_WINDOW_REVISIONS) {
@@ -885,7 +892,29 @@ export class CommerceService {
     this.need(actor, 'order');
     const mappings = await this.store.listMappings(actor.tenantId, actor.connectionId);
     const products = await this.store.listSellableProducts(actor.tenantId);
-    return validateOrderInput(input, { currency: actor.currency, mappings, products });
+    const preview = validateOrderInput(input, { currency: actor.currency, mappings, products });
+    // PR8: flag lines whose unit price differs from the channel price; the order is still accepted (coupons are legitimate).
+    if (this.store.catalogBundle) {
+      const b = await this.store.catalogBundle(actor.tenantId, actor.connectionId);
+      const list = activeList(b, (input as { customerGroup?: string }).customerGroup ?? null);
+      for (const line of input.lines ?? []) {
+        const mapped = preview.mapped.find((m) => m.sku === line.sku);
+        const raw = mapped?.productId ? b.products.find((p) => p.id === mapped.productId) : null;
+        if (!raw) continue;
+        const expected = unitPriceFor(channelPrice(raw, list, b.currency), Number(line.quantity) || 1);
+        if (Math.abs(Number(line.unitPrice) - Number(expected)) > 0.005) {
+          preview.issues.push({
+            code: 'PRICE_MISMATCH',
+            message: `PRICE_MISMATCH:${line.sku}`,
+            field: 'lines.unitPrice',
+            blocking: false,
+            expected,
+            received: line.unitPrice,
+          } as (typeof preview.issues)[number]);
+        }
+      }
+    }
+    return preview;
   }
 
   async submitOrder(actor: CommerceActor, input: OrderInput, idempotencyKey: string | null) {
@@ -1342,6 +1371,153 @@ export class CommerceService {
   }
 
   // ---------------------------------------------------------------------------
+  // WP2: pricing
+  // ---------------------------------------------------------------------------
+
+  /** PR4: fast price re-check for up to 100 SKUs (product or variant), e.g. at checkout. */
+  async pricing(actor: CommerceActor, skus: string[], customerGroup?: string | null) {
+    this.need(actor, 'catalog');
+    const wanted = [...new Set(skus.map((s) => s.trim()).filter(Boolean))];
+    if (!wanted.length) fail('VALIDATION', 'Pass at least one sku.');
+    if (wanted.length > 100) fail('VALIDATION', 'Pass at most 100 SKUs per call.');
+    const b = await this.bundle(actor.tenantId, actor.connectionId);
+    const list = activeList(b, customerGroup);
+    const sellable = new Map<string, CatalogBundle['products'][number]>();
+    for (const entry of visibleTree(b, 'published')) {
+      for (const p of entry.variants.length ? entry.variants : [entry.product]) sellable.set(p.sku, p);
+    }
+    const items = [];
+    const missing: string[] = [];
+    for (const sku of wanted) {
+      const p = sellable.get(sku);
+      if (!p) {
+        missing.push(sku);
+        continue;
+      }
+      items.push({ sku, productId: p.id, parentProductId: p.parentProductId, price: channelPrice(p, list, b.currency) });
+    }
+    return { items, missing, priceListId: list?.id ?? 'default', customerGroup: customerGroup ?? null, nextCursor: null, requestId: randomUUID() };
+  }
+
+  async listPriceListsForOperator(operator: OperatorActor) {
+    return (await this.store.listPriceLists?.(operator.tenantId)) ?? [];
+  }
+
+  async savePriceList(
+    operator: OperatorActor,
+    input: { id?: string; name: string; currency?: string; customerGroup?: string | null; archive?: boolean },
+  ) {
+    this.assertWrite(operator);
+    if (!this.store.savePriceList) fail('NOT_FOUND', 'Price lists are not available on this store.');
+    const name = input.name?.trim() ?? '';
+    if (!input.archive && name.length < 2) fail('VALIDATION', 'Enter the price list name.');
+    const group = input.customerGroup?.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 40) || null;
+    const id = await this.store.savePriceList(operator.tenantId, {
+      id: input.id,
+      name: name.slice(0, 120),
+      currency: (input.currency ?? 'LKR').toUpperCase().slice(0, 5),
+      customerGroup: group,
+      archive: input.archive,
+    });
+    if (input.archive) {
+      // Channels that sold at this list fall back to the BookOne sell price.
+      for (const connection of await this.store.listConnections(operator.tenantId)) {
+        if (connection.channelSettings?.priceListId === id) {
+          await this.store.updateConnection({ ...connection, channelSettings: { ...connection.channelSettings, priceListId: null }, updatedAt: nowIso() });
+          await this.emitChannelPrices(operator.tenantId, connection.id);
+        }
+      }
+    }
+    await this.audit(operator, null, input.archive ? 'price_list.archive' : 'price_list.save', 'price_list', id, { name, customerGroup: group });
+    return { id };
+  }
+
+  /** C2: the price list a channel sells at (null = BookOne sell price). */
+  async setChannelPriceList(operator: OperatorActor, connectionId: string, priceListId: string | null) {
+    this.assertWrite(operator);
+    const row = await this.requireConnection(operator.tenantId, connectionId);
+    if (priceListId) {
+      const lists = (await this.store.listPriceLists?.(operator.tenantId)) ?? [];
+      if (!lists.some((l) => l.id === priceListId)) fail('VALIDATION', 'Price list was not found.');
+    }
+    await this.store.updateConnection({ ...row, channelSettings: { ...row.channelSettings, priceListId }, updatedAt: nowIso() });
+    await this.emitChannelPrices(operator.tenantId, connectionId);
+    await this.audit(operator, connectionId, 'connection.price_list', 'connection', connectionId, { priceListId });
+    return { priceListId };
+  }
+
+  /** Save prices on a list; emits `price` changes on channels selling at it. */
+  async savePriceEntries(operator: OperatorActor, priceListId: string, rows: PriceEntryInput[]) {
+    this.assertWrite(operator);
+    if (!this.store.upsertPriceEntries) fail('NOT_FOUND', 'Price lists are not available on this store.');
+    const lists = (await this.store.listPriceLists?.(operator.tenantId)) ?? [];
+    if (!lists.some((l) => l.id === priceListId)) fail('VALIDATION', 'Price list was not found.');
+    for (const r of rows) {
+      for (const [label, v] of [['Price', r.price], ['Compare-at price', r.compareAtPrice], ['Sale price', r.salePrice]] as const) {
+        if (v !== null && (!Number.isFinite(Number(v)) || Number(v) < 0)) fail('VALIDATION', `${label} must be a number of 0 or more.`);
+      }
+      if (r.saleStartsAt && r.saleEndsAt && Date.parse(r.saleEndsAt) <= Date.parse(r.saleStartsAt)) {
+        fail('VALIDATION', 'The sale must end after it starts.');
+      }
+      if ((r.saleStartsAt || r.saleEndsAt) && !r.salePrice) fail('VALIDATION', 'Enter a sale price for the sale dates.');
+    }
+    const changed = await this.store.upsertPriceEntries(operator.tenantId, priceListId, rows);
+    for (const connection of await this.store.listConnections(operator.tenantId)) {
+      if (connection.channelSettings?.priceListId === priceListId) {
+        await this.notifyProductsChanged(operator.tenantId, rows.map((r) => r.productId), 'price', undefined, [connection.id]);
+      }
+    }
+    await this.audit(operator, null, 'price_list.prices', 'price_list', priceListId, { count: rows.length });
+    return { changed };
+  }
+
+  /** Prices tab: sellable published SKUs with base price and the list's entry. */
+  async pricesForOperator(operator: OperatorActor, connectionId: string, priceListId: string | null) {
+    await this.requireConnection(operator.tenantId, connectionId);
+    const b = await this.bundle(operator.tenantId, connectionId);
+    const list = priceListId ? (b.priceLists ?? []).find((l) => l.id === priceListId) ?? null : null;
+    const rows = [];
+    for (const entry of visibleTree(b, 'published')) {
+      for (const p of entry.variants.length ? entry.variants : [entry.product]) {
+        const e = list?.entries.get(p.id);
+        rows.push({
+          productId: p.id,
+          sku: p.sku,
+          name: p.name,
+          basePrice: Number(p.sellPrice).toFixed(2),
+          price: e?.price ?? null,
+          compareAtPrice: e?.compareAtPrice ?? null,
+          salePrice: e?.salePrice ?? null,
+          saleStartsAt: e?.saleStartsAt ?? null,
+          saleEndsAt: e?.saleEndsAt ?? null,
+          tiers: e?.tiers ?? [],
+          effective: channelPrice(p, list, b.currency).effectivePrice,
+        });
+      }
+    }
+    return { rows, channelPriceListId: b.channel.priceListId ?? null };
+  }
+
+  /** Every published product's price changed for this channel (list switched or archived). */
+  private async emitChannelPrices(tenantId: string, connectionId: string) {
+    const b = await this.bundle(tenantId, connectionId);
+    const ids = visibleTree(b, 'published').flatMap((e) => (e.variants.length ? e.variants : [e.product]).map((p) => p.id));
+    await this.notifyProductsChanged(tenantId, ids, 'price', undefined, [connectionId]);
+  }
+
+  /** PR2: emit `price` changes when scheduled sales start or end (checked when the channel polls /changes). */
+  private async tickSales(actor: CommerceActor) {
+    const connection = await this.store.getConnection(actor.tenantId, actor.connectionId);
+    const listId = connection?.channelSettings?.priceListId;
+    if (!connection || !listId || !this.store.saleBoundaryProductIds) return;
+    const now = nowIso();
+    const from = connection.channelSettings?.priceTickAt ?? connection.createdAt;
+    const ids = await this.store.saleBoundaryProductIds(actor.tenantId, listId, from, now);
+    await this.store.updateConnection({ ...connection, channelSettings: { ...connection.channelSettings, priceTickAt: now } });
+    if (ids.length) await this.notifyProductsChanged(actor.tenantId, ids, 'price', undefined, [connection.id]);
+  }
+
+  // ---------------------------------------------------------------------------
   // WP1: catalog read, channel publishing and channel settings
   // ---------------------------------------------------------------------------
 
@@ -1362,10 +1538,11 @@ export class CommerceService {
     include: CatalogInclude[],
     mediaBase: string,
     scope: 'published' | 'all' = 'published',
+    customerGroup?: string | null,
   ) {
     this.need(actor, 'catalog');
     const b = await this.bundle(actor.tenantId, actor.connectionId);
-    const found = findCatalogProduct(b, match, include, mediaBase, scope);
+    const found = findCatalogProduct(b, match, include, mediaBase, scope, customerGroup);
     if (!found) fail('NOT_FOUND', 'Product was not found on this channel.');
     return { ...found, requestId: randomUUID() };
   }
@@ -1472,9 +1649,11 @@ export class CommerceService {
   async notifyProductsChanged(
     tenantId: string,
     productIds: string[],
-    kind: 'product' | 'inventory',
+    kind: 'product' | 'inventory' | 'price',
     /** Only channels selling from this location (stock moved there). Omit for all. */
     atLocation?: string | null,
+    /** Only these connections. */
+    onlyConnections?: string[],
   ) {
     const ids = [...new Set(productIds)].filter(Boolean);
     if (!ids.length) return;
@@ -1482,6 +1661,9 @@ export class CommerceService {
     for (const connection of connections) {
       if (connection.status !== 'active') continue;
       if (atLocation !== undefined && (connection.locationId ?? null) !== (atLocation ?? null)) continue;
+      if (onlyConnections && !onlyConnections.includes(connection.id)) continue;
+      const priceBundle = kind === 'price' && this.store.catalogBundle ? await this.store.catalogBundle(tenantId, connection.id) : null;
+      const priceList = priceBundle ? activeList(priceBundle) : null;
       const mappings = await this.store.listMappings(tenantId, connection.id);
       const channel = new Set((await this.store.listChannelProductIds?.(tenantId, connection.id)) ?? []);
       for (const id of ids) {
@@ -1515,6 +1697,15 @@ export class CommerceService {
               locationId: connection.locationId,
             },
             createdAt: nowIso(),
+          });
+        } else if (kind === 'price') {
+          const raw = priceBundle?.products.find((p) => p.id === id);
+          if (!raw) continue;
+          await this.emitCatalogEvent(tenantId, connection.id, 'price', id, raw.sku, {
+            productId: raw.parentProductId ?? id,
+            variantId: raw.parentProductId ? id : null,
+            sku: raw.sku,
+            price: channelPrice(raw, priceList, priceBundle!.currency),
           });
         } else {
           await this.emitCatalogEvent(tenantId, connection.id, 'product', id, product?.sku ?? null, {
@@ -1846,7 +2037,7 @@ export class CommerceService {
   private async emitCatalogEvent(
     tenantId: string,
     connectionId: string,
-    kind: 'mapping' | 'publish' | 'product',
+    kind: 'mapping' | 'publish' | 'product' | 'price',
     productId: string | null,
     sku: string | null,
     payload: Record<string, unknown>,

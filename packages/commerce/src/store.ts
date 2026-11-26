@@ -1,4 +1,14 @@
 import type { CatalogBundle } from './catalog';
+
+export type PriceEntryInput = {
+  productId: string;
+  price: string | null;
+  compareAtPrice: string | null;
+  salePrice: string | null;
+  saleStartsAt: string | null;
+  saleEndsAt: string | null;
+  tiers: Array<{ minQty: string; price: string }>;
+};
 import type {
   ActivityRow,
   CommitmentLine,
@@ -97,6 +107,13 @@ export type CommerceStore = {
   /** WP1: publish or unpublish products on a channel. Returns rows changed. */
   setChannelProducts?(tenantId: string, connectionId: string, productIds: string[], published: boolean): Promise<number>;
   listChannelProductIds?(tenantId: string, connectionId: string): Promise<string[]>;
+
+  /** WP2 price lists. */
+  listPriceLists?(tenantId: string): Promise<Array<{ id: string; name: string; currency: string; customerGroup: string | null; itemCount: number }>>;
+  savePriceList?(tenantId: string, input: { id?: string; name: string; currency: string; customerGroup: string | null; archive?: boolean }): Promise<string>;
+  upsertPriceEntries?(tenantId: string, priceListId: string, rows: PriceEntryInput[]): Promise<number>;
+  /** Products on a list whose sale started or ended in (from, to]. */
+  saleBoundaryProductIds?(tenantId: string, priceListId: string, fromIso: string, toIso: string): Promise<string[]>;
 };
 
 export type CommerceEventRow = {

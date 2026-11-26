@@ -25,6 +25,7 @@ In **Company → Commerce Integrations → Products**, staff choose which produc
 | `GET /catalog/categories` | Category tree as a flat list |
 | `GET /catalog/brands` | Product brands |
 | `GET /catalog/attributes` | Specification attributes for filters |
+| `GET /pricing?sku=` | Current prices for 1 to 100 SKUs (see [Prices](#prices)) |
 
 ### Query parameters for `/catalog/products`
 
@@ -36,6 +37,7 @@ In **Company → Commerce Integrations → Products**, staff choose which produc
 | `categoryId` | Includes child categories |
 | `brandId` | Product brand id |
 | `sku` | Up to 100, repeated or comma-separated. Matches a product or a variant SKU |
+| `customerGroup` | Prices from this customer group's list when one exists, e.g. `wholesale` |
 | `include` | Comma list of `variants`, `images`, `prices`, `inventory`, `attributes`. Without it you get the core fields only |
 | `scope` | `published` (default) or `all` |
 
@@ -113,6 +115,16 @@ curl -sS -H "Authorization: Bearer $BOOKONE_KEY" \
 
 Each variant is its own BookOne SKU with its own stock, so POS sales and invoices of that colour reduce exactly that variant's `available`.
 
+## Prices
+
+`price` (with `include=prices`) has `price`, `compareAtPrice` (only when higher), `sale` (`price`, `startsAt`, `endsAt`, `active`), `tiers` (`minQty`, `price`), `effectivePrice`, `currency`, `priceListId`, `revision` and `updatedAt`.
+
+- Charge `effectivePrice` for one item; for larger quantities use the highest tier at or below the quantity when it is lower.
+- Each channel sells at one price list, chosen in BookOne (**Commerce Integrations → Prices**). `default` means the BookOne sell price. Products that are not on the list use their sell price.
+- Pass `customerGroup=` to read a customer group's list (e.g. wholesale buyers who are signed in).
+- Sale dates are whole days in the company timezone (`timezone` on `/connection`). A `price` change arrives on the feed when a sale starts or ends.
+- `GET /pricing?sku=A,B` returns `{ items: [{ sku, productId, parentProductId, price }], missing, priceListId, customerGroup }`. Use it to re-check a cart before payment.
+
 ## Images
 
 ```json
@@ -164,7 +176,6 @@ Build the category tree from `parentId`. Product brands are the makers of the go
 
 Check `capabilities` on `GET /connection`; these are `false` today and will be announced in the changelog:
 
-- price lists per channel and customer group, compare-at and sale prices (`priceLists`);
 - reservations during card checkout (`reservations`);
 - webhooks (`webhooks`; use the change feed);
 - more than one stock location per channel (`multiLocation`);

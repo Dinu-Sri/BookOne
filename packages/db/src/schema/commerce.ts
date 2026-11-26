@@ -319,3 +319,42 @@ export const commerceChannelProducts = pgTable(
   },
   (t) => ({ pk: primaryKey({ columns: [t.connectionId, t.productId] }) }),
 );
+
+/** WP2: price lists (a channel sells at its list; customer-group lists for group pricing). */
+export const priceLists = pgTable('price_lists', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  name: varchar('name', { length: 120 }).notNull(),
+  currency: varchar('currency', { length: 5 }).notNull().default('LKR'),
+  /** e.g. retail, wholesale, school, artist. Null = a general list. */
+  customerGroup: varchar('customer_group', { length: 40 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  voidedAt: timestamp('voided_at', { withTimezone: true }),
+});
+
+/** WP2: one product's price on a list. Null price = the BookOne sell price. */
+export const priceListItems = pgTable(
+  'price_list_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    priceListId: uuid('price_list_id')
+      .notNull()
+      .references(() => priceLists.id),
+    productId: uuid('product_id').notNull(),
+    price: varchar('price', { length: 32 }),
+    compareAtPrice: varchar('compare_at_price', { length: 32 }),
+    salePrice: varchar('sale_price', { length: 32 }),
+    saleStartsAt: timestamp('sale_starts_at', { withTimezone: true }),
+    saleEndsAt: timestamp('sale_ends_at', { withTimezone: true }),
+    /** [{"minQty":"6","price":"1050.00"}] */
+    tiers: jsonb('tiers').notNull().default([]),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+);

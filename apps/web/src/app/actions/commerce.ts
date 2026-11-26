@@ -58,6 +58,8 @@ function commercePath(formData: FormData, extra: Record<string, string | undefin
   if (extra.saved) params.set('saved', extra.saved);
   if (extra.err) params.set('err', extra.err);
   if (extra.published) params.set('published', extra.published);
+  const list = extra.list ?? (tab === 'prices' ? String(formData.get('priceListId') ?? '') : '');
+  if (list) params.set('list', list);
   const order = String(formData.get('orderId') ?? extra.order ?? '');
   if (order) params.set('order', order);
   const query = params.toString();
@@ -531,4 +533,111 @@ export async function seedSampleCatalogFromForm(formData: FormData) {
     finish(formData, { err: e instanceof Error ? e.message : 'Could not add the sample catalog.', tab: 'developer' });
   }
   finish(formData, { saved: '1', tab: 'mapping' });
+}
+
+// ---------------------------------------------------------------------------
+// WP2: price lists and channel prices
+// ---------------------------------------------------------------------------
+
+function moneyOrNull(raw: FormDataEntryValue | null, label: string): string | null {
+  const v = String(raw ?? '').trim().replace(/,/g, '');
+  if (!v) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${label} must be a number of 0 or more.`);
+  return n.toFixed(2);
+}
+
+export async function savePriceListFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const archive = formData.get('archive') === '1';
+  let savedId = '';
+  try {
+    const result = await withCommerceService(operator.tenantId, (service) =>
+      service.savePriceList(operator, {
+        id: String(formData.get('priceListId') ?? '') || undefined,
+        name: String(formData.get('name') ?? ''),
+        customerGroup: String(formData.get('customerGroup') ?? '') || null,
+        archive,
+      }),
+    );
+    savedId = result.id;
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not save the price list.', tab: 'prices' });
+  }
+  finish(formData, { saved: '1', tab: 'prices', list: archive ? '' : savedId });
+}
+
+export async function setChannelPriceListFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  try {
+    const listId = String(formData.get('channelPriceListId') ?? '');
+    await withCommerceService(operator.tenantId, (service) => service.setChannelPriceList(operator, connectionId, listId || null));
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not change the price list.', tab: 'prices' });
+  }
+  finish(formData, { saved: '1', tab: 'prices' });
+}
+
+/** One product's price on a list (list price, was-price, scheduled sale, quantity tiers). */
+export async function savePriceEntryFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  try {
+    const { parseTiers } = await import('@bookone/commerce');
+    const { zonedDayBoundary } = await import('@/lib/zoned-day');
+    const tz = String(formData.get('timezone') ?? 'Asia/Colombo') || 'Asia/Colombo';
+    const from = String(formData.get('saleFrom') ?? '').trim();
+    const to = String(formData.get('saleTo') ?? '').trim();
+    const row = {
+      productId: String(formData.get('productId') ?? ''),
+      price: moneyOrNull(formData.get('price'), 'Price'),
+      compareAtPrice: moneyOrNull(formData.get('compareAtPrice'), 'Was price'),
+      salePrice: moneyOrNull(formData.get('salePrice'), 'Sale price'),
+      saleStartsAt: from ? zonedDayBoundary(from, tz, false) : null,
+      saleEndsAt: to ? zonedDayBoundary(to, tz, true) : null,
+      tiers: parseTiers(String(formData.get('tiers') ?? '')),
+    };
+    if (!row.productId) throw new Error('Choose a product.');
+    await withCommerceService(operator.tenantId, (service) =>
+      service.savePriceEntries(operator, String(formData.get('priceListId') ?? ''), [row]),
+    );
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not save the price.', tab: 'prices' });
+  }
+  finish(formData, { saved: '1', tab: 'prices' });
+}
+
+/** Bulk: set list prices from the BookOne sell price ± a percentage, or clear them. */
+export async function bulkPriceListFromForm(formData: FormData) {
+  const operator = await operatorFromSession();
+  const connectionId = String(formData.get('connectionId') ?? '');
+  try {
+    const listId = String(formData.get('priceListId') ?? '');
+    const clear = formData.get('clear') === '1';
+    const pct = Number(String(formData.get('percent') ?? '0').trim() || '0');
+    if (!clear && (!Number.isFinite(pct) || pct < -90 || pct > 500)) throw new Error('Percentage must be between -90 and 500.');
+    await withCommerceService(operator.tenantId, async (service) => {
+      const { rows } = await service.pricesForOperator(operator, connectionId, listId);
+      return service.savePriceEntries(
+        operator,
+        listId,
+        rows.map((r) => ({
+          productId: r.productId,
+          price: clear ? null : (Math.round(Number(r.basePrice) * (1 + pct / 100) * 100) / 100).toFixed(2),
+          compareAtPrice: clear ? null : r.compareAtPrice,
+          salePrice: clear ? null : r.salePrice,
+          saleStartsAt: clear ? null : r.saleStartsAt,
+          saleEndsAt: clear ? null : r.saleEndsAt,
+          tiers: clear ? [] : r.tiers,
+        })),
+      );
+    });
+  } catch (e) {
+    rethrowNav(e);
+    finish(formData, { err: e instanceof Error ? e.message : 'Could not update the prices.', tab: 'prices' });
+  }
+  finish(formData, { saved: '1', tab: 'prices' });
 }

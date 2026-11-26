@@ -16,6 +16,7 @@ import {
   SampleCatalogCard,
   type ChannelCatalogView,
 } from '@/components/commerce/commerce-channel-catalog';
+import { CommercePrices, type PricesView } from '@/components/commerce/commerce-prices';
 import { CommerceWebOrders, nextStepFor, type WebOrderView } from '@/components/commerce/commerce-web-orders';
 import { LOCATION_TYPE_LABELS, isFleetLocationType } from '@/lib/rental-locations';
 import {
@@ -35,11 +36,12 @@ import {
   updateCommerceConnectionFromForm,
 } from '@/app/actions/commerce';
 
-type Tab = 'overview' | 'orders' | 'mapping' | 'payments' | 'settings' | 'developer' | 'activity';
+type Tab = 'overview' | 'orders' | 'mapping' | 'prices' | 'payments' | 'settings' | 'developer' | 'activity';
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'orders', label: 'Orders' },
   { id: 'mapping', label: 'Products' },
+  { id: 'prices', label: 'Prices' },
   { id: 'payments', label: 'Payments' },
   { id: 'settings', label: 'Settings' },
   { id: 'developer', label: 'Developer' },
@@ -111,6 +113,7 @@ type ConnectionView = {
   paymentSettings: CommercePaymentSettingsView;
   webOrders: WebOrderView[];
   channelCatalog: ChannelCatalogView | null;
+  prices: PricesView;
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -786,6 +789,12 @@ export function CompanyCommerce(props: {
                       couriers={selected.paymentSettings.couriers ?? []}
                       initialOrderId={props.initialOrderId}
                     />
+                  </div>
+                ) : null}
+
+                {tab === 'prices' && selected ? (
+                  <div className="party-tab-panel" role="tabpanel" id="commerce-panel-prices" aria-labelledby="commerce-tab-prices">
+                    <CommercePrices key={`prices-${selected.id}`} connectionId={selected.id} canWrite={props.canWrite} data={selected.prices} />
                   </div>
                 ) : null}
 

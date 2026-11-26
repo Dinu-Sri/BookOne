@@ -12,6 +12,7 @@ describe('OpenAPI document', () => {
       '/catalog/categories',
       '/catalog/brands',
       '/catalog/attributes',
+      '/pricing',
       '/inventory',
       '/changes',
       '/payment-methods',
@@ -24,5 +25,7 @@ describe('OpenAPI document', () => {
       expect(Object.keys(op?.responses ?? {}).length, p).toBeGreaterThan(0);
     }
     expect(JSON.stringify(COMMERCE_OPENAPI)).toContain('600 requests per minute');
+    expect(JSON.stringify(COMMERCE_OPENAPI)).toContain('PRICE_MISMATCH');
+    expect(COMMERCE_OPENAPI.info.version).toBe('1.3.0');
   });
 });

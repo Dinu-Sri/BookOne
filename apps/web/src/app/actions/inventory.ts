@@ -1408,6 +1408,8 @@ async function updateProductFromFormInner(formData: FormData): Promise<void> {
   });
 
   await notifyCommerce(user.tenantId, [id], 'product');
+  // The sell price is the channel price unless a price list overrides it (WP2).
+  await notifyCommerce(user.tenantId, [id], 'price');
   revalidateInventory();
   const { redirect } = await import('next/navigation');
   redirect('/inventory/products?flash=updated');

@@ -81,6 +81,7 @@ async function catalogQuery(req: NextRequest, tenantId: string): Promise<Catalog
     include: parseInclude(q.get('include')),
     scope: q.get('scope') === 'all' ? 'all' : 'published',
     mediaBase: await mediaBase(tenantId),
+    customerGroup: q.get('customerGroup'),
   };
 }
 
@@ -107,6 +108,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
         return okJson(req, await service.catalogCandidates(actor), actor.rateLimitRemaining);
       }
       if (route === 'payment-methods') return okJson(req, await service.paymentMethods(actor), actor.rateLimitRemaining);
+      // ---- WP2 pricing ----
+      if (route === 'pricing') {
+        return okJson(req, await service.pricing(actor, skuList(req), req.nextUrl.searchParams.get('customerGroup')), actor.rateLimitRemaining);
+      }
       // ---- WP1 catalog read ----
       if (route === 'catalog/products') {
         return okJson(req, await service.catalogProducts(actor, await catalogQuery(req, actor.tenantId)), actor.rateLimitRemaining);
@@ -119,7 +124,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
           : { id: decodeURIComponent(rest) };
         return okJson(
           req,
-          await service.catalogProduct(actor, match, q.include ?? [], q.mediaBase, q.scope),
+          await service.catalogProduct(actor, match, q.include ?? [], q.mediaBase, q.scope, q.customerGroup),
           actor.rateLimitRemaining,
         );
       }

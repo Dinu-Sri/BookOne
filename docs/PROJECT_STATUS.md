@@ -1,3 +1,7 @@
+## 2026-11-26 — Commerce WP2: price lists, sales, quantity prices, /pricing (v2.22.0)
+
+Each website can sell at its own price list, with was prices, scheduled sales, quantity prices and customer-group lists (e.g. wholesale). New Commerce **Prices** tab with per-product editing and a bulk "sell price ±%" tool. Websites get `GET /pricing?sku=`, `customerGroup=`, `effectivePrice`, a `price` change event, and a non-blocking PRICE_MISMATCH warning on order validation. Developer docs, the operator guide and OpenAPI 1.3.0 updated. See [CHG-20261126-commerce-wp2-pricing](changes/CHG-20261126-commerce-wp2-pricing.md) and [docs/commerce/RELEASE-WP2.md](commerce/RELEASE-WP2.md).
+
 ## 2026-11-26 — Dropdowns stay open while scrolling (v2.21.1)
 
 Shared select menus no longer close when the page or their own list scrolls; they follow the field and close only when it leaves the view (fixes the WP1 CoreGuard failure and the Payments dropdown closing on staging). See [CHG-20261126-commerce-wp1-catalog](changes/CHG-20261126-commerce-wp1-catalog.md).

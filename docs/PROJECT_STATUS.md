@@ -1,3 +1,7 @@
+## 2026-11-26 — Payments card button layout (v2.19.1)
+
+The Create clearing account button no longer stretches. See [CHG-20261126-commerce-payment-settings](changes/CHG-20261126-commerce-payment-settings.md).
+
 ## 2026-11-26 — Payments settings for store connections (v2.19.0)
 
 Each commerce connection now has a Payments section: a default account for paid orders, an account per payment method the store sends (any gateway, bank transfer or COD), and a button to create a clearing account per gateway. Paid web orders settle there instead of staying open in receivables; unsettled ones show in Activity. See [CHG-20261126-commerce-payment-settings](changes/CHG-20261126-commerce-payment-settings.md).

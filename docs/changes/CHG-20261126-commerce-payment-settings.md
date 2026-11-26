@@ -34,3 +34,7 @@ A paid web order posted Dr Accounts Receivable / Cr Sales (+VAT) and stayed open
 - New `packages/commerce/test/payments.test.ts` (6): precedence, case-insensitive names, leave-unpaid, pending, legacy code, seen methods, settlement and Activity flag end to end, validation and write access.
 - Source locks in `packages/auth/test/qa-1126-commerce-pos.test.ts` (2).
 - `pnpm typecheck` 8/8; unit tests 757 passed.
+
+## Follow-up v2.19.1 (staging check)
+
+Staging (ZZ-TEST company, connection "ZZ-TEST Web Shop"): creating "ZZ-TEST Gateway" made 1201 · ZZ-TEST Gateway clearing, set as default; a `cod` rule set to "Leave unpaid" saved and reloaded. The "Create clearing account" button stretched to the full grid cell; it now sits at its natural size. Not run on staging: a paid API order end to end (settlement path covered by unit tests).

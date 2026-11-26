@@ -160,9 +160,11 @@ export function CommercePaymentsCard({
             help="Creates “<name> clearing” (codes 1201–1299). It becomes the default if none is set. Make one per gateway so each payout reconciles on its own."
             required
           />
-          <Button type="submit" variant="secondary">
-            Create clearing account
-          </Button>
+          <div style={{ alignSelf: 'start', paddingTop: 22 }}>
+            <Button type="submit" variant="secondary">
+              Create clearing account
+            </Button>
+          </div>
         </form>
       ) : null}
     </section>

@@ -11800,3 +11800,25 @@ a.bih-card:hover {
   .commerce-v2 .commerce-store-bar { grid-template-columns: 1fr; }
   .commerce-v2 .commerce-order-detail .commerce-sync-facts { grid-template-columns: 1fr; }
 }
+/* Commerce on phones: order rows become cards; other tables keep a readable width and scroll in their box */
+@media (max-width: 640px) {
+  .commerce-v2 .commerce-table { min-width: 560px; }
+  .commerce-v2 .commerce-orders-list .commerce-table { min-width: 0; width: 100%; }
+  .commerce-v2 .commerce-orders-list thead { display: none; }
+  .commerce-v2 .commerce-orders-list tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'num total' 'cust cust' 'pay status' 'next next';
+    gap: 3px 10px; padding: 10px 2px; border-bottom: 1px solid var(--line);
+  }
+  .commerce-v2 .commerce-orders-list td { border: 0; padding: 0; }
+  .commerce-v2 .commerce-orders-list td:nth-child(1) { grid-area: num; }
+  .commerce-v2 .commerce-orders-list td:nth-child(2) { display: none; }
+  .commerce-v2 .commerce-orders-list td:nth-child(3) { grid-area: cust; color: var(--ink); }
+  .commerce-v2 .commerce-orders-list td:nth-child(4) { grid-area: total; font-weight: 700; text-align: right; }
+  .commerce-v2 .commerce-orders-list td:nth-child(5) { grid-area: pay; font-size: 12px; }
+  .commerce-v2 .commerce-orders-list td:nth-child(6) { grid-area: status; font-size: 12px; text-align: right; }
+  .commerce-v2 .commerce-orders-list td:nth-child(7) { grid-area: next; font-size: 12px; color: var(--ink-muted); }
+  .commerce-v2 .party-tabs { flex-wrap: wrap; }
+}
+@media (max-width: 640px) {
+  .commerce-v2 .commerce-orders-list td:nth-child(1) .link-button { white-space: nowrap; text-align: left; padding: 0; }
+}

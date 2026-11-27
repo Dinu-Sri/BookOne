@@ -84,3 +84,26 @@ There is no data change.
 ## Rollback
 
 Revert the commit.
+
+## v2.27.1 staging review on the live store
+
+v2.27.0 was checked on staging in Dinu Madhusanka's Company (store watercolorlkv2).
+
+**Worked:**
+- the Overview (orders waiting first, then setup stages with one action, then At a glance);
+- the Orders tab count;
+- the list and the open order side by side at 1568 px;
+- `?tab=products` opening Products;
+- the API log at 10 rows with "Show all 50";
+- keys as "Key … Active/Revoked";
+- Save buttons sized to their text.
+
+**Found and fixed:**
+- **Products tab.** The linked-products table had no heading and showed a raw 36-character ID. It is now a "Linked to website products (n)" card: the ID is shortened with the full ID on hover, the status shows as a "Linked" badge, and the columns are "BookOne product" and "Website product".
+- **Order message.** "Inventory is not committed." now reads "Stock is not held for it yet."
+- **Settings switches.** "Pause inbound orders" and "Pause outbound stock" now read "Stop taking new orders from the website" and "Stop sending stock changes to the website". No test pins these labels.
+- **Phone (390 px frame).** The orders table squeezed to one-letter columns. Under 640 px, order rows are now cards (number and total, customer, payment and status, next step). Other Commerce tables keep 560 px and scroll inside their own scroll region, and the tabs wrap.
+
+**Phone result:** with the CSS injected, the page scroll width equals the client width (373) and the cards are readable.
+
+**Laptop:** the 1366 px check is covered by the same layout rules. Side by side starts at 1200 px.

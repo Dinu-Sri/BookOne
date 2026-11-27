@@ -910,7 +910,7 @@ export function CompanyCommerce(props: {
                             disabled={!props.canWrite}
                             defaultChecked={selected.inboundPaused}
                           />{' '}
-                          Pause inbound orders
+                          Stop taking new orders from the website
                         </label>
                         <label className="party-check">
                           <input
@@ -919,7 +919,7 @@ export function CompanyCommerce(props: {
                             disabled={!props.canWrite}
                             defaultChecked={selected.outboundPaused}
                           />{' '}
-                          Pause outbound stock
+                          Stop sending stock changes to the website
                         </label>
                         <Button type="submit" disabled={!props.canWrite}>
                           Save pauses and posting
@@ -1105,6 +1105,10 @@ export function CompanyCommerce(props: {
                           </section>
                         ) : null}
                         {selected.mappings.length > 0 ? (
+                          <section className="commerce-card commerce-links">
+                          <h2 className="commerce-section-title">
+                            Linked to website products <span className="ux-muted">({selected.mappings.length})</span>
+                          </h2>
                           <SearchField
                             id="map-search"
                             label="Search mappings"
@@ -1113,17 +1117,14 @@ export function CompanyCommerce(props: {
                             placeholder="SKU, BookOne name, store product"
                             showLabel
                           />
-                        ) : !props.productsError && props.products.length > 0 ? (
-                          <p className="field-help">Nothing mapped yet for this store. Preview a SKU, then apply it.</p>
-                        ) : null}
                         {filteredMappings.length ? (
                           <div className="commerce-table-scroll" tabIndex={0} role="region" aria-label="Product mappings">
                             <table className="commerce-table">
                               <thead>
                                 <tr>
                                   <th>SKU</th>
-                                  <th>BookOne</th>
-                                  <th>Store product</th>
+                                  <th>BookOne product</th>
+                                  <th>Website product</th>
                                   <th>Variant</th>
                                   <th>Status</th>
                                 </tr>
@@ -1133,16 +1134,26 @@ export function CompanyCommerce(props: {
                                   <tr key={row.id}>
                                     <td>{row.sku}</td>
                                     <td>{row.bookoneName ?? row.bookoneProductId}</td>
-                                    <td>{row.externalProductId}</td>
+                                    <td title={row.externalProductId}>
+                                      {row.externalProductId.length > 14 ? `${row.externalProductId.slice(0, 8)}…` : row.externalProductId}
+                                    </td>
                                     <td>{row.externalVariantId || '—'}</td>
-                                    <td>{row.status}</td>
+                                    <td>
+                                      <Badge tone={row.status === 'mapped' || row.status === 'active' ? 'success' : 'warning'}>
+                                        {row.status === 'mapped' || row.status === 'active' ? 'Linked' : row.status.replaceAll('_', ' ')}
+                                      </Badge>
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
-                        ) : selected.mappings.length > 0 ? (
-                          <p className="field-help">No mappings match your search.</p>
+                        ) : (
+                          <p className="field-help">No linked products match your search.</p>
+                        )}
+                          </section>
+                        ) : !props.productsError && props.products.length > 0 ? (
+                          <p className="field-help">Nothing mapped yet for this store. Preview a SKU, then apply it.</p>
                         ) : null}
 
                         {selected.proposals?.length ? (

@@ -308,7 +308,7 @@ export function CommerceWebOrders({
           </h2>
           {open.reviewReason ? (
             <p className={open.status === 'needs_review' ? 'form-error' : 'field-help'} role="status">
-              {open.reviewReason}
+              {open.reviewReason.replace('Inventory is not committed.', 'Stock is not held for it yet.')}
             </p>
           ) : null}
           <dl className="commerce-sync-facts">

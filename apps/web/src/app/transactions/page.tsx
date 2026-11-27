@@ -67,7 +67,21 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
 
   return (
     <BookOneShell active="Transactions" tenant={tenant} period={periodOptions}>
-      <div className="workspace">
+      <div className="workspace ux-page tx-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Transactions</h1>
+              <p>Every money entry in {monthLabel.toLowerCase() === 'all time' ? 'your books' : monthLabel}. Search, check receipts, or reverse a mistake.</p>
+            </div>
+          </div>
+          <div className="ux-head-actions">
+            <span className="ux-muted">{txs.length} entr{txs.length === 1 ? 'y' : 'ies'}</span>
+            <Link href="/" className="button primary">
+              New entry
+            </Link>
+          </div>
+        </header>
         <Card>
           <div className="card-body" style={{ borderBottom: '1px solid var(--line)' }}>
             <form className="filter-bar">
@@ -116,7 +130,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                       <th>Category</th>
                       <th>Account</th>
                       <th>Type</th>
-                      <th>Review</th>
+                      <th>Status</th>
                       <th>Receipt</th>
                       <th style={{ textAlign: 'right' }}>Amount</th>
                       <th>Action</th>
@@ -156,8 +170,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                           </td>
                           <td>
                             <div className="status-stack">
-                              {tx.isPeriodLocked ? <Badge tone="warning">Locked</Badge> : <Badge tone="info">Open</Badge>}
-                              {tx.reconciliationStatus ? <Badge tone="success">Reconciled</Badge> : <Badge tone="neutral">Unreconciled</Badge>}
+                              {tx.reconciliationStatus ? <Badge tone="success">Reconciled</Badge> : <Badge tone="neutral">Not reconciled</Badge>}
+                              {tx.isPeriodLocked ? <Badge tone="warning">Locked</Badge> : null}
                               {tx.reversedByTransactionId ? <Badge tone="danger">Reversed</Badge> : null}
                               {tx.reversesTransactionId ? <Badge tone="info">Reversal</Badge> : null}
                             </div>

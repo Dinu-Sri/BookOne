@@ -21,6 +21,7 @@ import {
   withTenantContext,
 } from '@bookone/db';
 import {
+  MODULE_KEYS,
   modulesForPlan,
   modulesFromForm,
   normalizeModules,
@@ -827,3 +828,37 @@ export async function applyPlanModulesFromForm(formData: FormData): Promise<void
   revalidatePath('/control-room/modules');
 }
 
+
+/** Control Room quick switch: turn one module on or off for one company (audited like the edit form). */
+export async function setPlatformModule(input: { id: string; key: string; on: boolean }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const actor = await requirePlatformAdmin();
+  const id = String(input.id ?? '').trim();
+  const key = String(input.key ?? '') as (typeof MODULE_KEYS)[number];
+  if (!id || !(MODULE_KEYS as readonly string[]).includes(key)) return { ok: false, error: 'Unknown company or module.' };
+  try {
+    const result = await withTenantContext(id, async () => {
+      const [existing] = await db()
+        .select({ name: tenants.name, plan: tenants.plan, modules: tenants.modules })
+        .from(tenants)
+        .where(eq(tenants.id, id))
+        .limit(1);
+      if (!existing) throw new Error('Company not found.');
+      const before = normalizeModules(existing.modules, existing.plan);
+      const after = { ...before, [key]: Boolean(input.on) };
+      await db().update(tenants).set({ modules: after, updatedAt: sql`NOW()` }).where(eq(tenants.id, id));
+      return { name: existing.name, before, after };
+    });
+    await writeAudit({
+      actorUserId: actor.id,
+      targetTenantId: id,
+      action: 'tenant.modules.toggle',
+      summary: `${input.on ? 'Turned on' : 'Turned off'} ${key} for ${result.name}`,
+      meta: { before: result.before, after: result.after },
+    });
+    revalidatePath('/control-room/modules');
+    revalidatePath(`/control-room/companies/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not change the module.' };
+  }
+}

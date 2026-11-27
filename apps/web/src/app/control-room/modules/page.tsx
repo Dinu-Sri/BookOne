@@ -7,6 +7,7 @@ import { BookOneShell } from '@/components/layout/bookone-shell';
 import { MODULE_CATALOG, MODULE_KEYS } from '@/lib/platform-modules';
 import { StatusBadge } from '@/components/module/list-page';
 import { Button, Card } from '@/components/ui/bookone-ui';
+import { ModuleSwitch } from '@/components/control-room/module-switch';
 
 export default async function ControlRoomModulesPage() {
   let tenant;
@@ -23,7 +24,15 @@ export default async function ControlRoomModulesPage() {
 
   return (
     <BookOneShell active="Modules" tenant={tenant}>
-      <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
+      <div className="workspace ux-page cr-modules">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Modules</h1>
+              <p>Turn a module on or off for any company with one switch. Changes apply straight away and are recorded in the audit log.</p>
+            </div>
+          </div>
+        </header>
         <div className="party-toolbar">
           <div className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
             {MODULE_CATALOG.map((m) => (
@@ -50,8 +59,8 @@ export default async function ControlRoomModulesPage() {
                     <th>Plan</th>
                     <th>Status</th>
                     {MODULE_KEYS.map((k) => (
-                      <th key={k} style={{ textTransform: 'capitalize' }}>
-                        {k}
+                      <th key={k} className="cr-mod-cell">
+                        {MODULE_CATALOG.find((m) => m.key === k)?.name ?? k}
                       </th>
                     ))}
                     <th />
@@ -73,8 +82,14 @@ export default async function ControlRoomModulesPage() {
                           <StatusBadge status={row.status === 'active' ? 'active' : 'inactive'} />
                         </td>
                         {MODULE_KEYS.map((k) => (
-                          <td key={k}>
-                            <StatusBadge status={row.modules[k] ? 'active' : 'inactive'} />
+                          <td key={k} className="cr-mod-cell">
+                            <ModuleSwitch
+                              companyId={row.id}
+                              companyName={row.name}
+                              moduleKey={k}
+                              moduleName={MODULE_CATALOG.find((m) => m.key === k)?.name ?? k}
+                              on={Boolean(row.modules[k])}
+                            />
                           </td>
                         ))}
                         <td>

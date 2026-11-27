@@ -1,3 +1,7 @@
+## 2026-11-27 — Switches everywhere, Control Room module switches, plain Activity, Transactions head (v2.30.0)
+
+Batch 2 of the calm-screens rollout. See [CHG-20261127-switches-modules-activity](changes/CHG-20261127-switches-modules-activity.md).
+
 ## 2026-11-27 — Sidebar hints, docs button, Company tabs, Commerce API, reverse confirmation (v2.29.0)
 
 Batch 1 of the calm-screens rollout. See [CHG-20261127-shell-company-tabs-reverse](changes/CHG-20261127-shell-company-tabs-reverse.md).

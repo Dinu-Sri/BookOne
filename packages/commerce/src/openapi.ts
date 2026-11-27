@@ -970,7 +970,7 @@ export const COMMERCE_OPENAPI = {
       get: {
         summary: 'Payment methods this channel uses, where each settles and whether it holds stock while unpaid',
         description:
-          'Send payment.method as any name your store uses (for example cod, bank_transfer or a gateway id). BookOne maps names to accounts under Commerce Integrations → Payments; a 4-digit account code is still accepted. Methods appear here after the first order that uses them, or when the owner adds them.',
+          'Send payment.method as any name your store uses (for example cod, bank_transfer or a gateway id). BookOne maps names to accounts under Commerce API → Payments; a 4-digit account code is still accepted. Methods appear here after the first order that uses them, or when the owner adds them.',
         responses: {
           '200': { description: 'Methods', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaymentMethods' } } } },
           '401': { description: 'Unauthenticated', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },

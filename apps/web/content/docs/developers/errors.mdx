@@ -24,7 +24,7 @@ Every error body includes `ok: false`, `code`, `error`, and `requestId`.
 
 `304 Not Modified` is not an error: your `If-None-Match` ETag still matches, keep your copy.
 
-A `NOT_FOUND` on `/catalog/products/{id}` usually means the product is not published to your channel (staff: **Commerce Integrations → Products**).
+A `NOT_FOUND` on `/catalog/products/{id}` usually means the product is not published to your channel (staff: **Commerce API → Products**).
 
 HTTP **202** on `POST /orders` means accepted for processing. Confirm `status`, `documentNumber`, and inventory. `httpStatusIsNotAccountingAcceptance` is always true on that receipt.
 

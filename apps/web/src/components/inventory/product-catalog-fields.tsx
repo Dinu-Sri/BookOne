@@ -19,7 +19,7 @@ export function ProductCatalogFields({ editor, disabled }: { editor: ProductCata
     <div className="party-tab-grid">
       <input type="hidden" name="catalogFields" value="1" />
       <p className="field-help field-full">
-        These details are sent to your online stores (Company → Commerce Integrations). Websites charge delivery by
+        These details are sent to your online stores (Company → Commerce API). Websites charge delivery by
         weight, so fill in the weight for every product you sell online.
       </p>
 

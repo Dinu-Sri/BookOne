@@ -166,7 +166,7 @@ export const SCREEN_DEFS: {
   { keyPrefix: 'company.sales_settings', label: 'Sales Settings', href: '/company/sales', module: 'company', writeable: true },
   { keyPrefix: 'company.document_styles', label: 'Document styles', href: '/company/document-styles', module: 'company', writeable: true },
   { keyPrefix: 'company.purchase_settings', label: 'Purchase Settings', href: '/company/purchase', module: 'company', writeable: true },
-  { keyPrefix: 'company.commerce', label: 'Commerce Integrations', href: '/company/commerce', module: 'company', writeable: true },
+  { keyPrefix: 'company.commerce', label: 'Commerce API', href: '/company/commerce', module: 'company', writeable: true },
   { keyPrefix: 'company.inventory_settings', label: 'Inventory Settings', href: '/company/inventory', module: 'company', writeable: true },
   { keyPrefix: 'company.rental_settings', label: 'Rental Settings', href: '/company/rental', module: 'company', writeable: true },
   { keyPrefix: 'company.brands', label: 'Brands', href: '/company/brands', module: 'company', writeable: true },

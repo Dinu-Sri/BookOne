@@ -37,7 +37,7 @@ test('Commerce settings support keyboard tabs and invalidate an edited mapping p
   });
   await login(page, ownerEmail, ownerPassword);
   await page.goto('/company/commerce');
-  await expect(page.getByRole('heading', { name: 'Commerce Integrations' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Commerce API' })).toBeVisible();
   // v2.20.0: keys live on the Developer tab; the screen opens on Overview.
   await page.getByRole('tab', { name: 'Developer' }).click();
   await expect(page.getByRole('button', { name: 'Issue scoped key' })).toBeVisible();

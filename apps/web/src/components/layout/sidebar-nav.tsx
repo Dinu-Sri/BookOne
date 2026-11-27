@@ -2,7 +2,47 @@
 
 import { ChevronDown, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { navHint } from '@/lib/nav-hints';
 import { isDocumentationItem, type NavItem, type NavSuite } from '@/lib/nav-suites';
+
+/**
+ * Wraps a menu icon. Resting the pointer on the icon (not the text or the row) shows a short
+ * plain explanation beside it, and the icon takes the brand colour.
+ */
+export function NavIconHint({ label, hint, children }: { label: string; hint?: string | null; children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const text = hint ?? navHint(label);
+  useEffect(() => {
+    if (!pos) return;
+    const hide = () => setPos(null);
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [pos]);
+  if (!text) return <>{children}</>;
+  function show() {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const left = Math.min(r.right + 12, window.innerWidth - 260);
+    setPos({ left, top: Math.max(8, r.top + r.height / 2 - 26) });
+  }
+  return (
+    <span ref={ref} className="nav-icon-hint" onMouseEnter={show} onMouseLeave={() => setPos(null)}>
+      {children}
+      {pos && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="status-tip-bubble nav-hint-bubble" role="tooltip" style={{ position: 'fixed', left: pos.left, top: pos.top, zIndex: 95 }}>
+              <strong>{label}</strong>
+              <p>{text}</p>
+            </div>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
 
 function itemTitle(item: NavItem): string {
   return item.label;
@@ -53,7 +93,9 @@ function WorkspaceNavTarget({
 function NavItemBody({ item }: { item: NavItem }) {
   return (
     <>
-      <item.icon size={16} aria-hidden />
+      <NavIconHint label={item.label}>
+        <item.icon size={16} aria-hidden />
+      </NavIconHint>
       <span className="nav-item-text">
         <span className="nav-item-label">{item.label}</span>
       </span>
@@ -89,7 +131,9 @@ export function ListSuiteNav({
               aria-controls={`suite-panel-${suite.id}`}
               onClick={() => onOpenSuite(isOpen ? '' : suite.id)}
             >
-              <suite.icon size={17} aria-hidden />
+              <NavIconHint label={suite.label}>
+                <suite.icon size={17} aria-hidden />
+              </NavIconHint>
               <span>{suite.label}</span>
               <ChevronDown className="suite-chevron" size={15} aria-hidden />
             </button>

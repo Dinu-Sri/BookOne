@@ -21,12 +21,12 @@ export default async function CompanyCommercePage({
   } catch {
     redirect('/login?from=/company/commerce');
   }
-  const level = tenant.accessByLabel?.['Commerce Integrations'] ?? 'none';
+  const level = tenant.accessByLabel?.['Commerce API'] ?? 'none';
   if (level === 'none') redirect(tenant.landingHref ?? '/?denied=1');
 
   startCommerceBackground();
   const query = await searchParams;
-  const canWrite = jobCanWrite(tenant, 'Commerce Integrations');
+  const canWrite = jobCanWrite(tenant, 'Commerce API');
   const operator = await operatorFromSession();
   let products: Awaited<ReturnType<typeof listProducts>> = [];
   let productsError: string | null = null;
@@ -73,7 +73,7 @@ export default async function CompanyCommercePage({
   const origin = process.env.AUTH_URL ?? process.env.BETTER_AUTH_URL ?? '';
 
   return (
-    <BookOneShell active="Commerce Integrations" tenant={tenant}>
+    <BookOneShell active="Commerce API" tenant={tenant}>
       <CompanyCommerce
         canWrite={canWrite}
         inventoryOff={inventoryOff}

@@ -20,7 +20,7 @@ export default async function PackingSlipPage({
   } catch {
     redirect('/login?from=/company/commerce');
   }
-  if ((tenant.accessByLabel?.['Commerce Integrations'] ?? 'none') === 'none') redirect(tenant.landingHref ?? '/?denied=1');
+  if ((tenant.accessByLabel?.['Commerce API'] ?? 'none') === 'none') redirect(tenant.landingHref ?? '/?denied=1');
   const q = await searchParams;
   const operator = await operatorFromSession();
   const order = await withCommerceService(operator.tenantId, (service) =>

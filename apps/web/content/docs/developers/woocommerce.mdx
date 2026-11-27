@@ -15,7 +15,7 @@ Live Woo checkout remains **not-run** as of BookOne 2.17.0 (2026-11-20). CoreGua
 2. Install `connectors/woocommerce/release/bookone-commerce-1.2.0.zip`
 3. Confirm HPOS (custom order tables) is on
 4. Open **WooCommerce → BookOne**
-5. Paste the BookOne API base (`…/api/commerce/v1`) and the sandbox key issued in **Company → Commerce Integrations**
+5. Paste the BookOne API base (`…/api/commerce/v1`) and the sandbox key issued in **Company → Commerce API**
 6. Click **Save connection**, then **Test connection**
 
 The token is stored in an autoload-off option. It is never printed to shoppers.
@@ -32,7 +32,7 @@ SKU is a search aid. Durable identity is BookOne product id + Woo product id.
 
 `GET /products` cannot fill an empty store.
 
-1. In BookOne **Commerce Integrations → Products**, select products under **Publish from BookOne**, **Preview publish**, then **Queue publish**
+1. In BookOne **Commerce API → Products**, select products under **Publish from BookOne**, **Preview publish**, then **Queue publish**
 2. In Woo, click **Publish from BookOne**
 3. The plugin `GET /catalog/candidates`, creates **draft** simple products (or acknowledges an existing SKU), then `POST /catalog/acknowledge`
 

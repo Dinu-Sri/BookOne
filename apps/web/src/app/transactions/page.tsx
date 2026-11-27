@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getPeriodOptions, getTenantInfo, listTransactions } from '@/app/actions/workspace';
-import { reverseTransactionFromForm } from '@/app/actions/record-entry';
+import { ReverseButton } from '@/components/transactions/reverse-button';
 import { jobCanWrite } from '@/lib/access';
 import { getReceiptDownloadUrl } from '@/app/actions/upload-receipt';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button, Card } from '@/components/ui/bookone-ui';
-import { Paperclip, RotateCcw, Search } from 'lucide-react';
+import { Paperclip, Search } from 'lucide-react';
 
 function formatLKR(value: number) {
   return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -183,12 +183,14 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                           </td>
                           <td>
                             {canReverse ? (
-                              <form action={reverseTransactionFromForm}>
-                                <input type="hidden" name="transactionId" value={tx.id} />
-                                <Button variant="ghost" type="submit" className="table-icon-action" aria-label={`Reverse ${tx.description}`}>
-                                  <RotateCcw size={14} aria-hidden /> Reverse
-                                </Button>
-                              </form>
+                              <ReverseButton
+                                transactionId={tx.id}
+                                description={tx.description}
+                                party={tx.party}
+                                date={tx.date}
+                                amountLabel={formatLKR(tx.amount)}
+                                reconciled={Boolean(tx.reconciliationStatus)}
+                              />
                             ) : (
                               <span style={{ color: 'var(--ink-soft)' }}>-</span>
                             )}

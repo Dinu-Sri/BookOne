@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, CalendarDays, Check, ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Bell, BookOpen, CalendarDays, Check, ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { BrandLockup, Button } from '@/components/ui/bookone-ui';
@@ -17,7 +17,8 @@ import {
   usesPersonalShell,
 } from '@/lib/entity-kind';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
-import { ListSuiteNav } from '@/components/layout/sidebar-nav';
+import { ListSuiteNav, NavIconHint } from '@/components/layout/sidebar-nav';
+import { COMPANY_TAB_LABELS, CompanyTabs } from '@/components/layout/company-tabs';
 import { CASHBOOK_NAV_ITEM, NAV_SUITES, type NavItem } from '@/lib/nav-suites';
 import { filterVisibleSuites, suiteIdForActiveLabel } from '@/lib/nav-visibility';
 
@@ -214,7 +215,9 @@ export function BookOneShell({
       }),
     [isSuperAdmin, modules, soleNeedsCashbook, entityKind, tenant?.capabilityTier, tenant?.accessByLabel, tenant?.agentBridgeEnabled],
   );
-  const activeSuite = suiteIdForActiveLabel(visibleSuites, active) ?? 'accounting';
+  // Company profile tabs live under "Company Details" in the menu.
+  const navActive = COMPANY_TAB_LABELS.has(active) ? 'Company Details' : active;
+  const activeSuite = suiteIdForActiveLabel(visibleSuites, navActive) ?? 'accounting';
   const [openSuite, setOpenSuite] = useState(activeSuite);
 
   useEffect(() => {
@@ -244,7 +247,7 @@ export function BookOneShell({
         <div className="sidebar-section suite-nav">
           <ListSuiteNav
             suites={visibleSuites}
-            active={active}
+            active={navActive}
             openSuite={openSuite}
             onOpenSuite={setOpenSuite}
           />
@@ -256,9 +259,22 @@ export function BookOneShell({
               {tenant.jobTitle ? <p className="sidebar-user-job">{tenant.jobTitle}</p> : null}
             </div>
           ) : null}
-          <p className="sidebar-version" data-testid="bookone-build" title={bookoneVersionLabel()}>
-            {sidebarOpen ? bookoneVersionLabel() : `v${bookoneAppVersion()}\n${bookoneBuildId()}`}
-          </p>
+          <div className="sidebar-foot">
+            <p className="sidebar-version" data-testid="bookone-build" title={bookoneVersionLabel()}>
+              {sidebarOpen ? bookoneVersionLabel() : `v${bookoneAppVersion()}\n${bookoneBuildId()}`}
+            </p>
+            <a
+              className="sidebar-docs"
+              href="/docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Documentation (opens in a new tab)"
+            >
+              <NavIconHint label="Documentation" hint="Step-by-step guides for every screen. Opens in a new tab.">
+                <BookOpen size={16} aria-hidden />
+              </NavIconHint>
+            </a>
+          </div>
         </div>
       </aside>
 
@@ -291,6 +307,7 @@ export function BookOneShell({
             </form>
           </div>
         </header>
+        {COMPANY_TAB_LABELS.has(active) ? <CompanyTabs active={active} accessByLabel={tenant?.accessByLabel} /> : null}
         {children}
       </main>
     </div>

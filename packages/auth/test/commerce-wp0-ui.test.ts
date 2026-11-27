@@ -23,7 +23,7 @@ describe('Commerce WP0 — held stock outside commerce', () => {
   });
 });
 
-describe('Commerce Integrations screen', () => {
+describe('Commerce API screen', () => {
   it('has task-based tabs including Orders, Payments, Settings and Developer', () => {
     const ui = read('apps/web/src/components/commerce/company-commerce.tsx');
     for (const label of ['Overview', 'Orders', 'Products', 'Payments', 'Settings', 'Developer', 'Activity']) {

@@ -253,6 +253,10 @@ function heading(key: string, label: string): StatementLine {
   return { key, label, kind: 'heading', amount: 0, compare: null };
 }
 
+function section(key: string, label: string, lines: StatementLine[], total: StatementLine): StatementLine[] {
+  return lines.length ? [heading(key, label), ...lines, total] : [];
+}
+
 /**
  * Closing balances (cumulative to the reporting date). Retained earnings include every
  * unclosed profit to date, so the statement balances without closing entries.
@@ -292,26 +296,17 @@ export function statementOfFinancialPosition(current: StatementAccount[], compar
   return {
     id: 'financial_position',
     title: 'Statement of Financial Position',
+    // Sections with nothing in either column are left out, as on a printed statement.
     lines: [
       heading('h_assets', 'Assets'),
-      heading('h_nca', 'Non-current assets'),
-      ...nca,
-      ncaTotal,
-      heading('h_ca', 'Current assets'),
-      ...ca,
-      caTotal,
+      ...section('h_nca', 'Non-current assets', nca, ncaTotal),
+      ...section('h_ca', 'Current assets', ca, caTotal),
       assets,
       heading('h_eq_liab', 'Equity and liabilities'),
-      heading('h_eq', 'Equity'),
-      ...eq,
-      eqTotal,
-      heading('h_ncl', 'Non-current liabilities'),
-      ...ncl,
-      nclTotal,
-      heading('h_cl', 'Current liabilities'),
-      ...cl,
-      clTotal,
-      liabilities,
+      ...section('h_eq', 'Equity', eq, eqTotal),
+      ...section('h_ncl', 'Non-current liabilities', ncl, nclTotal),
+      ...section('h_cl', 'Current liabilities', cl, clTotal),
+      ...(ncl.length && cl.length ? [liabilities] : []),
       eqAndLiab,
     ],
     checks: [{ label: 'Assets equal equity and liabilities', ok: Math.abs(diff) < 0.01, difference: diff }],
@@ -445,12 +440,8 @@ export function statementOfCashFlows(input: {
       heading('h_op', 'Cash flows from operating activities'),
       ...op,
       opTotal,
-      heading('h_inv', 'Cash flows from investing activities'),
-      ...inv,
-      invTotal,
-      heading('h_fin', 'Cash flows from financing activities'),
-      ...fin,
-      finTotal,
+      ...section('h_inv', 'Cash flows from investing activities', inv, invTotal),
+      ...section('h_fin', 'Cash flows from financing activities', fin, finTotal),
       net,
       opening,
       closing,

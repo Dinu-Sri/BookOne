@@ -537,7 +537,7 @@ export function CompanyCommerce(props: {
             <header className="commerce-page-head">
               <div className="commerce-title-row">
                 <div>
-                  <h1 className="commerce-page-title">Commerce Integrations</h1>
+                  <h1 className="commerce-page-title">Commerce API</h1>
                   <p className="commerce-page-lead">
                     Connect your website so BookOne can share stock levels and receive orders.{' '}
                     <a href="/docs/developers" target="_blank" rel="noopener noreferrer">

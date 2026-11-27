@@ -1,3 +1,7 @@
+## 2026-11-27 — Sidebar hints, docs button, Company tabs, Commerce API, reverse confirmation (v2.29.0)
+
+Batch 1 of the calm-screens rollout. See [CHG-20261127-shell-company-tabs-reverse](changes/CHG-20261127-shell-company-tabs-reverse.md).
+
 ## 2026-11-27 — Reports: professional statements with print/PDF and Excel; Dashboard charts (v2.28.0)
 
 Four statements in the SLFRS for SMEs presentation with comparatives, checks and account notes; calm Reports screen with pictures; A4 print/PDF pack with basis of preparation and signatures; Excel export. Dashboard: sentence case, tone accents, Where the money went chart, coloured aging; still no page scroll. See [CHG-20261127-reports-statements-dashboard](changes/CHG-20261127-reports-statements-dashboard.md).

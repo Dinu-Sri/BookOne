@@ -120,7 +120,7 @@ test('Viewer sees Chart of Accounts without write actions', async ({ page }) => 
 
   // Verify Commerce using the same Viewer session so the shared sign-in limit remains exercised normally.
   await page.goto('/company/commerce');
-  const commerceTitle = page.getByRole('heading', { name: 'Commerce Integrations' });
+  const commerceTitle = page.getByRole('heading', { name: 'Commerce API' });
   if (new URL(page.url()).pathname === '/company/commerce') {
     await expect(commerceTitle).toBeVisible();
     // v2.20.0: keys are on Developer, posting controls on Settings.

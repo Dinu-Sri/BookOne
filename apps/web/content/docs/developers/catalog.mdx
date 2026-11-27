@@ -9,7 +9,7 @@ Read [Custom Website API](/docs/developers/custom-website) first for keys, conve
 
 ## What is published
 
-In **Company → Commerce Integrations → Products**, staff choose which products this website may show (filter by category or brand, select, **Publish**).
+In **Company → Commerce API → Products**, staff choose which products this website may show (filter by category or brand, select, **Publish**).
 
 - Publishing a **listing with variants** publishes all its colours/sizes. A single variant can also be published on its own.
 - Products linked to your existing listings (mapping) also count as published.
@@ -120,7 +120,7 @@ Each variant is its own BookOne SKU with its own stock, so POS sales and invoice
 `price` (with `include=prices`) has `price`, `compareAtPrice` (only when higher), `sale` (`price`, `startsAt`, `endsAt`, `active`), `tiers` (`minQty`, `price`), `effectivePrice`, `currency`, `priceListId`, `revision` and `updatedAt`.
 
 - Charge `effectivePrice` for one item; for larger quantities use the highest tier at or below the quantity when it is lower.
-- Each channel sells at one price list, chosen in BookOne (**Commerce Integrations → Prices**). `default` means the BookOne sell price. Products that are not on the list use their sell price.
+- Each channel sells at one price list, chosen in BookOne (**Commerce API → Prices**). `default` means the BookOne sell price. Products that are not on the list use their sell price.
 - Pass `customerGroup=` to read a customer group's list (e.g. wholesale buyers who are signed in).
 - Sale dates are whole days in the company timezone (`timezone` on `/connection`). A `price` change arrives on the feed when a sale starts or ends.
 - `GET /pricing?sku=A,B` returns `{ items: [{ sku, productId, parentProductId, price }], missing, priceListId, customerGroup }`. Use it to re-check a cart before payment.

@@ -308,7 +308,7 @@ export async function operatorFromSession(): Promise<OperatorActor> {
   return {
     tenantId: user.tenantId,
     userId: user.id,
-    canWrite: jobCanWrite(tenant, 'Commerce Integrations'),
+    canWrite: jobCanWrite(tenant, 'Commerce API'),
   };
 }
 

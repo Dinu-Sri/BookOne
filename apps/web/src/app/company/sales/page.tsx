@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { getSalesSettings, saveSalesSettingsFromForm } from '@/app/actions/sales-settings';
 import {
   archivePosRegisterFromForm,
@@ -9,9 +8,43 @@ import {
 import { getCompanySettingsData } from '@/app/actions/company-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Button } from '@/components/ui/bookone-ui';
+import { Badge, Button } from '@/components/ui/bookone-ui';
+import { TextField } from '@/components/ui/text-field';
+import {
+  ConfirmSubmitButton,
+  FormSelect,
+  SelectRow,
+  SettingsForm,
+  SettingsSection,
+  SwitchRow,
+  TextRow,
+} from '@/components/settings/settings-kit';
 import { formatDocumentNumber } from '@/lib/document-number';
 import { jobCanWrite } from '@/lib/access';
+
+const RESET_OPTIONS = [
+  { value: 'monthly', label: 'Each month' },
+  { value: 'yearly', label: 'Each year' },
+  { value: 'never', label: 'Never (keep counting)' },
+];
+
+const PRINT_MODES = [
+  { value: 'browser', label: 'Browser print' },
+  { value: 'thermal', label: 'Thermal printer only' },
+  { value: 'both', label: 'Thermal and browser' },
+  { value: 'manual', label: 'Preview only', description: 'No automatic print or cash drawer; print from Last receipt.' },
+];
+
+function example(prefix: string, postfix: string, pad: number, reset: string) {
+  return formatDocumentNumber({
+    prefix,
+    postfix,
+    pad,
+    reset: reset === 'yearly' || reset === 'never' ? reset : 'monthly',
+    date: new Date().toISOString().slice(0, 10),
+    sequence: 1,
+  });
+}
 
 export default async function CompanySalesSettingsPage() {
   let tenant;
@@ -35,343 +68,243 @@ export default async function CompanySalesSettingsPage() {
   }
 
   const canWrite = jobCanWrite(tenant, 'Sales Settings');
+  const activeCount = registers.filter((r) => r.isActive).length;
 
   return (
     <BookOneShell active="Sales Settings" tenant={tenant}>
-      <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
-        {/* VAT / invoice defaults */}
-        <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
-          <div className="party-form-top">
-            <Link href="/company/details" className="party-back-btn">
-              <span className="party-back-arrow">←</span>
-              <span>
-                <strong>Back</strong>
-                <small>Company</small>
-              </span>
-            </Link>
-            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-              VAT &amp; invoice defaults
-            </span>
-          </div>
-          <form action={canWrite ? saveSalesSettingsFromForm : undefined} className="party-form-body">
-            <fieldset disabled={!canWrite} style={{ border: 0, margin: 0, padding: 0, minInlineSize: 0 }}>
-            <div className="party-tab-panel">
-              <div className="party-tab-grid">
-                <div className="field">
-                  <label>VAT rate % (local tax invoices)</label>
-                  <input
-                    className="input"
-                    name="vatRatePercent"
-                    inputMode="decimal"
-                    defaultValue={settings.vatRatePercent}
-                  />
-                </div>
-                <div className="field">
-                  <label>Export VAT rate %</label>
-                  <input
-                    className="input"
-                    name="exportVatRatePercent"
-                    inputMode="decimal"
-                    defaultValue={settings.exportVatRatePercent}
-                  />
-                </div>
-                <div className="field field-full">
-                  <label className="party-check">
-                    <input type="checkbox" name="vatRegistered" value="on" defaultChecked={settings.vatRegistered} />
-                    Company is VAT registered (enables TAX INVOICE on invoices / POS)
-                  </label>
-                </div>
-                <div className="field">
-                  <label>Tax invoice dept / division code</label>
-                  <input className="input" name="taxInvoiceDeptCode" defaultValue={settings.taxInvoiceDeptCode} />
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    Format <code>YYMMM_DEPT/SERIAL</code> e.g. 26JUL_01/1
-                  </p>
-                </div>
-                <div className="field">
-                  <label>Default sale channel</label>
-                  <select className="input" name="defaultSaleChannel" defaultValue={settings.defaultSaleChannel || 'local'}>
-                    <option value="local">Local sales</option>
-                    <option value="export">Export sales</option>
-                  </select>
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    New quotes, orders, and invoices always open as Local commercial. Change on that document for tax or export.
-                  </p>
-                </div>
-                <div className="field">
-                  <label>Default invoice kind (office invoices)</label>
-                  <select className="input" name="defaultInvoiceKind" defaultValue={settings.defaultInvoiceKind || 'commercial'}>
-                    <option value="commercial">Commercial invoice</option>
-                    <option value="tax_invoice">Tax invoice</option>
-                  </select>
-                </div>
-                <div className="field field-full">
-                  <label className="party-check">
-                    <input
-                      type="checkbox"
-                      name="enforceCreditLimit"
-                      value="on"
-                      defaultChecked={settings.enforceCreditLimit}
-                    />
-                    Enforce customer credit limits on credit sales invoices
-                  </label>
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    When on, invoices that would push open AR above the party credit limit are blocked.
-                    Set limits on the customer party master.
-                  </p>
-                </div>
-                <div className="field field-full">
-                  <p style={{ fontSize: 13, fontWeight: 800, margin: '8px 0 0' }}>Invoice numbering</p>
-                  <p className="party-hint">Used for commercial invoices (not tax invoice serials). Sequence counts documents in the reset window.</p>
-                </div>
-                <div className="field">
-                  <label>Invoice prefix</label>
-                  <input className="input" name="invoicePrefix" defaultValue={settings.invoicePrefix} placeholder="INV" />
-                </div>
-                <div className="field">
-                  <label>Invoice postfix</label>
-                  <input className="input" name="invoicePostfix" defaultValue={settings.invoicePostfix} placeholder="optional e.g. /WLK" />
-                </div>
-                <div className="field">
-                  <label>Invoice digits</label>
-                  <input className="input" name="invoicePad" inputMode="numeric" defaultValue={settings.invoicePad} />
-                </div>
-                <div className="field">
-                  <label>Invoice reset</label>
-                  <select className="input" name="invoiceReset" defaultValue={settings.invoiceReset}>
-                    <option value="monthly">Each month</option>
-                    <option value="yearly">Each year</option>
-                    <option value="never">Never (keep counting)</option>
-                  </select>
-                </div>
-                <div className="field field-full">
-                  <p className="party-hint">
-                    Example:{' '}
-                    <code>
-                      {formatDocumentNumber({
-                        prefix: settings.invoicePrefix,
-                        postfix: settings.invoicePostfix,
-                        pad: settings.invoicePad,
-                        reset: settings.invoiceReset === 'yearly' || settings.invoiceReset === 'never' ? settings.invoiceReset : 'monthly',
-                        date: new Date().toISOString().slice(0, 10),
-                        sequence: 1,
-                      })}
-                    </code>
-                  </p>
-                </div>
-                <div className="field field-full">
-                  <p style={{ fontSize: 13, fontWeight: 800, margin: '8px 0 0' }}>Quotation numbering</p>
-                </div>
-                <div className="field">
-                  <label>Quote prefix</label>
-                  <input className="input" name="quotePrefix" defaultValue={settings.quotePrefix} placeholder="QT" />
-                </div>
-                <div className="field">
-                  <label>Quote postfix</label>
-                  <input className="input" name="quotePostfix" defaultValue={settings.quotePostfix} placeholder="optional" />
-                </div>
-                <div className="field">
-                  <label>Quote digits</label>
-                  <input className="input" name="quotePad" inputMode="numeric" defaultValue={settings.quotePad} />
-                </div>
-                <div className="field">
-                  <label>Quote reset</label>
-                  <select className="input" name="quoteReset" defaultValue={settings.quoteReset}>
-                    <option value="monthly">Each month</option>
-                    <option value="yearly">Each year</option>
-                    <option value="never">Never (keep counting)</option>
-                  </select>
-                </div>
-                <div className="field field-full">
-                  <p className="party-hint">
-                    Example:{' '}
-                    <code>
-                      {formatDocumentNumber({
-                        prefix: settings.quotePrefix,
-                        postfix: settings.quotePostfix,
-                        pad: settings.quotePad,
-                        reset: settings.quoteReset === 'yearly' || settings.quoteReset === 'never' ? settings.quoteReset : 'monthly',
-                        date: new Date().toISOString().slice(0, 10),
-                        sequence: 1,
-                      })}
-                    </code>
-                  </p>
-                </div>
-                <div className="field">
-                  <label>Lock edits after (days)</label>
-                  <input
-                    className="input"
-                    name="editLockDays"
-                    inputMode="numeric"
-                    defaultValue={settings.editLockDays ?? 0}
-                  />
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    0 = invoices and quotations can be edited anytime. Any other number hides Edit
-                    after that many days from the document date.
-                  </p>
-                </div>
-              </div>
+      <div className="workspace ux-page set-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Sales settings</h1>
+              <p>Set VAT, how invoices and quotations are numbered, and your shop tills.</p>
             </div>
-            </fieldset>
-            {canWrite ? (
-              <div className="party-form-footer">
-                <Button variant="primary" type="submit">
-                  Save VAT settings
-                </Button>
-              </div>
-            ) : (
-              <div className="party-form-footer">
-                <p className="party-hint">Read-only — this job cannot change VAT settings.</p>
-              </div>
-            )}
-          </form>
-        </div>
-
-        {/* POS registers */}
-        <div className="party-form-shell" id="pos-registers" style={{ maxHeight: 'none', minHeight: 0 }}>
-          <div className="party-form-top">
-            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--ink)' }}>POS registers (counters)</span>
-            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
-              Multi-counter · print mode · thermal via Web Serial on POS · customer display
-            </span>
           </div>
+        </header>
 
-          <div className="doc-form-scroll" style={{ paddingBottom: 8 }}>
-            <div className="table-wrap" style={{ border: '1px solid var(--line)', borderRadius: 8, marginBottom: 14 }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Location</th>
-                    <th>Print</th>
-                    <th>Cash account</th>
-                    <th>Active</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {registers.map((r) => (
-                    <tr key={r.id}>
-                      <td>
-                        <strong>{r.code}</strong>
-                      </td>
-                      <td>{r.name}</td>
-                      <td style={{ fontSize: 13 }}>
-                        {r.locationId
-                          ? locationOptions.find((l) => l.id === r.locationId)?.name ?? 'Linked'
-                          : '—'}
-                      </td>
-                      <td>
-                        {canWrite ? (
-                          <form action={savePosRegisterFromForm} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <input type="hidden" name="id" value={r.id} />
-                            <input type="hidden" name="code" value={r.code} />
-                            <input type="hidden" name="name" value={r.name} />
-                            <input type="hidden" name="locationId" value={r.locationId ?? ''} />
-                            <input type="hidden" name="thermalDeviceHint" value={r.thermalDeviceHint ?? ''} />
-                            <input type="hidden" name="receiptFooter" value={r.receiptFooter ?? ''} />
-                            <input type="hidden" name="defaultPaymentAccountCode" value={r.defaultPaymentAccountCode} />
-                            {r.isActive ? <input type="hidden" name="isActive" value="on" /> : null}
-                            <select className="input" name="printMode" defaultValue={r.printMode} aria-label={`Print mode for ${r.code}`}>
-                              <option value="browser">Browser print</option>
-                              <option value="thermal">Thermal only</option>
-                              <option value="both">Both (thermal + browser)</option>
-                              <option value="manual">Manual / preview only</option>
-                            </select>
-                            <Button variant="ghost" type="submit">
-                              Save
-                            </Button>
-                          </form>
-                        ) : (
-                          <span>{r.printMode}</span>
-                        )}
-                        {r.thermalDeviceHint ? (
-                          <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{r.thermalDeviceHint}</div>
-                        ) : null}
-                      </td>
-                      <td>{r.defaultPaymentAccountCode}</td>
-                      <td>{r.isActive ? 'Yes' : 'No'}</td>
-                      <td>
-                        {canWrite ? (
-                          <div className="party-row-actions">
-                            <form action={archivePosRegisterFromForm}>
+        <div className="ux-split">
+          <div className="ux-main set-stack">
+            <SettingsForm
+              id="sales-settings"
+              action={canWrite ? saveSalesSettingsFromForm : undefined}
+              title="Invoices and VAT"
+              saveLabel="Save sales settings"
+              readOnly={!canWrite}
+              readOnlyNote="Read only: this job cannot change sales settings."
+            >
+              <SettingsSection title="VAT">
+                <SwitchRow
+                  name="vatRegistered"
+                  label="VAT registered"
+                  help="Turns on tax invoices for office invoices and the POS."
+                  defaultChecked={settings.vatRegistered}
+                />
+                <TextRow name="vatRatePercent" label="VAT rate %" help="For local tax invoices." inputMode="decimal" defaultValue={settings.vatRatePercent} />
+                <TextRow name="exportVatRatePercent" label="Export VAT rate %" inputMode="decimal" defaultValue={settings.exportVatRatePercent} />
+                <TextRow
+                  name="taxInvoiceDeptCode"
+                  label="Tax invoice department code"
+                  help="Tax invoice serials look like 26JUL_01/1, where 01 is this code."
+                  defaultValue={settings.taxInvoiceDeptCode}
+                />
+              </SettingsSection>
+
+              <SettingsSection title="New invoices">
+                <SelectRow
+                  name="defaultSaleChannel"
+                  label="Usual sale channel"
+                  help="New documents open as local commercial; change the channel on the document for tax or export."
+                  defaultValue={settings.defaultSaleChannel || 'local'}
+                  options={[
+                    { value: 'local', label: 'Local sales' },
+                    { value: 'export', label: 'Export sales' },
+                  ]}
+                />
+                <SelectRow
+                  name="defaultInvoiceKind"
+                  label="Office invoice type"
+                  defaultValue={settings.defaultInvoiceKind || 'commercial'}
+                  options={[
+                    { value: 'commercial', label: 'Commercial invoice' },
+                    { value: 'tax_invoice', label: 'Tax invoice' },
+                  ]}
+                />
+                <SwitchRow
+                  name="enforceCreditLimit"
+                  label="Enforce customer credit limits"
+                  help="Blocks a credit invoice that would take what the customer owes above their limit. Set limits on each customer."
+                  defaultChecked={settings.enforceCreditLimit}
+                />
+                <TextRow
+                  name="editLockDays"
+                  label="Lock edits after (days)"
+                  help="0 lets invoices and quotations be edited any time. Otherwise Edit disappears that many days after the document date."
+                  inputMode="numeric"
+                  defaultValue={settings.editLockDays ?? 0}
+                />
+              </SettingsSection>
+
+              <SettingsSection
+                title="Invoice numbers"
+                help={
+                  <>
+                    For commercial invoices (tax invoices have their own serial). Next number looks like{' '}
+                    <code>{example(settings.invoicePrefix, settings.invoicePostfix, settings.invoicePad, settings.invoiceReset)}</code>
+                  </>
+                }
+              >
+                <TextRow name="invoicePrefix" label="Starts with" defaultValue={settings.invoicePrefix} placeholder="INV" />
+                <TextRow name="invoicePostfix" label="Ends with" help="Optional, such as /WLK." defaultValue={settings.invoicePostfix} />
+                <TextRow name="invoicePad" label="Digits" inputMode="numeric" defaultValue={settings.invoicePad} />
+                <SelectRow name="invoiceReset" label="Start again at 1" defaultValue={settings.invoiceReset} options={RESET_OPTIONS} />
+              </SettingsSection>
+
+              <SettingsSection
+                title="Quotation numbers"
+                help={
+                  <>
+                    Next number looks like{' '}
+                    <code>{example(settings.quotePrefix, settings.quotePostfix, settings.quotePad, settings.quoteReset)}</code>
+                  </>
+                }
+              >
+                <TextRow name="quotePrefix" label="Starts with" defaultValue={settings.quotePrefix} placeholder="QT" />
+                <TextRow name="quotePostfix" label="Ends with" help="Optional." defaultValue={settings.quotePostfix} />
+                <TextRow name="quotePad" label="Digits" inputMode="numeric" defaultValue={settings.quotePad} />
+                <SelectRow name="quoteReset" label="Start again at 1" defaultValue={settings.quoteReset} options={RESET_OPTIONS} />
+              </SettingsSection>
+            </SettingsForm>
+
+            <section className="ux-card" id="pos-registers" aria-labelledby="pos-registers-title">
+              <header className="ux-card-head">
+                <div>
+                  <h2 id="pos-registers-title">Shop tills (POS registers)</h2>
+                  <p className="set-card-sub">Each counter that takes payments, how it prints, and where its stock comes from.</p>
+                </div>
+                <span>{activeCount} active</span>
+              </header>
+              <div className="table-wrap set-table">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Till</th>
+                      <th>Location</th>
+                      <th>Printing</th>
+                      <th>Cash account</th>
+                      <th>Status</th>
+                      <th aria-label="Actions" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {registers.map((r) => (
+                      <tr key={r.id}>
+                        <td>
+                          <strong>{r.name}</strong> <span className="muted-line">({r.code})</span>
+                          {r.thermalDeviceHint ? <div className="muted-line">{r.thermalDeviceHint}</div> : null}
+                        </td>
+                        <td>
+                          {r.locationId
+                            ? locationOptions.find((l) => l.id === r.locationId)?.name ?? 'Linked'
+                            : '—'}
+                        </td>
+                        <td>
+                          {canWrite ? (
+                            <form action={savePosRegisterFromForm} className="set-inline-form">
                               <input type="hidden" name="id" value={r.id} />
+                              <input type="hidden" name="code" value={r.code} />
+                              <input type="hidden" name="name" value={r.name} />
+                              <input type="hidden" name="locationId" value={r.locationId ?? ''} />
+                              <input type="hidden" name="thermalDeviceHint" value={r.thermalDeviceHint ?? ''} />
+                              <input type="hidden" name="receiptFooter" value={r.receiptFooter ?? ''} />
+                              <input type="hidden" name="defaultPaymentAccountCode" value={r.defaultPaymentAccountCode} />
+                              {r.isActive ? <input type="hidden" name="isActive" value="on" /> : null}
+                              <FormSelect
+                                id={`print-${r.id}`}
+                                name="printMode"
+                                label={`Printing for ${r.code}`}
+                                defaultValue={r.printMode}
+                                options={PRINT_MODES}
+                                className="set-label-hidden"
+                              />
                               <Button variant="ghost" type="submit">
-                                Archive
+                                Save
                               </Button>
                             </form>
-                          </div>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {canWrite ? (
-            <form action={savePosRegisterFromForm}>
-              <div className="doc-form-header">
-                <div className="field">
-                  <label>Code *</label>
-                  <input className="input" name="code" required placeholder="REG-02" />
-                </div>
-                <div className="field field-span-2">
-                  <label>Name *</label>
-                  <input className="input" name="name" required placeholder="Side counter" />
-                </div>
-                <div className="field">
-                  <label>Print mode *</label>
-                  <select className="input" name="printMode" defaultValue="browser">
-                    <option value="browser">Browser print</option>
-                    <option value="thermal">Thermal only</option>
-                    <option value="both">Both (thermal + browser)</option>
-                    <option value="manual">Manual / preview only</option>
-                  </select>
-                  <small className="muted-line">
-                    Manual skips autoprint, thermal write, and drawer kick on sale, refund, and Z-close. Use Last receipt / Last Z-report to preview and print.
-                  </small>
-                </div>
-                <div className="field">
-                  <label>Thermal device note</label>
-                  <input className="input" name="thermalDeviceHint" placeholder="e.g. Epson TM-T82 USB" />
-                </div>
-                <div className="field">
-                  <label>Default cash account code</label>
-                  <input className="input" name="defaultPaymentAccountCode" defaultValue="1000" />
-                </div>
-                <div className="field">
-                  <label>Location (stock + brand for POS)</label>
-                  <select className="input" name="locationId" defaultValue="">
-                    <option value="">— optional —</option>
-                    {locationOptions.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.code ? `${l.code} — ` : ''}
-                        {l.name}
-                      </option>
+                          ) : (
+                            <span>{PRINT_MODES.find((m) => m.value === r.printMode)?.label ?? r.printMode}</span>
+                          )}
+                        </td>
+                        <td>{r.defaultPaymentAccountCode}</td>
+                        <td>
+                          <Badge tone={r.isActive ? 'success' : 'neutral'}>{r.isActive ? 'Active' : 'Off'}</Badge>
+                        </td>
+                        <td>
+                          {canWrite ? (
+                            <form action={archivePosRegisterFromForm}>
+                              <input type="hidden" name="id" value={r.id} />
+                              <ConfirmSubmitButton
+                                title={`Archive the ${r.name} till?`}
+                                message="It disappears from the POS and cannot be brought back. Past sales and shifts stay in your books. You must keep at least one active till."
+                                confirmLabel="Archive till"
+                              >
+                                Archive
+                              </ConfirmSubmitButton>
+                            </form>
+                          ) : null}
+                        </td>
+                      </tr>
                     ))}
-                  </select>
-                </div>
-                <div className="field field-span-2">
-                  <label>Receipt footer</label>
-                  <input className="input" name="receiptFooter" placeholder="Thank you · Hotline …" />
-                </div>
-                <div className="field field-span-2">
-                  <label className="party-check">
-                    <input type="checkbox" name="isActive" value="on" defaultChecked />
-                    Active
-                  </label>
-                </div>
+                  </tbody>
+                </table>
               </div>
-              <div className="doc-form-footer" style={{ border: 0, padding: '8px 0 0', background: 'transparent' }}>
-                <Button variant="primary" type="submit">
-                  Add register
-                </Button>
-              </div>
-            </form>
-            ) : null}
+
+              {canWrite ? (
+                <details className="ux-disclosure set-add">
+                  <summary>Add a till</summary>
+                  <form action={savePosRegisterFromForm} className="set-add-grid">
+                    <TextField id="reg-code" name="code" label="Code" required placeholder="REG-02" />
+                    <TextField id="reg-name" name="name" label="Name" required placeholder="Side counter" />
+                    <FormSelect id="reg-print" name="printMode" label="Printing" defaultValue="browser" options={PRINT_MODES} />
+                    <FormSelect
+                      id="reg-location"
+                      name="locationId"
+                      label="Location (stock and brand)"
+                      defaultValue=""
+                      options={[
+                        { value: '', label: 'No location' },
+                        ...locationOptions.map((l) => ({ value: l.id, label: l.code ? `${l.name} (${l.code})` : l.name })),
+                      ]}
+                    />
+                    <TextField id="reg-account" name="defaultPaymentAccountCode" label="Cash account code" defaultValue="1000" />
+                    <TextField id="reg-device" name="thermalDeviceHint" label="Printer note" placeholder="e.g. Epson TM-T82 USB" />
+                    <TextField id="reg-footer" name="receiptFooter" label="Receipt footer" placeholder="Thank you · Hotline …" className="set-span-2" />
+                    <div className="set-add-actions">
+                      <label className="set-switch-label" htmlFor="reg-active">
+                        <span className="ux-switch">
+                          <input id="reg-active" type="checkbox" role="switch" name="isActive" value="on" defaultChecked />
+                          <span aria-hidden />
+                        </span>
+                        Active
+                      </label>
+                      <Button variant="primary" type="submit">
+                        Add register
+                      </Button>
+                    </div>
+                  </form>
+                </details>
+              ) : null}
+            </section>
           </div>
+
+          <aside className="ux-guide set-guide" aria-label="About sales settings">
+            <h2>Good to know</h2>
+            <p>Number changes apply to the next invoice or quotation. Numbers already issued do not change.</p>
+            <p>
+              <strong>Preview only</strong> printing skips the automatic print, thermal printing and the cash drawer on sales,
+              refunds and day-end. Print from Last receipt or Last Z-report instead.
+            </p>
+            <p>The thermal printer connects from the POS screen in a supported browser.</p>
+          </aside>
         </div>
       </div>
     </BookOneShell>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock } from 'lucide-react';
 import { pushStatusToast } from '@/components/layout/status-toast';
@@ -60,6 +60,8 @@ export function TeamJobsScreen({
   const roleRevision = matrix ? `${matrix.role.id}:${matrix.screens.map((s) => `${s.keyPrefix}:${s.level}`).join('|')}` : '';
   const [levels, setLevels] = useState<Record<string, Level>>({});
   const [dirty, setDirty] = useState(false);
+  const [opening, startOpening] = useTransition();
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   useEffect(() => {
     const next: Record<string, Level> = {};
@@ -79,7 +81,8 @@ export function TeamJobsScreen({
   async function selectRole(id: string) {
     if (id === roleId) return;
     if (dirty && !(await askConfirm({ title: 'Leave without saving?', message: 'You have unsaved job changes. Leave this job without saving? Your changes will be lost.', confirmLabel: 'Leave without saving', cancelLabel: 'Keep editing', tone: 'warning' }))) return;
-    router.push(`/company/team/jobs?role=${id}`);
+    setOpeningId(id);
+    startOpening(() => router.push(`/company/team/jobs?role=${id}`));
   }
   function set(key: string, v: Level) {
     setLevels((prev) => ({ ...prev, [key]: v }));
@@ -111,8 +114,15 @@ export function TeamJobsScreen({
             <button
               key={j.id}
               type="button"
-              className={matrix?.role.id === j.id ? 'is-current' : ''}
+              className={
+                opening && openingId === j.id
+                  ? 'is-current is-opening'
+                  : matrix?.role.id === j.id && !(opening && openingId)
+                    ? 'is-current'
+                    : ''
+              }
               aria-current={matrix?.role.id === j.id ? 'true' : undefined}
+              aria-busy={opening && openingId === j.id ? true : undefined}
               onClick={() => selectRole(j.id)}
             >
               <span className="jobs-name">
@@ -128,7 +138,7 @@ export function TeamJobsScreen({
         </nav>
 
         {matrix ? (
-          <section className="ux-card jobs-matrix" aria-labelledby="jobs-title">
+          <section className={`ux-card jobs-matrix ${opening ? 'is-opening' : ''}`.trim()} aria-labelledby="jobs-title" aria-busy={opening || undefined}>
             <header className="ux-card-head">
               <div>
                 <h2 id="jobs-title">{matrix.role.name}</h2>

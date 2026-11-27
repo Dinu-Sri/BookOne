@@ -1,3 +1,7 @@
+## 2026-11-28 — Calm Sales, Purchase, Inventory and Rental settings (v2.32.0)
+
+Settings kit with sticky Save, switches and registry selects; tills archive asks first; Jobs highlights at once. See [CHG-20261128-calm-settings-screens](changes/CHG-20261128-calm-settings-screens.md).
+
 ## 2026-11-27 — No browser pop-ups anywhere; Jobs Save always visible (v2.31.2)
 
 All 11 window.confirm/prompt calls replaced by BookOne dialogs (askConfirm/askText), enforced by a test; rule book updated. See [CHG-20261127-no-browser-popups](changes/CHG-20261127-no-browser-popups.md).

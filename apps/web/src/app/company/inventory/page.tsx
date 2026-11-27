@@ -1,12 +1,11 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import {
   getInventorySettings,
   saveInventorySettingsFromForm,
 } from '@/app/actions/inventory-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Button } from '@/components/ui/bookone-ui';
+import { SelectRow, SettingsForm, SettingsSection } from '@/components/settings/settings-kit';
 
 export default async function CompanyInventorySettingsPage() {
   let tenant;
@@ -19,67 +18,61 @@ export default async function CompanyInventorySettingsPage() {
 
   return (
     <BookOneShell active="Inventory Settings" tenant={tenant}>
-      <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
-        <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
-          <div className="party-form-top">
-            <Link href="/company/details" className="party-back-btn">
-              <span className="party-back-arrow">←</span>
-              <span>
-                <strong>Back</strong>
-                <small>Company</small>
-              </span>
-            </Link>
-            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-              Inventory controls
-            </span>
+      <div className="workspace ux-page set-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Inventory settings</h1>
+              <p>Choose how stock is costed and whether stock can go below zero.</p>
+            </div>
           </div>
-          <form action={saveInventorySettingsFromForm} className="party-form-body">
-            <div className="party-tab-panel">
-              <div className="party-tab-grid">
-                <div className="field field-full">
-                  <label>Costing method</label>
-                  <select
-                    className="input"
-                    name="costingMethod"
-                    defaultValue={settings.costingMethod}
-                  >
-                    <option value="last">Last cost — newest buy price becomes the product cost</option>
-                    <option value="average">
-                      Weighted average — blends old stock value with the new receipt
-                    </option>
-                    <option value="fifo">
-                      FIFO lots — each carton keeps its price; sales take the oldest carton first
-                    </option>
-                  </select>
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    Last and average update the product cost used for COGS. FIFO keeps separate lots
-                    (e.g. 10 @ 500 then 20 @ 450); the first 10 sold use 500, then 450. Physical and
-                    rental fleet qty use lots. Digital and service items do not.
-                  </p>
-                </div>
-                <div className="field field-full">
-                  <label>Negative stock</label>
-                  <select
-                    className="input"
-                    name="negativeStockPolicy"
-                    defaultValue={settings.negativeStockPolicy}
-                  >
-                    <option value="allow">Allow negative stock</option>
-                    <option value="block">Block movements that would go negative</option>
-                  </select>
-                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    When blocked, sales invoices, POS, purchase returns, and stock adjustments that
-                    would reduce qty below zero are rejected.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="party-form-footer">
-              <Button variant="primary" type="submit">
-                Save inventory settings
-              </Button>
-            </div>
-          </form>
+        </header>
+
+        <div className="ux-split">
+          <div className="ux-main">
+            <SettingsForm
+              id="inventory-settings"
+              action={saveInventorySettingsFromForm}
+              title="Stock rules"
+              saveLabel="Save inventory settings"
+            >
+              <SettingsSection title="Costing">
+                <SelectRow
+                  name="costingMethod"
+                  label="Costing method"
+                  help="Sets the cost of goods sold when you sell stock."
+                  defaultValue={settings.costingMethod}
+                  wide
+                  options={[
+                    { value: 'last', label: 'Last cost', description: 'The newest buy price becomes the product cost.' },
+                    { value: 'average', label: 'Weighted average', description: 'Blends the old stock value with each new receipt.' },
+                    { value: 'fifo', label: 'FIFO lots', description: 'Each delivery keeps its price; sales use the oldest first.' },
+                  ]}
+                />
+              </SettingsSection>
+              <SettingsSection title="Stock below zero">
+                <SelectRow
+                  name="negativeStockPolicy"
+                  label="Negative stock"
+                  help="When blocked, invoices, POS sales, purchase returns and adjustments that would take stock below zero are stopped."
+                  defaultValue={settings.negativeStockPolicy}
+                  options={[
+                    { value: 'allow', label: 'Allow negative stock' },
+                    { value: 'block', label: 'Block it' },
+                  ]}
+                />
+              </SettingsSection>
+            </SettingsForm>
+          </div>
+
+          <aside className="ux-guide set-guide" aria-label="About inventory settings">
+            <h2>Good to know</h2>
+            <p>
+              <strong>FIFO example:</strong> you buy 10 at 500, then 20 at 450. The first 10 you sell cost 500 each,
+              the rest 450.
+            </p>
+            <p>Physical products and rental fleet quantities use lots. Digital and service items do not hold stock.</p>
+          </aside>
         </div>
       </div>
     </BookOneShell>

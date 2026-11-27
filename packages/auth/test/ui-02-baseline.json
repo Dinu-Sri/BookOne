@@ -5,18 +5,6 @@
   "apps/web/src/app/company/brand-location-forms.tsx": {
     "raw-select": 2
   },
-  "apps/web/src/app/company/inventory/page.tsx": {
-    "raw-select": 2
-  },
-  "apps/web/src/app/company/purchase/page.tsx": {
-    "raw-select": 2
-  },
-  "apps/web/src/app/company/rental/page.tsx": {
-    "raw-select": 4
-  },
-  "apps/web/src/app/company/sales/page.tsx": {
-    "raw-select": 7
-  },
   "apps/web/src/app/inventory/adjustments/new/page.tsx": {
     "raw-date": 1,
     "raw-select": 1

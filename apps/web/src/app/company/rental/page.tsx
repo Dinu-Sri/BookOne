@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { listHireBayPresence, type HireBayPresence } from '@/app/actions/company-settings';
 import { getRentalSettings, saveRentalSettingsFromForm } from '@/app/actions/rental-settings';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Button } from '@/components/ui/bookone-ui';
+import { SelectRow, SettingsForm, SettingsSection, SwitchRow, TextRow } from '@/components/settings/settings-kit';
 import { HireBaySetupForm } from '../rental-bay-form';
 
 export default async function CompanyRentalSettingsPage() {
@@ -23,305 +22,138 @@ export default async function CompanyRentalSettingsPage() {
 
   return (
     <BookOneShell active="Rental Settings" tenant={tenant}>
-      <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
-        <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
-          <div className="party-form-top">
-            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-              Hire bays
-            </span>
-          </div>
-          <div className="party-form-body">
-            <div className="party-tab-panel">
-              <HireBaySetupForm bays={hireBays} />
+      <div className="workspace ux-page set-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Rental settings</h1>
+              <p>Set how you charge for hire, when you invoice, deposits and double bookings.</p>
             </div>
           </div>
+        </header>
+
+        <div className="ux-split">
+          <div className="ux-main set-stack">
+            <SettingsForm
+              id="rental-settings"
+              action={saveRentalSettingsFromForm}
+              title="Hire rules"
+              saveLabel="Save rental settings"
+            >
+              <SettingsSection
+                title="Rate units"
+                help="Turn on every unit you use. Each hire product still picks one of them."
+              >
+                <SwitchRow name="allowHirePerEvent" label="Per event" help="One rate for the whole booking, such as chairs for a wedding." defaultChecked={settings.allowHirePerEvent} />
+                <SwitchRow name="allowHirePerDay" label="Per day" help="Rate × hire days, such as a generator." defaultChecked={settings.allowHirePerDay} />
+                <SwitchRow name="allowHirePerHour" label="Per hour" help="Rate × hours, such as a speaker." defaultChecked={settings.allowHirePerHour} />
+                <SelectRow
+                  name="defaultHireUnit"
+                  label="Unit for new hire products"
+                  defaultValue={settings.defaultHireUnit}
+                  options={[
+                    { value: 'event', label: 'Event' },
+                    { value: 'day', label: 'Day' },
+                    { value: 'hour', label: 'Hour' },
+                  ]}
+                />
+              </SettingsSection>
+
+              <SettingsSection
+                title="When to invoice"
+                help="Catering often invoices when the job is booked; tool hire at dispatch or after return. Turn on every timing you use."
+              >
+                <SwitchRow name="allowInvoiceOnConfirm" label="When the booking is confirmed" defaultChecked={settings.allowInvoiceOnConfirm} />
+                <SwitchRow name="allowInvoiceOnDispatch" label="When kit is dispatched" defaultChecked={settings.allowInvoiceOnDispatch} />
+                <SwitchRow name="allowInvoiceAfterReturn" label="After return and inspection" defaultChecked={settings.allowInvoiceAfterReturn} />
+                <SwitchRow name="allowInvoiceManual" label="Manual only" help="Staff create the invoice themselves." defaultChecked={settings.allowInvoiceManual} />
+                <SelectRow
+                  name="defaultInvoiceTiming"
+                  label="Usual timing"
+                  help="What a new booking starts with."
+                  defaultValue={settings.defaultInvoiceTiming}
+                  options={[
+                    { value: 'on_confirm', label: 'On confirm' },
+                    { value: 'on_dispatch', label: 'On dispatch' },
+                    { value: 'after_return', label: 'After return' },
+                    { value: 'manual', label: 'Manual' },
+                  ]}
+                />
+                <SwitchRow
+                  name="allowInvoiceTimingOverride"
+                  label="Let each booking choose its timing"
+                  defaultChecked={settings.allowInvoiceTimingOverride}
+                />
+              </SettingsSection>
+
+              <SettingsSection
+                title="Deposits"
+                help="Deposits are money you owe back (account 2400), not sales. Hire income posts to 4400. Both kinds can be on."
+              >
+                <SwitchRow name="allowDepositPerEvent" label="Per event" help="One deposit on the booking." defaultChecked={settings.allowDepositPerEvent} />
+                <SwitchRow name="allowDepositPerItem" label="Per item" help="An amount set on the hire product." defaultChecked={settings.allowDepositPerItem} />
+                <SelectRow
+                  name="defaultDepositMode"
+                  label="Deposit on new bookings"
+                  defaultValue={settings.defaultDepositMode}
+                  options={[
+                    { value: 'none', label: 'No deposit' },
+                    { value: 'per_event', label: 'Per event' },
+                    { value: 'per_item', label: 'Per item' },
+                    { value: 'both', label: 'Event and item' },
+                  ]}
+                />
+                <TextRow name="defaultEventDepositAmount" label="Event deposit amount" inputMode="decimal" defaultValue={settings.defaultEventDepositAmount} />
+                <TextRow name="defaultEventDepositPercent" label="Event deposit %" inputMode="decimal" defaultValue={settings.defaultEventDepositPercent} />
+              </SettingsSection>
+
+              <SettingsSection title="Double bookings and returns">
+                <SelectRow
+                  name="overlapPolicy"
+                  label="If the quantity is already booked"
+                  help="Manager override suits most caterers: staff cannot double-book; a manager can, with a reason."
+                  defaultValue={settings.overlapPolicy}
+                  wide
+                  options={[
+                    { value: 'block', label: 'Block', description: 'Nobody can confirm an overlap.' },
+                    { value: 'override', label: 'Manager override', description: 'Staff are blocked; a manager or admin may confirm with a reason.' },
+                    { value: 'warn', label: 'Warn', description: 'Anyone can confirm after a warning.' },
+                    { value: 'allow', label: 'Allow', description: 'No availability check.' },
+                  ]}
+                />
+                <TextRow
+                  name="defaultLateFeePerDay"
+                  label="Late fee per day"
+                  help="Suggested when kit comes back late. 0 hides the suggestion."
+                  inputMode="decimal"
+                  defaultValue={settings.defaultLateFeePerDay}
+                />
+                <TextRow
+                  name="defaultTurnaroundHours"
+                  label="Turnaround hours"
+                  help="Hours after a return before the kit can be booked again (cleaning, transport). Products may set their own."
+                  inputMode="numeric"
+                  defaultValue={String(settings.defaultTurnaroundHours)}
+                />
+              </SettingsSection>
+            </SettingsForm>
+
+            <section className="ux-card" aria-labelledby="hire-bays-title">
+              <header className="ux-card-head">
+                <h2 id="hire-bays-title">Hire bays</h2>
+              </header>
+              <div className="ux-card-body">
+                <HireBaySetupForm bays={hireBays} />
+              </div>
+            </section>
+          </div>
+
+          <aside className="ux-guide set-guide" aria-label="About rental settings">
+            <h2>Good to know</h2>
+            <p>A booking can only use the rate units, invoice timings and deposit kinds you turn on here.</p>
+            <p>Hire bays are the On rent, Wash and Repair stock locations that dispatch and returns move kit through. Create them once.</p>
+          </aside>
         </div>
-
-        <form action={saveRentalSettingsFromForm} style={{ display: 'grid', gap: 14 }}>
-          <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
-            <div className="party-form-top">
-              <Link href="/company/details" className="party-back-btn">
-                <span className="party-back-arrow">←</span>
-                <span>
-                  <strong>Back</strong>
-                  <small>Company</small>
-                </span>
-              </Link>
-              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-                Hire rate units
-              </span>
-            </div>
-            <div className="party-form-body">
-              <div className="party-tab-panel">
-                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 10px' }}>
-                  Enable every unit this company actually uses. A product still picks one unit from
-                  this list (chairs per event, a generator per day, a speaker per hour).
-                </p>
-                <div className="party-tab-grid">
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowHirePerEvent"
-                        value="on"
-                        defaultChecked={settings.allowHirePerEvent}
-                      />
-                      Per event (one rate for the whole booking)
-                    </label>
-                  </div>
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowHirePerDay"
-                        value="on"
-                        defaultChecked={settings.allowHirePerDay}
-                      />
-                      Per day (rate × hire days)
-                    </label>
-                  </div>
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowHirePerHour"
-                        value="on"
-                        defaultChecked={settings.allowHirePerHour}
-                      />
-                      Per hour
-                    </label>
-                  </div>
-                  <div className="field">
-                    <label>Default unit for new hire products</label>
-                    <select className="input" name="defaultHireUnit" defaultValue={settings.defaultHireUnit}>
-                      <option value="event">Event</option>
-                      <option value="day">Day</option>
-                      <option value="hour">Hour</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
-            <div className="party-form-top">
-              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-                When to invoice
-              </span>
-            </div>
-            <div className="party-form-body">
-              <div className="party-tab-panel">
-                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 10px' }}>
-                  Catering often invoices when the job is booked. Tool hire often invoices at
-                  dispatch or after return. Enable every timing this company uses; a booking can
-                  pick among them if override is on.
-                </p>
-                <div className="party-tab-grid">
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowInvoiceOnConfirm"
-                        value="on"
-                        defaultChecked={settings.allowInvoiceOnConfirm}
-                      />
-                      When the booking is confirmed
-                    </label>
-                  </div>
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowInvoiceOnDispatch"
-                        value="on"
-                        defaultChecked={settings.allowInvoiceOnDispatch}
-                      />
-                      When kit is dispatched
-                    </label>
-                  </div>
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowInvoiceAfterReturn"
-                        value="on"
-                        defaultChecked={settings.allowInvoiceAfterReturn}
-                      />
-                      After return / inspection
-                    </label>
-                  </div>
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowInvoiceManual"
-                        value="on"
-                        defaultChecked={settings.allowInvoiceManual}
-                      />
-                      Manual only (staff create the invoice)
-                    </label>
-                  </div>
-                  <div className="field">
-                    <label>Default timing</label>
-                    <select
-                      className="input"
-                      name="defaultInvoiceTiming"
-                      defaultValue={settings.defaultInvoiceTiming}
-                    >
-                      <option value="on_confirm">On confirm</option>
-                      <option value="on_dispatch">On dispatch</option>
-                      <option value="after_return">After return</option>
-                      <option value="manual">Manual</option>
-                    </select>
-                  </div>
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowInvoiceTimingOverride"
-                        value="on"
-                        defaultChecked={settings.allowInvoiceTimingOverride}
-                      />
-                      Allow a different timing on each booking
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
-            <div className="party-form-top">
-              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-                Deposits
-              </span>
-            </div>
-            <div className="party-form-body">
-              <div className="party-tab-panel">
-                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 10px' }}>
-                  Deposits are a liability (account 2400), not sales. Hire income posts to 4400. Event hire often takes one
-                  amount per job; high-value kit often takes a deposit per item. Both can be on.
-                </p>
-                <div className="party-tab-grid">
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowDepositPerEvent"
-                        value="on"
-                        defaultChecked={settings.allowDepositPerEvent}
-                      />
-                      Per event (one deposit on the booking)
-                    </label>
-                  </div>
-                  <div className="field field-full">
-                    <label className="party-check">
-                      <input
-                        type="checkbox"
-                        name="allowDepositPerItem"
-                        value="on"
-                        defaultChecked={settings.allowDepositPerItem}
-                      />
-                      Per item (amount on the hire product)
-                    </label>
-                  </div>
-                  <div className="field">
-                    <label>Default on new bookings</label>
-                    <select
-                      className="input"
-                      name="defaultDepositMode"
-                      defaultValue={settings.defaultDepositMode}
-                    >
-                      <option value="none">No deposit</option>
-                      <option value="per_event">Per event</option>
-                      <option value="per_item">Per item</option>
-                      <option value="both">Event + item</option>
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label>Default event deposit amount</label>
-                    <input
-                      className="input"
-                      name="defaultEventDepositAmount"
-                      inputMode="decimal"
-                      defaultValue={settings.defaultEventDepositAmount}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Default event deposit %</label>
-                    <input
-                      className="input"
-                      name="defaultEventDepositPercent"
-                      inputMode="decimal"
-                      defaultValue={settings.defaultEventDepositPercent}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="party-form-shell" style={{ maxHeight: 'none', minHeight: 0 }}>
-            <div className="party-form-top">
-              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)' }}>
-                Overlap &amp; turnaround
-              </span>
-            </div>
-            <div className="party-form-body">
-              <div className="party-tab-panel">
-                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 10px' }}>
-                  When two bookings want the same chairs on the same dates. Manager override is the
-                  usual catering default: staff cannot double-book; a manager can force it with a
-                  reason (VIP, sub-rent).
-                </p>
-                <div className="party-tab-grid">
-                  <div className="field field-full">
-                    <label>If qty is already reserved</label>
-                    <select className="input" name="overlapPolicy" defaultValue={settings.overlapPolicy}>
-                      <option value="block">Block — nobody can confirm an overlap</option>
-                      <option value="override">
-                        Manager override — staff blocked; manager/admin may confirm with a reason
-                      </option>
-                      <option value="warn">Warn — anyone can confirm after a warning</option>
-                      <option value="allow">Allow — no availability check</option>
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label>Late fee per overdue day</label>
-                    <input
-                      className="input"
-                      name="defaultLateFeePerDay"
-                      inputMode="decimal"
-                      defaultValue={settings.defaultLateFeePerDay}
-                    />
-                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                      Suggested on return when kit comes back after hire-to. 0 hides the suggestion.
-                    </p>
-                  </div>
-                  <div className="field">
-                    <label>Default turnaround hours</label>
-                    <input
-                      className="input"
-                      name="defaultTurnaroundHours"
-                      inputMode="numeric"
-                      defaultValue={String(settings.defaultTurnaroundHours)}
-                    />
-                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                      Hours after a return before the qty can be booked again (wash / transit). 0
-                      means next booking may start at the collect time. Products may override.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="party-form-footer">
-                <Button variant="primary" type="submit">
-                  Save rental settings
-                </Button>
-              </div>
-            </div>
-          </div>
-        </form>
       </div>
     </BookOneShell>
   );

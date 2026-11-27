@@ -46,3 +46,15 @@ Status: ready for the owner's staging review.
 ## Rollback
 
 Revert the commit. Server actions and data are unchanged.
+
+## v2.31.1: CI fix
+
+**What failed.** The "Docker web image" job failed on `1c75a80` in the AgentBridge CoreGuard browser set. In `e2e/agent-bridge-01.spec.ts`, a source-pattern check pinned the old Jobs screen:
+- a select with `value={levels[s.keyPrefix]…}`;
+- the phrase "unsaved job changes".
+
+**What changed.** The behaviour is the same in the new screen: each control is driven by the `levels` state, and the leave-without-saving guard is kept.
+- The "unsaved job changes" wording is restored in the guard and the save bar.
+- The pinned pattern is updated in the same commit to the three-way control: `levels[s.keyPrefix] ?? s.level` and `checked={value === l.v}`.
+
+**Local result.** The full CI browser set passed 40 of 40, twice. AgentBridge-01, connect and consent, UI-NAV-01, DB-01, COA-01 and UI-02 all passed.

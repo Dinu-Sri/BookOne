@@ -1,3 +1,7 @@
+## 2026-11-27 — CI fix for the Jobs screen source check (v2.31.1)
+
+See [CHG-20261127-people-jobs-tooltips](changes/CHG-20261127-people-jobs-tooltips.md).
+
 ## 2026-11-27 — People and Jobs simplified; one sidebar tooltip; docs bubble stays on screen (v2.31.0)
 
 Team and Groups merged into People; Jobs is a Company tab with plain descriptions and No access / View / Edit controls. See [CHG-20261127-people-jobs-tooltips](changes/CHG-20261127-people-jobs-tooltips.md).

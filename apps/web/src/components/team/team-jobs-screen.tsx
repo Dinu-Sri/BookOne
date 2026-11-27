@@ -77,7 +77,7 @@ export function TeamJobsScreen({
 
   function selectRole(id: string) {
     if (id === roleId) return;
-    if (dirty && !window.confirm('You have unsaved changes to this job. Leave without saving?')) return;
+    if (dirty && !window.confirm('You have unsaved job changes. Leave this job without saving?')) return;
     router.push(`/company/team/jobs?role=${id}`);
   }
   function set(key: string, v: Level) {
@@ -195,7 +195,7 @@ export function TeamJobsScreen({
               </div>
               <div className="jobs-bar">
                 <span className={dirty ? 'is-dirty' : ''} role="status">
-                  {dirty ? 'You have unsaved changes to this job.' : 'Saved.'}
+                  {dirty ? 'You have unsaved job changes.' : 'Saved.'}
                 </span>
                 <Button variant="primary" type="submit" disabled={!dirty}>
                   Save job

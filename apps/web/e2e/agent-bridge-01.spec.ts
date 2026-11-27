@@ -48,7 +48,9 @@ test('source routes exist for inbox, API, MCP and posting adapter', () => {
   expect(nav).toMatch(/Document Inbox/);
   expect(nav).not.toMatch(/TileSuiteNav|NavModeToggle/);
   expect(jobs).toMatch(/key=\{roleId\}/);
-  expect(jobs).toMatch(/value=\{levels\[s\.keyPrefix\]/);
+  // Each screen's control is driven by the levels state (three-way No access / View / Edit since v2.31.0).
+  expect(jobs).toMatch(/levels\[s\.keyPrefix\] \?\? s\.level/);
+  expect(jobs).toMatch(/checked=\{value === l\.v\}/);
   expect(jobs).toMatch(/unsaved job changes/i);
 });
 

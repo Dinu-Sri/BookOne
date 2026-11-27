@@ -121,3 +121,29 @@ Revert the commit. Migration 058 only adds tables, columns and a function, and d
 ## Follow-up v2.23.1 — CoreGuard cleanup
 
 CoreGuard on `03b578f` passed every browser and HTTP test, including the new WP3–WP7 HTTP test against Postgres. The pilot then failed in teardown: `commerce_api_calls` rows (written by the new API call log) block deleting the test connection, because the schema sync created that foreign key without cascade. `scripts/coreguard/seed.ts` cleanup now deletes the newer commerce tables (API calls, webhook deliveries, webhooks, customers, reservations, stock commitments, channel products, publish claims, mapping proposals) first, each only if the table exists. Test infrastructure only; no product behaviour changes.
+
+## Staging verification (v2.23.1, 2026-11-27) and follow-up v2.23.2
+
+Owner-approved test on the `watercolorlkv2` sandbox connection with a temporary key (prefix `a77fc856f9d4`, revoked afterwards):
+
+- **Live system:** `/health` 200 (spec 1.4.0, no key). Migration 058 is applied: 5 tables, 5 RLS policies, nullable `order_id`, `reservation_id` and `expires_at`, background function working. The website's existing polling (`/connection`, `/changes`, `/catalog/candidates`) stayed at 200 with about 50 ms averages.
+- **`/connection`:** `grantedScopes` lists the 10 aliases, and the capabilities report reservations, webhooks and customers as true.
+- **Reservations:**
+  - 11 of 10 is refused (all-or-nothing, released, insufficient, available 10);
+  - holding 2 makes `/inventory` show committed 2 and available 8;
+  - an `Idempotency-Key` replay returns the same hold;
+  - extend works; asking for 50 gives 409 `INSUFFICIENT_STOCK` and keeps the hold; changing to 3 holds 3;
+  - a 60 s hold showed `expired` at 77 s, with committed back to 3;
+  - DELETE releases, with committed 0 and available 10.
+- **Feed:** `?kinds=reservation` returns only reservation items with `entityId` and `occurredAt`; an unknown kind gives 422.
+- **Webhooks:** an http URL is refused. A webhook on a deliberately rejecting target (401) queued reservation, customer and ping deliveries; they were sent signed and scheduled for retry. The Developer card shows `HTTP 401`, the delivery log shows attempts and next tries, and **Remove** works.
+- **Customers:** `PUT /customers/ZZ-TEST-web-1` created and linked a BookOne customer ("ZZ-TEST Web Customer", zz-test-web-1@example.com, kept as test data). The `Idempotency-Key` replay returned `replayed: true`. GET by channel id, and the customer's orders, both work.
+- **Orders:**
+  - `GET /orders` lists the 2 existing web orders; `GET /orders/WLK-100001` shows lines, payment and fulfilment plus the receipt fields;
+  - `/invoice` returns 404, correct because nothing is invoiced yet;
+  - `/orders/validate` folds `fees` and `discounts` into the total, with a non-blocking PRICE_MISMATCH;
+  - the **Packing slip** for WLK-100001 renders.
+- **Catalog:** `include=stats`, `/catalog/related` and `/catalog/new-arrivals` all return 200.
+- **Not run on staging:** reservation-to-order conversion and returns (they would create test orders or invoices in the owner's company). CoreGuard covers them on Postgres and unit tests cover them in memory. A POS sale against a held unit was not tried by hand either; the POS reads the same commitments with the same expiry rule, which the unit tests and the code lock cover.
+
+**v2.23.2 fix:** the Developer tab's API call and webhook times used the browser or server locale and timezone. Server-rendered rows showed UTC (3:12 AM instead of 8:42 AM). They now use the same fixed `Asia/Colombo` formatter as the Orders tab, and so does the packing slip date.

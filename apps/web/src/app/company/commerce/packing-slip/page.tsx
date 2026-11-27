@@ -37,7 +37,7 @@ export default async function PackingSlipPage({
         </div>
         <div style={{ textAlign: 'right' }}>
           <strong>Order {order.displayNumber}</strong>
-          <p style={{ margin: '4px 0 0' }}>{new Date(order.placedAt).toLocaleDateString()}</p>
+          <p style={{ margin: '4px 0 0' }}>{new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: 'Asia/Colombo' }).format(new Date(order.placedAt))}</p>
           {order.documentNumber ? <p style={{ margin: '4px 0 0' }}>Invoice {order.documentNumber}</p> : null}
         </div>
       </header>

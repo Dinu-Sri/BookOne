@@ -1,3 +1,7 @@
+## 2026-11-27 — Commerce WP3–WP7 verified on staging; Developer tab times (v2.23.2)
+
+Reservations (hold, all-or-nothing, extend, change, expiry, release), the feed filter, webhook delivery and retries, customers, order reads, validate, packing slip, stats, related and new arrivals were checked on staging with a temporary sandbox key (since revoked). Developer tab times now show Sri Lanka time like the Orders tab. See [CHG-20261126-commerce-wp3-wp7](changes/CHG-20261126-commerce-wp3-wp7.md).
+
 ## 2026-11-26 — CoreGuard cleanup for the new commerce tables (v2.23.1)
 
 Tests only: CoreGuard teardown deletes API-call, webhook, customer and reservation rows before the test connection (v2.23.0 passed all tests but failed cleanup). See [CHG-20261126-commerce-wp3-wp7](changes/CHG-20261126-commerce-wp3-wp7.md).

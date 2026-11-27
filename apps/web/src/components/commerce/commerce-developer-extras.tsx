@@ -53,8 +53,12 @@ export type ApiCallView = {
 
 const KINDS = ['product', 'variant', 'price', 'image', 'inventory', 'category', 'brand', 'order', 'customer', 'reservation', 'mapping'];
 
+/** Fixed timezone (as on the Orders tab) so server and browser render the same text. */
 function when(iso: string | null) {
-  return iso ? new Date(iso).toLocaleString() : '—';
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Colombo' }).format(d);
 }
 
 /** WP4: endpoints that receive change-feed items, signed with a per-endpoint secret. */

@@ -609,19 +609,19 @@ export function ReconciliationCompare({
           </p>
           <dl className="brc-finish-sum">
             <div>
-              <dt>Bank closing</dt>
+              <dt>Bank closing </dt>
               <dd>{money(review?.bankClosing ?? 0)}</dd>
             </div>
             <div>
-              <dt>BookOne closing</dt>
+              <dt>BookOne closing </dt>
               <dd>{money(review?.bookClosing ?? 0)}</dd>
             </div>
             <div>
-              <dt>Waiting to clear</dt>
+              <dt>Waiting to clear </dt>
               <dd>{money(review?.outstandingNet ?? 0)}</dd>
             </div>
             <div className="is-total">
-              <dt>Difference</dt>
+              <dt>Difference </dt>
               <dd>{review?.differenceVerified ? money(review.difference) : 'Unverified'}</dd>
             </div>
           </dl>

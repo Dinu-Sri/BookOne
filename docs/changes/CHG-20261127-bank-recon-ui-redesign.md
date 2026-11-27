@@ -101,3 +101,10 @@ Status: in progress (first pass; screen review on staging follows).
 ## Rollback
 
 Revert the commit. CSS is in appended blocks (`.brc-v2`, `.rin`, `.bis-page`), and there is no data change.
+
+## Follow-up v2.25.1 — CoreGuard after the redesign
+
+CI on `8ffb787` compiled and passed lint, typecheck and unit tests. Two browser checks failed on the new markup:
+
+- **bank-recon:** the finish dialog's `<dt>Difference</dt><dd>LKR 0.00</dd>` read as "DifferenceLKR 0.00". Each summary label now ends with a space, so "Difference LKR 0.00" reads the same as before.
+- **custom-bank:** the transfer step used the old native selects and date input on Simple Entry. It now uses the shared helpers: `pickSelect` for From account / To account and `pickDate` (generalised from `pickOpeningDate`) for `#entry-date`.

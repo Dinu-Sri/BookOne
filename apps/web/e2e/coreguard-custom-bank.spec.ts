@@ -32,9 +32,13 @@ async function pickSelect(page: Page, label: string, query: string) {
 }
 
 async function pickOpeningDate(page: Page, iso: string) {
+  await pickDate(page, 'open-date', iso);
+}
+
+async function pickDate(page: Page, id: string, iso: string) {
   const [year, month, day] = iso.split('-').map(Number);
-  await page.locator('#open-date').click();
-  const menu = page.locator('#open-date-menu');
+  await page.locator(`#${id}`).click();
+  const menu = page.locator(`#${id}-menu`);
   await expect(menu).toBeVisible();
   for (let i = 0; i < 24; i += 1) {
     const label = await menu.locator('strong').innerText();
@@ -87,14 +91,14 @@ test('custom-bank vertical slice through the real app', async ({ page }) => {
 
   await page.goto('/');
   await page.getByRole('tab', { name: /Move Money/i }).click();
-  const fromSelect = page.locator('.field', { hasText: 'From account' }).locator('select');
-  await expect(fromSelect.locator(`option[value="${fixture.transfer.from}"]`)).toHaveCount(1, { timeout: 15_000 });
+  // Simple Entry uses the shared SelectField / DateField (v2.25.0).
+  await expect(page.getByRole('combobox', { name: 'From account' })).toBeEnabled({ timeout: 15_000 });
   await page.getByPlaceholder('Reference / memo').fill(fixture.transfer.party);
   await page.locator('.amount-field input').fill(String(centsToAmount(fixture.transfer.amountCents)));
   await page.locator('.field', { hasText: 'What was it for?' }).locator('input').fill('Internal bank transfer');
-  await fromSelect.selectOption(fixture.transfer.from);
-  await page.locator('.field', { hasText: 'To account' }).locator('select').selectOption(fixture.transfer.to);
-  await page.locator('input[type="date"]').fill(fixture.transfer.date);
+  await pickSelect(page, 'From account', fixture.transfer.from);
+  await pickSelect(page, 'To account', fixture.transfer.to);
+  await pickDate(page, 'entry-date', fixture.transfer.date);
   await page.getByRole('button', { name: 'Record Transfer' }).click();
   await expect(page.getByText(/Entry recorded/)).toBeVisible({ timeout: 30_000 });
 

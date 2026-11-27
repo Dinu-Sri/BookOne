@@ -21,6 +21,7 @@ import {
   type CanonicalStatementLine,
 } from '@bookone/statement-import';
 import { requireTenantContext } from '@bookone/auth';
+import { inferCategory } from '@bookone/accounting';
 import {
   accounts,
   and,
@@ -41,9 +42,12 @@ import {
   gte,
   inArray,
   isNull,
+  journalEntries,
+  journalLines,
   lte,
   or,
   sql,
+  tenants,
   transactions,
   withTenantContext,
 } from '@bookone/db';
@@ -339,42 +343,33 @@ async function loadBookCandidates(
   return out;
 }
 
+/**
+ * The bank account's BookOne balance at the end of `asOf`, from the ledger
+ * (posted journal lines), the same figure as Accounts. Opening balances and
+ * manual journals count; reading cashbook rows alone missed them (a new
+ * company's opening balance made the reconciliation impossible to finish).
+ */
 async function bookBalanceThrough(
   tenantId: string,
   bankAccountId: string,
   asOf: string,
 ): Promise<number> {
-  const rows = await db()
+  const [row] = await db()
     .select({
-      amount: transactions.amount,
-      direction: transactions.direction,
-      paymentAccountId: transactions.paymentAccountId,
-      transferSourceAccountId: transactions.transferSourceAccountId,
+      net: sql<string>`COALESCE(SUM(CASE WHEN ${journalLines.side} = 'debit' THEN ${journalLines.amount}::numeric ELSE -${journalLines.amount}::numeric END), 0)`,
     })
-    .from(transactions)
+    .from(journalLines)
+    .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
     .where(
       and(
-        eq(transactions.tenantId, tenantId),
-        isNull(transactions.voidedAt),
-        lte(transactions.date, asOf),
-        or(
-          eq(transactions.paymentAccountId, bankAccountId),
-          eq(transactions.transferSourceAccountId, bankAccountId),
-        ),
+        eq(journalLines.tenantId, tenantId),
+        eq(journalLines.accountId, bankAccountId),
+        isNull(journalLines.voidedAt),
+        isNull(journalEntries.voidedAt),
+        lte(journalEntries.entryDate, asOf),
       ),
     );
-  let bal = 0;
-  for (const r of rows) {
-    const s = bookSignedAmount(
-      r.direction,
-      Number(r.amount),
-      r.paymentAccountId,
-      r.transferSourceAccountId,
-      bankAccountId,
-    );
-    if (s != null) bal += s;
-  }
-  return Math.round(bal * 100) / 100;
+  return Math.round(Number(row?.net ?? 0) * 100) / 100;
 }
 
 async function loadReconPostingAccounts(tenantId: string): Promise<{
@@ -3272,6 +3267,8 @@ export type CompareSideRow = {
   hint: string | null;
   pairCaseId: string | null;
   selectable: boolean;
+  /** Bank-only lines: the category BookOne suggests when adding it (e.g. 6600 for "SERVICE CHARGES"). */
+  suggestedCategory?: string | null;
 };
 
 export type CompareBoard = {
@@ -3450,6 +3447,20 @@ export async function getCompareBoard(
         (r) => r.caseType === 'match_1_1' && r.confidence === 'strong' && r.state === 'suggested',
       ).length;
       const posting = await loadReconPostingAccounts(user.tenantId);
+      // Suggest a category for lines that are not in BookOne yet, using the
+      // same rules as Simple Entry (on this company's chart).
+      const [tenantRow] = await db().select({ entityKind: tenants.entityKind }).from(tenants).where(eq(tenants.id, user.tenantId)).limit(1);
+      for (const row of bank) {
+        if (row.status !== 'bank_only') continue;
+        const dir = row.amount > 0 ? 'money_in' : 'money_out';
+        const list = row.amount > 0 ? posting.income : posting.expenses;
+        try {
+          const guess = inferCategory(row.description, '', dir, undefined, tenantRow?.entityKind ?? null);
+          row.suggestedCategory = guess.confidence >= 0.5 && list.some((a) => a.code === guess.accountCode) ? guess.accountCode : null;
+        } catch {
+          row.suggestedCategory = null;
+        }
+      }
 
       return {
         ok: true as const,

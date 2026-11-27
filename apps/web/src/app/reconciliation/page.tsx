@@ -43,8 +43,12 @@ export default async function ReconciliationPage() {
               Bank reconciliation
             </h1>
             <p className="card-subtitle" style={{ marginTop: 6, maxWidth: 56 * 8 }}>
-              Match bank statements to BookOne by account and period. Nothing posts until you
-              confirm.
+              Once a month, check that your bank statement and BookOne agree. Import the statement, confirm the
+              matches, add bank charges or interest, and mark late items as waiting to clear. Nothing is recorded
+              until you confirm.{' '}
+              <a href="/docs/accounting/bank-reconciliation" target="_blank" rel="noopener noreferrer">
+                Step-by-step guide with an example
+              </a>
             </p>
           </div>
           <Link href="/reconciliation/import" className="button primary">

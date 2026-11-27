@@ -39,7 +39,7 @@ export default async function ErpBankImportPage({
               Import bank file
             </h1>
             <p className="card-subtitle" style={{ marginTop: 6 }}>
-              Same Smart Bank Import Studio as cashbook. Staging only — match after save.
+              Upload the statement you downloaded from your bank (Excel or CSV). Nothing changes in your books until you confirm each item.
             </p>
           </div>
           <Link href="/reconciliation" className="bis-btn secondary">

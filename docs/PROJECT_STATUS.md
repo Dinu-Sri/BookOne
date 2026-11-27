@@ -1,3 +1,7 @@
+## 2026-11-27 — Bank reconciliation: works for new companies, plain words, beginner guide (v2.24.0)
+
+A full October month was reconciled in the browser on staging (test company, synthetic statement). The run found that BookOne's balance ignored opening balances, so a new company could never finish; it now uses the ledger like Accounts. Bank charges, SMS fees, insurance and interest get the right category suggested; 'salaries' is recognised. Import and reconciliation screens use plain words, Opening balances shows a bank example, and a step-by-step guide with a downloadable sample statement was added. See [CHG-20261127-bank-recon-month-walkthrough](changes/CHG-20261127-bank-recon-month-walkthrough.md).
+
 ## 2026-11-27 — Commerce WP3–WP7 verified on staging; Developer tab times (v2.23.2)
 
 Reservations (hold, all-or-nothing, extend, change, expiry, release), the feed filter, webhook delivery and retries, customers, order reads, validate, packing slip, stats, related and new arrivals were checked on staging with a temporary sandbox key (since revoked). Developer tab times now show Sri Lanka time like the Orders tab. See [CHG-20261126-commerce-wp3-wp7](changes/CHG-20261126-commerce-wp3-wp7.md).

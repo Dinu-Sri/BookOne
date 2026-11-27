@@ -26,7 +26,7 @@ export const CATEGORY_RULES: CategoryRule[] = [
   },
   {
     accountCode: '6300',
-    patterns: [/\bsalary\b/i, /\bwages?\b/i, /\bpayroll\b/i, /staff\s*pay/i],
+    patterns: [/\bsalar(y|ies)\b/i, /\bwages?\b/i, /\bpayroll\b/i, /staff\s*pay/i],
     defaultTypes: ['money_out'],
     packs: COMPANY,
   },
@@ -58,7 +58,7 @@ export const CATEGORY_RULES: CategoryRule[] = [
   },
   {
     accountCode: '6600',
-    patterns: [/bank\s*charge/i, /bank\s*fee/i, /service\s*charge/i],
+    patterns: [/bank\s*charge/i, /bank\s*fee/i, /service\s*charge/i, /\bsms\s*(alert)?\s*(charge|fee)/i, /\bledger\s*fee/i, /\bcheque\s*book/i, /\bcommission\b/i],
     defaultTypes: ['money_out'],
     packs: COMPANY,
   },
@@ -87,8 +87,8 @@ export const CATEGORY_RULES: CategoryRule[] = [
     accountCode: '6800',
     patterns: [
       /\bstationery\b/i, /office\s*supplies/i, /\bprinter\b/i,
-      /\bsalary\b/i, /\bwages?\b/i, /\bpayroll\b/i, /staff\s*pay/i,
-      /bank\s*charge/i, /bank\s*fee/i, /service\s*charge/i,
+      /\bsalar(y|ies)\b/i, /\bwages?\b/i, /\bpayroll\b/i, /staff\s*pay/i,
+      /bank\s*charge/i, /bank\s*fee/i, /service\s*charge/i, /\bsms\s*(alert)?\s*(charge|fee)/i,
     ],
     defaultTypes: ['money_out'],
     packs: HOUSEHOLD,
@@ -115,12 +115,12 @@ export const CATEGORY_RULES: CategoryRule[] = [
   },
   {
     accountCode: '4200',
-    patterns: [/\bsalary\b/i, /\bwages?\b/i, /\bpayroll\b/i, /\bemployment\b/i, /\bpaycheck\b/i],
+    patterns: [/\bsalar(y|ies)\b/i, /\bwages?\b/i, /\bpayroll\b/i, /\bemployment\b/i, /\bpaycheck\b/i],
     defaultTypes: ['money_in'],
   },
   {
     accountCode: '4300',
-    patterns: [/\bgift\b/i, /\binheritance\b/i, /\brefund\b/i, /\bcashback\b/i, /\bother\s*income\b/i],
+    patterns: [/\bgift\b/i, /\binheritance\b/i, /\brefund\b/i, /\bcashback\b/i, /\bother\s*income\b/i, /\binterest\b/i],
     defaultTypes: ['money_in'],
   },
   {

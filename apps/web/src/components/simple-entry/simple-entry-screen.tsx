@@ -120,6 +120,11 @@ export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) 
 
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<RecordEntryResult | null>(null);
+  // Hide the last "Entry recorded" note once the next entry is being typed, so it
+  // never looks like the new entry is already saved.
+  useEffect(() => {
+    setResult((r) => (r?.success && (party || amountStr || description) ? null : r));
+  }, [party, amountStr, description]);
   const [forceDuplicate, setForceDuplicate] = useState(false);
   const [moneyInType, setMoneyInType] = useState<MoneyInType>('new_sale');
   const [invoiceBillType, setInvoiceBillType] = useState<InvoiceBillType>('customer_invoice');

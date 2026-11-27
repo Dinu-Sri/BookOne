@@ -161,7 +161,8 @@ export function ReconciliationCompare({
   useEffect(() => {
     if (!createRow) return;
     const list = createRow.amount > 0 ? (board?.posting?.income ?? []) : (board?.posting?.expenses ?? []);
-    const preferred = createRow.amount > 0 ? '4300' : '6800';
+    // BookOne's suggestion for this line (e.g. Bank Charges for "SERVICE CHARGES"), else Other income / General expense.
+    const preferred = createRow.suggestedCategory ?? (createRow.amount > 0 ? '4300' : '6800');
     setCat(list.some((a) => a.code === preferred) ? preferred : (list[0]?.code ?? ''));
   }, [createRow, board]);
 
@@ -349,9 +350,9 @@ export function ReconciliationCompare({
         </div>
       </div>
       <p className="brc-explain">
-        BookOne {money(review?.bookClosing ?? 0)} − waiting items {money(review?.outstandingNet ?? 0)} should equal
-        bank {money(review?.bankClosing ?? 0)}. Remaining difference{' '}
-        {review?.differenceVerified ? money(review.difference) : 'Unverified'}.
+        Goal: BookOne&apos;s balance {money(review?.bookClosing ?? 0)}, minus items still waiting to clear{' '}
+        {money(review?.outstandingNet ?? 0)}, equals the bank&apos;s closing balance {money(review?.bankClosing ?? 0)}. Left to
+        explain: {review?.differenceVerified ? money(review.difference) : 'not known yet'}.
       </p>
       {bankToReview > 0 ? (
         <p className="muted-line">{bankToReview} bank line{bankToReview === 1 ? '' : 's'} to review</p>
@@ -530,7 +531,7 @@ export function ReconciliationCompare({
         title="Create this BookOne entry?"
         message={
           createRow
-            ? `Post ${money(createRow.amount)} as ${createIn ? 'income' : 'expense'} ${selectedCat ? catLabel(selectedCat) : cat}. This creates a journal.`
+            ? `Add ${money(Math.abs(createRow.amount))} ${createIn ? 'money in' : 'money out'} to BookOne as ${selectedCat ? catLabel(selectedCat) : cat}, dated like the bank line. It is recorded in your books.`
             : 'Create a BookOne entry for the selected bank line?'
         }
         confirmLabel="Create entry"

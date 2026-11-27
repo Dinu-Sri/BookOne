@@ -163,7 +163,12 @@ export function CoaOpening({
           </p>
         ) : null}
         <p className="field-help" style={{ marginBottom: 12 }}>
-          Creating an account does not write equity or journals. Preview must balance before posting.
+          Enter what each account held on the day you start using BookOne. Debits and credits must be equal, then
+          Preview and Post.
+        </p>
+        <p className="field-help" style={{ marginBottom: 12 }}>
+          <strong>Bank example:</strong> your statement shows Rs 250,000 on 1 October. Line 1: your bank account,
+          Debit 250,000. Line 2: 3000 · Owner Equity, Credit 250,000. Use the same date as your first bank statement.
         </p>
         <DateField id="open-date" label="Effective date" value={date} onChange={setDate} required className="opening-date" />
         <div className="opening-editor">

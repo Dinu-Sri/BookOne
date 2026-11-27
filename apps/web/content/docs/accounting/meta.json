@@ -1,4 +1,4 @@
 {
   "title": "Accounting",
-  "pages": ["index", "simple-entry", "chart-of-accounts", "reports"]
+  "pages": ["index", "simple-entry", "chart-of-accounts", "bank-reconciliation", "reports"]
 }

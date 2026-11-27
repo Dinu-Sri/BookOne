@@ -443,7 +443,7 @@ export function ReconciliationGuided({
         title="Create this BookOne entry?"
         message={
           current
-            ? `Post ${formatRs(current.bank.amount)} as ${createIn ? 'income' : 'expense'} ${selectedCat ? catLabel(selectedCat) : cat}. This creates a journal.`
+            ? `Add ${formatRs(Math.abs(current.bank.amount ?? 0))} ${createIn ? 'money in' : 'money out'} to BookOne as ${selectedCat ? catLabel(selectedCat) : cat}, dated like the bank line. It is recorded in your books.`
             : 'Create a BookOne entry for this bank line?'
         }
         confirmLabel="Create entry"

@@ -855,7 +855,7 @@ export function BankImportStudioWizard({
         step={meta.step}
         stepIndex={meta.index}
         stepTotal={9}
-        title="Which bank?"
+        title="Which account is this statement for?"
         compact
         pending={pending}
         onBack={() => setPhase('upload')}
@@ -863,7 +863,7 @@ export function BankImportStudioWizard({
         continueDisabled={!bankId}
       >
         <p className="bis-money-label">
-          Confirm the named account for this file. The first eligible bank may already be selected.
+          Pick the bank account this statement belongs to. BookOne may have picked one already; check it is right.
         </p>
         <div className="bis-cards">
           {bankOnly.map((b) => (
@@ -873,7 +873,7 @@ export function BankImportStudioWizard({
               className={`bis-card ${bankId === b.id ? 'active' : ''}`}
               onClick={() => setBankId(b.id)}
             >
-              <strong>{b.shortName}</strong>
+              <strong>{b.name || b.shortName}</strong>
               <span>{b.code}</span>
             </button>
           ))}
@@ -1493,18 +1493,18 @@ export function BankImportStudioWizard({
                   </p>
                 ) : null}
                 <div className="bis-equation" data-testid="bis-equation">
-                  <strong>Statement equation</strong>
+                  <strong>{t.balanceCheck.ok ? 'Your bank file adds up' : 'Your bank file does not add up'}</strong>
                   <p>
-                    {formatLkr(openN)} opening + {formatLkr(t.totals.totalMoneyIn)} deposits −{' '}
-                    {formatLkr(t.totals.totalMoneyOut)} withdrawals = {formatLkr(closeN)} closing
+                    Starting balance {formatLkr(openN)} + money in {formatLkr(t.totals.totalMoneyIn)} − money out{' '}
+                    {formatLkr(t.totals.totalMoneyOut)} = closing balance {formatLkr(closeN)}
                   </p>
                   <p>
-                    Statement arithmetic difference{' '}
+                    Difference inside the file{' '}
                     {t.balanceCheck.difference == null ? '—' : formatRs(t.balanceCheck.difference)}
-                    {t.balanceCheck.ok ? ' · balances' : ' · does not balance'}
+                    {t.balanceCheck.ok ? ' · OK' : ' · check the file or the columns'}
                   </p>
                   <p className="bis-money-label">
-                    This is the bank file arithmetic. Bank vs BookOne is compared after you save.
+                    This only checks the bank's own numbers. Comparing the bank with BookOne comes next, after you save.
                   </p>
                 </div>
                 <p className="bis-row-counts" data-testid="bis-row-counts">

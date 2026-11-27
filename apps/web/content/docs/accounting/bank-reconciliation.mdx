@@ -1,0 +1,99 @@
+---
+title: Bank reconciliation
+description: Check your bank statement against BookOne once a month, step by step, with a worked example you can try.
+---
+
+# Bank reconciliation
+
+Once a month you check that BookOne and your bank agree. This is a **bank reconciliation**. You do not need to know accounting: BookOne compares the two lists and asks you about the few items that are different.
+
+## In one sentence
+
+> Every line on the bank statement should be in BookOne, and every bank entry in BookOne should be on the statement. The few that are not need a reason.
+
+There are only four kinds of item:
+
+| What you see | What it means | What you do |
+|---|---|---|
+| **Possible match** | The bank line and a BookOne entry look like the same thing (same amount, a nearby date). | Check it is the same, then **Confirm match**. Nothing new is recorded. |
+| **Bank only** | The bank did something you have not recorded: bank charges, interest, a standing order, a direct debit. | **Search BookOne** in case you recorded it differently. If it is not there, pick a category and **Create in BookOne**. |
+| **BookOne only** | You recorded it, but the bank has not processed it yet: a cheque the supplier has not cashed, a deposit made on the last day. | **Waiting to clear**. It should appear on next month's statement. |
+| **Matched** | Done. | Nothing. |
+
+When all items are matched, added or waiting, the **difference is 0** and you can **Review & finish**.
+
+## Before your first reconciliation
+
+1. **Your bank account is in BookOne.** New companies have *1100 · Commercial Bank*. Rename it or add another bank under **Accounts → New account**.
+2. **The starting balance is set**, from the first statement you will check. Go to **Accounts → Opening balances**:
+   - Line 1: your bank account, **Debit** = the opening balance on the statement.
+   - Line 2: **3000 · Owner Equity**, **Credit** = the same amount.
+   - Use the statement's first date, then **Preview** and **Post opening**.
+3. **Your month's receipts and payments are recorded**, for example with [Simple Entry](/docs/accounting/simple-entry) (Money In / Money Out, paid from or to the bank).
+
+## Every month: 5 steps
+
+1. **Download the statement** from your bank's internet banking as Excel or CSV for the month (for example 1–31 October).
+2. **Reconciliation → Import bank file.** Drop the file, choose **which account it is for**, and check the columns (BookOne usually finds Date, Description, Money in, Money out and Balance itself).
+3. **Check the file adds up.** BookOne shows *starting balance + money in − money out = closing balance*. If it does not add up, the file or the column choice is wrong; fix that first. Then **Save bank lines**.
+4. **Reconcile.** Bank statement on the left, BookOne on the right:
+   - confirm each **Possible match**;
+   - for each **Bank only** line, search, then add it with the right category (BookOne suggests one, e.g. *Bank Charges* for "SERVICE CHARGES");
+   - mark each **BookOne only** item that is simply late as **Waiting to clear**.
+5. **Finish.** The top of the screen shows *Left to explain*. At **LKR 0.00** click **Review & finish**. The month is reconciled.
+
+## Worked example (try it yourself)
+
+Download the sample statement: [sample-bank-statement-october-2026.csv](/samples/sample-bank-statement-october-2026.csv). Use a test company.
+
+**1. Opening balance** on 1 Oct 2026: 1100 bank Debit 250,000; 3000 Owner Equity Credit 250,000.
+
+**2. Record October in Simple Entry** (all paid to or from 1100 · Commercial Bank):
+
+| Date | Money in / out | Who | What | Amount |
+|---|---|---|---|---|
+| 2 Oct | In (cash sale) | ABC Traders | Sale INV 1045 paid by bank transfer | 45,000.00 |
+| 5 Oct | Out | Kandy Properties | Office rent October cheque 001001 | 60,000.00 |
+| 8 Oct | In (cash sale) | Cash sales | Shop cash sales banked | 18,500.00 |
+| 12 Oct | Out | Lanka Supplies | Office supplies paper and ink | 32,000.00 |
+| 15 Oct | Out | Staff | Staff salaries October | 85,000.00 |
+| 18 Oct | In (cash sale) | Ceylon Crafts | Sale INV 1052 paid by bank transfer | 27,250.00 |
+| 22 Oct | Out | CEB | Electricity bill October | 9,840.00 |
+| 25 Oct | In (cash sale) | ABC Traders | Sale INV 1061 paid by bank transfer | 15,000.00 |
+| 29 Oct | Out | Lanka Supplies | Office supplies cheque 001002 | 12,500.00 |
+| 30 Oct | In (cash sale) | Cash sales | Shop cash sales banked end of month | 20,000.00 |
+
+BookOne now shows the bank at **176,410.00** (Accounts).
+
+**3. Import the sample file.** It adds up: 250,000.00 + 106,162.50 − 191,740.00 = **164,422.50**.
+
+**4. Reconcile.** You will see:
+
+- **8 possible matches**: ABC Traders 45,000 (the bank booked it a day later, which is normal), rent cheque 60,000, deposit 18,500, Lanka Supplies 32,000, salaries 85,000, Ceylon Crafts 27,250, electricity 9,840, ABC Traders 15,000. Confirm each.
+- **4 bank-only lines**. Add them:
+  - Interest credit 412.50 → *Other Income*
+  - Service charges 350.00 → *Bank Charges*
+  - SMS alert charges 50.00 → *Bank Charges*
+  - AIA insurance standing order 4,500.00 → *Insurance Expense*
+- **2 BookOne-only items**. Mark them **Waiting to clear**:
+  - cheque 001002 (−12,500.00), which the supplier has not banked yet;
+  - the 30 Oct deposit (+20,000.00), which the bank credits in November.
+
+**5. Check and finish.**
+
+| | Amount |
+|---|---|
+| BookOne balance after adding the 4 bank items | 171,922.50 |
+| minus items waiting to clear (+20,000.00 − 12,500.00) | 7,500.00 |
+| = bank closing balance | **164,422.50** |
+| Left to explain | **0.00** |
+
+Click **Review & finish**. Next month, the cheque and the deposit appear on the statement and you match them like any other line.
+
+## When the difference is not 0
+
+- **A line you skipped.** Every bank line must be matched or added.
+- **A wrong amount in BookOne** (for example 9,480 instead of 9,840). Fix the entry; it will then match.
+- **A duplicate** (the same payment recorded twice). Remove the extra BookOne entry.
+- **The wrong account or month.** The statement must be for this bank account and these dates.
+- **The starting balance** is different from the statement's opening balance. Check **Accounts → Opening balances**.

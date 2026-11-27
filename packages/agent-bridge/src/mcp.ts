@@ -57,6 +57,21 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   get_mapping_summary: 'Read current SKU mappings for one Commerce connection. Requires commerce_read.',
   preview_mapping_proposal:
     'Preview and store a mapping proposal from sanitized store identities. SKU is a search aid. Apply stays in the BookOne UI. Requires commerce_propose.',
+  list_print_items:
+    'List the print items (invoice, VAT tax invoice, quotation, proforma, receipt, credit note, dispatch note, packing slip, POS bill, purchase order, payment voucher) with the design in use and how many designs and drafts each has. Requires design_read.',
+  get_print_design_guide:
+    'Read how to design one print item: the approved elements, which are compulsory and why, options, layout bands and columns, theme limits and a working example (the BookOne standard design). Read this before creating a design. Requires design_read.',
+  list_print_designs: 'List saved print designs and their versions (draft, awaiting approval, approved, in use, retired). Optional kind filter. Requires design_read.',
+  get_print_design:
+    'Read one saved design version: its design JSON, status, who made it, warnings and the BookOne preview link for a person. Requires design_read.',
+  check_print_assets:
+    'Check whether the company logo, signature and stamp images are uploaded, and where a person uploads them in BookOne. Ask the user to upload a missing logo before relying on it. Requires design_read.',
+  create_print_design:
+    'Save a new print design (version 1, draft) for one print item. Pass designJson as a JSON string following get_print_design_guide. BookOne refuses designs that remove a compulsory part. Returns warnings and a preview link. It is not used for printing until a person approves it. Requires design_write.',
+  save_print_design_version:
+    'Save a changed copy of an existing design as the next version of the same design (the earlier version is kept unchanged). Pass basedOnDesignId and designJson. Requires design_write.',
+  request_print_design_approval:
+    'Ask a person to review a draft version. They approve and put it in use in BookOne; you cannot approve, use or delete designs. Requires design_write.',
 };
 
 export function mcpToolsList() {
@@ -233,6 +248,35 @@ export async function dispatchTool(
       return service.listBookoneCatalog(actor, args.q ? String(args.q) : undefined);
     case 'get_mapping_summary':
       return service.getMappingSummary(actor, String(args.connectionId ?? ''));
+    case 'list_print_items':
+      return service.listPrintItems(actor);
+    case 'get_print_design_guide':
+      return service.getPrintDesignGuide(actor, String(args.kind ?? ''));
+    case 'list_print_designs':
+      return service.listPrintDesigns(actor, args.kind ? String(args.kind) : undefined);
+    case 'get_print_design':
+      return service.getPrintDesign(actor, String(args.designId ?? ''));
+    case 'check_print_assets':
+      return service.checkPrintAssets(actor);
+    case 'create_print_design':
+      return service.createPrintDesign(actor, {
+        kind: String(args.kind ?? ''),
+        name: String(args.name ?? ''),
+        designJson: String(args.designJson ?? ''),
+        changeNote: args.changeNote ? String(args.changeNote) : undefined,
+      });
+    case 'save_print_design_version':
+      return service.savePrintDesignVersion(actor, {
+        basedOnDesignId: String(args.basedOnDesignId ?? ''),
+        designJson: String(args.designJson ?? ''),
+        changeNote: args.changeNote ? String(args.changeNote) : undefined,
+        name: args.name ? String(args.name) : undefined,
+      });
+    case 'request_print_design_approval':
+      return service.requestPrintDesignApproval(actor, {
+        designId: String(args.designId ?? ''),
+        message: args.message ? String(args.message) : undefined,
+      });
     case 'preview_mapping_proposal':
       return service.previewMappingProposal(actor, {
         connectionId: String(args.connectionId ?? ''),

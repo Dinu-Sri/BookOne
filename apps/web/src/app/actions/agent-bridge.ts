@@ -116,6 +116,30 @@ export async function setAgentBridgeMappingScopesFromForm(formData: FormData) {
   redirect('/company/agent-bridge?saved=1');
 }
 
+/**
+ * Save what one connected assistant may do beyond supplier bills. An ability the signed-in
+ * person may not grant (no job key) is left as it was rather than switched off.
+ */
+export async function setAgentBridgeAbilitiesFromForm(formData: FormData) {
+  await requireWriteOrRedirect('company.purchase_settings.write', '/company/agent-bridge');
+  const user = await requireTenantContext();
+  const id = String(formData.get('connectionId') ?? '');
+  const canMapping = !(await writeDeniedMessage('agent_bridge.commerce_propose'));
+  const canDesign = !(await writeDeniedMessage('agent_bridge.design_write'));
+  if (!canMapping && !canDesign) {
+    redirect(`/company/agent-bridge?err=${encodeURIComponent('Your job cannot give assistants extra abilities.')}`);
+  }
+  const { setAgentBridgeConnectionAbilities } = await import('@/lib/agent-bridge-runtime');
+  await withTenantContext(user.tenantId, () =>
+    setAgentBridgeConnectionAbilities(user.tenantId, id, {
+      commerceMapping: canMapping ? formData.get('commerceMapping') === 'on' : undefined,
+      printDesign: canDesign ? formData.get('printDesign') === 'on' : undefined,
+    }),
+  );
+  revalidatePath('/company/agent-bridge');
+  redirect('/company/agent-bridge?saved=1');
+}
+
 export async function revokeAgentConnection(formData: FormData) {
   await requireWriteOrRedirect('purchase.inbox.write', inboxBack(formData));
   const user = await requireTenantContext();

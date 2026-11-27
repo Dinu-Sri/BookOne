@@ -135,7 +135,7 @@ export const NAV_SUITES: NavSuite[] = [
       { label: 'Company Details', icon: Building2, href: '/company/details' },
       { label: 'Tax Info', icon: FileText, href: '/company/tax' },
       { label: 'Sales Settings', icon: ReceiptText, href: '/company/sales' },
-      { label: 'Document styles', icon: FileText, href: '/company/document-styles' },
+      { label: 'Print designs', icon: FileText, href: '/company/print-designs' },
       { label: 'Purchase Settings', icon: ShoppingCart, href: '/company/purchase' },
       { label: 'AgentBridge', icon: FileText, href: '/company/agent-bridge' },
       { label: 'Commerce Integrations', icon: ShoppingCart, href: '/company/commerce' },

@@ -45,6 +45,9 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
             </Link>
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <PrintPreviewButton documentId={doc.id} />
+              <Link href={`/sales/quotations/${doc.id}/proforma`} target="_blank" rel="noopener noreferrer" className="button secondary">
+                Proforma invoice
+              </Link>
               <strong style={{ fontSize: 14 }}>{doc.documentNumber}</strong>
               <StatusBadge status={doc.status} />
             </div>

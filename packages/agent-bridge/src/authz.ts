@@ -47,6 +47,11 @@ export function parseScopes(keys: string[]): Capability[] {
       out.add('commerce_read');
       out.add('commerce_propose');
     }
+    if (k === 'agent_bridge.design_read' || k === 'design_read') out.add('design_read');
+    if (k === 'agent_bridge.design_write' || k === 'design_write') {
+      out.add('design_read');
+      out.add('design_write');
+    }
   }
   return [...out];
 }

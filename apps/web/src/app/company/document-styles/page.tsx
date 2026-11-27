@@ -17,7 +17,7 @@ export default async function DocumentStylesPage() {
   }
 
   return (
-    <BookOneShell active="Document styles" tenant={tenant}>
+    <BookOneShell active="Print designs" tenant={tenant}>
       <div className="workspace" style={{ display: 'grid', gap: 16 }}>
         <Card>
           <CardHeader

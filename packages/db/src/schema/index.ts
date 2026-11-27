@@ -29,6 +29,7 @@ export {
 } from './reconciliation';
 export { businessDocuments, businessDocumentLines } from './business-documents';
 export { documentStyles } from './document-styles';
+export { printDesigns, printDesignAssets } from './print-designs';
 export {
   tenantMemberships,
   companyProfiles,

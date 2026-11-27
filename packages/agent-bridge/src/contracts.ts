@@ -25,7 +25,19 @@ export const DOCUMENT_STATES = [
 ] as const;
 export type DocumentState = (typeof DOCUMENT_STATES)[number];
 
-export const CAPABILITIES = ['read', 'upload', 'draft', 'approve', 'post', 'commerce_read', 'commerce_propose'] as const;
+export const CAPABILITIES = [
+  'read',
+  'upload',
+  'draft',
+  'approve',
+  'post',
+  'commerce_read',
+  'commerce_propose',
+  /** Print designs: list designs, elements and company assets. */
+  'design_read',
+  /** Print designs: save new designs and versions (drafts). Never approve, use or delete. */
+  'design_write',
+] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 /** New agent connections receive these scopes. Post remains explicit. Approve is never mintable by an agent. */

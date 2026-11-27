@@ -24,6 +24,7 @@ import {
   type DocumentStyleKind,
   type DocumentStyleSnapshot,
 } from '@/lib/document-style';
+import type { PrintData, PrintDesign, PrintKind } from '@bookone/print-design';
 
 export type DocumentPrintModel = {
   kind: DocumentStyleKind;
@@ -76,7 +77,63 @@ export type DocumentPrintModel = {
     words: string | null;
   };
   notes: string | null;
+  /** Set when an approved print design prints this document (otherwise the standard print is used). */
+  design?: { versionId: string; name: string; version: number; layout: PrintDesign; data: PrintData } | null;
 };
+
+/** Which print item a business document prints as. */
+function printKindFor(documentType: string, styleKind: DocumentStyleKind, credit: boolean): PrintKind {
+  if (credit) return 'credit_note';
+  if (documentType === 'sales_order') return 'sales_order';
+  if (documentType === 'pos_sale') return 'pos_bill';
+  if (styleKind === 'quotation') return 'quotation';
+  if (styleKind === 'tax_invoice') return 'tax_invoice';
+  if (styleKind === 'receipt') return 'receipt';
+  return 'invoice';
+}
+
+type SnapshotWithDesigns = DocumentStyleSnapshot & { printDesigns?: Partial<Record<PrintKind, string>> };
+
+/**
+ * Pick the print design for a document: the version it printed with before (kept forever, so
+ * reprints look the same), else the version in use now (remembered on the document).
+ * Documents that printed with a custom document style before designs existed keep that style.
+ */
+async function attachDesign(
+  tenantId: string,
+  doc: { id: string; printStyleSnapshot: string | null },
+  model: DocumentPrintModel,
+  pkind: PrintKind,
+  opts: { storedCustomStyle: boolean; tradingName: string },
+): Promise<DocumentPrintModel> {
+  const { designForDocument, assetUrls } = await import('@/lib/print-designs');
+  // A document that printed earlier with a custom document style keeps that look.
+  let snap: SnapshotWithDesigns | null = null;
+  try {
+    snap = doc.printStyleSnapshot ? (JSON.parse(doc.printStyleSnapshot) as SnapshotWithDesigns) : null;
+  } catch {
+    snap = null;
+  }
+  const chosen = await designForDocument(
+    tenantId,
+    { id: doc.id, printStyleSnapshot: snap ? JSON.stringify(snap) : JSON.stringify(model.style) },
+    pkind,
+    { keepStandard: opts.storedCustomStyle },
+  );
+  if (!chosen) return { ...model, design: null };
+  const { designUsesQr, printDataFromModel } = await import('@/lib/print-data');
+  let qrImage: string | null = null;
+  if (designUsesQr(chosen.design) && model.style.publicUrl) {
+    qrImage = model.style.qrDataUrl ?? null;
+    if (!qrImage) {
+      const { toQrDataUrl } = await import('@/lib/qr-dataurl');
+      qrImage = await toQrDataUrl(model.style.publicUrl);
+    }
+  }
+  const assets = await assetUrls(tenantId);
+  const data = printDataFromModel(model, pkind, { tradingName: opts.tradingName, assets, qrImage });
+  return { ...model, design: { versionId: chosen.id, name: chosen.name, version: chosen.version, layout: chosen.design, data } };
+}
 
 function titleFor(kind: DocumentStyleKind) {
   if (kind === 'quotation') return 'QUOTATION';
@@ -87,7 +144,7 @@ function titleFor(kind: DocumentStyleKind) {
 
 export async function getDocumentPrintModel(
   documentId: string,
-  opts?: { tenantId?: string },
+  opts?: { tenantId?: string; printAs?: PrintKind },
 ): Promise<DocumentPrintModel | null> {
   const tenantId = opts?.tenantId ?? (await requireTenantContext()).tenantId;
   return withTenantContext(tenantId, async () => {
@@ -166,6 +223,7 @@ export async function getDocumentPrintModel(
     }
     const origin = await publicOrigin();
     const publicUrl = token && origin ? `${origin}/i/${token}` : null;
+    if (publicUrl) style.publicUrl = publicUrl;
     if (style.showQr && publicUrl) {
       const { toQrDataUrl } = await import('@/lib/qr-dataurl');
       style.qrDataUrl = await toQrDataUrl(publicUrl);
@@ -193,7 +251,7 @@ export async function getDocumentPrintModel(
       }
     }
 
-    return {
+    const base: DocumentPrintModel = {
       kind,
       title: creditTitle ?? titleFor(kind),
       credit,
@@ -257,6 +315,11 @@ export async function getDocumentPrintModel(
       },
       notes: doc.additionalInfo || doc.notes,
     };
+    const pkind = opts?.printAs ?? printKindFor(doc.documentType, kind, credit);
+    return attachDesign(tenantId, doc, base, pkind, {
+      storedCustomStyle: !storedIsDefault,
+      tradingName: company?.tradingName ?? '',
+    });
   });
 }
 
@@ -270,6 +333,16 @@ export async function getPublicPrintModel(token: string): Promise<DocumentPrintM
     .limit(1);
   if (!hit) return null;
   return getDocumentPrintModel(hit.id, { tenantId: hit.tenantId });
+}
+
+/** Payment receipts are not stored documents: use the receipt design in use now, if any. */
+async function receiptWithDesign(tenantId: string, model: DocumentPrintModel, tradingName: string): Promise<DocumentPrintModel> {
+  const { inUseVersion, assetUrls } = await import('@/lib/print-designs');
+  const chosen = await inUseVersion(tenantId, 'receipt');
+  if (!chosen) return { ...model, design: null };
+  const { printDataFromModel } = await import('@/lib/print-data');
+  const data = printDataFromModel(model, 'receipt', { tradingName, assets: await assetUrls(tenantId) });
+  return { ...model, design: { versionId: chosen.id, name: chosen.name, version: chosen.version, layout: chosen.design, data } };
 }
 
 export async function getReceiptPrintModel(opts: {
@@ -291,7 +364,7 @@ export async function getReceiptPrintModel(opts: {
     const companyAddress = [company?.addressLine1, company?.addressLine2, company?.city, company?.postalCode]
       .filter(Boolean)
       .join(', ');
-    return {
+    const receipt: DocumentPrintModel = {
       kind: 'receipt',
       title: 'PAYMENT RECEIPT',
       credit: false,
@@ -343,5 +416,6 @@ export async function getReceiptPrintModel(opts: {
       },
       notes: null,
     };
+    return receiptWithDesign(user.tenantId, receipt, company?.tradingName ?? '');
   });
 }

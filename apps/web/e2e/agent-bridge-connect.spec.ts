@@ -59,7 +59,10 @@ test('connection screen shows Codex and Claude prompts without secrets', async (
   await expect(claude).toHaveValue(bundle.prompts[1].prompt);
   await expect(codex).toHaveValue(/oauth-client-id bookone-codex/);
   await expect(claude).toHaveValue(/bookone-claude/);
-  await expect(page.getByRole('cell', { name: /Copying a connection prompt does not itself connect/ })).toBeVisible();
+  await expect(page.getByText(/Copying a connection prompt does not itself connect/)).toBeVisible();
+  // Long prompts are folded: visible on request, never required to read the screen.
+  await expect(codex).toBeHidden();
+  await expect(page.getByRole('switch', { name: 'Allow AI assistants for this company' })).toBeVisible();
   const body = await page.content();
   expect(body).not.toMatch(/BEGIN PRIVATE|PRIVATE KEY/);
   expect(body).not.toMatch(/client_secret=/);

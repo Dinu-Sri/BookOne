@@ -38,7 +38,7 @@ OAuth discovery is public (no session 307): `/.well-known/oauth-protected-resour
 
 Owner/Admin jobs include `agent_bridge.commerce_read` and `agent_bridge.commerce_propose`. Accountant and Purchasing templates do **not**. Viewer does **not**.
 
-On each revocable connection, check **Allow catalog mapping** and Save. Authorize unions stored connection scopes with the token, then intersects live job grants. Existing purchase tokens stay purchase-only until that checkbox is saved.
+On each revocable connection, press **Change abilities**, turn on **Website product mapping** and press **Save abilities**. Authorize unions stored connection scopes with the token, then intersects live job grants. Existing purchase tokens stay purchase-only until that checkbox is saved.
 
 | Tool | Capability | Result |
 |------|------------|--------|
@@ -48,6 +48,25 @@ On each revocable connection, check **Allow catalog mapping** and Save. Authoriz
 | `preview_mapping_proposal` | `commerce_propose` | Stores a proposal. `applyInBookOne: true`, `humanApprovalRequired: true` |
 
 SKU is a search aid. Rows come back `suggested`, `unchanged`, `ambiguous`, `missing`, `conflicting`, or `unsupported`. The operator reviews **Agent mapping proposals** and clicks **Apply** or **Reject**. Mapping tools cannot change stock, prices, posting, or permissions.
+
+## Print design tools (separate grant)
+
+Owner/Admin jobs include `agent_bridge.design_read` and `agent_bridge.design_write`. On the connection, press **Change abilities**, turn on **Print designs** and save. The company switch **Allow AI assistants for this company** stops these tools too.
+
+| Tool | Capability | Result |
+|------|------------|--------|
+| `list_print_items` | `design_read` | The 11 print items, the design in use for each, design and draft counts |
+| `get_print_design_guide` | `design_read` | Allowed elements, the compulsory set and why, options, bands and columns, theme limits, and a working example |
+| `list_print_designs` | `design_read` | Saved designs and versions with status (draft, awaiting approval, approved, in use) |
+| `get_print_design` | `design_read` | One version's design JSON, warnings and the preview link |
+| `check_print_assets` | `design_read` | Whether the logo, signature and stamp are uploaded, and the upload page |
+| `create_print_design` | `design_write` | Saves version 1 as a draft. Refused if a compulsory part is missing |
+| `save_print_design_version` | `design_write` | Saves the next version of an existing design. Earlier versions are never changed |
+| `request_print_design_approval` | `design_write` | Marks a draft "waiting for approval" and returns the review link |
+
+There is no delete, approve or "use" tool. A person approves a version in **Company → Print designs** and it prints from then on; documents keep the design they first printed with. Designs are JSON (`bookone.print-design.v1`) built only from approved elements; text is plain text and images come only from the company's uploaded logo, signature and stamp. See `docs/PRINT_DESIGNS.md` in the repository for the full format.
+
+To copy a document from a photo: read `get_print_design_guide` for that item, pick the closest elements, place them in the same bands and columns, match colours, font, table style and labels, call `check_print_assets` (ask the user to upload a missing logo), then `create_print_design` and `request_print_design_approval`.
 
 ## Confirm health
 

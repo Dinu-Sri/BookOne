@@ -54,6 +54,36 @@ export type PostingPort = {
   ): Promise<{ billId: string; documentNumber: string } | null>;
 };
 
+/** Print designs as seen by an assistant. Implemented by the web runtime; never deletes or approves. */
+export type PrintDesignPort = {
+  listItems(tenantId: string): Promise<unknown>;
+  guide(tenantId: string, kind: string): Promise<unknown>;
+  listDesigns(tenantId: string, kind?: string): Promise<unknown>;
+  getDesign(tenantId: string, designId: string): Promise<unknown>;
+  assets(tenantId: string): Promise<unknown>;
+  create(input: {
+    tenantId: string;
+    userId: string;
+    connectionId: string | null;
+    agentLabel: string;
+    kind: string;
+    name: string;
+    designJson: string;
+    changeNote?: string;
+  }): Promise<unknown>;
+  saveVersion(input: {
+    tenantId: string;
+    userId: string;
+    connectionId: string | null;
+    agentLabel: string;
+    basedOnDesignId: string;
+    designJson: string;
+    changeNote?: string;
+    name?: string;
+  }): Promise<unknown>;
+  requestApproval(input: { tenantId: string; userId: string; designId: string; message?: string }): Promise<unknown>;
+};
+
 export type CommerceMappingPort = {
   listConnections(tenantId: string): Promise<
     Array<{ id: string; name: string; kind: string; locationId: string | null; mappingCount: number }>
@@ -101,6 +131,7 @@ export type AgentBridgeDeps = {
   extractor?: ExtractionProvider;
   posting?: PostingPort;
   commerce?: CommerceMappingPort;
+  printDesigns?: PrintDesignPort;
   policyFor(tenantId: string): Promise<CompanyPolicy>;
   now?: () => number;
   authorizeActor?(actor: Actor): Promise<Actor>;
@@ -156,8 +187,106 @@ export class AgentBridgeService {
     return this.deps.policyFor(actor.tenantId);
   }
 
+  /** Optional abilities stop with the company switch ("Allow AI assistants"). */
+  private async assistantsOn(tenantId: string) {
+    const flags = await this.flags(tenantId);
+    return flags.enabled;
+  }
+
+  private async designReady(actor: Actor, need: 'design_read' | 'design_write') {
+    const next = await this.authorized(actor, need);
+    if (!(await this.assistantsOn(next.tenantId))) {
+      return { actor: next, port: null, refusal: fail('FEATURE_DISABLED', 'AI assistants are off for this company.') };
+    }
+    const port = this.deps.printDesigns;
+    if (!port) return { actor: next, port: null, refusal: fail('FEATURE_DISABLED', 'Print designs are not wired on this runtime.') };
+    return { actor: next, port, refusal: null };
+  }
+
+  private agentLabel(actor: Actor) {
+    const id = actor.clientId ?? '';
+    if (id === 'bookone-claude') return 'Claude';
+    if (id === 'bookone-codex') return 'Codex';
+    return id || 'Assistant';
+  }
+
+  async listPrintItems(actor: Actor) {
+    const r = await this.designReady(actor, 'design_read');
+    if (!r.port) return r.refusal;
+    return r.port.listItems(r.actor.tenantId);
+  }
+
+  async getPrintDesignGuide(actor: Actor, kind: string) {
+    const r = await this.designReady(actor, 'design_read');
+    if (!r.port) return r.refusal;
+    return r.port.guide(r.actor.tenantId, kind);
+  }
+
+  async listPrintDesigns(actor: Actor, kind?: string) {
+    const r = await this.designReady(actor, 'design_read');
+    if (!r.port) return r.refusal;
+    return r.port.listDesigns(r.actor.tenantId, kind);
+  }
+
+  async getPrintDesign(actor: Actor, designId: string) {
+    const r = await this.designReady(actor, 'design_read');
+    if (!r.port) return r.refusal;
+    return r.port.getDesign(r.actor.tenantId, designId);
+  }
+
+  async checkPrintAssets(actor: Actor) {
+    const r = await this.designReady(actor, 'design_read');
+    if (!r.port) return r.refusal;
+    return r.port.assets(r.actor.tenantId);
+  }
+
+  async createPrintDesign(actor: Actor, input: { kind: string; name: string; designJson: string; changeNote?: string }) {
+    const r = await this.designReady(actor, 'design_write');
+    if (!r.port) return r.refusal;
+    return r.port.create({
+      tenantId: r.actor.tenantId,
+      userId: r.actor.userId,
+      connectionId: r.actor.connectionId ?? null,
+      agentLabel: this.agentLabel(r.actor),
+      kind: input.kind,
+      name: input.name,
+      designJson: input.designJson,
+      changeNote: input.changeNote,
+    });
+  }
+
+  async savePrintDesignVersion(
+    actor: Actor,
+    input: { basedOnDesignId: string; designJson: string; changeNote?: string; name?: string },
+  ) {
+    const r = await this.designReady(actor, 'design_write');
+    if (!r.port) return r.refusal;
+    return r.port.saveVersion({
+      tenantId: r.actor.tenantId,
+      userId: r.actor.userId,
+      connectionId: r.actor.connectionId ?? null,
+      agentLabel: this.agentLabel(r.actor),
+      basedOnDesignId: input.basedOnDesignId,
+      designJson: input.designJson,
+      changeNote: input.changeNote,
+      name: input.name,
+    });
+  }
+
+  async requestPrintDesignApproval(actor: Actor, input: { designId: string; message?: string }) {
+    const r = await this.designReady(actor, 'design_write');
+    if (!r.port) return r.refusal;
+    return r.port.requestApproval({
+      tenantId: r.actor.tenantId,
+      userId: r.actor.userId,
+      designId: input.designId,
+      message: input.message,
+    });
+  }
+
   async listCommerceConnections(actor: Actor) {
     actor = await this.authorized(actor, 'commerce_read');
+    if (!(await this.assistantsOn(actor.tenantId))) return fail('FEATURE_DISABLED', 'AI assistants are off for this company.');
     if (!this.deps.commerce) return fail('FEATURE_DISABLED', 'Commerce mapping is not wired on this runtime.');
     const items = await this.deps.commerce.listConnections(actor.tenantId);
     return { ok: true as const, items, keysExposed: false };
@@ -165,6 +294,7 @@ export class AgentBridgeService {
 
   async listBookoneCatalog(actor: Actor, q?: string) {
     actor = await this.authorized(actor, 'commerce_read');
+    if (!(await this.assistantsOn(actor.tenantId))) return fail('FEATURE_DISABLED', 'AI assistants are off for this company.');
     if (!this.deps.commerce) return fail('FEATURE_DISABLED', 'Commerce mapping is not wired on this runtime.');
     const items = await this.deps.commerce.listCatalog(actor.tenantId, q);
     return { ok: true as const, items };
@@ -172,6 +302,7 @@ export class AgentBridgeService {
 
   async getMappingSummary(actor: Actor, connectionId: string) {
     actor = await this.authorized(actor, 'commerce_read');
+    if (!(await this.assistantsOn(actor.tenantId))) return fail('FEATURE_DISABLED', 'AI assistants are off for this company.');
     if (!this.deps.commerce) return fail('FEATURE_DISABLED', 'Commerce mapping is not wired on this runtime.');
     const summary = await this.deps.commerce.mappingSummary(actor.tenantId, connectionId);
     return { ok: true as const, ...summary, keysExposed: false };
@@ -191,6 +322,7 @@ export class AgentBridgeService {
     },
   ) {
     actor = await this.authorized(actor, 'commerce_propose');
+    if (!(await this.assistantsOn(actor.tenantId))) return fail('FEATURE_DISABLED', 'AI assistants are off for this company.');
     if (!this.deps.commerce) return fail('FEATURE_DISABLED', 'Commerce mapping is not wired on this runtime.');
     if (!input.connectionId) return fail('VALIDATION', 'connectionId is required.');
     const observations = (input.observations ?? []).map((row) => ({
@@ -1173,10 +1305,27 @@ export const COMMERCE_READ_TOOL_NAMES = [
 
 export const COMMERCE_PROPOSE_TOOL_NAMES = ['preview_mapping_proposal'] as const;
 
+export const DESIGN_READ_TOOL_NAMES = [
+  'list_print_items',
+  'get_print_design_guide',
+  'list_print_designs',
+  'get_print_design',
+  'check_print_assets',
+] as const;
+
+/** There is deliberately no delete, approve or "use" tool: those stay with a person in BookOne. */
+export const DESIGN_WRITE_TOOL_NAMES = [
+  'create_print_design',
+  'save_print_design_version',
+  'request_print_design_approval',
+] as const;
+
 export function toolsForActor(actor: { capabilities: Capability[] }): string[] {
   const names: string[] = [...TOOL_NAMES];
   if (actor.capabilities.includes('commerce_read')) names.push(...COMMERCE_READ_TOOL_NAMES);
   if (actor.capabilities.includes('commerce_propose')) names.push(...COMMERCE_PROPOSE_TOOL_NAMES);
+  if (actor.capabilities.includes('design_read')) names.push(...DESIGN_READ_TOOL_NAMES);
+  if (actor.capabilities.includes('design_write')) names.push(...DESIGN_WRITE_TOOL_NAMES);
   return names;
 }
 

@@ -21,6 +21,7 @@
     "@bookone/commerce": "workspace:*",
     "@bookone/db": "workspace:*",
     "@bookone/modules": "workspace:*",
+    "@bookone/print-design": "workspace:*",
     "@bookone/statement-import": "workspace:*",
     "@bookone/ui": "workspace:*",
     "@tailwindcss/postcss": "^4.3.3",

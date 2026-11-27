@@ -23,7 +23,7 @@ export default async function EditDocumentStylePage({ params }: { params: Promis
   if (!style) redirect('/company/document-styles');
 
   return (
-    <BookOneShell active="Document styles" tenant={tenant}>
+    <BookOneShell active="Print designs" tenant={tenant}>
       <div className="workspace">
         <Card>
           <CardHeader title={style.name} subtitle={`${style.isActive ? 'Active' : 'Not active'} · v${style.version}`} />

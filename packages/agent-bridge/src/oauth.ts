@@ -117,6 +117,11 @@ export function parseRequestedScopes(raw: string | undefined): Capability[] {
       out.add('commerce_read');
       out.add('commerce_propose');
     }
+    if (item === 'agent_bridge.design_read' || item === 'design_read') out.add('design_read');
+    if (item === 'agent_bridge.design_write' || item === 'design_write') {
+      out.add('design_read');
+      out.add('design_write');
+    }
   }
   out.delete('approve');
   if (!out.has('read')) out.add('read');

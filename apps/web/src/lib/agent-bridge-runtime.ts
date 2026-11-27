@@ -1,3 +1,4 @@
+import { webPrintDesignPort } from '@/lib/print-designs';
 import {
   AgentBridgeService,
   MemoryStore,
@@ -1266,6 +1267,7 @@ export function makeAgentBridgeService(): AgentBridgeService {
     extractor: extractorFor(process.env),
     posting: webPostingPort(),
     commerce: webCommerceMappingPort(),
+    printDesigns: webPrintDesignPort(),
     policyFor: policyForTenant,
     authorizeActor: authorizeAgentConnection,
     publicBaseUrl: process.env.AGENT_BRIDGE_PUBLIC_URL || process.env.AUTH_URL,
@@ -1328,6 +1330,8 @@ export async function authorizeAgentConnection(actor: Actor): Promise<Actor> {
     if (access.allows('purchase.bills.write', 'write')) keys.push('purchase.bills.write');
     if (access.allows('agent_bridge.commerce_read', 'write')) keys.push('agent_bridge.commerce_read');
     if (access.allows('agent_bridge.commerce_propose', 'write')) keys.push('agent_bridge.commerce_propose');
+    if (access.allows('agent_bridge.design_read', 'write')) keys.push('agent_bridge.design_read');
+    if (access.allows('agent_bridge.design_write', 'write')) keys.push('agent_bridge.design_write');
     const live = parseScopes(keys);
     const tokenCaps = [...new Set([...actor.capabilities, ...parseScopes(storedScopes)])];
     return { ...actor, capabilities: intersectCapabilities(tokenCaps, live) };
@@ -1383,6 +1387,37 @@ export async function setAgentBridgeCommerceMappingScopes(
   }
   const kept = row.scopes.filter((s) => s !== 'commerce_read' && s !== 'commerce_propose');
   row.scopes = (enabled ? [...kept, 'commerce_read', 'commerce_propose'] : kept) as Capability[];
+  await store.saveConnection(row);
+  return row;
+}
+
+/**
+ * Turn optional abilities on or off for one connection. Supplier-bill scopes are untouched;
+ * effective access is still these scopes intersected with the person's live job grants.
+ */
+export async function setAgentBridgeConnectionAbilities(
+  tenantId: string,
+  connectionId: string,
+  abilities: { commerceMapping?: boolean; printDesign?: boolean },
+) {
+  const store = process.env.AGENT_BRIDGE_STORE === 'memory' ? memory : new PostgresStore();
+  if (!store.getConnection || !store.saveConnection) {
+    throw new Error('Connections are not available on this store.');
+  }
+  const row = await store.getConnection(tenantId, connectionId);
+  if (!row || row.tenantId !== tenantId) {
+    throw Object.assign(new Error('Connection was not found.'), { code: 'CONNECTION_REVOKED' });
+  }
+  let scopes = [...row.scopes] as string[];
+  if (abilities.commerceMapping !== undefined) {
+    scopes = scopes.filter((s) => s !== 'commerce_read' && s !== 'commerce_propose');
+    if (abilities.commerceMapping) scopes.push('commerce_read', 'commerce_propose');
+  }
+  if (abilities.printDesign !== undefined) {
+    scopes = scopes.filter((s) => s !== 'design_read' && s !== 'design_write');
+    if (abilities.printDesign) scopes.push('design_read', 'design_write');
+  }
+  row.scopes = [...new Set(scopes)] as Capability[];
   await store.saveConnection(row);
   return row;
 }

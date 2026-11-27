@@ -76,6 +76,9 @@ importers:
       '@bookone/modules':
         specifier: workspace:*
         version: link:../../packages/modules
+      '@bookone/print-design':
+        specifier: workspace:*
+        version: link:../../packages/print-design
       '@bookone/statement-import':
         specifier: workspace:*
         version: link:../../packages/statement-import
@@ -289,6 +292,18 @@ importers:
       '@bookone/db':
         specifier: workspace:*
         version: link:../db
+
+  packages/print-design:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.21
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.12
+        version: 4.1.12(@types/node@22.19.21)(vite@7.3.8(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
 
   packages/statement-import:
     dependencies:

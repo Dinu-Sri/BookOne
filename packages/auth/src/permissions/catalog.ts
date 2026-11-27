@@ -57,6 +57,8 @@ export const PERMISSION_KEYS = [
   'agent_bridge.post',
   'agent_bridge.commerce_read',
   'agent_bridge.commerce_propose',
+  'agent_bridge.design_read',
+  'agent_bridge.design_write',
   'inventory.products.read',
   'inventory.products.write',
   'inventory.categories.read',
@@ -178,6 +180,7 @@ export const SCREEN_DEFS: {
 const HREF_ALIASES: Record<string, string> = {
   '/company/team/groups': 'team.people',
   '/company/agent-bridge': 'company.purchase_settings',
+  '/company/print-designs': 'company.document_styles',
   '/company/commerce': 'company.commerce',
   '/purchase/inbox/connections': 'company.purchase_settings',
   '/purchase/suppliers': 'parties.vendors',
@@ -237,10 +240,14 @@ export const ACTION_PERMISSIONS: {
   { key: 'agent_bridge.post', label: 'Post approved inbox bills', module: 'purchase' },
   { key: 'agent_bridge.commerce_read', label: 'Read commerce catalog for mapping', module: 'company' },
   { key: 'agent_bridge.commerce_propose', label: 'Propose commerce SKU mappings', module: 'company' },
+  { key: 'agent_bridge.design_read', label: 'Let assistants read print designs', module: 'company' },
+  { key: 'agent_bridge.design_write', label: 'Let assistants create print designs', module: 'company' },
 ];
 
 export function moduleOfKey(key: string): string {
   const top = key.split('.')[0] ?? '';
+  // Print designs are company settings, not purchase work: every company type may use them.
+  if (key.startsWith('agent_bridge.design_')) return 'company';
   if (top === 'agent_bridge') return 'purchase';
   return top;
 }
@@ -249,6 +256,7 @@ export function screenKeyFromHref(href: string): string | null {
   const path = href.split('?')[0] ?? href;
   if (HREF_ALIASES[path]) return HREF_ALIASES[path];
   if (path.startsWith('/cashbook/recon')) return 'accounting.reconciliation';
+  if (path.startsWith('/company/print-designs/')) return 'company.document_styles';
   if (path.startsWith('/inventory/on-rent')) return 'rental.dispatch';
   if (path === '/inventory/levels' || path.startsWith('/inventory/levels')) return 'inventory.levels';
   const exact = SCREEN_DEFS.find((s) => s.href === path);

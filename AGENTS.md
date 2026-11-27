@@ -286,6 +286,7 @@ Commit types: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `db:` (f
 - `docs/KNOWN_ERRORS.md` — Common issues and fixes
 - `docs/TASK_LOG.md` — Track completed/in-progress tasks
 - `docs/LIST_TABLE_UX_GUIDE.md` — Universal list tables: search, duration filter, sort, pagination, view+Actions menu
+- `docs/UI_DESIGN_RULEBOOK.md` — **Calm screens rule book (mandatory for every new or changed screen)**: one purpose and one primary action, plain words, fill the screen, progressive disclosure, status words, named steps, sums as statements, what's next, three-size check, shared `.ux-*` layout kit
 - `docs/UI_UX_CHANGE_GUIDE.md` — Incremental UI/UX compatibility; extends the existing design system
 - `docs/UI_CONTROL_REGISTRY.md` — Approved field, select, date, Back, and form-shell primitives for new or changed UI (UI-02)
 - `ai/AI_CONTEXT.generated.md` — Auto-generated project context
@@ -350,7 +351,7 @@ Do not copy a second editable rulebook here, silently change adopted rules/setti
 
 ## Mandatory incremental UI/UX compatibility — owner2026-10-21
 
-For every UI, UX, shared form/control, feedback, list, print or navigation change, MUST read docs/UI_UX_CHANGE_GUIDE.md and the relevant existing docs/LIST_TABLE_UX_GUIDE.md, Simple Entry/entity guidance and actual CSS/component implementation. Extend existing design references; never introduce a second design system for this adoption.
+For every UI, UX, shared form/control, feedback, list, print or navigation change, MUST follow docs/UI_DESIGN_RULEBOOK.md (calm screens: low cognitive load, one primary action, plain words, fill the screen, minimal scrolling; build from the `.ux-*` kit; paste its review checklist into the CHG), and MUST read docs/UI_UX_CHANGE_GUIDE.md and the relevant existing docs/LIST_TABLE_UX_GUIDE.md, Simple Entry/entity guidance and actual CSS/component implementation. Extend existing design references; never introduce a second design system for this adoption.
 
 MUST record applicable external UX/UXW/WB IDs, exact QA commit/hash, direct screens and transitive shared consumers in CHG before implementation. Preserve existing branding/density, props/field identities, source snapshots, saved dates/notes, posting, access and historical output. Use the smallest compatible change; no global reset/palette/framework/screen rewrite or data migration for cosmetic work.
 

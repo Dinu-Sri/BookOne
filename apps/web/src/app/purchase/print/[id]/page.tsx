@@ -3,6 +3,11 @@ import { redirect } from 'next/navigation';
 import { getPurchasePrintData } from '@/app/actions/commercial-docs';
 import { creditPrintTitle, displayedLineNetSubtotal } from '@bookone/accounting';
 import { formatLKR } from '@/components/module/list-page';
+import { requireTenantContext } from '@bookone/auth';
+import { withTenantContext } from '@bookone/db';
+import { DesignPrintSheet } from '@/components/print/design-print-sheet';
+import { assetUrls, companyTin, designForDocument } from '@/lib/print-designs';
+import { companyFromProfile, printDataFromPurchase } from '@/lib/print-data';
 
 const TITLE: Record<string, string> = {
   purchase_order: 'PURCHASE ORDER',
@@ -41,6 +46,29 @@ export default async function PurchasePrintPage({ params }: { params: Promise<{ 
             : doc.documentType === 'purchase_return'
               ? `/purchase/returns/${doc.id}`
               : `/purchase/purchases/${doc.id}`;
+
+  // Purchase orders and cash purchases print with an approved design when one is in use.
+  const pkind =
+    doc.documentType === 'purchase_order' ? 'purchase_order' : doc.documentType === 'cash_purchase' ? 'payment_voucher' : null;
+  if (pkind) {
+    const user = await requireTenantContext();
+    const view = await withTenantContext(user.tenantId, async () => {
+      const chosen = await designForDocument(user.tenantId, { id: doc.id }, pkind);
+      if (!chosen) return null;
+      const [assets, tin] = await Promise.all([assetUrls(user.tenantId), companyTin(user.tenantId)]);
+      return {
+        design: chosen.design,
+        data: printDataFromPurchase(
+          pkind,
+          doc,
+          companyFromProfile(company, tin),
+          assets,
+          displayedLineNetSubtotal(doc.subtotal, doc.discountTotal),
+        ),
+      };
+    });
+    if (view) return <DesignPrintSheet design={view.design} data={view.data} backHref={back} backLabel="Back" />;
+  }
 
   return (
     <div className="tax-invoice-print-root">

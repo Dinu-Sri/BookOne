@@ -28,6 +28,10 @@ export default async function SalesOrderDetailPage({ params }: { params: Promise
         doc={doc}
         listHref="/sales/orders"
         listLabel="Sales orders"
+        extraPrints={[
+          { label: 'Print dispatch note', href: `/sales/orders/${doc.id}/print` },
+          { label: 'Proforma invoice', href: `/sales/orders/${doc.id}/proforma` },
+        ]}
         convertTo="sales_invoice"
         convertLabel="To invoice"
         vatRegistered={settings.vatRegistered}

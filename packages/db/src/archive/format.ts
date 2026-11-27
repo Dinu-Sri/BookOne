@@ -154,6 +154,8 @@ export const ARCHIVE_DATA_TABLE_NAMES = [
   'agent_bridge_jobs',
   'agent_bridge_batches',
   'agent_bridge_facts_keys',
+  'print_designs',
+  'print_design_assets',
 ] as const;
 
 export const TRADING_COUNT_KEYS = [
@@ -251,6 +253,8 @@ export const ARCHIVE_RESTORE_INSERT_ORDER = [
   'agent_bridge_jobs',
   'agent_bridge_batches',
   'agent_bridge_facts_keys',
+  'print_designs',
+  'print_design_assets',
 ] as const;
 
 export function isOperationallyEmpty(counts: Record<string, number>): boolean {

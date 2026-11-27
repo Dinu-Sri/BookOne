@@ -329,6 +329,10 @@ export function scopePlainLabel(scope: string): string {
       return 'Read BookOne catalog and mapping summaries';
     case 'commerce_propose':
       return 'Propose store product mappings';
+    case 'design_read':
+      return 'Read print designs';
+    case 'design_write':
+      return 'Create print designs and versions';
     default:
       return scope;
   }

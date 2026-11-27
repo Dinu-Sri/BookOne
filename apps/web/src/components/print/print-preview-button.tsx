@@ -10,7 +10,9 @@ export function PrintPreviewModal({ documentId, onClose }: { documentId: string;
   const [error, setError] = useState('');
 
   function printSheet() {
-    const sheet = document.querySelector('.doc-print-sheet');
+    // A print design carries its own paper size, colours and styles on its root.
+    const designed = document.querySelector('.doc-print-modal-paper .pd-root');
+    const sheet = designed ?? document.querySelector('.doc-print-sheet');
     if (!sheet) {
       window.print();
       return;
@@ -29,13 +31,17 @@ export function PrintPreviewModal({ documentId, onClose }: { documentId: string;
       window.print();
       return;
     }
-    const styles = Array.from(document.querySelectorAll('.doc-print-root style'))
-      .map((s) => s.innerHTML)
-      .join('\n');
-    const title = (sheet.getAttribute('data-print-title') || model?.meta.number || ' ').replace(/[<>]/g, '');
+    const styles = designed
+      ? ''
+      : Array.from(document.querySelectorAll('.doc-print-root style'))
+          .map((s) => s.innerHTML)
+          .join('\n');
+    const titled = designed ? designed.querySelector('[data-print-title]') : sheet;
+    const title = (titled?.getAttribute('data-print-title') || model?.meta.number || ' ').replace(/[<>]/g, '');
+    const page = designed ? '' : '<style>@page{size:A4;margin:10mm}</style>';
     doc.open();
     doc.write(
-      `<!doctype html><html><head><title>${title}</title><style>@page{size:A4;margin:10mm}html,body{margin:0}body{background:#fff}</style><style>${styles}</style></head><body>${sheet.outerHTML}</body></html>`,
+      `<!doctype html><html><head><title>${title}</title>${page}<style>html,body{margin:0}body{background:#fff}</style><style>${styles}</style></head><body>${sheet.outerHTML}</body></html>`,
     );
     doc.close();
     const run = () => {

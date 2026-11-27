@@ -51,6 +51,7 @@ export function CommercialDocumentDetail({
   payHref,
   payLabel = 'Pay',
   printHref,
+  extraPrints = [],
   editHref,
   convertTo,
   convertLabel,
@@ -68,6 +69,8 @@ export function CommercialDocumentDetail({
   payHref?: string | null;
   payLabel?: string;
   printHref?: string | null;
+  /** More print items for this document (e.g. dispatch note, proforma invoice). */
+  extraPrints?: Array<{ label: string; href: string }>;
   editHref?: string | null;
   convertTo?: 'sales_order' | 'sales_invoice' | 'purchase' | 'vendor_bill';
   convertLabel?: string;
@@ -198,6 +201,13 @@ export function CommercialDocumentDetail({
             </Link>
           ) : null}
           {printHref ? <PrintPreviewButton documentId={doc.id} /> : null}
+          {extraPrints.map((p) => (
+            <Link key={p.href} href={p.href} target="_blank" rel="noopener noreferrer">
+              <Button variant="secondary" type="button">
+                {p.label}
+              </Button>
+            </Link>
+          ))}
           {canWrite && editHref ? (
             <Link href={editHref}>
               <Button variant="secondary" type="button">

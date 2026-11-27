@@ -2,6 +2,10 @@
 
 Effective2026-10-21, owner requested. This extends the existing BookOne design system; it is not a replacement. Existing AGENTS/versioning/security/accounting rules and docs/QA_CHANGE_CONTRACT.md remain in force.
 
+## Design rule book (2026-11-27)
+
+How screens look and read is set by [UI_DESIGN_RULEBOOK](UI_DESIGN_RULEBOOK.md): calm screens for non-specialist users, one primary action, plain words, fill the screen with minimal scrolling, progressive disclosure, and the shared `.ux-*` layout kit. It is mandatory for every new or changed screen. Its review checklist goes into the CHG.
+
 ## Existing references first
 
 Read [LIST_TABLE_UX_GUIDE](LIST_TABLE_UX_GUIDE.md), [Simple Entry rationale](SIMPLE_ENTRY_UX_REDESIGN.md) and the relevant [entity UX flows](ENTITY_UX_FLOWS.md). Inspect actual shared components in apps/web/src/components/ui, existing ProductAddSearch/DocumentLinesEditor, globals.css variables/classes and the /design-system source. The showcase contains demo controls and is not proof of production behaviour. Preserve current branding, typography, density, route conventions and working keyboard fast paths.

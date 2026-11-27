@@ -139,6 +139,9 @@ describe('AB-04 AgentBridge action keys through the actual resolver', () => {
       'agent_bridge.post',
       'agent_bridge.commerce_read',
       'agent_bridge.commerce_propose',
+      // Print designs (v2.26.0): assistants read and save drafts; approve/use/delete stay human.
+      'agent_bridge.design_read',
+      'agent_bridge.design_write',
     ]);
   });
 });

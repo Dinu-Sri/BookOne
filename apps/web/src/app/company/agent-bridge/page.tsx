@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { requireTenantContext } from '@bookone/auth';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { jobCanWrite } from '@/lib/access';
+import { jobCanWrite, writeDeniedMessage } from '@/lib/access';
 import { loadAgentBridgeFlags, listAgentBridgeConnections } from '@/lib/agent-bridge-runtime';
 import { CompanyAgentBridge } from '@/components/agent-bridge/company-agent-bridge';
 import {
@@ -50,6 +50,10 @@ export default async function CompanyAgentBridgePage({
   const flags = await loadAgentBridgeFlags(tenant.id);
   const canWriteSettings = settingsLevel === 'write';
   const canRevoke = jobCanWrite(tenant, 'Document Inbox');
+  const canGrant = {
+    commerceMapping: canWriteSettings && !(await writeDeniedMessage('agent_bridge.commerce_propose')),
+    printDesign: canWriteSettings && !(await writeDeniedMessage('agent_bridge.design_write')),
+  };
   const listAll = settingsLevel !== 'none';
   const connections = await listAgentBridgeConnections(tenant.id, listAll ? undefined : user.id);
   const signingReady = Boolean(ensureOauthSigningPem(process.env));
@@ -111,6 +115,7 @@ export default async function CompanyAgentBridgePage({
         companyName={tenant.name}
         checkedAt={checkedAt}
         canWriteSettings={canWriteSettings}
+        canGrant={canGrant}
         flags={flags}
         effectiveExplanation={effectiveFlagsExplanation(flags)}
         saved={query.saved === '1'}
@@ -130,6 +135,10 @@ export default async function CompanyAgentBridgePage({
             created: formatStamp(c.createdAt),
             lastOauth: c.lastOauth ? formatStoredOauthDiagnostic(c.lastOauth) : null,
             canRevoke: canRevoke && !c.revokedAt,
+            abilities: {
+              commerceMapping: c.scopes.includes('commerce_read') || c.scopes.includes('commerce_propose'),
+              printDesign: c.scopes.includes('design_read') || c.scopes.includes('design_write'),
+            },
           };
         })}
         technical={technical}

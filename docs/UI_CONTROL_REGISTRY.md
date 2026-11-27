@@ -4,6 +4,8 @@ Canonical shared controls for **new or changed** BookOne UI. Reuse these primiti
 
 UI-02 CoreGuard enforces this registry with an AST lint (`packages/auth/test/ui-consistency.ts`) plus browser fixtures (`apps/web/e2e/ui-02.spec.ts`). Accounts and Advances must stay at zero violations. Legacy screens keep a recorded baseline that cannot grow.
 
+Layout and wording follow [UI_DESIGN_RULEBOOK](UI_DESIGN_RULEBOOK.md). Use its `.ux-*` layout kit in `globals.css` for page heads, split layouts with a guide, cards, setting rows, disclosures, statements, stages and empty or what's-next states.
+
 ## Approved wrappers (AST allow-list)
 
 | File | Export | Use for |

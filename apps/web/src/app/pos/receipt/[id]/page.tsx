@@ -1,6 +1,11 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getPosReceiptData } from '@/app/actions/pos-session';
+import { requireTenantContext } from '@bookone/auth';
+import { withTenantContext } from '@bookone/db';
+import { DesignPrintSheet } from '@/components/print/design-print-sheet';
+import { assetUrls, companyTin, designForDocument } from '@/lib/print-designs';
+import { companyFromProfile, printDataFromPos } from '@/lib/print-data';
 
 export default async function PosReceiptPage({
   params,
@@ -25,6 +30,36 @@ export default async function PosReceiptPage({
   const tax = Number(doc.taxTotal);
   const name = company?.tradingName || company?.legalName || 'Store';
   const auto = sp.autoprint === '1';
+  const isReturn = doc.documentType === 'sales_return' || doc.posMode === 'return';
+
+  // An approved POS bill design prints the sale; returns keep the standard slip.
+  if (!isReturn) {
+    const user = await requireTenantContext();
+    const view = await withTenantContext(user.tenantId, async () => {
+      const chosen = await designForDocument(user.tenantId, { id: doc.id }, 'pos_bill');
+      if (!chosen) return null;
+      const [assets, tin] = await Promise.all([assetUrls(user.tenantId), companyTin(user.tenantId)]);
+      return {
+        design: chosen.design,
+        data: printDataFromPos({
+          doc,
+          party,
+          lines,
+          company: companyFromProfile(company, tin, 'Store'),
+          register,
+          assets,
+        }),
+      };
+    });
+    if (view) {
+      return (
+        <>
+          <DesignPrintSheet design={view.design} data={view.data} backHref="/pos" backLabel="Back to POS" />
+          {auto ? <script dangerouslySetInnerHTML={{ __html: 'setTimeout(function(){window.print();},250);' }} /> : null}
+        </>
+      );
+    }
+  }
 
   return (
     <div className="pos-receipt-root">

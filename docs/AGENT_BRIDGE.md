@@ -24,6 +24,12 @@ Protocol schema `ab-06.1`. Policy `ab-01.purchase-bill.unpaid-service.v1`. Produ
 - Additive migration `046_agent_bridge_facts.sql` (last error/intake mode, upload sessions, batches, facts keys, oauth codes, connection scopes/last used). Additive `047_agent_bridge_oauth_lifecycle.sql` adds `token_issued_at` so consent is not labelled authenticated. Additive `048_agent_bridge_oauth_redeem_diag.sql` stores a sanitized last-redemption diagnostic on the connection.
 - AB-02/AB-03/AB-04 gates retained: fail-closed approval, unique claim, token∩live grants, lost-response reconcile, blob storage-pointer remap, explicit `agent_bridge.approve` / `agent_bridge.post` keys.
 
+## Company screen and print designs (v2.26.0)
+
+- Company → AgentBridge follows the calm-screen rule book: a status line, three plain switches (Allow AI assistants / Supplier bills: drafts only / Never post supplier bills from AgentBridge, same field names), compact Copy cards with the prompt folded behind "Show prompt", Connected assistants with **Change abilities** (Website product mapping, Print designs) and **Revoke access** in a confirm dialog, and Technical details folded.
+- New optional ability **Print designs** (`design_read`, `design_write`; job keys `agent_bridge.design_read` / `agent_bridge.design_write`). Tools and rules: [PRINT_DESIGNS.md](PRINT_DESIGNS.md). No delete/approve/use tool.
+- Optional abilities (product mapping and print designs) stop when the company switch is off.
+
 ## Out of this build
 
 Stock receipts, mixed stock-service, paid/part-paid invoices, foreign currency, payment execution, arbitrary journals, posted rewrites, folder watchers, autonomous posting, creating suppliers/accounts, minting human approval from an agent.

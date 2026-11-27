@@ -2,6 +2,11 @@ import { redirect } from 'next/navigation';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { PrintSheetButton } from '@/components/print/print-sheet-button';
 import { operatorFromSession, withCommerceService } from '@/lib/commerce-runtime';
+import { withTenantContext, companyProfiles, eq } from '@bookone/db';
+import { db } from '@bookone/db';
+import { DesignPrintSheet } from '@/components/print/design-print-sheet';
+import { assetUrls, companyTin, inUseVersion } from '@/lib/print-designs';
+import { companyFromProfile, printDataFromWebOrder } from '@/lib/print-data';
 
 /** WP5: printable packing slip for a web order (ship-to, delivery, lines, customer note). */
 export default async function PackingSlipPage({
@@ -22,6 +27,25 @@ export default async function PackingSlipPage({
     service.getWebOrder(operator, q.connection ?? '', q.order ?? ''),
   ).catch(() => null);
   if (!order) redirect('/company/commerce?tab=orders');
+
+  const view = await withTenantContext(operator.tenantId, async () => {
+    const chosen = await inUseVersion(operator.tenantId, 'packing_slip');
+    if (!chosen) return null;
+    const [assets, tin, rows] = await Promise.all([
+      assetUrls(operator.tenantId),
+      companyTin(operator.tenantId),
+      db().select().from(companyProfiles).where(eq(companyProfiles.tenantId, operator.tenantId)).limit(1),
+    ]);
+    return {
+      design: chosen.design,
+      data: printDataFromWebOrder(order, companyFromProfile(rows[0] ?? null, tin, tenant.name), assets),
+    };
+  });
+  if (view) {
+    return (
+      <DesignPrintSheet design={view.design} data={view.data} backHref="/company/commerce?tab=orders" backLabel="Back to orders" />
+    );
+  }
 
   const cell: React.CSSProperties = { borderBottom: '1px solid #ddd', padding: '6px 8px', textAlign: 'left', verticalAlign: 'top' };
   return (

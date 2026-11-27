@@ -78,6 +78,8 @@ import {
   agentBridgeJobs,
   agentBridgeBatches,
   agentBridgeFactsKeys,
+  printDesigns,
+  printDesignAssets,
 } from '../schema';
 import {
   ARCHIVE_DATA_TABLE_NAMES,
@@ -170,6 +172,8 @@ export const ARCHIVE_DUMP_TABLES: DumpTable[] = [
   { table: agentBridgeJobs, by: 'tenantId' },
   { table: agentBridgeBatches, by: 'tenantId' },
   { table: agentBridgeFactsKeys, by: 'tenantId' },
+  { table: printDesigns, by: 'tenantId' },
+  { table: printDesignAssets, by: 'tenantId' },
 ];
 
 function serializeRow(row: Record<string, unknown>): Record<string, unknown> {
@@ -234,7 +238,7 @@ export async function trialBalanceHash(tenantId: string): Promise<string> {
 }
 
 export async function collectLiveStoragePointers(tenantId: string): Promise<string[]> {
-  const [txns, styles, products, photos, imports, inboxDocs, inboxBlobs] = await Promise.all([
+  const [txns, styles, products, photos, imports, inboxDocs, inboxBlobs, printAssets] = await Promise.all([
     db()
       .select({ receiptRef: transactions.receiptRef })
       .from(transactions)
@@ -263,6 +267,10 @@ export async function collectLiveStoragePointers(tenantId: string): Promise<stri
       .select({ key: agentBridgeBlobs.key })
       .from(agentBridgeBlobs)
       .where(eq(agentBridgeBlobs.tenantId, tenantId)),
+    db()
+      .select({ imageKey: printDesignAssets.imageKey })
+      .from(printDesignAssets)
+      .where(eq(printDesignAssets.tenantId, tenantId)),
   ]);
   return collectStoragePointers({
     transactions: txns as Record<string, unknown>[],
@@ -272,6 +280,7 @@ export async function collectLiveStoragePointers(tenantId: string): Promise<stri
     bank_statement_imports: imports as Record<string, unknown>[],
     agent_bridge_documents: inboxDocs as Record<string, unknown>[],
     agent_bridge_blobs: inboxBlobs as Record<string, unknown>[],
+    print_design_assets: printAssets as Record<string, unknown>[],
   });
 }
 
@@ -287,6 +296,7 @@ export function collectStoragePointers(tables: Record<string, Record<string, unk
   for (const row of tables.bank_statement_imports ?? []) take(row.storageKey);
   for (const row of tables.agent_bridge_documents ?? []) take(row.storageKey);
   for (const row of tables.agent_bridge_blobs ?? []) take(row.key);
+  for (const row of tables.print_design_assets ?? []) take(row.imageKey);
   return [...keys];
 }
 

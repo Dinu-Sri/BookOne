@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { formatDateMmDdYyyy } from '@bookone/accounting';
 import type { DocumentPrintModel } from '@/app/actions/document-print';
 import { PrintSheetButton } from '@/components/print/print-sheet-button';
+import { DesignPrintSheet } from '@/components/print/design-print-sheet';
 import { scaleRatio } from '@/lib/document-style';
 
 function money(n: number) {
@@ -21,6 +22,18 @@ export function DocumentPrintSheet({
   embedded?: boolean;
   publicView?: boolean;
 }) {
+  if (model.design) {
+    return (
+      <DesignPrintSheet
+        design={model.design.layout}
+        data={model.design.data}
+        backHref={!embedded ? backHref : undefined}
+        backLabel={backLabel}
+        embedded={embedded}
+        title={publicView ? model.title : undefined}
+      />
+    );
+  }
   const { style, company, party, meta, lines, totals, kind } = model;
   const taxLocked = kind === 'tax_invoice';
   const showTin = taxLocked;

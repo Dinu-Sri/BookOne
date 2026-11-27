@@ -25,6 +25,8 @@ const mime = {
   enum: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
 };
 
+const PRINT_KIND_ENUM = ['quotation', 'proforma_invoice', 'invoice', 'tax_invoice', 'receipt', 'credit_note', 'sales_order', 'packing_slip', 'pos_bill', 'purchase_order', 'payment_voucher'];
+
 export const EMPTY_OBJECT_SCHEMA: JsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -230,6 +232,53 @@ export const TOOL_INPUT_SCHEMAS: Record<string, JsonSchema> = {
     additionalProperties: false,
     required: ['connectionId'],
     properties: { connectionId: id },
+  },
+  list_print_items: EMPTY_OBJECT_SCHEMA,
+  get_print_design_guide: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind'],
+    properties: { kind: { type: 'string', enum: PRINT_KIND_ENUM } },
+  },
+  list_print_designs: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { kind: { type: 'string', enum: PRINT_KIND_ENUM } },
+  },
+  get_print_design: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['designId'],
+    properties: { designId: id },
+  },
+  check_print_assets: EMPTY_OBJECT_SCHEMA,
+  create_print_design: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind', 'name', 'designJson'],
+    properties: {
+      kind: { type: 'string', enum: PRINT_KIND_ENUM },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+      designJson: { type: 'string', minLength: 2, maxLength: 60000, description: 'The design as a JSON string (schema bookone.print-design.v1).' },
+      changeNote: { type: 'string', maxLength: 500 },
+    },
+  },
+  save_print_design_version: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['basedOnDesignId', 'designJson'],
+    properties: {
+      basedOnDesignId: id,
+      designJson: { type: 'string', minLength: 2, maxLength: 60000 },
+      changeNote: { type: 'string', maxLength: 500 },
+      name: { type: 'string', minLength: 1, maxLength: 120 },
+    },
+  },
+  request_print_design_approval: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['designId'],
+    properties: { designId: id, message: { type: 'string', maxLength: 500 } },
   },
   preview_mapping_proposal: {
     type: 'object',

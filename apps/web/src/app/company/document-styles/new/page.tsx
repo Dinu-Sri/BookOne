@@ -15,7 +15,7 @@ export default async function NewDocumentStylePage() {
   }
 
   return (
-    <BookOneShell active="Document styles" tenant={tenant}>
+    <BookOneShell active="Print designs" tenant={tenant}>
       <div className="workspace">
         <Card>
           <CardHeader

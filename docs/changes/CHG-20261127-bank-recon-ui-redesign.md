@@ -204,3 +204,12 @@ Polish in v2.25.4:
 Noted, not changed:
 - Home progress counts reconciliation items ("10 of 10"), while the workspace counts rows on both sides ("17 of 17"). Both are correct but use different units.
 - In the finished view, the BookOne list does not show the two entries created from bank lines; they are shown on the bank side as Matched.
+
+## v2.25.5: the two noted items fixed
+
+CI on `15bb73f` (v2.25.4) passed.
+
+- **One unit for progress.** Both the home list and the reconcile screen now count *items to decide*, and a matched pair counts as one item. The reconcile screen counts the distinct cases behind its rows, and the To do / Done tabs use the same count. The home list's progress bar uses resolved ÷ (resolved + open) instead of dividing by the bank line count. November now reads 10 of 10 on both screens instead of 17 vs 10.
+- **The finished BookOne list is complete.** The board's BookOne side now also lists confirmed `create_entry`, `group_match` and `transfer` cases, so entries added from a bank line appear as Matched next to their bank line. An added line's tooltip on both sides reads "Added to BookOne from the bank line".
+
+Tests: auth 246 (+5 skipped) and typecheck pass. The CoreGuard bank-recon spec does not assert counts. Its "Added to BookOne" check is the toast; the hint is a `title`, not text.

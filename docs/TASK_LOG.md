@@ -1,3 +1,7 @@
+## 2026-11-27 — Bank reconciliation: one progress count; added entries listed (v2.25.5)
+
+Home and the reconcile screen both count items to decide (a matched pair is one item). The finished BookOne list now shows entries added from bank lines. See [CHG-20261127-bank-recon-ui-redesign](changes/CHG-20261127-bank-recon-ui-redesign.md).
+
 ## 2026-11-27 — Bank reconciliation: November finished end to end; report in plain words (v2.25.4)
 
 November was matched, finished and reported on staging at 0 (the manual cheque match works on v2.25.3). The dock hides idle buttons when nothing is left, and the reconciliation report uses the same plain words as the workspace. See [CHG-20261127-bank-recon-ui-redesign](changes/CHG-20261127-bank-recon-ui-redesign.md).

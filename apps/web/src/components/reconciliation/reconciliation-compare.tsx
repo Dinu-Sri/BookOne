@@ -280,8 +280,11 @@ export function ReconciliationCompare({
     );
   }
 
-  const total = bankRows.length + bookRows.length;
-  const todoCount = openBank.length + openBook.length;
+  // Count things to decide, not rows: a matched pair is one item (same unit as the home list).
+  const allCases = new Set([...bankRows, ...bookRows].map((r) => r.caseId));
+  const openCases = new Set([...openBank, ...openBook].map((r) => r.caseId));
+  const total = allCases.size;
+  const todoCount = openCases.size;
   const doneCount = total - todoCount;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
   const left = review?.differenceVerified ? review.difference : null;

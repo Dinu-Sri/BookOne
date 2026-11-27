@@ -1491,7 +1491,8 @@ export async function listReconciliationSessions(): Promise<ReconSessionListItem
     const items: ReconSessionListItem[] = [];
     for (const r of rows) {
       const bank = bankMap.get(r.bankAccountId);
-      const total = Math.max(r.bankLineCount || r.resolvedCaseCount + r.openCaseCount, 1);
+      // Progress counts things to decide (the same unit as the reconcile screen).
+      const total = Math.max(r.resolvedCaseCount + r.openCaseCount, 1);
       const resolved = r.resolvedCaseCount;
       const bankClose = r.statementClosingBalance != null ? Number(r.statementClosingBalance) : null;
       const liveBook = await bookBalanceThrough(user.tenantId, r.bankAccountId, r.periodTo);
@@ -3470,10 +3471,20 @@ export async function getCompareBoard(
             eq(bankReconciliationCases.sessionId, id),
             eq(bankReconciliationCases.tenantId, user.tenantId),
             isNull(bankReconciliationCases.voidedAt),
-            inArray(bankReconciliationCases.caseType, ['outstanding_book', 'match_1_1']),
             or(
-              inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
-              eq(bankReconciliationCases.state, 'confirmed'),
+              and(
+                inArray(bankReconciliationCases.caseType, ['outstanding_book', 'match_1_1']),
+                or(
+                  inArray(bankReconciliationCases.state, [...OPEN_CASE_STATES]),
+                  eq(bankReconciliationCases.state, 'confirmed'),
+                ),
+              ),
+              // Done items whose BookOne side is also part of this month: entries added from a
+              // bank line, grouped matches and transfers.
+              and(
+                inArray(bankReconciliationCases.caseType, ['create_entry', 'group_match', 'transfer']),
+                eq(bankReconciliationCases.state, 'confirmed'),
+              ),
             ),
           ),
         )
@@ -3499,9 +3510,11 @@ export async function getCompareBoard(
           reference: r.reference ?? null,
           kind: confirmed ? 'matched' : suggested ? 'suggested' : 'open',
           status,
-          hint: confirmed
-            ? 'Matched — links two existing records'
-            : suggested
+          hint: confirmed && r.caseType === 'create_entry'
+            ? 'Added to BookOne from this bank line'
+            : confirmed
+              ? 'Matched — links two existing records'
+              : suggested
               ? r.explanation || 'Same amount and a nearby date'
               : r.caseType === 'transfer'
                 ? 'May be a transfer — match it or add to BookOne'
@@ -3526,7 +3539,7 @@ export async function getCompareBoard(
         const waiting = r.caseType === 'outstanding_book' && confirmed;
         const status: CompareRowStatus = waiting
           ? 'waiting'
-          : confirmed && r.caseType === 'match_1_1'
+          : confirmed
             ? 'matched'
             : r.caseType === 'match_1_1'
               ? 'possible_match'
@@ -3543,8 +3556,10 @@ export async function getCompareBoard(
           status,
           hint: waiting
             ? 'Waiting to clear the bank'
-            : confirmed
-              ? 'Matched — links two existing records'
+            : confirmed && r.caseType === 'create_entry'
+              ? 'Added to BookOne from the bank line'
+              : confirmed
+                ? 'Matched — links two existing records'
               : suggested
                 ? r.explanation || 'Same amount and a nearby date'
                 : 'On the books, not on this statement',

@@ -59,3 +59,9 @@ Noted, not changed in this record (later work):
 ## Rollback
 
 Revert the commit. There is no migration. The book balance goes back to the cashbook-only figure.
+
+## Staging verification (v2.24.0) and follow-up v2.24.1
+
+- After deploy, the ZZ-TEST October session shows: BookOne 171,922.50, waiting to clear 7,500.00, bank 164,422.50, **left to explain 0.00**. **Review & finish** opened with matched 8 and added 4. **Finish reconciliation** worked and the Reconciliation list shows *Commercial Bank · 1100 · 3–31 Oct 2026 · Reconciled · 14/14 · Rs. 0.00*.
+- `/docs/accounting/bank-reconciliation` returns 200.
+- **v2.24.1:** the sample statement linked from the public guide (`/samples/…`) redirected to login. The middleware now treats `/samples/` as public; it holds static sample files only.

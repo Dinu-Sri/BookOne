@@ -25,6 +25,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === '/invite' || pathname.startsWith('/invite/')) return true;
   // Public product docs + docs search API (no session required).
   if (pathname === '/docs' || pathname.startsWith('/docs/')) return true;
+  // Sample files linked from the public docs (e.g. the practice bank statement).
+  if (pathname.startsWith('/samples/')) return true;
   if (pathname === '/api/search') return true;
   if (pathname === '/ops/logs' || pathname.startsWith('/ops/logs')) return true;
   if (pathname === '/api/ops' || pathname.startsWith('/api/ops/')) return true;

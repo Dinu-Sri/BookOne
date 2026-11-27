@@ -1,3 +1,7 @@
+## 2026-11-27 — Bank reconciliation verified on staging; sample file public (v2.24.1)
+
+The October test month now finishes as Reconciled (difference 0.00). The practice statement linked from the guide downloads without signing in. See [CHG-20261127-bank-recon-month-walkthrough](changes/CHG-20261127-bank-recon-month-walkthrough.md).
+
 ## 2026-11-27 — Bank reconciliation: works for new companies, plain words, beginner guide (v2.24.0)
 
 A full October month was reconciled in the browser on staging (test company, synthetic statement). The run found that BookOne's balance ignored opening balances, so a new company could never finish; it now uses the ledger like Accounts. Bank charges, SMS fees, insurance and interest get the right category suggested; 'salaries' is recognised. Import and reconciliation screens use plain words, Opening balances shows a bank example, and a step-by-step guide with a downloadable sample statement was added. See [CHG-20261127-bank-recon-month-walkthrough](changes/CHG-20261127-bank-recon-month-walkthrough.md).

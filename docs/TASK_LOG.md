@@ -1,3 +1,7 @@
+## 2026-11-27 — Print design editor: no sideways scrolling (v2.26.1)
+
+The editor's left panel fits its width; part names show in full with their location underneath. See [CHG-20261127-calm-rulebook-agentbridge-print-designs](changes/CHG-20261127-calm-rulebook-agentbridge-print-designs.md).
+
 ## 2026-11-27 — Calm-screen rule book; AgentBridge redesign; print designs with assistant tools (v2.26.0)
 
 Rule book docs/UI_DESIGN_RULEBOOK.md plus the .ux-* kit is now mandatory. AgentBridge screen redesigned. New Company → Print designs: 11 print items with compulsory parts, versions, person-only approve/use/delete, logo/signature/stamp images, an editor, and AgentBridge tools for assistants to create and version designs (no delete). See [CHG-20261127-calm-rulebook-agentbridge-print-designs](changes/CHG-20261127-calm-rulebook-agentbridge-print-designs.md).

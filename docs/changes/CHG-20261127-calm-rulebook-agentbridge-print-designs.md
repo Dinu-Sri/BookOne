@@ -60,3 +60,16 @@ Status: ready-for-QA after the staging deploy (not yet checked on staging).
 ## Rollback
 
 Revert the commit. Migration 059 is additive. Prints fall back to the standard print.
+
+## v2.26.1: editor panel without sideways scrolling
+
+**Owner check:** the print design editor's left panel scrolled sideways.
+
+**Cause:** the panel's grid column took the width of its widest content (select labels, part names), so sections were 564 px wide inside a 405 px panel.
+
+**Fix:**
+- shrinkable grid tracks (`minmax(0, 1fr)`) for the panel and the two-column field rows;
+- truncated select labels;
+- part names shown in full, with their location on a small second line.
+
+**Verified on staging** (ZZ-TEST, VAT tax invoice draft) with the CSS injected: with the items table part open, the panel's scroll width equals its client width (405).

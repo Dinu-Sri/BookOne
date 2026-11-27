@@ -9,6 +9,7 @@ import { withFormPending } from '@/components/ui/form-busy';
 import { jobDescription } from '@/lib/job-descriptions';
 import { TEAM_SOD_MESSAGE } from '@/lib/team-sod';
 
+import { askConfirm } from '@/components/ui/ask';
 type Job = { id: string; name: string; slug: string; templateKey: string | null; customizedAt: Date | null };
 type Level = 'none' | 'read' | 'write';
 type Matrix = {
@@ -75,9 +76,9 @@ export function TeamJobsScreen({
 
   const isOwner = matrix?.role.templateKey === 'owner';
 
-  function selectRole(id: string) {
+  async function selectRole(id: string) {
     if (id === roleId) return;
-    if (dirty && !window.confirm('You have unsaved job changes. Leave this job without saving?')) return;
+    if (dirty && !(await askConfirm({ title: 'Leave without saving?', message: 'You have unsaved job changes. Leave this job without saving? Your changes will be lost.', confirmLabel: 'Leave without saving', cancelLabel: 'Keep editing', tone: 'warning' }))) return;
     router.push(`/company/team/jobs?role=${id}`);
   }
   function set(key: string, v: Level) {
@@ -135,10 +136,16 @@ export function TeamJobsScreen({
                   {isOwner ? 'The owner always has full access.' : 'No access hides the screen. View lets them look. Edit lets them change things.'}
                 </p>
               </div>
+              {!isOwner ? (
+                <Button variant={dirty ? 'primary' : 'secondary'} type="submit" form="jobs-form" disabled={!dirty}>
+                  Save job
+                </Button>
+              ) : null}
             </header>
             {matrix.sod ? <p className="team-sod jobs-sod">{TEAM_SOD_MESSAGE}</p> : null}
             <form
               key={roleId}
+              id="jobs-form"
               className="jobs-form"
               action={async (fd) => {
                 const res = await withFormPending(() => saveAction(fd));

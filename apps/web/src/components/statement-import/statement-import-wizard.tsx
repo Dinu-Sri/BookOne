@@ -32,6 +32,7 @@ import {
 import type { LiquidAccount } from '@/app/actions/cashbook-banks';
 import type { ColumnMap, ParseProfile, SignConvention } from '@bookone/statement-import/client';
 
+import { askConfirm } from '@/components/ui/ask';
 function formatRs(n: number) {
   const sign = n < 0 ? '-' : '';
   return `${sign}Rs. ${Math.abs(n).toLocaleString('en-LK', {
@@ -359,7 +360,7 @@ export function StatementImportWizard({
     });
   }
 
-  function confirmMappingAndImport() {
+  async function confirmMappingAndImport() {
     if (!mapDraft || !bankId) return;
     if (mapDraft.lineCount === 0) {
       setError(
@@ -370,11 +371,11 @@ export function StatementImportWizard({
       return;
     }
     if (
-      !window.confirm(
-        si
-          ? `${mapDraft.lineCount} පේළි · නියැදි මුදල් නිවැරදිද? ආයාත කරන්න.`
-          : `Import ${mapDraft.lineCount} line(s)? Check sample amounts look correct first.`,
-      )
+      !(await askConfirm({
+        title: si ? `${mapDraft.lineCount} පේළි ආයාත කරන්නද?` : `Import ${mapDraft.lineCount} line(s)?`,
+        message: si ? 'නියැදි මුදල් නිවැරදිද කියා පළමුව බලන්න.' : 'Check the sample amounts look right first.',
+        confirmLabel: si ? 'ආයාත කරන්න' : 'Import',
+      }))
     ) {
       return;
     }
@@ -478,15 +479,15 @@ export function StatementImportWizard({
     });
   }
 
-  function confirmCreates() {
+  async function confirmCreates() {
     if (!importView) return;
     setError(null);
     if (
-      !window.confirm(
-        si
-          ? 'නව ඇතුළත් කිරීම් ඔබේ පොතට එකතු කරන්නද?'
-          : 'Add new entries to your books? You can undo later.',
-      )
+      !(await askConfirm({
+        title: si ? 'නව ඇතුළත් කිරීම් ඔබේ පොතට එකතු කරන්නද?' : 'Add the new entries to your books?',
+        message: si ? undefined : 'You can undo them later from this screen.',
+        confirmLabel: si ? 'එකතු කරන්න' : 'Add entries',
+      }))
     ) {
       return;
     }
@@ -552,9 +553,9 @@ export function StatementImportWizard({
     });
   }
 
-  function undoCreates() {
+  async function undoCreates() {
     if (!importView) return;
-    if (!window.confirm(si ? 'නව ඇතුළත් කිරීම් අහෝසි කරන්නද?' : 'Undo entries created from this import?')) {
+    if (!(await askConfirm({ title: si ? 'නව ඇතුළත් කිරීම් අහෝසි කරන්නද?' : 'Undo the entries made from this import?', message: si ? undefined : 'Each entry is reversed, so your balances go back to how they were before.', confirmLabel: si ? 'අහෝසි කරන්න' : 'Undo entries', tone: 'danger' }))) {
       return;
     }
     startTransition(() => {
@@ -570,9 +571,9 @@ export function StatementImportWizard({
     });
   }
 
-  function discardImport() {
+  async function discardImport() {
     if (!importView) return;
-    if (!window.confirm(si ? 'ඉවත් කරන්නද?' : 'Discard this import review?')) return;
+    if (!(await askConfirm({ title: si ? 'ඉවත් කරන්නද?' : 'Discard this import?', message: si ? undefined : 'The uploaded lines are removed. Entries already in your books stay.', confirmLabel: si ? 'ඉවත් කරන්න' : 'Discard', tone: 'danger' }))) return;
     startTransition(() => {
       voidStatementImport(importView.id).then((res) => {
         if (!res.ok) {

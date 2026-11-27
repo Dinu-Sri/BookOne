@@ -51,6 +51,9 @@ Every rule below serves that goal: fewer things on screen, plain words, one obvi
   - lists scroll inside their own pane;
   - the page itself must not scroll at **1366×768**.
 - **Settings and overview screens** may scroll, but the primary action stays reachable: put it in the page head or a sticky footer, not at the bottom of a long form.
+  - When a form is taller than the window, **Save is always visible**: a Save button in the sticky card header and a sticky save bar at the bottom. Both show the unsaved state.
+  - Sticky elements must not sit inside a container with `overflow: hidden`, which breaks `position: sticky`.
+  - Offset sticky headers by the app top bar (72 px).
 - Use the width. A main column plus a 300 px guide aside (`.ux-split`) beats one narrow centred column with empty space on both sides.
 - A one-question step (upload a file, pick an account) sits in a compact centred card with its buttons attached. It must not be a tall empty card with the button far away.
 
@@ -103,6 +106,12 @@ Use `dl.ux-statement` (or `.bis-sum`) with `is-total` on the result. Each `dt` t
 - **Suggestions** carry a plain reason. Example: "Same amount, 1 day apart. Banks often record payments a day or two later."
 - **Errors** say what happened and how to fix it, in the interface's voice. No apologies, no codes as the message.
 - **Dangerous or permanent actions** (delete, revoke, publish, post) confirm with `ConfirmDialog`. The dialog names the thing and the consequence.
+- **Never use browser pop-ups.** `window.alert`, `window.confirm` and `window.prompt` look like browser warnings and cannot be styled. Use BookOne's own dialogs:
+  - `ConfirmDialog` in JSX;
+  - `await askConfirm({ title, message, confirmLabel })` from `components/ui/ask.tsx` in event handlers;
+  - `await askText({ title, label })` for a single line of text.
+
+  A test (`packages/auth/test/no-browser-popups.test.ts`) fails the build if one is added.
 
 ### 9. Pre-fill the obvious, never decide money silently
 
@@ -151,6 +160,7 @@ Controls still come from the registry (`SelectField`, `DateField`, `TextField`, 
 - [ ] Sums as a statement; money with 2 decimals
 - [ ] Empty, finished and error states say what to do next
 - [ ] Nothing posted, published or approved without a person
+- [ ] No browser pop-ups (alert / confirm / prompt); long forms keep Save visible
 - [ ] Checked at 1920, 1366×768 and 390×844; work screens do not page-scroll at 1366×768
 - [ ] Registry controls only; test ids and accessible names kept or migrated in the same commit
 

@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/bookone-ui';
 import { sanitizeProductHtml } from '@/lib/product-html';
 
+import { askText } from '@/components/ui/ask';
 function Toolbar({ run }: { run: (command: string, value?: string) => void }) {
   return (
     <div className="rich-text-toolbar" onMouseDown={(e) => e.preventDefault()}>
@@ -38,9 +39,9 @@ function Toolbar({ run }: { run: (command: string, value?: string) => void }) {
       <button
         type="button"
         title="Link"
-        onClick={() => {
-          const url = window.prompt('Link URL', 'https://');
-          if (url) run('createLink', url);
+        onClick={async () => {
+          const url = await askText({ title: 'Add a link', label: 'Link address', defaultValue: 'https://', confirmLabel: 'Add link' });
+          if (url && url !== 'https://') run('createLink', url);
         }}
       >
         <Link2 size={14} />

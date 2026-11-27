@@ -12098,3 +12098,7 @@ a.party-back-btn[href='/company/details'], a.party-back-btn[href='/journal'] { d
   .ppl-history li { grid-template-columns: 1fr; }
   .jobs-row { flex-direction: column; align-items: flex-start; }
 }
+/* Jobs: the save bar really sticks to the bottom of the window (the card must not clip it) */
+.ux-card.jobs-matrix { overflow: visible; }
+.jobs-matrix > .ux-card-head { position: sticky; top: 72px; z-index: 4; background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.jobs-bar { z-index: 3; box-shadow: 0 -6px 16px rgba(19, 34, 56, 0.06); }

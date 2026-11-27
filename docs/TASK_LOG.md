@@ -1,3 +1,7 @@
+## 2026-11-27 — No browser pop-ups anywhere; Jobs Save always visible (v2.31.2)
+
+All 11 window.confirm/prompt calls replaced by BookOne dialogs (askConfirm/askText), enforced by a test; rule book updated. See [CHG-20261127-no-browser-popups](changes/CHG-20261127-no-browser-popups.md).
+
 ## 2026-11-27 — CI fix for the Jobs screen source check (v2.31.1)
 
 See [CHG-20261127-people-jobs-tooltips](changes/CHG-20261127-people-jobs-tooltips.md).

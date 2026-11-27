@@ -28,6 +28,7 @@ import {
 } from '@/app/actions/statement-import';
 import { StudioShell } from './studio-shell';
 
+import { askConfirm } from '@/components/ui/ask';
 type Pass = 'loading' | 'exact' | 'fuzzy' | 'leftover' | 'create' | 'done';
 
 const EXPENSE_CATS = [
@@ -324,11 +325,11 @@ export function BankMatchWizard({
     else setSelectedCreateIds(new Set());
   }
 
-  function doCreateSelected() {
+  async function doCreateSelected() {
     if (!view || selectedCreateIds.size === 0) return;
     const n = selectedCreateIds.size;
     const msg = `Add ${n} new cashbook entr${n === 1 ? 'y' : 'ies'} from the bank file?\n\nThis posts journals. You can undo creates from this screen.`;
-    if (!window.confirm(msg)) return;
+    if (!(await askConfirm({ title: `Add ${n} entr${n === 1 ? 'y' : 'ies'} to your books?`, message: 'This records them from the bank file. You can undo them from this screen.', confirmLabel: 'Add entries' }))) return;
     setError(null);
     startTransition(() => {
       confirmStatementCreates({
@@ -360,9 +361,9 @@ export function BankMatchWizard({
     });
   }
 
-  function doSkipSelected() {
+  async function doSkipSelected() {
     if (!view || selectedCreateIds.size === 0) return;
-    if (!window.confirm(`Skip ${selectedCreateIds.size} line(s)? They stay out of your cashbook.`)) {
+    if (!(await askConfirm({ title: `Skip ${selectedCreateIds.size} line(s)?`, message: 'They stay out of your books. You can still add them later.', confirmLabel: 'Skip lines' }))) {
       return;
     }
     startTransition(() => {
@@ -382,9 +383,9 @@ export function BankMatchWizard({
     });
   }
 
-  function doUndoCreates() {
+  async function doUndoCreates() {
     if (!view) return;
-    if (!window.confirm('Undo entries created from this bank file? Journals will be reversed.')) {
+    if (!(await askConfirm({ title: 'Undo the entries made from this bank file?', message: 'Each entry is reversed, so your balances go back to how they were before.', confirmLabel: 'Undo entries', tone: 'danger' }))) {
       return;
     }
     startTransition(() => {

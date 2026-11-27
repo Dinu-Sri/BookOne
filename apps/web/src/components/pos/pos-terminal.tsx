@@ -32,6 +32,7 @@ import {
 import { createQuickProduct } from '@/app/actions/inventory';
 import { posLinkedReturnPreview, posPrintEffects, posPrintModeLabel } from '@bookone/accounting';
 
+import { askConfirm } from '@/components/ui/ask';
 type CartLine = {
   key: string;
   productId: string | null;
@@ -313,13 +314,13 @@ export function PosTerminal({
     registerLabel,
   ]);
 
-  function switchMode(next: PosMode) {
+  async function switchMode(next: PosMode) {
     if (next === mode) return;
     if (next === 'return' && !bootstrap.canRefund) {
       setError('Refunds need a manager. Ask an Owner or Manager to process this return.');
       return;
     }
-    if (cart.length > 0 && !window.confirm('Switch mode and clear cart?')) return;
+    if (cart.length > 0 && !(await askConfirm({ title: 'Switch mode and clear the cart?', message: 'The items in the cart are removed.', confirmLabel: 'Switch and clear', tone: 'warning' }))) return;
     setMode(next);
     setCart([]);
     setSourceTicket(null);
@@ -523,9 +524,9 @@ export function PosTerminal({
     );
   }
 
-  function clearCart() {
+  async function clearCart() {
     if (cart.length === 0) return;
-    if (!window.confirm('Clear cart?')) return;
+    if (!(await askConfirm({ title: 'Clear the cart?', message: 'All items in the cart are removed.', confirmLabel: 'Clear cart', tone: 'warning' }))) return;
     setCart([]);
   }
 

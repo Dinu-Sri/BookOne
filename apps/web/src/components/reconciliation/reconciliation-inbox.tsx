@@ -2,22 +2,16 @@
 
 import Link from 'next/link';
 import { useMemo, useState, useTransition } from 'react';
-import { ArrowRight, Landmark, Trash2 } from 'lucide-react';
-import { Button, Card, Badge } from '@/components/ui/bookone-ui';
+import { ArrowRight, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { Button, Badge } from '@/components/ui/bookone-ui';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SearchField } from '@/components/ui/text-field';
 import { pushStatusToast } from '@/components/layout/status-toast';
-import {
-  listBankImports,
-  voidBankImport,
-  type ReconSessionListItem,
-} from '@/app/actions/bank-reconciliation';
+import { listBankImports, voidBankImport, type ReconSessionListItem } from '@/app/actions/bank-reconciliation';
 
 function formatRs(n: number) {
   const sign = n < 0 ? '-' : '';
-  return `${sign}Rs. ${Math.abs(n).toLocaleString('en-LK', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `${sign}Rs. ${Math.abs(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function statusTone(status: string): 'success' | 'warning' | 'info' | 'neutral' {
@@ -30,7 +24,8 @@ function statusTone(status: string): 'success' | 'warning' | 'info' | 'neutral' 
 const PAGE_SIZE = 10;
 
 /**
- * Session-first inbox — party/product list patterns (workspace + Card + table + pagination).
+ * Bank reconciliation home: one row per bank account and statement period,
+ * with what is left to do, plus a short "how it works" for new users.
  */
 export function ReconciliationInbox({
   sessions,
@@ -66,6 +61,7 @@ export function ReconciliationInbox({
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const slice = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const openCount = sessions.filter((s) => s.status !== 'reconciled').length;
 
   function doDelete() {
     if (!deleteId) return;
@@ -78,210 +74,186 @@ export function ReconciliationInbox({
         setImports((prev) => prev.filter((i) => i.id !== deleteId));
         setDeleteId(null);
         pushStatusToast({ kind: 'success', message: 'Import removed successfully' });
-        // Sessions may need server refresh
         window.location.reload();
       });
     });
   }
 
   return (
-    <div className="workspace party-workspace bih-hub-root">
-      <div className="party-toolbar">
-        <div className="party-search-form">
-          <input
-            className="input party-search"
-            placeholder="Search bank or period…"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-            aria-label="Search reconciliations"
-          />
-        </div>
-        {showImportButton ? (
-          <Link href={importHref}>
-            <Button variant="primary" type="button">
-              Import bank file
-            </Button>
-          </Link>
+    <div className="rin">
+      <div className="rin-main">
+        {sessions.length > 6 || showImportButton ? (
+          <div className="rin-toolbar">
+            {sessions.length > 6 ? (
+              <SearchField
+                id="rin-search"
+                label="Search reconciliations"
+                value={q}
+                onChange={(v) => {
+                  setQ(v);
+                  setPage(1);
+                }}
+                placeholder="Search bank or month…"
+              />
+            ) : (
+              <span />
+            )}
+            {showImportButton ? (
+              <Link href={importHref} className="button primary">
+                Import bank statement
+              </Link>
+            ) : null}
+          </div>
         ) : null}
-      </div>
 
-      <p className="bih-lead">
-        Each row is a bank account and statement period. Import files are evidence — match them to
-        BookOne here.
-      </p>
-
-      <Card>
-        <div className="card-body" style={{ padding: 0 }}>
-          {slice.length === 0 ? (
-            <div className="empty-state" style={{ padding: 32 }}>
-              <Landmark size={28} style={{ opacity: 0.5 }} />
-              <h3>No reconciliations yet</h3>
-              <p>Import a bank Excel or CSV. BookOne groups by bank account and period.</p>
-              <div style={{ marginTop: 12 }}>
-                <Link href={importHref}>
-                  <Button variant="primary" type="button">
-                    Import bank file
-                  </Button>
-                </Link>
-              </div>
+        {sessions.length === 0 ? (
+          <section className="rin-empty">
+            <FileSpreadsheet size={32} aria-hidden />
+            <h2>No reconciliations yet</h2>
+            <p>Start with last month&apos;s statement from your bank&apos;s internet banking, saved as Excel or CSV.</p>
+            <Link href={importHref} className="button primary">
+              Import bank statement
+            </Link>
+          </section>
+        ) : (
+          <section className="rin-card" aria-label="Reconciliations">
+            <header className="rin-card-head">
+              <h2>Your reconciliations</h2>
+              <span>{openCount === 0 ? 'All finished' : `${openCount} to finish`}</span>
+            </header>
+            <div className="table-wrap">
+              <table className="table rin-table">
+                <thead>
+                  <tr>
+                    <th>Bank account</th>
+                    <th>Period</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th className="rin-num">Left to explain</th>
+                    <th className="th-actions">
+                      <span className="sr-only">Open</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slice.map((s) => {
+                    const open = s.openCaseCount;
+                    const total = s.resolvedCaseCount + open;
+                    const cta = open > 0 ? 'Continue' : s.status === 'reconciled' ? 'View' : 'Open';
+                    const leftOk = s.differenceVerified && Math.abs(s.differenceAmount) <= 0.009;
+                    return (
+                      <tr key={s.id}>
+                        <td>
+                          <strong>{s.bankName}</strong>
+                          <div className="rin-meta">
+                            {s.bankCode ? `${s.bankCode} · ` : ''}
+                            {s.bankLineCount} bank lines
+                          </div>
+                        </td>
+                        <td>{s.periodLabel}</td>
+                        <td>
+                          <Badge tone={statusTone(s.status)}>{s.statusLabel}</Badge>
+                        </td>
+                        <td>
+                          <div className="rin-progress">
+                            <span className="rin-progress-bar" aria-hidden>
+                              <i style={{ width: `${s.progressPct}%` }} />
+                            </span>
+                            <span>
+                              {s.resolvedCaseCount} of {total}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="rin-num" data-testid="recon-inbox-difference">
+                          {s.differenceVerified ? (
+                            <strong className={leftOk ? 'text-ok' : 'text-warn'}>{formatRs(s.differenceAmount)}</strong>
+                          ) : (
+                            <span className="rin-meta">Unverified</span>
+                          )}
+                        </td>
+                        <td className="td-actions">
+                          <Link href={`${sessionBase}/${s.id}`} className={`button ${open > 0 ? 'primary' : 'secondary'}`}>
+                            {cta} <ArrowRight size={14} aria-hidden />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            <>
-              <div className="table-wrap table-wrap-actions">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Bank</th>
-                      <th>Period</th>
-                      <th>Status</th>
-                      <th>Progress</th>
-                      <th>Difference</th>
-                      <th className="th-actions">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {slice.map((s) => {
-                      const open = s.openCaseCount;
-                      const cta =
-                        open > 0 ? 'Continue' : s.status === 'reconciled' ? 'View' : 'Open';
-                      return (
-                        <tr key={s.id}>
-                          <td>
-                            <strong>
-                              {s.bankName}
-                              {s.bankCode ? ` · ${s.bankCode}` : ''}
-                            </strong>
-                            <div className="bih-meta-inline">
-                              {s.sourceFileCount} file{s.sourceFileCount === 1 ? '' : 's'} ·{' '}
-                              {s.bankLineCount} lines
-                            </div>
-                          </td>
-                          <td>{s.periodLabel}</td>
-                          <td>
-                            <Badge tone={statusTone(s.status)}>{s.statusLabel}</Badge>
-                          </td>
-                          <td>
-                            <div className="brw-progress-row compact">
-                              <div className="brw-progress-bar" aria-hidden>
-                                <i style={{ width: `${s.progressPct}%` }} />
-                              </div>
-                              <span>
-                                {s.resolvedCaseCount} / {s.resolvedCaseCount + open}
-                              </span>
-                            </div>
-                          </td>
-                          <td data-testid="recon-inbox-difference">
-                            {s.differenceVerified ? (
-                              <strong
-                                className={
-                                  Math.abs(s.differenceAmount) > 0.009 ? 'text-warn' : 'text-ok'
-                                }
-                              >
-                                {formatRs(s.differenceAmount)}
-                              </strong>
-                            ) : (
-                              <span className="bih-meta-inline">Unverified</span>
-                            )}
-                          </td>
-                          <td className="td-actions">
-                            <Link href={`${sessionBase}/${s.id}`}>
-                              <Button variant="secondary" type="button">
-                                {cta} <ArrowRight size={14} />
-                              </Button>
-                            </Link>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            {filtered.length > PAGE_SIZE ? (
               <div className="party-pagination">
                 <span>
                   {filtered.length} total · page {safePage} of {totalPages}
                 </span>
-                {filtered.length > PAGE_SIZE ? (
-                  <div className="party-pagination-actions">
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      disabled={safePage <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      disabled={safePage >= totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                ) : null}
+                <div className="party-pagination-actions">
+                  <Button variant="secondary" type="button" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                    Previous
+                  </Button>
+                  <Button variant="secondary" type="button" disabled={safePage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                    Next
+                  </Button>
+                </div>
               </div>
-            </>
-          )}
-        </div>
-      </Card>
+            ) : null}
+          </section>
+        )}
 
-      {imports.length > 0 ? (
-        <Card className="bih-imports-card">
-          <div className="card-header" style={{ padding: '12px 16px' }}>
-            <div>
-              <h2 className="card-title" style={{ fontSize: 16 }}>
-                Imported bank files
-              </h2>
-              <p className="card-subtitle">
-                Remove a file if it was uploaded by mistake. Posted cashbook entries are not reversed.
-              </p>
-            </div>
-          </div>
-          <div className="card-body" style={{ padding: 0 }}>
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>File</th>
-                    <th>Bank</th>
-                    <th>Period</th>
-                    <th>Lines</th>
-                    <th className="th-actions">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {imports.map((imp) => (
-                    <tr key={imp.id}>
-                      <td>
-                        <strong>{imp.fileName}</strong>
-                      </td>
-                      <td>{imp.bankName}</td>
-                      <td>{imp.periodLabel}</td>
-                      <td>{imp.lineCount}</td>
-                      <td className="td-actions">
-                        <Button
-                          variant="ghost"
-                          type="button"
-                          disabled={pending}
-                          onClick={() => setDeleteId(imp.id)}
-                          title="Delete import"
-                        >
-                          <Trash2 size={16} />
-                          Delete
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </Card>
-      ) : null}
+        {imports.length > 0 ? (
+          <details className="rin-files">
+            <summary>
+              Imported statement files <span>{imports.length}</span>
+            </summary>
+            <p className="field-help">Delete a file only if it was uploaded by mistake. Entries already added to BookOne stay.</p>
+            <ul>
+              {imports.map((imp) => (
+                <li key={imp.id}>
+                  <FileSpreadsheet size={16} aria-hidden />
+                  <strong>{imp.fileName}</strong>
+                  <span>{imp.bankName}</span>
+                  <span>{imp.periodLabel}</span>
+                  <span>{imp.lineCount} lines</span>
+                  <Button variant="ghost" type="button" disabled={pending} onClick={() => setDeleteId(imp.id)} title="Delete import">
+                    <Trash2 size={15} aria-hidden />
+                    Delete
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </div>
+
+      <aside className="rin-guide" aria-label="How bank reconciliation works">
+        <h2>How it works</h2>
+        <ol>
+          <li>
+            <strong>Import the statement</strong>
+            <span>Download the month from your bank as Excel or CSV and upload it.</span>
+          </li>
+          <li>
+            <strong>Match and add</strong>
+            <span>Confirm lines that are already in BookOne. Add bank charges or interest the bank recorded.</span>
+          </li>
+          <li>
+            <strong>Mark late items</strong>
+            <span>Cheques or deposits that reach the bank next month wait to clear.</span>
+          </li>
+          <li>
+            <strong>Finish at 0</strong>
+            <span>When nothing is left to explain, review and finish the month.</span>
+          </li>
+        </ol>
+        <div className="rin-guide-links">
+          <a href="/docs/accounting/bank-reconciliation" target="_blank" rel="noopener noreferrer">
+            Step-by-step guide
+          </a>
+          <a href="/samples/sample-bank-statement-october-2026.csv" download>
+            Practice statement (CSV)
+          </a>
+        </div>
+      </aside>
 
       <ConfirmDialog
         open={!!deleteId}

@@ -23,7 +23,7 @@ describe('Bank reconciliation: BookOne balance and plain wording', () => {
 
   it('screens use plain words and link the guide', () => {
     expect(read('apps/web/src/components/bank-import-studio/studio-wizard.tsx')).toContain('Which account is this statement for?');
-    expect(read('apps/web/src/app/reconciliation/page.tsx')).toContain('/docs/accounting/bank-reconciliation');
+    expect(read('apps/web/src/components/reconciliation/reconciliation-inbox.tsx')).toContain('/docs/accounting/bank-reconciliation');
     expect(read('apps/web/content/docs/accounting/bank-reconciliation.mdx')).toContain('164,422.50');
   });
 });

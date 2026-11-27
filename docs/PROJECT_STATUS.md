@@ -1,3 +1,7 @@
+## 2026-11-27 — Bank reconciliation screens redesigned (v2.25.0)
+
+Reconcile fills the window with one balance line (Left to explain), a To do filter and an action bar that says what to do; home shows your reconciliations with a how-it-works panel; import uses four named steps and a wider guide panel. Clearer match reasons, month names for one-month statements, search without already-matched entries; Simple Entry uses the shared dropdown and date controls. See [CHG-20261127-bank-recon-ui-redesign](changes/CHG-20261127-bank-recon-ui-redesign.md).
+
 ## 2026-11-27 — Bank reconciliation verified on staging; sample file public (v2.24.1)
 
 The October test month now finishes as Reconciled (difference 0.00). The practice statement linked from the guide downloads without signing in. See [CHG-20261127-bank-recon-month-walkthrough](changes/CHG-20261127-bank-recon-month-walkthrough.md).

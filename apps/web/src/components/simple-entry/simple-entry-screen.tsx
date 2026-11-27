@@ -5,12 +5,9 @@ import {
   ArrowDownLeft,
   ArrowRightLeft,
   ArrowUpRight,
-  CalendarDays,
   Camera,
   CheckCircle2,
-  ChevronDown,
   FileText,
-  Landmark,
   Loader2,
   Paperclip,
   ReceiptText,
@@ -22,6 +19,8 @@ import {
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button } from '@/components/ui/bookone-ui';
 import { withFormPending } from '@/components/ui/form-busy';
+import { SelectField } from '@/components/ui/select-field';
+import { DateField } from '@/components/ui/date-field';
 import { recordEntry, type RecordEntryResult } from '@/app/actions/record-entry';
 import {
   getActiveAccounts,
@@ -460,42 +459,44 @@ export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) 
 
               <div className="entry-form">
                 {direction === 'money_in' ? (
-                  <div className="field field-full">
-                    <label>Money in type</label>
-                    <select
-                      className="input large"
+                  <div className="field-full">
+                    <SelectField
+                      id="entry-money-in-type"
+                      label="Money in type"
                       value={moneyInType}
-                      onChange={(e) => setMoneyInType(e.target.value as MoneyInType)}
-                    >
-                      <option value="new_sale">New cash sale (revenue)</option>
-                      <option value="customer_payment">Customer payment (clear AR)</option>
-                      <option value="owner_contribution">Owner contribution</option>
-                    </select>
-                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                      {moneyInType === 'customer_payment'
-                        ? 'Credits AR 1300 — does not create a sales invoice document. Prefer Sales → Receive payments for invoice allocation.'
-                        : moneyInType === 'owner_contribution'
-                          ? 'Credits Owner Equity 3000.'
-                          : 'Credits Sales Revenue 4000 (cash sale). Prefer Sales invoices for stocked goods.'}
-                    </p>
+                      onChange={(v) => setMoneyInType(v as MoneyInType)}
+                      options={[
+                        { value: 'new_sale', label: 'New cash sale (revenue)' },
+                        { value: 'customer_payment', label: 'Customer payment (clear AR)' },
+                        { value: 'owner_contribution', label: 'Owner contribution' },
+                      ]}
+                      help={
+                        moneyInType === 'customer_payment'
+                          ? 'Credits AR 1300 — does not create a sales invoice document. Prefer Sales → Receive payments for invoice allocation.'
+                          : moneyInType === 'owner_contribution'
+                            ? 'Credits Owner Equity 3000.'
+                            : 'Credits Sales Revenue 4000 (cash sale). Prefer Sales invoices for stocked goods.'
+                      }
+                    />
                   </div>
                 ) : null}
                 {direction === 'invoice_bill' ? (
-                  <div className="field field-full">
-                    <label>Document type</label>
-                    <select
-                      className="input large"
+                  <div className="field-full">
+                    <SelectField
+                      id="entry-document-type"
+                      label="Document type"
                       value={invoiceBillType}
-                      onChange={(e) => setInvoiceBillType(e.target.value as InvoiceBillType)}
-                    >
-                      <option value="customer_invoice">Customer invoice (AR + sales)</option>
-                      <option value="vendor_bill">Vendor bill (expense + AP)</option>
-                    </select>
-                    <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-                      {invoiceBillType === 'vendor_bill'
-                        ? 'Dr expense / Cr AP 2100. Prefer Purchase module for inventory & multi-line bills.'
-                        : 'Dr AR 1300 / Cr Sales 4000. Prefer Sales → Invoices for products, VAT, and stock.'}
-                    </p>
+                      onChange={(v) => setInvoiceBillType(v as InvoiceBillType)}
+                      options={[
+                        { value: 'customer_invoice', label: 'Customer invoice (AR + sales)' },
+                        { value: 'vendor_bill', label: 'Vendor bill (expense + AP)' },
+                      ]}
+                      help={
+                        invoiceBillType === 'vendor_bill'
+                          ? 'Dr expense / Cr AP 2100. Prefer Purchase module for inventory & multi-line bills.'
+                          : 'Dr AR 1300 / Cr Sales 4000. Prefer Sales → Invoices for products, VAT, and stock.'
+                      }
+                    />
                   </div>
                 ) : null}
                 <div className="field">
@@ -601,30 +602,34 @@ export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) 
               {brandList.length > 0 || locationList.length > 0 ? (
                 <div className="entry-dimensions">
                   {brandList.length > 0 ? (
-                    <div className="field">
-                      <label>Brand</label>
-                      <select className="input" value={brandId} onChange={(e) => setBrandId(e.target.value)} required>
-                        <option value="">Select brand</option>
-                        {brandList.map((brand) => (
-                          <option key={brand.id} value={brand.id}>
-                            {brand.code ? `${brand.code} - ${brand.name}` : brand.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <SelectField
+                      id="entry-brand"
+                      label="Brand"
+                      value={brandId}
+                      onChange={setBrandId}
+                      required
+                      placeholder="Select brand"
+                      options={brandList.map((brand) => ({
+                        value: brand.id,
+                        label: brand.code ? `${brand.code} - ${brand.name}` : brand.name,
+                      }))}
+                      searchable={brandList.length >= 8}
+                    />
                   ) : null}
                   {locationList.length > 0 ? (
-                    <div className="field">
-                      <label>Location</label>
-                      <select className="input" value={locationId} onChange={(e) => setLocationId(e.target.value)} required>
-                        <option value="">Select location</option>
-                        {locationList.map((location) => (
-                          <option key={location.id} value={location.id}>
-                            {location.code ? `${location.code} - ${location.name}` : location.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <SelectField
+                      id="entry-location"
+                      label="Location"
+                      value={locationId}
+                      onChange={setLocationId}
+                      required
+                      placeholder="Select location"
+                      options={locationList.map((location) => ({
+                        value: location.id,
+                        label: location.code ? `${location.code} - ${location.name}` : location.name,
+                      }))}
+                      searchable={locationList.length >= 8}
+                    />
                   ) : null}
                 </div>
               ) : null}
@@ -663,50 +668,31 @@ export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) 
 
               <div className="side-field-stack">
                 {showFromAccount ? (
-                  <div className="field">
-                    <label>From account</label>
-                    <AccountSelect
-                      value={fromAccountCode}
-                      onChange={setFromAccountCode}
-                      accounts={liquidAccounts}
-                      disabled={accountsLoading}
-                    />
-                  </div>
-                ) : null}
-                <div className="field">
-                  <label>{accountLabel}</label>
                   <AccountSelect
-                    value={paymentAccountCode}
-                    onChange={setPaymentAccountCode}
+                    id="entry-from-account"
+                    label="From account"
+                    value={fromAccountCode}
+                    onChange={setFromAccountCode}
                     accounts={liquidAccounts}
                     disabled={accountsLoading}
                   />
-                </div>
-                <div className="field">
-                  <label>Payment method</label>
-                  <select
-                    className="input"
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                  >
-                    {PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label>Date</label>
-                  <div className="date-field">
-                    <CalendarDays size={16} />
-                    <input
-                      className="input"
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      max={todayString()}
-                    />
-                  </div>
-                </div>
+                ) : null}
+                <AccountSelect
+                  id="entry-payment-account"
+                  label={accountLabel}
+                  value={paymentAccountCode}
+                  onChange={setPaymentAccountCode}
+                  accounts={liquidAccounts}
+                  disabled={accountsLoading}
+                />
+                <SelectField
+                  id="entry-payment-method"
+                  label="Payment method"
+                  value={paymentMethod}
+                  onChange={(v) => setPaymentMethod(v as PaymentMethod)}
+                  options={PAYMENT_METHODS.map((m) => ({ value: m, label: m }))}
+                />
+                <DateField id="entry-date" label="Date" value={date} onChange={setDate} max={todayString()} required />
               </div>
 
               <div className="entry-receipt compact">
@@ -788,42 +774,32 @@ export function SimpleEntryScreen({ canWrite = false }: { canWrite?: boolean }) 
 }
 
 function AccountSelect({
+  id,
+  label,
   value,
   onChange,
   accounts,
   disabled,
 }: {
+  id: string;
+  label: string;
   value: string;
   onChange: (code: string) => void;
   accounts: AccountOption[];
   disabled?: boolean;
 }) {
-  if (disabled) {
-    return (
-      <div className="select-like" aria-busy>
-        <span className="cluster" style={{ color: 'var(--ink-soft)' }}>
-          <Landmark size={16} /> Loading accounts...
-        </span>
-        <ChevronDown size={14} />
-      </div>
-    );
-  }
   return (
-    <select
-      className="input"
+    <SelectField
+      id={id}
+      label={label}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label="Select account"
-    >
-      {accounts.length === 0 ? (
-        <option value="">No accounts available</option>
-      ) : null}
-      {accounts.map((a) => (
-        <option key={a.id} value={a.code}>
-          {a.code} - {a.name}
-        </option>
-      ))}
-    </select>
+      onChange={onChange}
+      disabled={disabled}
+      disabledReason={disabled ? 'Loading accounts…' : undefined}
+      emptyReason="No accounts available"
+      options={accounts.map((a) => ({ value: a.code, label: `${a.code} - ${a.name}` }))}
+      searchable={accounts.length >= 8}
+    />
   );
 }
 

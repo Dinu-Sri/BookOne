@@ -23,7 +23,7 @@ export default async function ErpReconSessionPage({
 
   return (
     <BookOneShell active="Reconciliation" tenant={tenant}>
-      <div className="workspace brw-workspace">
+      <div className={classic ? "workspace brw-workspace" : "workspace brw-workspace brc-page"}>
         {classic ? (
           <ReconciliationWorkbench
             sessionId={sessionId}

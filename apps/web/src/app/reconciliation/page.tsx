@@ -35,24 +35,14 @@ export default async function ReconciliationPage() {
 
   return (
     <BookOneShell active="Reconciliation" tenant={tenant}>
-      <div className="workspace bih-erp-workspace">
-        <div className="bih-erp-head">
+      <div className="workspace bih-erp-workspace rin-page">
+        <div className="rin-head">
           <div>
-            <p className="eyebrow">Banking</p>
-            <h1 className="page-title" style={{ margin: '4px 0 0' }}>
-              Bank reconciliation
-            </h1>
-            <p className="card-subtitle" style={{ marginTop: 6, maxWidth: 56 * 8 }}>
-              Once a month, check that your bank statement and BookOne agree. Import the statement, confirm the
-              matches, add bank charges or interest, and mark late items as waiting to clear. Nothing is recorded
-              until you confirm.{' '}
-              <a href="/docs/accounting/bank-reconciliation" target="_blank" rel="noopener noreferrer">
-                Step-by-step guide with an example
-              </a>
-            </p>
+            <h1 className="page-title">Bank reconciliation</h1>
+            <p>Once a month, check that your bank statement and BookOne agree. Nothing is recorded until you confirm.</p>
           </div>
           <Link href="/reconciliation/import" className="button primary">
-            Import bank file
+            Import bank statement
           </Link>
         </div>
         <ReconciliationInbox

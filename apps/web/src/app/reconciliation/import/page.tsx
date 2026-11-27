@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { listLiquidAccounts } from '@/app/actions/cashbook-banks';
 import { getStudioDraft } from '@/app/actions/bank-import-studio';
@@ -31,20 +32,15 @@ export default async function ErpBankImportPage({
 
   return (
     <BookOneShell active="Reconciliation" tenant={tenant}>
-      <div className="workspace bih-erp-workspace">
-        <div className="bih-erp-head">
-          <div>
-            <p className="eyebrow">Bank reconciliation</p>
-            <h1 className="page-title" style={{ margin: '4px 0 0' }}>
-              Import bank file
-            </h1>
-            <p className="card-subtitle" style={{ marginTop: 6 }}>
-              Upload the statement you downloaded from your bank (Excel or CSV). Nothing changes in your books until you confirm each item.
-            </p>
-          </div>
-          <Link href="/reconciliation" className="bis-btn secondary">
-            ← Bank imports
+      <div className="workspace bih-erp-workspace bis-page">
+        <div className="bis-page-head">
+          <Link href="/reconciliation" className="bis-page-back" aria-label="Back to bank reconciliation">
+            <ArrowLeft size={16} aria-hidden />
           </Link>
+          <div>
+            <h1 className="page-title">Import bank statement</h1>
+            <p>Upload the statement from your bank. Nothing changes in your books until you confirm each item.</p>
+          </div>
         </div>
         <BankImportStudioWizard
           banks={banks}

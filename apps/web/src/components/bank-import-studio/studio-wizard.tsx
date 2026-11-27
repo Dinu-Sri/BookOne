@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
+import { Fragment, useCallback, useMemo, useRef, useState, useTransition } from 'react';
 import {
   ArrowRight,
   Calendar,
@@ -78,10 +78,10 @@ function moneyLabel(mapping: StudioMapping): string {
 }
 
 function dateFormatExample(format: StudioMapping['dateFormat']): string {
-  if (format === 'iso') return '2026-11-03 stays 2026-11-03';
-  if (format === 'excel-serial') return 'Excel serial → 2026-11-03';
-  if (format === 'dmy') return '31/12/26 → 2026-12-31';
-  if (format === 'mdy') return '12/31/26 → 2026-12-31';
+  if (format === 'iso') return 'Dates are year-month-day (for example 2026-10-31)';
+  if (format === 'excel-serial') return 'Excel date numbers are turned into dates';
+  if (format === 'dmy') return 'Dates are day/month/year (for example 31/10/2026)';
+  if (format === 'mdy') return 'Dates are month/day/year (for example 10/31/2026)';
   return 'Use the date column as shown';
 }
 
@@ -823,12 +823,19 @@ export function BankImportStudioWizard({
             if (f) upload(f);
           }}
           onClick={() => fileRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileRef.current?.click();
+            }
+          }}
           role="button"
           tabIndex={0}
+          aria-label="Choose a bank statement file"
         >
-          {pending ? <Loader2 className="spin" size={28} /> : <FileSpreadsheet size={28} />}
-          <strong>Drop Excel / CSV</strong>
-          <small>or click to choose</small>
+          {pending ? <Loader2 className="spin" size={32} /> : <FileSpreadsheet size={32} />}
+          <strong>{pending ? 'Reading the file…' : 'Drop your bank statement here'}</strong>
+          <small>or click to choose a file · Excel or CSV</small>
           <input
             ref={fileRef}
             type="file"
@@ -844,6 +851,16 @@ export function BankImportStudioWizard({
           />
         </div>
         {error ? <p className="bis-error">{error}</p> : null}
+        <div className="bis-upload-help">
+          <strong>Where do I get it?</strong>
+          <p>
+            In your bank&apos;s internet banking, open the account, choose the month (for example 1–31 October) and
+            download or export the statement as Excel or CSV.
+          </p>
+          <a href="/samples/sample-bank-statement-october-2026.csv" download>
+            Download a practice statement
+          </a>
+        </div>
       </StudioShell>
     );
   }
@@ -866,17 +883,24 @@ export function BankImportStudioWizard({
           Pick the bank account this statement belongs to. BookOne may have picked one already; check it is right.
         </p>
         <div className="bis-cards">
-          {bankOnly.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              className={`bis-card ${bankId === b.id ? 'active' : ''}`}
-              onClick={() => setBankId(b.id)}
-            >
-              <strong>{b.name || b.shortName}</strong>
-              <span>{b.code}</span>
-            </button>
-          ))}
+          {[...bankOnly]
+            .sort((a, b) => Number(a.kind !== 'bank') - Number(b.kind !== 'bank'))
+            .map((b, i, all) => (
+              <Fragment key={b.id}>
+                {b.kind !== 'bank' && (i === 0 || all[i - 1]!.kind === 'bank') ? (
+                  <p className="bis-cards-group">Other money accounts</p>
+                ) : null}
+                <button
+                  type="button"
+                  className={`bis-card ${bankId === b.id ? 'active' : ''}`}
+                  onClick={() => setBankId(b.id)}
+                  aria-pressed={bankId === b.id}
+                >
+                  <strong>{b.name || b.shortName}</strong>
+                  <span>{b.code}</span>
+                </button>
+              </Fragment>
+            ))}
         </div>
         {error ? <p className="bis-error">{error}</p> : null}
       </StudioShell>

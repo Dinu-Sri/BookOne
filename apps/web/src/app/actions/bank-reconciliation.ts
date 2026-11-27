@@ -179,6 +179,33 @@ function revalidateRecon() {
   revalidatePath('/cashbook');
 }
 
+/**
+ * Why a suggested match needs a look, in plain words (shown on the bank line).
+ * Replaces the old catch-all "more than one possible entry, or unclear".
+ */
+function suggestionReason(
+  line: { amount: string | number; date: string | null },
+  bookId: string,
+  books: Array<{ id: string; date: string; amountSigned: number }>,
+): { code: string; text: string } {
+  const amt = Number(line.amount);
+  const book = books.find((b) => b.id === bookId);
+  if (!book) return { code: 'ambiguous', text: 'Check that this is the same payment.' };
+  const sameAmount = Math.abs(book.amountSigned - amt) < 0.005;
+  const twins = books.filter((b) => Math.abs(b.amountSigned - amt) < 0.005).length;
+  const gap = line.date && book.date
+    ? Math.round(Math.abs(Date.parse(`${String(line.date).slice(0, 10)}T12:00:00`) - Date.parse(`${book.date}T12:00:00`)) / 86_400_000)
+    : 0;
+  if (sameAmount && twins > 1) {
+    return { code: 'same_amount_several', text: `${twins} BookOne entries have this amount. Check this is the right one.` };
+  }
+  if (sameAmount && gap > 0) {
+    return { code: 'date_gap', text: `Same amount, ${gap} day${gap === 1 ? '' : 's'} apart. Banks often record payments a day or two later.` };
+  }
+  if (sameAmount) return { code: 'description_differs', text: 'Same amount and date. The description is different.' };
+  return { code: 'amount_differs', text: 'Similar amount and date. Check the amounts before confirming.' };
+}
+
 function formatPeriodLabel(from: string, to: string) {
   if (from === to) return from;
   try {
@@ -188,6 +215,11 @@ function formatPeriodLabel(from: string, to: string) {
     const sameMonth =
       a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
     if (sameMonth) {
+      // A statement for one month (bank lines from the first days to the month end) is shown as the month.
+      const lastDay = new Date(b.getFullYear(), b.getMonth() + 1, 0).getDate();
+      if (b.getDate() === lastDay && a.getDate() <= 7) {
+        return a.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+      }
       return `${a.getDate()}–${b.getDate()} ${a.toLocaleString('en-GB', { month: 'short', year: 'numeric' })}`;
     }
     return `${a.toLocaleString('en-GB', opts)} – ${b.toLocaleString('en-GB', opts)}`;
@@ -1143,6 +1175,7 @@ async function rebuildSessionSuggestionsInternal(
         const best = m.candidates[0]!;
         if (!usedBooks.has(best.id)) {
           usedBooks.add(best.id);
+          const reviewReason = suggestionReason(line, best.id, freeBooks);
           const [c] = await db()
             .insert(bankReconciliationCases)
             .values({
@@ -1153,8 +1186,8 @@ async function rebuildSessionSuggestionsInternal(
               state: 'needs_review',
               matchScore: m.matchScore.toFixed(4),
               matchMethod: 'fuzzy',
-              explanation: 'More than one possible BookOne entry, or the match is unclear.',
-              reasonCodes: ['ambiguous'],
+              explanation: reviewReason.text,
+              reasonCodes: [reviewReason.code],
               userLabel: 'Needs decision',
               resultLabel: 'Review',
               sortDate: line.date,
@@ -4056,12 +4089,28 @@ export async function searchBookForSession(input: {
         session.bookDomain,
       );
 
-      let candidates = books.map((b) => ({
-        id: b.id,
-        date: b.date,
-        description: b.description,
-        amountSigned: b.amountSigned,
-      }));
+      const settled = await db()
+        .select({ transactionId: bankReconciliationCaseBookTransactions.transactionId })
+        .from(bankReconciliationCaseBookTransactions)
+        .innerJoin(bankReconciliationCases, eq(bankReconciliationCases.id, bankReconciliationCaseBookTransactions.caseId))
+        .where(
+          and(
+            eq(bankReconciliationCases.sessionId, sessionId),
+            eq(bankReconciliationCases.tenantId, user.tenantId),
+            isNull(bankReconciliationCases.voidedAt),
+            isNull(bankReconciliationCaseBookTransactions.voidedAt),
+            inArray(bankReconciliationCases.state, ['confirmed', 'excluded']),
+          ),
+        );
+      const done = new Set(settled.map((r) => r.transactionId).filter(Boolean) as string[]);
+      let candidates = books
+        .filter((b) => !done.has(b.id))
+        .map((b) => ({
+          id: b.id,
+          date: b.date,
+          description: b.description,
+          amountSigned: b.amountSigned,
+        }));
       if (q) {
         candidates = candidates.filter(
           (b) =>

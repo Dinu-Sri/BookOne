@@ -15,6 +15,16 @@ const STEPS = [
 ] as const;
 
 export type StudioStepId = (typeof STEPS)[number]['id'];
+
+/** What the user sees: four plain stages over the nine internal steps. */
+const STAGES = ['Upload', 'Account', 'Columns', 'Check & save'] as const;
+
+function stageOf(step: StudioStepId): number {
+  if (step === 'upload') return 0;
+  if (step === 'account' || step === 'sheet') return 1;
+  if (step === 'review' || step === 'import') return step === 'import' ? 4 : 3;
+  return 2;
+}
 export type StepTone = 'neutral' | 'blue' | 'yellow' | 'green' | 'amber' | 'purple';
 
 /**
@@ -54,8 +64,8 @@ export function StudioShell({
   stepTotal: number;
   compact?: boolean;
 }) {
-  const activeIdx = STEPS.findIndex((s) => s.id === step);
   const split = Boolean(sheet) && !compact;
+  const stage = stageOf(step);
 
   return (
     <div className={`bis-workspace tone-${tone} ${split ? 'split' : 'single'}`}>
@@ -63,17 +73,18 @@ export function StudioShell({
 
       <section className="bis-pane-step">
         <div className={`bis-step-top tone-${tone}`}>
-          <div className="bis-dots" aria-label={`Step ${stepIndex} of ${stepTotal}`}>
-            {STEPS.map((s, i) => (
-              <span
-                key={s.id}
-                className={`bis-dot ${i < activeIdx ? 'done' : ''} ${i === activeIdx ? 'active' : ''}`}
-              />
+          <ol className="bis-stages" aria-label={`Step ${stepIndex} of ${stepTotal}`}>
+            {STAGES.map((label, i) => (
+              <li
+                key={label}
+                className={`${i < stage ? 'done' : ''} ${i === stage ? 'active' : ''}`.trim() || undefined}
+                aria-current={i === stage ? 'step' : undefined}
+              >
+                <span aria-hidden>{i < stage ? '✓' : i + 1}</span>
+                {label}
+              </li>
             ))}
-            <span className="bis-step-num">
-              {stepIndex}/{stepTotal}
-            </span>
-          </div>
+          </ol>
           <div className="bis-q-row">
             {icon ? <span className={`bis-q-icon tone-${tone}`}>{icon}</span> : null}
             <h1 className="bis-q">{title}</h1>

@@ -113,9 +113,6 @@
   "apps/web/src/components/purchase/purchase-vat-fields.tsx": {
     "raw-select": 1
   },
-  "apps/web/src/components/reconciliation/reconciliation-compare.tsx": {
-    "raw-select": 1
-  },
   "apps/web/src/components/reconciliation/reconciliation-workbench.tsx": {
     "raw-select": 1,
     "unstyled-field": 3
@@ -149,10 +146,6 @@
   },
   "apps/web/src/components/sales/sales-tax-profile-fields.tsx": {
     "raw-select": 4
-  },
-  "apps/web/src/components/simple-entry/simple-entry-screen.tsx": {
-    "raw-date": 1,
-    "raw-select": 6
   },
   "apps/web/src/components/statement-import/statement-import-wizard.tsx": {
     "raw-select": 4

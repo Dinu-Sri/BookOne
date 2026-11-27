@@ -11038,3 +11038,309 @@ a.bih-card:hover {
     text-align: left;
   }
 }
+
+/* ── Bank reconciliation v2 (2026-11-27): full-height workspace, one balance line, action dock ── */
+.workspace.brc-page { padding: 14px 24px 12px; }
+.brc.brc-v2 {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 0 0 12px;
+}
+/* Main app: the workspace fills the window under the top bar; only the lists scroll. */
+.brc-page .brc.brc-v2 {
+  height: calc(100dvh - 72px - 26px);
+  min-height: 560px;
+  padding: 0;
+}
+.brc.brc-v2:not(.brc-page .brc-v2) .brc-list { max-height: 56vh; }
+.brc-v2 .brc-head { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; }
+.brc-v2 .brc-back {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 36px; height: 36px; padding: 0; border-radius: var(--radius-md);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-muted);
+}
+.brc-v2 .brc-back:hover { color: var(--brand); border-color: var(--line-strong); }
+.brc-v2 .brc-head-main { flex: 1; min-width: 0; }
+.brc-v2 .brc-head-main h1 { margin: 0; font-size: 20px; font-weight: 750; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.brc-v2 .brc-head-main h1 span { font-size: 15px; font-weight: 600; color: var(--ink-muted); }
+.brc-v2 .brc-head-main p { margin: 2px 0 0; font-size: 13px; color: var(--ink-muted); max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brc-v2 .brc-head-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* The balance line: three terms, then the answer */
+.brc-balance {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "terms result" "explain result";
+  align-items: center;
+  column-gap: 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.brc-balance-terms { grid-area: terms; display: flex; gap: 32px; margin: 0; flex-wrap: wrap; }
+.brc-balance-terms > div { display: grid; gap: 2px; }
+.brc-balance-terms dt { font-size: 12px; color: var(--ink-muted); font-weight: 600; }
+.brc-balance-terms dd { margin: 0; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.brc-v2 .brc-explain { grid-area: explain; margin: 6px 0 0; font-size: 12px; color: var(--ink-soft); }
+.brc-balance-result {
+  grid-area: result;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; border-radius: var(--radius-md);
+  min-width: 230px;
+}
+.brc-balance-result > div { display: grid; gap: 2px; }
+.brc-balance-label { font-size: 12px; font-weight: 700; }
+.brc-balance-result strong { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.brc-balance-icon { display: inline-flex; width: 34px; height: 34px; border-radius: 999px; align-items: center; justify-content: center; }
+.brc-balance.is-ok .brc-balance-result { background: var(--success-soft); color: var(--success); }
+.brc-balance.is-ok .brc-balance-icon { background: var(--success); color: #fff; }
+.brc-balance.is-open .brc-balance-result { background: var(--warning-soft); color: var(--warning); }
+.brc-balance.is-open .brc-balance-icon { background: var(--warning); color: #fff; }
+
+/* Filter + progress */
+.brc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brc-tabs { display: inline-flex; padding: 3px; gap: 2px; background: var(--bg-subtle); border-radius: var(--radius-md); }
+.brc-tabs button {
+  border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 650; color: var(--ink-muted);
+  padding: 6px 14px; border-radius: 6px; cursor: pointer;
+}
+.brc-tabs button.is-on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.brc-tabs button:focus-visible { outline: none; box-shadow: var(--focus); }
+.brc-progress { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-muted); font-weight: 600; }
+.brc-progress-bar { width: 160px; height: 6px; border-radius: 999px; background: var(--bg-subtle); overflow: hidden; }
+.brc-progress-bar i { display: block; height: 100%; background: var(--brand); border-radius: inherit; transition: width .3s ease; }
+
+/* Two lists fill the remaining height; only they scroll */
+.brc-v2 .brc-board { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
+.brc-v2 .brc-pane { min-height: 0; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.brc-v2 .brc-pane header { display: flex; align-items: baseline; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.brc-v2 .brc-pane h2 { margin: 0; font-size: 14px; font-weight: 750; }
+.brc-v2 .brc-pane small { font-size: 12px; color: var(--ink-soft); }
+.brc-v2 .brc-list { flex: 1; min-height: 0; max-height: none; overflow: auto; padding: 4px; gap: 1px; display: flex; flex-direction: column; }
+.brc-v2 .brc-row {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto 128px; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-md); border: 1px solid transparent; background: transparent;
+  text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%;
+}
+.brc-v2 .brc-row:hover:not(:disabled) { background: var(--surface-muted); }
+.brc-v2 .brc-row:focus-visible { outline: none; box-shadow: var(--focus); }
+.brc-v2 .brc-row.is-on { background: var(--brand-soft); border-color: var(--brand); }
+.brc-v2 .brc-row.is-pair { background: var(--brand-soft); border-color: rgba(22, 119, 201, 0.35); }
+.brc-v2 .brc-row.is-done { opacity: 0.6; cursor: default; }
+.brc-v2 .brc-row-date { font-size: 12px; font-weight: 650; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.brc-v2 .brc-row-desc { font-size: 13px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brc-v2 .brc-row-amt { text-align: right; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.brc-v2 .brc-row-amt.is-out { color: var(--ink); }
+.brc-v2 .brc-row-amt.is-in { color: var(--success); }
+.brc-v2 .brc-badge { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: 0; padding: 2px 8px; white-space: nowrap; }
+.brc-v2 .brc-badge-possible_match { background: var(--brand-soft); color: var(--brand-ink); }
+.brc-v2 .brc-badge-bank_only { background: var(--warning-soft); color: var(--warning); }
+.brc-v2 .brc-badge-book_only { background: var(--info-soft); color: var(--info); }
+.brc-v2 .brc-badge-waiting { background: var(--bg-subtle); color: var(--ink-muted); }
+.brc-v2 .brc-badge-matched { background: var(--success-soft); color: var(--success); }
+.brc-v2 .brc-badge-needs_decision { background: var(--danger-soft); color: var(--danger); }
+.brc-v2 .brc-empty { margin: auto; padding: 32px 12px; text-align: center; color: var(--ink-soft); font-size: 13px; }
+
+/* Action dock: what the selection is, and what to do */
+.brc-dock {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 16px;
+  padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-md);
+}
+.brc-dock.is-done { box-shadow: none; border-color: var(--line); background: var(--success-soft); }
+.brc-dock-text { display: grid; gap: 2px; min-width: 0; font-size: 13px; color: var(--ink-muted); margin: 0; }
+.brc-dock-text strong { color: var(--ink); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brc-dock-actions { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.brc-dock-cat { width: 260px; }
+.brc-dock-cat .field { margin: 0; }
+.brc-v2 .brc-warn { color: var(--warning); font-weight: 650; }
+.brc-v2 .brc-search {
+  grid-column: 1 / -1; display: grid; gap: 8px; padding: 10px 0 0; border: 0; border-top: 1px solid var(--line); border-radius: 0;
+}
+.brc-search-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.brc-search-bar .field { margin: 0; }
+.brc-v2 .brc-search ul { max-height: 168px; overflow: auto; }
+.brc-v2 .brc-search-hit { grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; }
+.brc-blockers { margin: 0; font-size: 12px; color: var(--ink-soft); }
+.brc-v2 .brc-classic { position: absolute; right: 4px; bottom: -18px; margin: 0; font-size: 11px; }
+
+/* Finish dialog: the same sum, as a small statement */
+.brc-finish-title { margin: 0 0 10px; font-weight: 700; color: var(--ink); }
+.brc-finish-sum { margin: 0; display: grid; gap: 6px; }
+.brc-finish-sum > div { display: flex; justify-content: space-between; gap: 16px; font-variant-numeric: tabular-nums; }
+.brc-finish-sum dt { color: var(--ink-muted); }
+.brc-finish-sum dd { margin: 0; font-weight: 650; }
+.brc-finish-sum .is-total { border-top: 1px solid var(--line); padding-top: 6px; }
+.brc-finish-sum .is-total dt, .brc-finish-sum .is-total dd { font-weight: 800; color: var(--ink); }
+.brc-finish-counts { margin: 10px 0 4px; font-size: 13px; color: var(--ink-muted); }
+
+@media (max-height: 640px), (max-width: 980px) {
+  .brc.brc-v2 { height: auto; min-height: 0; grid-template-rows: none; }
+  .brc-v2 .brc-list { max-height: 52vh; }
+  .brc-v2 .brc-dock { position: sticky; bottom: 8px; z-index: 4; }
+  .brc-v2 .brc-classic { position: static; }
+}
+@media (max-width: 980px) {
+  .brc-v2 .brc-board { grid-template-columns: 1fr; }
+  .brc-balance { grid-template-columns: 1fr; grid-template-areas: "result" "terms" "explain"; row-gap: 10px; }
+  .brc-balance-terms { gap: 16px; }
+  .brc-v2 .brc-head { flex-wrap: wrap; }
+  .brc-v2 .brc-head-main p { white-space: normal; }
+  .brc-dock { grid-template-columns: 1fr; }
+  .brc-dock-actions { justify-content: flex-start; }
+  .brc-toolbar { flex-wrap: wrap; }
+  .brc-v2 .brc-row { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .brc-v2 .brc-row .brc-badge { grid-column: 2; grid-row: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brc-progress-bar i { transition: none; }
+}
+
+/* ── Bank reconciliation home v2 ── */
+.workspace.rin-page { padding: 20px 24px 24px; display: grid; gap: 16px; align-content: start; }
+.rin-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.rin-head .page-title { margin: 0; font-size: 22px; }
+.rin-head p { margin: 4px 0 0; font-size: 14px; color: var(--ink-muted); }
+.rin { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; min-height: calc(100dvh - 72px - 130px); }
+.rin-main { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.rin-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.rin-toolbar .party-search, .rin-toolbar input { max-width: 360px; }
+.rin-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+.rin-card-head { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 16px 10px; }
+.rin-card-head h2 { margin: 0; font-size: 15px; font-weight: 750; }
+.rin-card-head span { font-size: 13px; color: var(--ink-muted); font-weight: 600; }
+.rin-table th { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 650; color: var(--ink-muted); }
+.rin-table td { vertical-align: middle; padding-top: 12px; padding-bottom: 12px; }
+.rin-table .rin-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rin-meta { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+.rin-progress { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-muted); white-space: nowrap; }
+.rin-progress-bar { width: 120px; height: 6px; border-radius: 999px; background: var(--bg-subtle); overflow: hidden; }
+.rin-progress-bar i { display: block; height: 100%; background: var(--brand); border-radius: inherit; }
+.rin-table .button { white-space: nowrap; }
+.rin-empty {
+  display: grid; justify-items: center; gap: 10px; text-align: center;
+  padding: 56px 24px; background: var(--surface); border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); color: var(--ink-muted);
+}
+.rin-empty h2 { margin: 0; font-size: 18px; color: var(--ink); }
+.rin-empty p { margin: 0 0 6px; max-width: 34rem; font-size: 14px; }
+.rin-files { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 0 16px; }
+.rin-files summary { cursor: pointer; padding: 12px 0; font-size: 14px; font-weight: 650; color: var(--ink); list-style-position: inside; }
+.rin-files summary span { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--bg-subtle); font-size: 12px; color: var(--ink-muted); }
+.rin-files[open] { padding-bottom: 8px; }
+.rin-files ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+.rin-files li { display: grid; grid-template-columns: 20px minmax(0, 1.6fr) 1fr 1fr auto auto; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-muted); }
+.rin-files li strong { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rin-guide {
+  position: sticky; top: 88px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px;
+}
+.rin-guide h2 { margin: 0 0 12px; font-size: 15px; font-weight: 750; }
+.rin-guide ol { margin: 0; padding: 0; list-style: none; counter-reset: rin; display: grid; gap: 14px; }
+.rin-guide li { counter-increment: rin; display: grid; grid-template-columns: 26px 1fr; column-gap: 10px; }
+.rin-guide li::before {
+  content: counter(rin); grid-row: span 2; width: 24px; height: 24px; border-radius: 999px;
+  background: var(--brand-soft); color: var(--brand-ink); font-size: 12px; font-weight: 750; display: inline-flex; align-items: center; justify-content: center;
+}
+.rin-guide li strong { font-size: 13px; color: var(--ink); }
+.rin-guide li span { font-size: 13px; color: var(--ink-muted); line-height: 1.45; }
+.rin-guide-links { display: grid; gap: 6px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; font-weight: 650; }
+.rin-guide-links a { color: var(--brand); text-decoration: none; }
+.rin-guide-links a:hover { text-decoration: underline; }
+@media (max-width: 1100px) {
+  .rin { grid-template-columns: 1fr; min-height: 0; }
+  .rin-guide { position: static; }
+  .rin-guide ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .rin-head { flex-direction: column; align-items: stretch; }
+  .rin-guide ol { grid-template-columns: 1fr; }
+  .rin-files li { grid-template-columns: 20px 1fr auto; }
+  .rin-files li > span { display: none; }
+}
+
+/* ── Bank statement import v2 (reconciliation page): full height, wider guide panel, named stages ── */
+.workspace.bis-page {
+  padding: 14px 24px 14px !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  height: calc(100dvh - 72px);
+  min-height: 600px;
+}
+.bis-page-head { display: flex; align-items: center; gap: 12px; }
+.bis-page-head .page-title { margin: 0; font-size: 20px; }
+.bis-page-head p { margin: 2px 0 0; font-size: 13px; color: var(--ink-muted); }
+.bis-page-back {
+  display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--surface); color: var(--ink-muted);
+}
+.bis-page-back:hover { color: var(--brand); border-color: var(--line-strong); }
+
+.bis-page .bis-workspace {
+  height: 100% !important; min-height: 0 !important; max-height: none !important;
+  border: 1px solid var(--line); border-radius: var(--radius-lg) !important; background: var(--surface) !important;
+  box-shadow: none !important;
+}
+.bis-page .bis-workspace.split { align-items: stretch !important; }
+.bis-page .bis-pane-sheet { align-self: stretch !important; height: 100% !important; background: var(--surface-muted) !important; }
+.bis-page .bis-pane-sheet .bis-excel { height: 100% !important; display: flex !important; flex-direction: column !important; }
+.bis-page .bis-pane-sheet .bis-excel-scroll { flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow: auto !important; }
+.bis-page .bis-pane-step {
+  flex: 0 0 420px !important; width: 420px !important; max-width: 42% !important;
+  align-self: stretch !important; height: 100% !important; display: flex !important; flex-direction: column !important;
+}
+.bis-page .bis-step-top { padding: 14px 18px 10px !important; background: var(--surface) !important; border-bottom: 1px solid var(--line); }
+.bis-page .bis-q { font-size: 17px !important; font-weight: 750; margin: 0; }
+.bis-page .bis-step-body {
+  flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow: auto !important;
+  padding: 14px 18px !important; gap: 12px !important;
+}
+.bis-page .bis-step-foot { padding: 12px 18px !important; border-top: 1px solid var(--line); background: var(--surface); }
+.bis-page .bis-btn { min-height: 38px; padding: 0 18px; border-radius: var(--radius-md); font-size: 14px; font-weight: 650; }
+
+/* Single steps (upload, account) use the whole card */
+.bis-page .bis-workspace.single {
+  max-width: none !important; width: 100% !important; margin: 0 !important; align-self: stretch;
+  justify-content: center; align-items: stretch !important;
+}
+.bis-page .bis-workspace.single .bis-pane-step { width: min(720px, 100%) !important; max-width: 720px !important; margin: 0 auto; border-left: 0 !important; flex: 0 1 720px !important; }
+.bis-page .bis-workspace.single .bis-drop { min-height: 260px; border-radius: var(--radius-lg); gap: 8px; }
+.bis-page .bis-drop:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--brand); }
+.bis-upload-help { display: grid; gap: 4px; padding: 14px 16px; border-radius: var(--radius-md); background: var(--surface-muted); font-size: 13px; color: var(--ink-muted); }
+.bis-upload-help strong { color: var(--ink); }
+.bis-upload-help p { margin: 0; line-height: 1.5; }
+.bis-upload-help a { color: var(--brand); font-weight: 650; text-decoration: none; }
+.bis-cards-group { margin: 8px 0 0; font-size: 12px; font-weight: 650; color: var(--ink-soft); }
+
+/* Named stages instead of dots */
+.bis-stages { list-style: none; margin: 0 0 10px; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.bis-stages li {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: var(--ink-soft);
+  padding: 4px 10px 4px 4px; border-radius: 999px; background: var(--bg-subtle);
+}
+.bis-stages li span {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px;
+  background: var(--surface); font-size: 11px; color: var(--ink-muted);
+}
+.bis-stages li.done { color: var(--success); background: var(--success-soft); }
+.bis-stages li.done span { background: var(--success); color: #fff; }
+.bis-stages li.active { color: var(--brand-ink); background: var(--brand-soft); }
+.bis-stages li.active span { background: var(--brand); color: #fff; }
+
+/* Instructions read as sentences, not shouting */
+.bis-money-label { font-size: 13px !important; font-weight: 500 !important; text-transform: none !important; letter-spacing: 0 !important; color: var(--ink-muted) !important; line-height: 1.5; }
+.bis-page .bis-equation { border-radius: var(--radius-md); padding: 12px 14px; background: var(--surface-muted); }
+.bis-page .bis-equation strong { font-size: 14px; }
+.bis-page .bis-map-table th { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 650; }
+
+@media (max-width: 1024px), (max-height: 600px) {
+  .workspace.bis-page { height: auto; min-height: 0; grid-template-rows: none; }
+  .bis-page .bis-workspace { height: auto !important; }
+  .bis-page .bis-workspace.split { flex-direction: column !important; }
+  .bis-page .bis-pane-step { width: 100% !important; max-width: none !important; flex: 0 0 auto !important; border-left: 0 !important; border-top: 1px solid var(--line); }
+  .bis-page .bis-pane-sheet .bis-excel-scroll { max-height: 50vh !important; }
+}

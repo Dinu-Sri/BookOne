@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { ArrowLeft, Check, CircleAlert } from 'lucide-react';
 import {
   bulkConfirmStrongMatches,
   confirmCaseMatch,
@@ -33,15 +34,12 @@ function catOptions(accounts: { code: string; name: string }[]) {
 
 function money(n: number) {
   const sign = n < 0 ? '−' : '';
-  return `${sign}LKR ${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${sign}LKR ${Math.abs(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function day(iso: string) {
   try {
-    return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-    });
+    return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   } catch {
     return iso;
   }
@@ -64,6 +62,17 @@ function statusLabel(status: CompareRowStatus) {
   }
 }
 
+type Filter = 'todo' | 'done' | 'all';
+
+function isTodo(r: CompareSideRow) {
+  return r.selectable;
+}
+
+/**
+ * Reconcile one bank account for one period. Full-height workspace:
+ * balance line → to-do filter → bank and BookOne lists → action bar for
+ * whatever is selected. Nothing is recorded until the user confirms.
+ */
 export function ReconciliationCompare({
   sessionId,
   inboxHref,
@@ -83,11 +92,10 @@ export function ReconciliationCompare({
   const [cat, setCat] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState('');
-  const [searchHits, setSearchHits] = useState<
-    { id: string; date: string; description: string; amountSigned: number }[]
-  >([]);
+  const [searchHits, setSearchHits] = useState<{ id: string; date: string; description: string; amountSigned: number }[]>([]);
   const [finishOpen, setFinishOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [filter, setFilter] = useState<Filter>('todo');
 
   const load = useCallback(() => {
     start(() => {
@@ -116,6 +124,12 @@ export function ReconciliationCompare({
   const bookRows = board?.book ?? [];
   const openBank = bankRows.filter((r) => r.selectable);
   const openBook = bookRows.filter((r) => r.selectable);
+  const finished = board?.session.status === 'reconciled';
+
+  // A finished month opens on everything; otherwise only what still needs you.
+  useEffect(() => {
+    if (finished) setFilter('all');
+  }, [finished]);
 
   useEffect(() => {
     if (!board) return;
@@ -128,14 +142,8 @@ export function ReconciliationCompare({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board]);
 
-  const selectedBank = useMemo(
-    () => openBank.filter((r) => r.bankLineId && bankSel.includes(r.bankLineId)),
-    [openBank, bankSel],
-  );
-  const selectedBook = useMemo(
-    () => openBook.filter((r) => r.transactionId && bookSel.includes(r.transactionId)),
-    [openBook, bookSel],
-  );
+  const selectedBank = useMemo(() => openBank.filter((r) => r.bankLineId && bankSel.includes(r.bankLineId)), [openBank, bankSel]);
+  const selectedBook = useMemo(() => openBook.filter((r) => r.transactionId && bookSel.includes(r.transactionId)), [openBook, bookSel]);
   const bankSum = selectedBank.reduce((s, r) => s + r.amount, 0);
   const bookSum = selectedBook.reduce((s, r) => s + r.amount, 0);
   const canMatch = selectedBank.length > 0 && selectedBook.length > 0;
@@ -145,7 +153,6 @@ export function ReconciliationCompare({
     selectedBook.length === 1 &&
     Boolean(selectedBank[0]?.pairCaseId) &&
     selectedBank[0]?.pairCaseId === selectedBook[0]?.pairCaseId;
-  const finished = board?.session.status === 'reconciled';
   const canFinish = Boolean(board?.review.canFinish) && !finished;
   const review = board?.review;
 
@@ -204,7 +211,7 @@ export function ReconciliationCompare({
 
   function addToBooks() {
     if (!createRow) {
-      pushStatusToast({ kind: 'error', message: 'Search BookOne first, then create if the line is missing.' });
+      pushStatusToast({ kind: 'error', message: 'Pick the bank line that is missing from BookOne first.' });
       return;
     }
     const isIn = createRow.amount > 0;
@@ -222,7 +229,7 @@ export function ReconciliationCompare({
 
   function waiting() {
     if (selectedBook.length !== 1) {
-      pushStatusToast({ kind: 'error', message: 'Select one BookOne line that is not on the statement.' });
+      pushStatusToast({ kind: 'error', message: 'Pick one BookOne entry that is not on the statement.' });
       return;
     }
     run(() => markCaseOutstanding({ caseId: selectedBook[0]!.caseId }), 'Marked waiting to clear');
@@ -231,11 +238,7 @@ export function ReconciliationCompare({
   function doSearch() {
     const target = createRow?.amount ?? selectedBank[0]?.amount;
     start(() => {
-      searchBookForSession({
-        sessionId,
-        q: searchQ,
-        targetAmount: target,
-      }).then((res) => {
+      searchBookForSession({ sessionId, q: searchQ, targetAmount: target }).then((res) => {
         if (!res.ok) {
           pushStatusToast({ kind: 'error', message: res.error });
           return;
@@ -246,7 +249,12 @@ export function ReconciliationCompare({
     });
   }
 
-  const bankToReview = openBank.filter((r) => r.status === 'bank_only' || r.status === 'needs_decision').length;
+  function clearSelection() {
+    setBankSel([]);
+    setBookSel([]);
+    setCreateCaseId(null);
+    setSearchOpen(false);
+  }
 
   if (!ready && pending) {
     return (
@@ -260,18 +268,30 @@ export function ReconciliationCompare({
     return (
       <div className="brc-loading">
         {error || 'This reconciliation is still opening.'}
-        <Link href={inboxHref} className="brc-back" style={{ display: 'block', marginTop: 12 }}>
-          ← Imports
+        <Link href={inboxHref} className="brc-back" style={{ display: 'inline-flex', marginTop: 12 }}>
+          <ArrowLeft size={14} aria-hidden /> Bank reconciliation
         </Link>
       </div>
     );
   }
 
+  const total = bankRows.length + bookRows.length;
+  const todoCount = openBank.length + openBook.length;
+  const doneCount = total - todoCount;
+  const pct = total ? Math.round((doneCount / total) * 100) : 0;
+  const left = review?.differenceVerified ? review.difference : null;
+  const balanced = left != null && Math.abs(left) < 0.005;
+  const visible = (rows: CompareSideRow[]) =>
+    filter === 'all' ? rows : filter === 'todo' ? rows.filter(isTodo) : rows.filter((r) => !isTodo(r));
+  const bankShown = visible(bankRows);
+  const bookShown = visible(bookRows);
+  const hint = selectedBank[0]?.hint ?? selectedBook[0]?.hint ?? null;
+
   return (
-    <div className="brc">
+    <div className="brc brc-v2">
       <header className="brc-head">
-        <Link href={inboxHref} className="brc-back">
-          ← Imports
+        <Link href={inboxHref} className="brc-back" aria-label="Back to bank reconciliation">
+          <ArrowLeft size={16} aria-hidden />
         </Link>
         <div className="brc-head-main">
           <h1>
@@ -279,8 +299,9 @@ export function ReconciliationCompare({
             <span>{board.session.periodLabel}</span>
           </h1>
           <p>
-            Bank statement on the left, BookOne on the right. Confirm a suggested match to link two existing
-            records — that does not create a journal.
+            {finished
+              ? 'This month is reconciled.'
+              : 'Match each bank line to BookOne. Add what the bank did that you did not record, and mark late items as waiting.'}
           </p>
         </div>
         <div className="brc-head-actions">
@@ -291,26 +312,15 @@ export function ReconciliationCompare({
               disabled={pending}
               onClick={() => run(() => bulkConfirmStrongMatches(sessionId), 'Confirmed obvious matches')}
             >
-              Match obvious ({board.obviousCount})
+              Confirm sure matches ({board.obviousCount})
             </Button>
           ) : null}
           {finished ? (
-            <Button
-              variant="secondary"
-              type="button"
-              disabled={pending}
-              onClick={() => run(() => reopenReconciliationSession(sessionId), 'Reopened')}
-            >
+            <Button variant="secondary" type="button" disabled={pending} onClick={() => run(() => reopenReconciliationSession(sessionId), 'Reopened')}>
               Reopen
             </Button>
           ) : canFinish ? (
-            <Button
-              variant="primary"
-              type="button"
-              disabled={pending}
-              data-testid="brc-review-finish"
-              onClick={() => setFinishOpen(true)}
-            >
+            <Button variant="primary" type="button" disabled={pending} data-testid="brc-review-finish" onClick={() => setFinishOpen(true)}>
               Review & finish
             </Button>
           ) : null}
@@ -319,60 +329,74 @@ export function ReconciliationCompare({
 
       {error ? <p className="form-error">{error}</p> : null}
 
-      <div className="brc-stats" data-testid="brc-summary">
-        <div>
-          <span>Account</span>
-          <strong>
-            {board.session.bankCode} · {board.session.bankName}
-          </strong>
+      <section className={`brc-balance${balanced ? ' is-ok' : ' is-open'}`} data-testid="brc-summary" aria-label="Balance check">
+        <dl className="brc-balance-terms">
+          <div>
+            <dt>Bank closing</dt>
+            <dd>{review?.bankClosing != null ? money(review.bankClosing) : '—'}</dd>
+          </div>
+          <div>
+            <dt>BookOne balance</dt>
+            <dd>{review?.bookClosing != null ? money(review.bookClosing) : '—'}</dd>
+          </div>
+          <div>
+            <dt>Waiting to clear</dt>
+            <dd>{money(review?.outstandingNet ?? 0)}</dd>
+          </div>
+        </dl>
+        <div className="brc-balance-result">
+          <span className="brc-balance-icon" aria-hidden>
+            {balanced ? <Check size={18} /> : <CircleAlert size={18} />}
+          </span>
+          <div>
+            <span className="brc-balance-label">Left to explain</span>
+            <strong data-testid="brc-difference">{review?.differenceVerified ? money(review.difference) : 'Unverified'}</strong>
+          </div>
         </div>
-        <div>
-          <span>Period</span>
-          <strong>{board.session.periodLabel}</strong>
+        <p className="brc-explain">
+          BookOne balance minus items waiting to clear should equal the bank closing balance.
+          {balanced ? ' They agree.' : ''}
+        </p>
+      </section>
+
+      <div className="brc-toolbar">
+        <div className="brc-tabs" role="tablist" aria-label="Show">
+          {(
+            [
+              ['todo', `To do ${todoCount}`],
+              ['done', `Done ${doneCount}`],
+              ['all', `All ${total}`],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={filter === id} className={filter === id ? 'is-on' : ''} onClick={() => setFilter(id)}>
+              {label}
+            </button>
+          ))}
         </div>
-        <div>
-          <span>Bank closing</span>
-          <strong>{review?.bankClosing != null ? money(review.bankClosing) : '—'}</strong>
-        </div>
-        <div>
-          <span>BookOne closing</span>
-          <strong>{review?.bookClosing != null ? money(review.bookClosing) : '—'}</strong>
-        </div>
-        <div>
-          <span>Explained timing</span>
-          <strong>{money(review?.outstandingNet ?? 0)}</strong>
-        </div>
-        <div>
-          <span>Difference</span>
-          <strong data-testid="brc-difference">
-            {review?.differenceVerified ? money(review.difference) : 'Unverified'}
-          </strong>
+        <div className="brc-progress" aria-label={`${doneCount} of ${total} done`}>
+          <span className="brc-progress-bar" aria-hidden>
+            <i style={{ width: `${pct}%` }} />
+          </span>
+          <span>
+            {doneCount} of {total} done
+          </span>
         </div>
       </div>
-      <p className="brc-explain">
-        Goal: BookOne&apos;s balance {money(review?.bookClosing ?? 0)}, minus items still waiting to clear{' '}
-        {money(review?.outstandingNet ?? 0)}, equals the bank&apos;s closing balance {money(review?.bankClosing ?? 0)}. Left to
-        explain: {review?.differenceVerified ? money(review.difference) : 'not known yet'}.
-      </p>
-      {bankToReview > 0 ? (
-        <p className="muted-line">{bankToReview} bank line{bankToReview === 1 ? '' : 's'} to review</p>
-      ) : null}
 
       <div className="brc-board">
         <section className="brc-pane" data-testid="brc-bank-pane">
           <header>
             <h2>Bank statement</h2>
-            <small>Imported lines for this period</small>
+            <small>{bankShown.length} line{bankShown.length === 1 ? '' : 's'}</small>
           </header>
           <div className="brc-list">
-            {bankRows.length === 0 ? (
-              <p className="brc-empty">Nothing left on this side.</p>
+            {bankShown.length === 0 ? (
+              <p className="brc-empty">{filter === 'todo' ? 'Every bank line is done.' : 'Nothing here.'}</p>
             ) : (
-              bankRows.map((row) => (
+              bankShown.map((row) => (
                 <CompareRow
                   key={`bank-${row.caseId}-${row.bankLineId}`}
                   row={row}
-                  side="bank"
                   selected={Boolean(row.bankLineId && bankSel.includes(row.bankLineId))}
                   pairOn={Boolean(row.pairCaseId && selectedBook.some((b) => b.pairCaseId === row.pairCaseId))}
                   disabled={finished || pending || !row.selectable}
@@ -380,7 +404,7 @@ export function ReconciliationCompare({
                     if (!row.bankLineId || !row.selectable) return;
                     toggle(bankSel, row.bankLineId, setBankSel);
                     setCreateCaseId(row.status === 'bank_only' ? row.caseId : null);
-                    if (row.status === 'bank_only') setSearchOpen(true);
+                    if (row.status !== 'bank_only') setSearchOpen(false);
                   }}
                 />
               ))
@@ -390,17 +414,16 @@ export function ReconciliationCompare({
         <section className="brc-pane" data-testid="brc-book-pane">
           <header>
             <h2>BookOne records</h2>
-            <small>Entries already in the books</small>
+            <small>{bookShown.length} entr{bookShown.length === 1 ? 'y' : 'ies'}</small>
           </header>
           <div className="brc-list">
-            {bookRows.length === 0 ? (
-              <p className="brc-empty">Nothing left on this side.</p>
+            {bookShown.length === 0 ? (
+              <p className="brc-empty">{filter === 'todo' ? 'Every BookOne entry is done.' : 'Nothing here.'}</p>
             ) : (
-              bookRows.map((row) => (
+              bookShown.map((row) => (
                 <CompareRow
                   key={`book-${row.caseId}-${row.transactionId}`}
                   row={row}
-                  side="book"
                   selected={Boolean(row.transactionId && bookSel.includes(row.transactionId))}
                   pairOn={Boolean(row.pairCaseId && selectedBank.some((b) => b.pairCaseId === row.pairCaseId))}
                   disabled={finished || pending || !row.selectable}
@@ -412,118 +435,145 @@ export function ReconciliationCompare({
         </section>
       </div>
 
-      {!finished ? (
-        <div className="brc-bar">
-          <div className="brc-bar-sums">
-            {selectedBank.length > 0 ? <span>Bank {money(bankSum)}</span> : null}
-            {selectedBook.length > 0 ? <span>BookOne {money(bookSum)}</span> : null}
-            {uniquePair ? (
-              <span>Matching links two existing records. No journal is created.</span>
-            ) : canMatch && !amountsOk ? (
-              <span className="brc-warn">Amounts don’t match — pick different lines, or several that add up.</span>
-            ) : null}
+      {finished ? (
+        <footer className="brc-dock is-done">
+          <p className="brc-dock-text">
+            <strong>Reconciled.</strong> Reopen only if you need to change a match.
+          </p>
+          <div className="brc-dock-actions">
+            <Link className="button secondary" href={classicHref.replace('?view=classic', '/report')}>
+              Report
+            </Link>
           </div>
-          <div className="brc-bar-actions">
-            <Button
-              variant="primary"
-              type="button"
-              data-testid="brc-confirm-match"
-              disabled={pending || !canMatch || !amountsOk}
-              onClick={confirmMatch}
-            >
-              Confirm match
-            </Button>
-            <Button
-              variant="secondary"
-              type="button"
-              disabled={pending || selectedBook.length !== 1 || selectedBook[0]?.status === 'possible_match'}
-              onClick={waiting}
-            >
-              Waiting to clear
-            </Button>
+        </footer>
+      ) : (
+        <footer className="brc-dock" aria-live="polite">
+          <div className="brc-dock-text">
+            {canMatch ? (
+              <>
+                <strong>
+                  Bank {money(bankSum)} and BookOne {money(bookSum)}
+                </strong>
+                <span className={amountsOk ? '' : 'brc-warn'}>
+                  {uniquePair
+                    ? hint || 'These look like the same payment.'
+                    : amountsOk
+                      ? 'The amounts agree. Confirm to link them; nothing new is recorded.'
+                      : 'The amounts do not agree. Pick other lines, or several that add up.'}
+                </span>
+              </>
+            ) : createRow ? (
+              <>
+                <strong>
+                  {day(createRow.date)} · {createRow.description} · {money(createRow.amount)}
+                </strong>
+                <span>Not in BookOne yet. Check it is not recorded differently, then add it with the right category.</span>
+              </>
+            ) : selectedBook.length === 1 ? (
+              <>
+                <strong>
+                  {day(selectedBook[0]!.date)} · {selectedBook[0]!.description} · {money(selectedBook[0]!.amount)}
+                </strong>
+                <span>On your books but not on this statement. If the bank will show it next month, mark it waiting to clear.</span>
+              </>
+            ) : selectedBank.length > 0 || selectedBook.length > 0 ? (
+              <span>Pick a line on the other side with the same amount to match them.</span>
+            ) : todoCount === 0 ? (
+              <strong>Everything is done. Review and finish the month.</strong>
+            ) : (
+              <span>Pick a line to see what to do with it.</span>
+            )}
+          </div>
+          <div className="brc-dock-actions">
             {createRow ? (
               <>
-                <Button
-                  variant="secondary"
-                  type="button"
-                  disabled={pending}
-                  onClick={doSearch}
-                >
+                <Button variant="secondary" type="button" disabled={pending} onClick={doSearch}>
                   Search BookOne
                 </Button>
-                <SelectField
-                  id="brc-create-cat"
-                  label="Category"
-                  value={cat}
-                  onChange={setCat}
-                  options={catOptions(postingList)}
-                  searchable={postingList.length >= 8}
-                  emptyReason="No eligible posting account on this company chart."
-                />
-                <Button
-                  variant="secondary"
-                  type="button"
-                  disabled={pending || !cat}
-                  onClick={() => setCreateOpen(true)}
-                >
+                <div className="brc-dock-cat">
+                  <SelectField
+                    id="brc-create-cat"
+                    label="Category"
+                    value={cat}
+                    onChange={setCat}
+                    options={catOptions(postingList)}
+                    searchable={postingList.length >= 8}
+                    emptyReason="No eligible posting account on this company chart."
+                  />
+                </div>
+                <Button variant="primary" type="button" disabled={pending || !cat} onClick={() => setCreateOpen(true)}>
                   Create in BookOne
                 </Button>
               </>
             ) : (
-              <span className="muted-line">Select a bank-only line to search BookOne first.</span>
+              <>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  disabled={pending || selectedBook.length !== 1 || selectedBank.length > 0 || selectedBook[0]?.status === 'possible_match'}
+                  onClick={waiting}
+                >
+                  Waiting to clear
+                </Button>
+                <Button variant="primary" type="button" data-testid="brc-confirm-match" disabled={pending || !canMatch || !amountsOk} onClick={confirmMatch}>
+                  Confirm match
+                </Button>
+              </>
             )}
+            {selectedBank.length + selectedBook.length > 0 ? (
+              <Button variant="ghost" type="button" disabled={pending} onClick={clearSelection}>
+                Clear
+              </Button>
+            ) : null}
           </div>
-        </div>
-      ) : (
-        <p className="muted-line" style={{ padding: '8px 4px' }}>
-          This month is finished. Reopen if you need to change a match.
-        </p>
+          {searchOpen && createRow ? (
+            <div className="brc-search" data-testid="brc-search">
+              <div className="brc-search-bar">
+                <TextField
+                  id="brc-search-q"
+                  label="Search BookOne"
+                  value={searchQ}
+                  onChange={(e) => setSearchQ(e.target.value)}
+                  placeholder="Amount, date or description"
+                />
+                <Button variant="secondary" type="button" disabled={pending} onClick={doSearch}>
+                  Search
+                </Button>
+              </div>
+              <ul>
+                {searchHits.length === 0 ? (
+                  <li className="muted-line">Nothing similar in BookOne. Add it with the button above.</li>
+                ) : (
+                  searchHits.map((hit) => (
+                    <li key={hit.id}>
+                      <button
+                        type="button"
+                        className={`brc-search-hit${bookSel.includes(hit.id) ? ' is-on' : ''}`}
+                        onClick={() => {
+                          if (!hit.id) return;
+                          setBookSel([hit.id]);
+                          setCreateCaseId(null);
+                        }}
+                      >
+                        <span>{day(hit.date)}</span>
+                        <strong>{hit.description}</strong>
+                        <span className="brc-row-amt">{money(hit.amountSigned)}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          ) : null}
+        </footer>
       )}
 
-      {searchOpen ? (
-        <div className="brc-search" data-testid="brc-search">
-          <TextField
-            id="brc-search-q"
-            label="Search BookOne"
-            value={searchQ}
-            onChange={(e) => setSearchQ(e.target.value)}
-            placeholder="Amount, date, reference or description"
-          />
-          <Button variant="secondary" type="button" disabled={pending} onClick={doSearch}>
-            Search
-          </Button>
-          <ul>
-            {searchHits.length === 0 ? (
-              <li className="muted-line">No BookOne rows yet. Create the bank line if it is missing.</li>
-            ) : (
-              searchHits.map((hit) => (
-                <li key={hit.id}>
-                  <button
-                    type="button"
-                    className="brc-search-hit"
-                    onClick={() => {
-                      if (!hit.id) return;
-                      setBookSel([hit.id]);
-                    }}
-                  >
-                    <span>{day(hit.date)}</span>
-                    <strong>{hit.description}</strong>
-                    <span className="brc-row-amt">{money(hit.amountSigned)}</span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      ) : null}
-
       {review?.finishBlockers && review.finishBlockers.length > 0 && !finished ? (
-        <p className="muted-line">Before finish: {review.finishBlockers.join(' · ')}</p>
+        <p className="brc-blockers">Before you can finish: {review.finishBlockers.join(' · ')}</p>
       ) : null}
 
       <p className="brc-classic">
-        <Link href={classicHref}>Classic workbench</Link>
-        {pending ? ' · Working…' : ''}
+        <Link href={classicHref}>Detailed view</Link>
       </p>
 
       <ConfirmDialog
@@ -554,25 +604,34 @@ export function ReconciliationCompare({
         }}
       >
         <div className="brc-finish-review" data-testid="brc-finish-review">
-          <p>
-            {board.session.bankCode} · {board.session.bankName}
-            <br />
-            {board.session.periodLabel}
+          <p className="brc-finish-title">
+            {board.session.bankCode} · {board.session.bankName} · {board.session.periodLabel}
           </p>
-          <ul>
-            <li>Bank closing {money(review?.bankClosing ?? 0)}</li>
-            <li>BookOne closing {money(review?.bookClosing ?? 0)}</li>
-            <li>Waiting to clear {money(review?.outstandingNet ?? 0)}</li>
-            <li>
-              Difference {review?.differenceVerified ? money(review.difference) : 'Unverified'}
-            </li>
-            <li>Matched {review?.matched ?? 0}</li>
-            <li>Added {review?.added ?? 0}</li>
-          </ul>
+          <dl className="brc-finish-sum">
+            <div>
+              <dt>Bank closing</dt>
+              <dd>{money(review?.bankClosing ?? 0)}</dd>
+            </div>
+            <div>
+              <dt>BookOne closing</dt>
+              <dd>{money(review?.bookClosing ?? 0)}</dd>
+            </div>
+            <div>
+              <dt>Waiting to clear</dt>
+              <dd>{money(review?.outstandingNet ?? 0)}</dd>
+            </div>
+            <div className="is-total">
+              <dt>Difference</dt>
+              <dd>{review?.differenceVerified ? money(review.difference) : 'Unverified'}</dd>
+            </div>
+          </dl>
+          <p className="brc-finish-counts">
+            Matched {review?.matched ?? 0} · Added {review?.added ?? 0}
+          </p>
           {review?.finishBlockers && review.finishBlockers.length > 0 ? (
             <p className="form-error">{review.finishBlockers.join(' · ')}</p>
           ) : (
-            <p>Difference is explained. Finishing does not lock the accounting period.</p>
+            <p className="field-help">Difference is explained. Finishing does not lock the accounting period.</p>
           )}
         </div>
       </ConfirmDialog>
@@ -582,14 +641,12 @@ export function ReconciliationCompare({
 
 function CompareRow({
   row,
-  side,
   selected,
   pairOn,
   disabled,
   onToggle,
 }: {
   row: CompareSideRow;
-  side: 'bank' | 'book';
   selected: boolean;
   pairOn: boolean;
   disabled: boolean;
@@ -598,21 +655,16 @@ function CompareRow({
   return (
     <button
       type="button"
-      className={`brc-row${selected ? ' is-on' : ''}${row.status === 'possible_match' ? ' is-hint' : ''}${pairOn ? ' is-pair' : ''}${!row.selectable ? ' is-done' : ''}`}
+      className={`brc-row${selected ? ' is-on' : ''}${pairOn ? ' is-pair' : ''}${!row.selectable ? ' is-done' : ''}`}
       disabled={disabled}
+      aria-pressed={selected}
+      title={row.hint ?? undefined}
       onClick={onToggle}
     >
       <span className="brc-row-date">{day(row.date)}</span>
-      <span className="brc-row-body">
-        <strong>{row.description}</strong>
-        <small>
-          <span className={`brc-badge brc-badge-${row.status}`}>{statusLabel(row.status)}</span>
-          {row.reference ? <span className="brc-ref">{row.reference}</span> : null}
-          {row.hint ? ` · ${row.hint}` : ''}
-        </small>
-      </span>
+      <span className="brc-row-desc">{row.description}</span>
+      <span className={`brc-badge brc-badge-${row.status}`}>{statusLabel(row.status)}</span>
       <span className={`brc-row-amt${row.amount < 0 ? ' is-out' : ' is-in'}`}>{money(row.amount)}</span>
-      <span className="brc-row-side">{side === 'bank' ? 'Bank' : 'BookOne'}</span>
     </button>
   );
 }

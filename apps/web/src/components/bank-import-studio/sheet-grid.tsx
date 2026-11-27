@@ -17,7 +17,7 @@ export type SheetHighlight = {
   onColClick?: (col: number) => void;
 };
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 25;
 
 /**
  * Excel-like sheet with numeric column headers (Col 1…) matching step copy,

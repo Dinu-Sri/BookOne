@@ -1,3 +1,7 @@
+## 2026-11-27 — Bank reconciliation: November finished end to end; report in plain words (v2.25.4)
+
+November was matched, finished and reported on staging at 0 (the manual cheque match works on v2.25.3). The dock hides idle buttons when nothing is left, and the reconciliation report uses the same plain words as the workspace. See [CHG-20261127-bank-recon-ui-redesign](changes/CHG-20261127-bank-recon-ui-redesign.md).
+
 ## 2026-11-27 — Bank reconciliation: match a bank line by hand; cheque numbers kept (v2.25.3)
 
 Picking a Bank-only line and a BookOne entry now shows Confirm match (it showed Create). Detailed view search finds entries waiting in a BookOne-only row, and waiting items carried from an earlier month can be matched by hand in both views. Imported statements keep the cheque or reference number. Import wording and one-step card fixes. November reached Left to explain 0 on staging; one cheque pair is left until deploy. See [CHG-20261127-bank-recon-ui-redesign](changes/CHG-20261127-bank-recon-ui-redesign.md).

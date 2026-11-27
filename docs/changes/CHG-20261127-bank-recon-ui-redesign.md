@@ -1,6 +1,6 @@
 # CHG-20261127-bank-recon-ui-redesign: bank reconciliation screens redesigned (v2.25.0)
 
-Status: ready-for-QA after the v2.25.3 staging review (cheque pair and finish pending deploy).
+Status: ready-for-QA; October and November reconciled end to end on staging (v2.25.3), polish in v2.25.4.
 
 - Author/agent and date: coding agent, 2026-11-27
 - Product version and base: 2.25.0, pushed directly to `master` (owner-approved), based on `f6924fd` / v2.24.1
@@ -169,3 +169,38 @@ November was worked in the redesigned workspace after a fresh re-import. Results
 Tests: typecheck passes; auth has 246 passing (+5 skipped).
 
 To do after deploy: match cheque 001003 in the workspace, then Review & finish, and check the report and the home "What's next" card.
+
+## November finished on v2.25.3, polish in v2.25.4
+
+CI on `3b523f6` passed ("Docker web image" including CoreGuard, and "Production Check").
+
+On staging (v2.25.3), November was finished end to end:
+- **Manual match.** I picked bank "CHEQUE 001003" and BookOne "Office rent November cheque 001003". The dock showed **Confirm match**, and the match was confirmed.
+- **Workspace after the match.** It showed 17 of 17 done and Left to explain **LKR 0.00**.
+- **Review & finish.** The dialog read:
+  - Bank closing 76,792.50;
+  - BookOne closing 68,792.50;
+  - Waiting to clear −8,000.00;
+  - Difference 0.00.
+
+  Finish reconciliation worked: the status became Reconciled, the All tab opened by default, and the Report and Reopen buttons were offered.
+- **Report.** Opening 164,422.50, closing 76,792.50, BookOne 68,792.50, waiting −8,000.00, difference 0.00. 9 bank lines: 7 matched, 2 added, 1 waiting, 0 still to do.
+- **Home.** October and November both show Reconciled at Rs. 0.00. The "What's next" card reads "Commercial Bank is reconciled to 30 November 2026. Next: the December 2026 statement…" with **Import December**.
+
+Polish in v2.25.4:
+- When nothing is left and nothing is selected, the dock shows only "Everything is done. Review and finish the month.". It no longer shows the disabled Waiting to clear and Confirm match buttons.
+- The report uses the workspace's words:
+  - Back to reconciliation;
+  - Bank opening/closing balance;
+  - Waiting to clear;
+  - Left to explain;
+  - Bank lines;
+  - Matched to BookOne;
+  - Left out (duplicates);
+  - Still to do.
+
+  No test relies on the old labels. The Detailed view's own wording is unchanged.
+
+Noted, not changed:
+- Home progress counts reconciliation items ("10 of 10"), while the workspace counts rows on both sides ("17 of 17"). Both are correct but use different units.
+- In the finished view, the BookOne list does not show the two entries created from bank lines; they are shown on the bank side as Matched.

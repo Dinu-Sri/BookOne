@@ -53,7 +53,7 @@ export function ReconciliationReportView({
   return (
     <div className="brp-root">
       <div className="brp-toolbar no-print">
-        <a href={backHref}>← Back to workbench</a>
+        <a href={backHref}>← Back to reconciliation</a>
         <button type="button" id="brp-print-btn">
           Print / Save PDF
         </button>
@@ -88,11 +88,11 @@ export function ReconciliationReportView({
           <table className="brp-table">
             <tbody>
               <tr>
-                <td>Statement opening</td>
+                <td>Bank opening balance</td>
                 <td className="num">{formatRs(data.statementOpening)}</td>
               </tr>
               <tr>
-                <td>Statement closing</td>
+                <td>Bank closing balance</td>
                 <td className="num">{formatRs(data.statementClosing)}</td>
               </tr>
               <tr>
@@ -100,11 +100,11 @@ export function ReconciliationReportView({
                 <td className="num">{formatRs(data.bookClosing)}</td>
               </tr>
               <tr>
-                <td>Outstanding / timing</td>
+                <td>Waiting to clear</td>
                 <td className="num">{formatRs(data.outstandingNet)}</td>
               </tr>
               <tr className="strong">
-                <td>Difference left</td>
+                <td>Left to explain</td>
                 <td className="num">{formatRs(data.difference)}</td>
               </tr>
             </tbody>
@@ -116,11 +116,11 @@ export function ReconciliationReportView({
           <table className="brp-table">
             <tbody>
               <tr>
-                <td>Bank transactions (session)</td>
+                <td>Bank lines</td>
                 <td className="num">{data.review.bankLines}</td>
               </tr>
               <tr>
-                <td>Matched existing</td>
+                <td>Matched to BookOne</td>
                 <td className="num">{data.review.matched}</td>
               </tr>
               <tr>
@@ -136,11 +136,11 @@ export function ReconciliationReportView({
                 <td className="num">{data.review.waiting}</td>
               </tr>
               <tr>
-                <td>Duplicates / excluded</td>
+                <td>Left out (duplicates)</td>
                 <td className="num">{data.review.duplicates}</td>
               </tr>
               <tr>
-                <td>Still needs attention</td>
+                <td>Still to do</td>
                 <td className="num">{data.review.needsAttention}</td>
               </tr>
             </tbody>
@@ -158,7 +158,7 @@ export function ReconciliationReportView({
           </section>
         ) : null}
 
-        <ReportBlock title="Matched existing" rows={matched} />
+        <ReportBlock title="Matched to BookOne" rows={matched} />
         <ReportBlock title="Added to BookOne" rows={added} />
         <ReportBlock title="Transfers" rows={transfers} />
         <ReportBlock title="Waiting to clear" rows={waiting} />

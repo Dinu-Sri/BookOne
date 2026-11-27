@@ -513,7 +513,7 @@ export function ReconciliationCompare({
                   Create in BookOne
                 </Button>
               </>
-            ) : (
+            ) : todoCount === 0 && selectedBank.length + selectedBook.length === 0 ? null : (
               <>
                 <Button
                   variant="secondary"

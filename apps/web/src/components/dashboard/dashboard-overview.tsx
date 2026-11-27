@@ -5,6 +5,7 @@ import type { BusinessOverview, HeadlineMetric, Widget } from '@/app/actions/das
 import { DashboardAttention } from '@/components/dashboard/dashboard-attention';
 import { DashboardChartPanel } from '@/components/dashboard/dashboard-chart-panel';
 import { DashboardControls } from '@/components/dashboard/dashboard-controls';
+import { HBarChart, compactMoney } from '@/components/charts/simple-charts';
 
 const BUCKET_LABEL: Record<AgingBucket, string> = {
   current: 'Current',
@@ -106,7 +107,7 @@ function AgingStrip({
                 const amount = widget.data!.amounts[bucket];
                 const max = Math.max(widget.data!.grandTotal, 0.01);
                 return (
-                  <li key={bucket} title={`${BUCKET_LABEL[bucket]} ${amount.toFixed(2)}`}>
+                  <li key={bucket} className={`is-${bucket}`} title={`${BUCKET_LABEL[bucket]} ${amount.toFixed(2)}`}>
                     <i style={{ height: `${Math.min(100, (Math.abs(amount) / max) * 100)}%` }} />
                     <span>{BUCKET_LABEL[bucket]}</span>
                   </li>
@@ -184,7 +185,7 @@ export function DashboardOverview({ overview }: { overview: BusinessOverview }) 
         </section>
       </div>
 
-      <div className="grid two dash-charts">
+      <div className="grid dash-charts dash-charts-3">
         <WidgetState widget={overview.sales} label="sales trend">
           {overview.sales.data ? (
             <DashboardChartPanel
@@ -209,6 +210,38 @@ export function DashboardOverview({ overview }: { overview: BusinessOverview }) 
             />
           ) : null}
         </WidgetState>
+        <section className="card dash-chart-card dash-expenses" aria-labelledby="dash-expenses-title">
+          <div className="card-header dash-chart-head">
+            <h2 className="card-title" id="dash-expenses-title">
+              Where the money went
+            </h2>
+            <Link href="/reports?report=pnl" className="button secondary">
+              Profit or loss
+            </Link>
+          </div>
+          <div className="card-body">
+            <WidgetState widget={overview.expenses} label="expenses">
+              {overview.expenses.data && overview.expenses.data.items.length ? (
+                <>
+                  <HBarChart
+                    title="Biggest costs this period"
+                    bars={overview.expenses.data.items.slice(0, 6).map((e, i) => ({
+                      label: e.name,
+                      value: e.amount,
+                      tone: i === 0 ? 'danger' : 'brand',
+                    }))}
+                  />
+                  <p className="dash-expense-total">
+                    Total costs {compactMoney(overview.expenses.data.total)} {overview.currency}
+                    {overview.expenses.data.items.length > 6 ? ` · top 6 of ${overview.expenses.data.items.length}` : ''}
+                  </p>
+                </>
+              ) : (
+                <p className="dash-empty">No activity in selected period.</p>
+              )}
+            </WidgetState>
+          </div>
+        </section>
       </div>
 
       <section className="dash-summary" aria-label="Balances and exceptions">

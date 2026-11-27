@@ -118,7 +118,7 @@ export function dashboardDb01Html(opts?: { longLabel?: boolean; collapsedSidebar
       const amount = aging.amounts[bucket];
       const max = Math.max(aging.grandTotal, 0.01);
       const h = Math.min(100, (Math.abs(amount) / max) * 100);
-      return `<li title="${bucketLabel[bucket]} ${amount.toFixed(2)}"><i style="height:${h}%"></i><span>${bucketLabel[bucket]}</span></li>`;
+      return `<li class="is-${bucket}" title="${bucketLabel[bucket]} ${amount.toFixed(2)}"><i style="height:${h}%"></i><span>${bucketLabel[bucket]}</span></li>`;
     }).join('');
 
   const inner = `
@@ -156,7 +156,7 @@ export function dashboardDb01Html(opts?: { longLabel?: boolean; collapsedSidebar
           </div>
         </section>
       </div>
-      <div class="grid two dash-charts">
+      <div class="grid dash-charts dash-charts-3">
         <section class="card dash-chart-card">
           <div class="card-header dash-chart-head"><h2 class="card-title">Sales trend</h2><button type="button" class="button secondary" id="sales-view-data">View data</button></div>
           <div class="card-body">
@@ -180,6 +180,18 @@ export function dashboardDb01Html(opts?: { longLabel?: boolean; collapsedSidebar
             <table class="dash-chart-table" id="cash-table"><caption>Cash received and paid</caption><tbody>${cashRows}</tbody></table>
             <p id="funding">Funding in ${snapshot.externalCash.fundingIn} · internal transfers ${snapshot.externalCash.transferIn} excluded</p>
           </dialog>
+        </section>
+        <section class="card dash-chart-card dash-expenses" aria-labelledby="dash-expenses-title">
+          <div class="card-header dash-chart-head"><h2 class="card-title" id="dash-expenses-title">Where the money went</h2><a class="button secondary" href="/reports?report=pnl">Profit or loss</a></div>
+          <div class="card-body">
+            <div class="ch-hbars" role="img" aria-label="Biggest costs this period">
+              <div class="ch-hbar"><span class="ch-hbar-label">Rent Expense</span><span class="ch-hbar-track"><span class="ch-hbar-fill" style="width:100%;background:var(--danger)"></span></span><span class="ch-hbar-value">60K</span></div>
+              <div class="ch-hbar"><span class="ch-hbar-label">Salaries Expense</span><span class="ch-hbar-track"><span class="ch-hbar-fill" style="width:70%;background:var(--brand)"></span></span><span class="ch-hbar-value">42K</span></div>
+              <div class="ch-hbar"><span class="ch-hbar-label">Utilities Expense</span><span class="ch-hbar-track"><span class="ch-hbar-fill" style="width:20%;background:var(--brand)"></span></span><span class="ch-hbar-value">12K</span></div>
+              <div class="ch-hbar"><span class="ch-hbar-label">Bank Charges</span><span class="ch-hbar-track"><span class="ch-hbar-fill" style="width:3%;background:var(--brand)"></span></span><span class="ch-hbar-value">2K</span></div>
+            </div>
+            <p class="dash-expense-total">Total costs 116K LKR</p>
+          </div>
         </section>
       </div>
       <section class="dash-summary" aria-label="Balances and exceptions">
@@ -244,9 +256,10 @@ export function dashboardDb02EmptyHtml() {
           </div>
         </section>
       </div>
-      <div class="grid two dash-charts">
+      <div class="grid dash-charts dash-charts-3">
         <section class="card dash-chart-card"><div class="card-header dash-chart-head"><h2 class="card-title">Sales trend</h2></div><div class="card-body"><p class="dash-empty">No activity in selected period.</p></div></section>
         <section class="card dash-chart-card"><div class="card-header dash-chart-head"><h2 class="card-title">Cash received and paid</h2></div><div class="card-body"><p class="dash-empty">No activity in selected period.</p></div></section>
+        <section class="card dash-chart-card dash-expenses"><div class="card-header dash-chart-head"><h2 class="card-title">Where the money went</h2></div><div class="card-body"><p class="dash-empty">No activity in selected period.</p></div></section>
       </div>
       <section class="dash-summary">
         <p class="dash-all-clear">All clear — no flagged items.</p>

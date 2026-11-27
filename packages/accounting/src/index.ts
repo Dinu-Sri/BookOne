@@ -349,3 +349,4 @@ export {
   resolveReturnFocus,
 } from './focus-trap';
 
+export * from './professional-statements';

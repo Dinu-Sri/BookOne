@@ -1,3 +1,7 @@
+## 2026-11-27 — Reports: professional statements with print/PDF and Excel; Dashboard charts (v2.28.0)
+
+Four statements in the SLFRS for SMEs presentation with comparatives, checks and account notes; calm Reports screen with pictures; A4 print/PDF pack with basis of preparation and signatures; Excel export. Dashboard: sentence case, tone accents, Where the money went chart, coloured aging; still no page scroll. See [CHG-20261127-reports-statements-dashboard](changes/CHG-20261127-reports-statements-dashboard.md).
+
 ## 2026-11-27 — Commerce review fixes: linked products card, phone order cards, plain switches (v2.27.1)
 
 Staging review of the Commerce redesign on the live store. See [CHG-20261127-commerce-calm-redesign](changes/CHG-20261127-commerce-calm-redesign.md).

@@ -11425,3 +11425,9 @@ a.bih-card:hover {
   .rin-table .td-actions .button { width: 100%; justify-content: center; }
   .rin-head .button { width: 100%; justify-content: center; }
 }
+/* One-question import steps: lay out in a row so the 640px basis is a width, and hug the content */
+.bis-page .bis-workspace.single { flex-direction: row !important; height: 100% !important; min-height: 0 !important; overflow: auto !important; }
+.bis-page .bis-workspace.single .bis-pane-step { flex: 0 1 auto !important; height: auto !important; }
+.bis-page .bis-map-table td:last-child, .bis-page .bis-map-table th:last-child { white-space: nowrap; width: 1%; }
+.bis-page .bis-map-table td:nth-child(2) { word-break: normal; }
+.bis-done-links .bis-link { padding: 0; border: 0; background: none; font: inherit; line-height: inherit; cursor: pointer; }

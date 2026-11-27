@@ -1,6 +1,6 @@
 # CHG-20261127-bank-recon-ui-redesign: bank reconciliation screens redesigned (v2.25.0)
 
-Status: ready-for-QA after the v2.25.2 staging review.
+Status: ready-for-QA after the v2.25.3 staging review (cheque pair and finish pending deploy).
 
 - Author/agent and date: coding agent, 2026-11-27
 - Product version and base: 2.25.0, pushed directly to `master` (owner-approved), based on `f6924fd` / v2.24.1
@@ -142,3 +142,30 @@ Tests: `packages/statement-import/test/match-carry.test.ts` (4):
 - the default 2-day window is unchanged.
 
 Totals: statement-import 48, auth 246 (+5 skipped), typecheck passing.
+
+## Staging run of November on v2.25.2 and fixes in v2.25.3
+
+November was worked in the redesigned workspace after a fresh re-import. Results:
+
+- The carried October items were suggested with the reason "This was waiting to clear last month and has now reached the bank."
+- Six suggested matches were confirmed.
+- Cheque 001004 (26 Nov) was marked waiting to clear.
+- Service charges 350 and SMS 50 were created; both had **6600 · Bank Charges** suggested.
+- Left to explain reached **LKR 0.00**:
+  - BookOne 68,792.50;
+  - waiting −8,000.00;
+  - bank 76,792.50.
+- One pair was still open: bank "CHEQUE 001003" (5 Nov) against BookOne "Office rent November cheque 001003" (3 Nov). It is blocked by finding 1 below, so it is not finished until v2.25.3 is live.
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **A Bank-only line could not be matched by hand.** After a bank line and a BookOne entry were picked, the dock said "The amounts agree…" but showed Create/Search instead of **Confirm match** (picking from Search BookOne only selected the entry). | The create actions apply only while no BookOne entry is selected (`createRow` is null when `selectedBook.length > 0`), so the pair shows Confirm match. |
+| 2 | Detailed view → Find returned nothing for that cheque. Its search hid every entry in any open case, including the open BookOne-only row the entry was waiting in. | `searchGroupBookCandidates` keeps entries whose only case is an unconfirmed `outstanding_book`, hides entries settled in other months, and includes waiting items carried from an earlier month. `confirmGroupMatch` loads the same set and closes the BookOne-only row the entry leaves. |
+| 3 | A waiting item carried from an earlier month (outside the ±7-day window) could not be matched by hand in either view. | `matchBankToBook` and `confirmGroupMatch` load `priorBookStates().waiting`; an entry already matched in another month is refused. |
+| 4 | The bank reference (cheque number) was not saved on import (`external_ref` null on staging), so the v2.25.2 reference credit never applied to imported files. | Both statement-line inserts in `bank-import-studio.ts` save `externalRef` (≤100 characters). |
+| 5 | Import wording: the totals warning box listed the left-out balance row again. | "Ready to save. Nothing is in your books yet."; the warnings box is titled "Worth a look (you can still save)" and leaves out `excluded_summary`. |
+| 6 | One-question import steps: the card stretched to the full height (column flex), and the column check wrapped its action column. | `.bis-workspace.single` is a row flex with an auto-height card; the action column does not wrap. The "Import another file" link-button aligns with the other links. |
+
+Tests: typecheck passes; auth has 246 passing (+5 skipped).
+
+To do after deploy: match cheque 001003 in the workspace, then Review & finish, and check the report and the home "What's next" card.

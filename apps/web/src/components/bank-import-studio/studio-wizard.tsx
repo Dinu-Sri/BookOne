@@ -1596,20 +1596,21 @@ export function BankImportStudioWizard({
           ) : (
             <div className="bis-status-ok">
               <CheckCircle2 size={16} />
-              Looks good · cashbook not changed yet
+              Ready to save. Nothing is in your books yet.
             </div>
           )}
 
           {(preview.hardeningWarnings?.length ?? 0) > 0 ||
-          t.issues.some((i) => i.severity === 'warning') ? (
+          t.issues.some((i) => i.severity === 'warning' && i.type !== 'excluded_summary') ? (
             <div className="bis-harden-warn">
-              <p className="bis-money-label">Checks (not blocking)</p>
+              <p className="bis-money-label">Worth a look (you can still save)</p>
               <ul>
                 {(preview.hardeningWarnings ?? []).slice(0, 4).map((w) => (
                   <li key={w}>{w}</li>
                 ))}
                 {t.issues
-                  .filter((i) => i.severity === 'warning')
+                  // Balance/summary rows left out are already said in the row counts.
+                  .filter((i) => i.severity === 'warning' && i.type !== 'excluded_summary')
                   .slice(0, 3)
                   .map((i) => (
                     <li key={i.type}>

@@ -156,11 +156,16 @@ export function ReconciliationCompare({
   const canFinish = Boolean(board?.review.canFinish) && !finished;
   const review = board?.review;
 
-  const createRow = createCaseId
-    ? openBank.find((r) => r.caseId === createCaseId)
-    : selectedBank.length === 1 && selectedBank[0]?.status === 'bank_only'
-      ? selectedBank[0]
-      : null;
+  // Adding to BookOne only applies to a single bank line on its own. Once a BookOne entry is
+  // also picked, the user is matching the two instead.
+  const createRow =
+    selectedBook.length > 0
+      ? null
+      : createCaseId
+        ? openBank.find((r) => r.caseId === createCaseId)
+        : selectedBank.length === 1 && selectedBank[0]?.status === 'bank_only'
+          ? selectedBank[0]
+          : null;
   const createIn = (createRow?.amount ?? 0) > 0;
   const postingList = createIn ? (board?.posting?.income ?? []) : (board?.posting?.expenses ?? []);
   const selectedCat = postingList.find((a) => a.code === cat);

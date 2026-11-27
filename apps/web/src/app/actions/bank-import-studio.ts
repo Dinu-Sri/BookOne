@@ -819,6 +819,8 @@ export async function commitStudioImport(formData: FormData): Promise<
             rowNumber: String(line.rowNumber),
             transactionDate: line.date,
             description: line.description,
+            // The bank's reference (cheque number, transfer id) — used to match cheques to BookOne.
+            externalRef: line.externalRef ? String(line.externalRef).slice(0, 100) : null,
             amount: line.signedAmount.toFixed(2),
             status: 'imported',
             raw: line.raw,
@@ -843,6 +845,8 @@ export async function commitStudioImport(formData: FormData): Promise<
             rowNumber: String(line.rowNumber),
             transactionDate: line.date,
             description: line.description,
+            // The bank's reference (cheque number, transfer id) — used to match cheques to BookOne.
+            externalRef: line.externalRef ? String(line.externalRef).slice(0, 100) : null,
             amount: line.signedAmount.toFixed(2),
             status: 'duplicate',
             raw: line.raw,

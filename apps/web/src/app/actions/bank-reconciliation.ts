@@ -2967,18 +2967,23 @@ export async function searchGroupBookCandidates(input: {
         .limit(1);
       if (!bankJoin) throw new Error('No bank line on case.');
 
+      const prior = await priorBookStates(user.tenantId, session.bankAccountId, c.sessionId);
       const books = await loadBookCandidates(
         user.tenantId,
         session.bankAccountId,
         session.periodFrom,
         session.periodTo,
         session.bookDomain,
+        [...prior.waiting],
       );
 
-      // Exclude books already locked to confirmed cases in this session
+      // Exclude books already taken in this session. A BookOne-only row that is still open stays
+      // searchable: that entry is exactly what a bank line cleared a few days later should find.
       const used = await db()
         .select({
           transactionId: bankReconciliationCaseBookTransactions.transactionId,
+          caseType: bankReconciliationCases.caseType,
+          state: bankReconciliationCases.state,
         })
         .from(bankReconciliationCaseBookTransactions)
         .innerJoin(
@@ -2993,7 +2998,12 @@ export async function searchGroupBookCandidates(input: {
             inArray(bankReconciliationCases.state, ['confirmed', 'suggested', 'needs_review']),
           ),
         );
-      const usedSet = new Set(used.map((u) => u.transactionId));
+      const usedSet = new Set(
+        used
+          .filter((u) => !(u.caseType === 'outstanding_book' && u.state !== 'confirmed'))
+          .map((u) => u.transactionId),
+      );
+      for (const id of prior.settled) usedSet.add(id);
 
       let candidates = books
         .filter((b) => !usedSet.has(b.id))
@@ -3097,14 +3107,16 @@ export async function confirmGroupMatch(input: {
         .limit(1);
       if (!bankJoin) throw new Error('No bank line.');
 
+      const prior = await priorBookStates(user.tenantId, session.bankAccountId, c.sessionId);
       const books = await loadBookCandidates(
         user.tenantId,
         session.bankAccountId,
         session.periodFrom,
         session.periodTo,
         session.bookDomain,
+        [...prior.waiting],
       );
-      const byId = new Map(books.map((b) => [b.id, b]));
+      const byId = new Map(books.filter((b) => !prior.settled.has(b.id)).map((b) => [b.id, b]));
       let sum = 0;
       const selected: typeof books = [];
       for (const tid of ids) {
@@ -3130,6 +3142,12 @@ export async function confirmGroupMatch(input: {
             isNull(bankReconciliationCaseBookTransactions.voidedAt),
           ),
         );
+      // The entries leave any open BookOne-only row they were waiting in.
+      await voidOpenCasesOwning({
+        tenantId: user.tenantId,
+        sessionId: c.sessionId,
+        transactionIds: selected.map((b) => b.id),
+      });
 
       for (const b of selected) {
         await db().insert(bankReconciliationCaseBookTransactions).values({
@@ -3765,12 +3783,15 @@ export async function matchBankToBook(input: {
         .limit(1);
       if (!line) throw new Error('Bank line not found.');
 
+      const prior = await priorBookStates(user.tenantId, session.bankAccountId, sessionId);
+      if (prior.settled.has(transactionId)) throw new Error('That BookOne entry was already matched in another month.');
       const books = await loadBookCandidates(
         user.tenantId,
         session.bankAccountId,
         session.periodFrom,
         session.periodTo,
         session.bookDomain,
+        [...prior.waiting],
       );
       const book = books.find((b) => b.id === transactionId);
       if (!book) throw new Error('BookOne entry is not in this period or account.');

@@ -75,9 +75,9 @@ export function CommerceChannelCatalog({
       <section className="commerce-card">
         <h2 className="commerce-section-title">Products on this store</h2>
         <p className="field-help">
-          Choose what this website may show and sell. The catalog API, stock and change feed only include published
-          products. Products you linked to existing website listings count as published. Publishing a listing with
-          variants publishes all its colours/sizes.
+          Choose which products this website may show and sell. Only published products and their stock go to the website.
+          Products linked to listings already on the website count as published, and publishing a product with colours or
+          sizes publishes all of them.
         </p>
         <p className="commerce-badges">
           <Badge tone="info">{publishedCount} published</Badge>
@@ -246,7 +246,7 @@ export function CommerceChannelSettingsCard({
           name="timezone"
           label="Store timezone"
           defaultValue={channel.timezone}
-          help="IANA name, e.g. Asia/Colombo."
+          help="The time zone your website uses, e.g. Asia/Colombo."
         />
       </fieldset>
       {canWrite ? <Button type="submit">Save stock settings</Button> : null}

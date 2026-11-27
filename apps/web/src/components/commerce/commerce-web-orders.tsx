@@ -201,12 +201,12 @@ export function CommerceWebOrders({
   }
 
   return (
-    <div className="commerce-panel-stack">
-      <section className="commerce-card">
+    <div className={`commerce-panel-stack commerce-orders${open ? ' has-open' : ''}`}>
+      <section className="commerce-card commerce-orders-list">
         <h2 className="commerce-section-title">Web orders</h2>
         <p className="field-help">
-          Every order your website sends appears here. Cash on delivery and bank transfer orders hold their stock as soon as
-          they arrive, so the same item cannot be sold twice.
+          Every order your website sends appears here. Pick an order to see its items and what to do next. Orders paid by a
+          method ticked under Settings → Hold stock keep their items aside so they are not sold twice.
         </p>
         <p className="commerce-badges">
           <Badge tone={counts.action ? 'warning' : 'neutral'}>{counts.action} need action</Badge>
@@ -302,7 +302,7 @@ export function CommerceWebOrders({
       </section>
 
       {open ? (
-        <section className="commerce-card" aria-labelledby={`order-detail-${open.id}`}>
+        <section className="commerce-card commerce-order-detail" aria-labelledby={`order-detail-${open.id}`}>
           <h2 className="commerce-section-title" id={`order-detail-${open.id}`}>
             Order {open.displayNumber}
           </h2>

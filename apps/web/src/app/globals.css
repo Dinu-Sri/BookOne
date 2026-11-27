@@ -11763,3 +11763,40 @@ a.bih-card:hover {
 .pde-colours { min-width: 0; }
 .pde-add { grid-template-columns: minmax(0, 1fr) auto; }
 .pde-help, .pde-errors, .pde-warn { overflow-wrap: anywhere; }
+
+/* ── Commerce Integrations v2 (calm screen) ── */
+.commerce-v2 .party-form-top { display: none; }
+.commerce-v2 .commerce-page-title { font-size: 22px; }
+.commerce-v2 .commerce-page-lead { font-size: 14px; }
+.commerce-v2 .commerce-store-bar { grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr); align-items: center; }
+.commerce-v2 .commerce-status-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; color: var(--ink-muted); }
+.commerce-v2 .commerce-store-bar .field { margin: 0; }
+/* Sentence case everywhere: no shouting labels */
+.commerce-v2 .commerce-next-kicker, .commerce-v2 th, .commerce-v2 .commerce-overview-tiles dt, .commerce-v2 .commerce-section-title,
+.commerce-v2 legend { text-transform: none !important; letter-spacing: 0 !important; }
+.commerce-v2 .commerce-table th { font-size: 12px; font-weight: 650; color: var(--ink-muted); }
+.commerce-v2 .commerce-table td { padding-top: 8px; padding-bottom: 8px; }
+/* Buttons keep their own width inside cards and forms */
+.commerce-v2 :is(.commerce-card, .commerce-panel-stack, form, fieldset, .commerce-map-form, .commerce-publish) > .button { justify-self: start; width: auto; }
+.commerce-v2 .party-tab { display: inline-flex; align-items: center; gap: 6px; }
+.commerce-v2 .party-tab .ux-count { padding: 0 7px; border-radius: 999px; background: var(--warning-soft); color: var(--warning); font-size: 11px; font-weight: 750; }
+/* Overview */
+.commerce-v2 .commerce-overview { gap: 12px; }
+.commerce-v2 .commerce-setup { display: grid; gap: 12px; }
+.commerce-v2 .commerce-glance { max-width: 36rem; }
+.commerce-v2 .commerce-glance > div { padding: 3px 0; }
+/* Orders: list and the open order side by side on wide screens */
+@media (min-width: 1200px) {
+  .commerce-v2 .commerce-orders.has-open { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr); gap: 12px; align-items: start; }
+  .commerce-v2 .commerce-orders.has-open .commerce-order-detail { position: sticky; top: 0; max-height: calc(100dvh - 72px - 220px); overflow: auto; }
+  .commerce-v2 .commerce-orders.has-open .commerce-orders-list th:nth-child(2),
+  .commerce-v2 .commerce-orders.has-open .commerce-orders-list td:nth-child(2),
+  .commerce-v2 .commerce-orders.has-open .commerce-orders-list th:nth-child(7),
+  .commerce-v2 .commerce-orders.has-open .commerce-orders-list td:nth-child(7) { display: none; }
+}
+.commerce-v2 .commerce-order-detail .commerce-sync-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.commerce-v2 .commerce-key-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+@media (max-width: 760px) {
+  .commerce-v2 .commerce-store-bar { grid-template-columns: 1fr; }
+  .commerce-v2 .commerce-order-detail .commerce-sync-facts { grid-template-columns: 1fr; }
+}

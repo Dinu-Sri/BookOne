@@ -48,7 +48,7 @@ export function CommerceFulfilmentCard({
           name="holdStockExtra"
           label="Other method names"
           placeholder="Comma separated, e.g. pay_at_store"
-          help="Exactly as your website sends payment.method."
+          help="Spelled exactly as your website names the payment method, e.g. cod."
         />
       </fieldset>
 

@@ -130,7 +130,7 @@ export function CommercePaymentsCard({
               placeholder="Exact name the store sends, e.g. cod"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              help="Match the payment method ID your store sends with the order."
+              help="Spelled exactly as your website names it on orders, e.g. cod."
             />
             <SelectField
               id={`payments-new-account-${connectionId}`}
@@ -159,7 +159,7 @@ export function CommercePaymentsCard({
             name="gatewayName"
             label="Create a clearing account"
             placeholder={`Gateway or channel name, e.g. ${connectionName} card payments`}
-            help="Creates “<name> clearing” (codes 1201–1299). It becomes the default if none is set. Make one per gateway so each payout reconciles on its own."
+            help="Creates an account called “<name> clearing” that holds gateway money until it pays out to your bank. It becomes the default if none is set. Make one per gateway."
             required
           />
           <div style={{ alignSelf: 'start', paddingTop: 22 }}>

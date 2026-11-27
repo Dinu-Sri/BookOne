@@ -83,7 +83,7 @@ export default async function CompanyCommercePage({
         publishedCount={query.published ? Number(query.published) : null}
         initialTab={
           (['overview', 'orders', 'mapping', 'prices', 'payments', 'settings', 'developer', 'activity'] as const).find(
-            (t) => t === query.tab,
+            (t) => t === (query.tab === 'products' ? 'mapping' : query.tab),
           ) ?? 'overview'
         }
         initialOrderId={query.order}

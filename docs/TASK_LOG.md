@@ -1,3 +1,7 @@
+## 2026-11-27 — Commerce Integrations redesigned as a calm screen (v2.27.0)
+
+Plain store status line, Overview with one next step and an at-a-glance statement, Orders list and order side by side, plain wording, ?tab=products fixed, readable keys and activity, API log capped at 10. See [CHG-20261127-commerce-calm-redesign](changes/CHG-20261127-commerce-calm-redesign.md).
+
 ## 2026-11-27 — Print design editor: no sideways scrolling (v2.26.1)
 
 The editor's left panel fits its width; part names show in full with their location underneath. See [CHG-20261127-calm-rulebook-agentbridge-print-designs](changes/CHG-20261127-calm-rulebook-agentbridge-print-designs.md).

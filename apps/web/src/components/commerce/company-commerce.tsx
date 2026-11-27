@@ -136,7 +136,14 @@ const ACTION_LABELS: Record<string, string> = {
   'mapping.apply': 'Applied mapping',
   'mapping.propose': 'Proposed mapping',
   'mapping.reject': 'Rejected mapping proposal',
-  'catalog.queue': 'Queued BookOne-first publish',
+  'catalog.queue': 'Sent products from BookOne to the website',
+  'connection.price_list': 'Changed the price list',
+  'connection.settings': 'Changed store settings',
+  'connection.couriers': 'Changed couriers',
+  'webhook.create': 'Added a webhook',
+  'webhook.delete': 'Removed a webhook',
+  'catalog.publish': 'Published products',
+  'catalog.unpublish': 'Unpublished products',
   'stock.publish': 'Published stock',
   'order.retry': 'Retried review order',
   'connection.payments': 'Changed payment accounts',
@@ -374,8 +381,8 @@ export function CompanyCommerce(props: {
         title: 'Connect your website',
         detail:
           selected.kind === 'woocommerce'
-            ? 'Issue a scoped key, install bookone-commerce-1.2.0.zip with HPOS on, and paste the key in the plugin. An issued key is only a key.'
-            : 'Issue a scoped key and store it on your website server with Authorization: Bearer. An issued key is only a key.',
+            ? 'Create a key under Developer and paste it into the BookOne Commerce plugin on your WooCommerce site.'
+            : 'Create a key under Developer and give it to whoever runs your website, to keep on the website server.',
         tab: 'developer' as Tab,
         label: 'Open Developer',
       };
@@ -383,7 +390,7 @@ export function CompanyCommerce(props: {
     if (!keyUsed) {
       return {
         title: 'Test the key',
-        detail: 'Paste the key once and use Test connection. A successful test proves authentication, not catalog or stock sync.',
+        detail: 'Use Test connection under Developer to check your website can sign in with the key.',
         tab: 'developer' as Tab,
         label: 'Open Developer',
       };
@@ -391,7 +398,7 @@ export function CompanyCommerce(props: {
     if (!mapped) {
       return {
         title: 'Map products and test sync',
-        detail: 'Match a BookOne SKU, preview, then apply. Website listings stay intact until you publish stock.',
+        detail: 'Link your website products to BookOne products: choose, preview, then apply. Nothing changes on the website yet.',
         tab: 'mapping' as Tab,
         label: 'Open Products',
       };
@@ -399,15 +406,14 @@ export function CompanyCommerce(props: {
     if (!stockPublished) {
       return {
         title: 'Publish BookOne stock',
-        detail: `Publish absolute BookOne quantities for mapped SKUs at ${locationName}. A publish with no mappings is not a successful publication.`,
+        detail: `Send the stock BookOne has at ${locationName} for your linked products to the website.`,
         tab: 'mapping' as Tab,
         label: 'Open Products',
       };
     }
     return {
       title: 'Verify stock and orders',
-      detail:
-        'A paid last-unit order proves intake. Posted invoices can still show amount due until a payment account is configured. HTTP 2xx is not cash settlement.',
+      detail: 'Place a test order on your website and check it arrives under Orders with the right items and total.',
       tab: 'orders' as Tab,
       label: 'Open Orders',
     };
@@ -432,7 +438,7 @@ export function CompanyCommerce(props: {
   }
 
   return (
-    <div className="workspace party-workspace commerce-workspace">
+    <div className="workspace party-workspace commerce-workspace commerce-v2">
       <FormShell backHref="/company/details" backParent="Company" size="wide" fillViewport>
         {creating ? (
           <form action={createCommerceConnectionFromForm} className="commerce-create-view">
@@ -539,11 +545,13 @@ export function CompanyCommerce(props: {
                     </a>
                   </p>
                 </div>
-                {props.canWrite && !empty ? (
-                  <Button type="button" onClick={openCreate}>
-                    New connection
-                  </Button>
-                ) : null}
+                <div className="commerce-head-actions">
+                  {props.canWrite && !empty ? (
+                    <Button type="button" onClick={openCreate}>
+                      New connection
+                    </Button>
+                  ) : null}
+                </div>
               </div>
               {selected ? (
                 <div className="commerce-store-bar">
@@ -559,23 +567,24 @@ export function CompanyCommerce(props: {
                     }))}
                   />
                   <div className="commerce-store-meta">
-                    <p className="commerce-badges">
-                      <Badge>{kindLabel(selected.kind)}</Badge>
-                      <Badge>{selected.environment === 'live' ? 'Live' : 'Sandbox'}</Badge>
-                      <Badge tone={selected.postingMode === 'posting' ? 'success' : 'neutral'}>
-                        {selected.postingMode === 'posting' ? 'Posting' : 'Preview'}
+                    <p className="commerce-status-line">
+                      <Badge tone={selected.environment === 'live' ? 'success' : 'neutral'}>
+                        {selected.environment === 'live' ? 'Live store' : 'Test store'}
                       </Badge>
-                      <Badge>{selected.mappingCount} mapped</Badge>
-                      <Badge tone={selected.reviewCount > 0 ? 'warning' : 'neutral'}>
-                        {selected.reviewCount} need review
-                      </Badge>
+                      <span>
+                        {kindLabel(selected.kind)} ·{' '}
+                        {selected.postingMode === 'posting'
+                          ? 'paid orders become invoices automatically'
+                          : 'orders wait for your review'}{' '}
+                        · stock from {locationName} · {selected.mappingCount} product{selected.mappingCount === 1 ? '' : 's'} linked
+                        {selected.reviewCount > 0 ? ` · ${selected.reviewCount} to review` : ''}
+                        {selected.inboundPaused ? ' · new orders paused' : ''}
+                        {selected.outboundPaused ? ' · stock updates paused' : ''}
+                      </span>
                     </p>
-                    <p className={fleetLocation ? 'form-error' : 'field-help'}>
-                      {locationName} · {selected.currency}
-                      {selected.inboundPaused ? ' · inbound paused' : ''}
-                      {selected.outboundPaused ? ' · outbound paused' : ''}
-                      {fleetLocation ? ' · not eligible for online stock' : ''}
-                    </p>
+                    {fleetLocation ? (
+                      <p className="form-error">{locationName} cannot hold online stock. Choose a shop or warehouse in Settings.</p>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -652,15 +661,15 @@ export function CompanyCommerce(props: {
                   </li>
                   <li>
                     <strong>Connect your website</strong>
-                    <span>Issue a key once and paste it in the plugin or your server. Then test it.</span>
+                    <span>Create a key and paste it into the plugin or your website server, then test it.</span>
                   </li>
                   <li>
                     <strong>Map products and test sync</strong>
-                    <span>Match SKUs, preview, apply, then publish BookOne stock.</span>
+                    <span>Link your website products to BookOne products, then send BookOne stock to the website.</span>
                   </li>
                   <li>
                     <strong>Verify stock and orders</strong>
-                    <span>A paid last-unit order proves intake. HTTP 2xx is not cash settlement.</span>
+                    <span>Place a test order on your website and check it arrives here.</span>
                   </li>
                 </ol>
                 {props.canWrite ? (
@@ -688,6 +697,11 @@ export function CompanyCommerce(props: {
                       onKeyDown={(event) => tabKeyDown(event, index)}
                     >
                       {label}
+                      {id === 'orders' && openOrders > 0 ? (
+                        <span className="ux-count" aria-label={`${openOrders} waiting`}>
+                          {openOrders}
+                        </span>
+                      ) : null}
                     </button>
                   ))}
                 </div>
@@ -699,88 +713,96 @@ export function CompanyCommerce(props: {
                     id="commerce-panel-overview"
                     aria-labelledby="commerce-tab-overview"
                   >
-                    <div className="commerce-panel-stack">
-                      <dl className="commerce-overview-tiles">
-                        <div>
-                          <dt>Orders to handle</dt>
-                          <dd>{openOrders}</dd>
-                        </div>
-                        <div>
-                          <dt>Need review</dt>
-                          <dd>{selected.reviewCount}</dd>
-                        </div>
-                        <div>
-                          <dt>Orders received</dt>
-                          <dd>{selected.webOrders.length}</dd>
-                        </div>
-                        <div>
-                          <dt>Linked products</dt>
-                          <dd>{selected.mappingCount}</dd>
-                        </div>
-                      </dl>
+                    <div className="commerce-panel-stack commerce-overview">
                       {openOrders > 0 ? (
-                        <div className="commerce-next">
+                        <div className="ux-next-row is-warn">
                           <div>
-                            <p className="commerce-next-kicker">Orders</p>
-                            <strong>{openOrders} web order{openOrders === 1 ? '' : 's'} waiting for you</strong>
-                            <p>Confirm, dispatch or mark them paid from the Orders tab.</p>
+                            <strong>
+                              {openOrders} web order{openOrders === 1 ? ' is' : 's are'} waiting for you
+                            </strong>
+                            <span>Confirm, dispatch or mark them paid from the Orders tab.</span>
                           </div>
                           <Button type="button" variant="primary" onClick={() => changeTab('orders')}>
                             Open Orders
                           </Button>
                         </div>
                       ) : null}
+                      {!stockPublished && nextAction ? (
+                        <section className="commerce-card commerce-setup">
+                          <h2 className="commerce-section-title">Finish setting up</h2>
+                          <ol className="ux-stages">
+                            <li className="is-done">
+                              <span>1</span> Create a connection
+                            </li>
+                            <li className={keyUsed ? 'is-done' : 'is-current'}>
+                              <span>2</span> Connect your website
+                            </li>
+                            <li className={mapped ? 'is-done' : keyUsed ? 'is-current' : ''}>
+                              <span>3</span> Map products and test sync
+                            </li>
+                            <li className={stockPublished ? 'is-done' : mapped ? 'is-current' : ''}>
+                              <span>4</span> Verify stock and orders
+                            </li>
+                          </ol>
+                          <div className="ux-next-row">
+                            <div>
+                              <strong>{nextAction.title}</strong>
+                              <span>{nextAction.detail}</span>
+                            </div>
+                            {nextAction.label && tab !== nextAction.tab ? (
+                              <Button type="button" variant={openOrders > 0 ? 'secondary' : 'primary'} onClick={() => changeTab(nextAction.tab)}>
+                                {nextAction.label}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </section>
+                      ) : openOrders === 0 ? (
+                        <div className="ux-next-row is-ok">
+                          <div>
+                            <strong>Your store is connected and up to date.</strong>
+                            <span>New web orders show here and on the Orders tab as they arrive.</span>
+                          </div>
+                        </div>
+                      ) : null}
                       <section className="commerce-card">
-                        <h2 className="commerce-section-title">Setup</h2>
-              {selected ? (
-                <ol className="commerce-progress">
-                  <li className="is-done">
-                    <span>1</span> Create a connection
-                  </li>
-                  <li className={keyUsed ? 'is-done' : 'is-current'}>
-                    <span>2</span> Connect your website
-                  </li>
-                  <li className={mapped ? 'is-done' : keyUsed ? 'is-current' : ''}>
-                    <span>3</span> Map products and test sync
-                  </li>
-                  <li className={stockPublished ? 'is-done' : mapped ? 'is-current' : ''}>
-                    <span>4</span> Verify stock and orders
-                  </li>
-                </ol>
-              ) : null}
-              {selected && nextAction ? (
-                <div className="commerce-next">
-                  <div>
-                    <p className="commerce-next-kicker">{stockPublished ? 'Next' : 'Continue setup'}</p>
-                    <strong>{nextAction.title}</strong>
-                    <p>{nextAction.detail}</p>
-                  </div>
-                  {nextAction.label && tab !== nextAction.tab ? (
-                    <Button type="button" variant="primary" onClick={() => changeTab(nextAction.tab)}>
-                      {nextAction.label}
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
+                        <h2 className="commerce-section-title">At a glance</h2>
+                        <dl className="ux-statement commerce-glance">
+                          <div>
+                            <dt>Orders waiting for you </dt>
+                            <dd>{openOrders}</dd>
+                          </div>
+                          <div>
+                            <dt>Orders to review </dt>
+                            <dd>{selected.reviewCount}</dd>
+                          </div>
+                          <div>
+                            <dt>Orders received </dt>
+                            <dd>{selected.webOrders.length}</dd>
+                          </div>
+                          <div>
+                            <dt>Products linked </dt>
+                            <dd>{selected.mappingCount}</dd>
+                          </div>
+                          <div>
+                            <dt>Last order received </dt>
+                            <dd>{formatWhen(selected.lastOrder)}</dd>
+                          </div>
+                          <div>
+                            <dt>Last mapping change </dt>
+                            <dd>{formatWhen(selected.lastCatalog)}</dd>
+                          </div>
+                          <div>
+                            <dt>Stock last sent </dt>
+                            <dd>{mapped ? formatWhen(selected.lastStock) : 'No products linked yet'}</dd>
+                          </div>
+                        </dl>
                       </section>
-                      <dl className="commerce-sync-facts">
-                      <div>
-                        <dt>BookOne stock publication</dt>
-                        <dd>{mapped ? formatWhen(selected.lastStock) : 'No mappings yet'}</dd>
-                      </div>
-                      <div>
-                        <dt>Last order received</dt>
-                        <dd>{formatWhen(selected.lastOrder)}</dd>
-                      </div>
-                      <div>
-                        <dt>Last mapping change</dt>
-                        <dd>{formatWhen(selected.lastCatalog)}</dd>
-                      </div>
-                    </dl>
                       <p className="field-help">
-                        How it works: your website reads products and stock from BookOne and sends orders back. In Preview,
-                        orders wait for you; in Posting, paid orders become invoices automatically. Payments decides which
-                        account the money lands in.
+                        How it works: your website reads products and stock from BookOne and sends orders back.{' '}
+                        {selected.postingMode === 'posting'
+                          ? 'Paid orders become invoices automatically.'
+                          : 'Orders wait for you to review them.'}{' '}
+                        Payments decides which account the money goes to.
                       </p>
                     </div>
                   </div>
@@ -879,7 +901,7 @@ export function CompanyCommerce(props: {
                             { value: 'preview', label: 'Preview — review incoming orders before they are posted' },
                             { value: 'posting', label: 'Post supported paid orders' },
                           ]}
-                          help="Choosing posting prepares the setting. Save applies it with the pause checkboxes. Paid orders settle into the accounts chosen under Payments."
+                          help="Review first is safest while testing. Post supported paid orders turns paid web orders into invoices automatically, into the accounts chosen under Payments."
                         />
                         <label className="party-check">
                           <input
@@ -1005,8 +1027,11 @@ export function CompanyCommerce(props: {
                           {selected.credentials.map((cred) => (
                             <li key={cred.id}>
                               <span>
-                                Prefix {cred.prefix} · {cred.status} · {cred.scopes.join(', ')} · last used{' '}
-                                {cred.lastUsedAt ? formatWhen(cred.lastUsedAt) : 'never'}
+                                <strong>Key {cred.prefix}</strong>{' '}
+                                <Badge tone={cred.status === 'active' ? 'success' : cred.status === 'rotated' ? 'warning' : 'neutral'}>
+                                  {cred.status === 'active' ? 'Active' : cred.status === 'rotated' ? 'Being replaced' : 'Revoked'}
+                                </Badge>{' '}
+                                · {cred.scopes.join(', ')} · last used {cred.lastUsedAt ? formatWhen(cred.lastUsedAt) : 'never'}
                                 {cred.expiresAt && cred.status === 'rotated'
                                   ? ` · overlap until ${formatWhen(cred.expiresAt)}`
                                   : ''}
@@ -1249,7 +1274,7 @@ export function CompanyCommerce(props: {
                             </ul>
                           </div>
                         ) : props.canWrite && props.products.length > 0 ? (
-                          <p className="field-help">Preview is the primary action until the current fields are reviewed.</p>
+                          <p className="field-help">Preview first to check the link, then apply it.</p>
                         ) : null}
                         <form action={props.canWrite ? publishCommerceStockFromForm : undefined} className="commerce-publish">
                           <input type="hidden" name="connectionId" value={selected.id} />
@@ -1264,10 +1289,10 @@ export function CompanyCommerce(props: {
                           </Button>
                           <p className="field-help">
                             {selected.mappingCount === 0
-                              ? 'Map a SKU before publishing. BookOne will not record a successful publication for zero items.'
+                              ? 'Link at least one product first. There is no stock to send yet.'
                               : fleetLocation
                                 ? `Choose a shop or warehouse. ${locationName} cannot receive online stock.`
-                                : `Publishes absolute BookOne quantities for mapped SKUs at ${locationName}. Store acknowledgment is separate.`}
+                                : `Sends the stock BookOne has at ${locationName} for every linked product. The website updates when it next checks in.`}
                           </p>
                         </form>
 
@@ -1290,8 +1315,8 @@ export function CompanyCommerce(props: {
                             <fieldset className="commerce-fields">
                               <legend className="commerce-section-title">Publish from BookOne</legend>
                               <p className="field-help">
-                                For an empty store. WooCommerce creations default to draft. Custom websites create listings
-                                themselves, then acknowledge stable IDs.
+                                For a website that does not list these products yet. BookOne offers them to the website; on
+                                WooCommerce they arrive as drafts for you to check and publish.
                               </p>
                               <div className="commerce-table-scroll" tabIndex={0} role="region" aria-label="Products to publish">
                                 <table className="commerce-table">
@@ -1338,8 +1363,7 @@ export function CompanyCommerce(props: {
                         ) : null}
                         {selected.publishClaims?.length ? (
                           <p className="field-help">
-                            Queued claims: {selected.publishClaims.map((c) => `${c.sku} (${c.status})`).join(', ')}. The store
-                            pulls `/catalog/candidates` and acknowledges IDs. GET `/products` stays mapped-only.
+                            Sent to the website: {selected.publishClaims.map((c) => `${c.sku} (${c.status === 'acknowledged' ? 'received' : 'waiting for the website'})`).join(', ')}.
                           </p>
                         ) : null}
                       </div>

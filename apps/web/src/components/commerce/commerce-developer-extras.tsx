@@ -303,6 +303,8 @@ export function CommerceReservationsCard({ reservations }: { reservations: Reser
 
 /** WP7: recent API calls from this connection's keys (kept 30 days). */
 export function CommerceApiLogCard({ calls }: { calls: ApiCallView[] }) {
+  const [all, setAll] = useState(false);
+  const shownCalls = all ? calls : calls.slice(0, 10);
   return (
     <section className="commerce-card">
       <h2 className="commerce-section-title">API calls</h2>
@@ -320,7 +322,7 @@ export function CommerceApiLogCard({ calls }: { calls: ApiCallView[] }) {
               </tr>
             </thead>
             <tbody>
-              {calls.map((c) => (
+              {shownCalls.map((c) => (
                 <tr key={c.id}>
                   <td>{when(c.createdAt)}</td>
                   <td>{c.keyPrefix ?? '—'}</td>
@@ -337,6 +339,11 @@ export function CommerceApiLogCard({ calls }: { calls: ApiCallView[] }) {
       ) : (
         <p className="field-help">No API calls yet.</p>
       )}
+      {calls.length > 10 ? (
+        <Button type="button" variant="ghost" onClick={() => setAll((v) => !v)}>
+          {all ? 'Show the latest 10' : `Show all ${calls.length}`}
+        </Button>
+      ) : null}
     </section>
   );
 }

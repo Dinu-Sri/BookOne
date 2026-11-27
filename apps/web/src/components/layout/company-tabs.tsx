@@ -7,8 +7,8 @@ export const COMPANY_TABS: Array<{ label: string; tab: string; href: string }> =
   { label: 'Brands', tab: 'Brands', href: '/company/brands' },
   { label: 'Locations', tab: 'Locations', href: '/company/locations' },
   { label: 'Domain Verification', tab: 'Domains', href: '/company/domains' },
-  { label: 'Team', tab: 'Team', href: '/company/team' },
-  { label: 'Groups', tab: 'Groups', href: '/company/team/groups' },
+  { label: 'Team', tab: 'People', href: '/company/team' },
+  { label: 'Jobs', tab: 'Jobs', href: '/company/team/jobs' },
 ];
 
 export const COMPANY_TAB_LABELS = new Set(COMPANY_TABS.map((t) => t.label));

@@ -150,15 +150,6 @@
   "apps/web/src/components/statement-import/statement-import-wizard.tsx": {
     "raw-select": 4
   },
-  "apps/web/src/components/team/team-groups-screen.tsx": {
-    "raw-select": 2
-  },
-  "apps/web/src/components/team/team-jobs-screen.tsx": {
-    "raw-select": 1
-  },
-  "apps/web/src/components/team/team-people-screen.tsx": {
-    "raw-select": 3
-  },
   "apps/web/src/components/team/team-person-screen.tsx": {
     "raw-select": 3
   },

@@ -1,3 +1,7 @@
+## 2026-11-27 — People and Jobs simplified; one sidebar tooltip; docs bubble stays on screen (v2.31.0)
+
+Team and Groups merged into People; Jobs is a Company tab with plain descriptions and No access / View / Edit controls. See [CHG-20261127-people-jobs-tooltips](changes/CHG-20261127-people-jobs-tooltips.md).
+
 ## 2026-11-27 — Switches everywhere, Control Room module switches, plain Activity, Transactions head (v2.30.0)
 
 Batch 2 of the calm-screens rollout. See [CHG-20261127-switches-modules-activity](changes/CHG-20261127-switches-modules-activity.md).

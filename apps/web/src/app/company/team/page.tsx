@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getTenantInfo } from '@/app/actions/workspace';
-import { createTeamMember, getSeatUsage, inviteTeamMember, listAccessHistory, listPendingInvites, listTeamJobs, listTeamPeople, revokeInvite } from '@/app/actions/team';
+import { createTeamMember, getSeatUsage, inviteTeamMember, listAccessHistory, listPendingInvites, listTeamJobs, listTeamPeople, listTeamsWithMembers, revokeInvite } from '@/app/actions/team';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { TeamPeopleScreen } from '@/components/team/team-people-screen';
 
@@ -12,23 +12,25 @@ export default async function TeamPeoplePage() {
     redirect('/login');
   }
   if (tenant.entityKind === 'personal') redirect('/cashbook');
-  const [people, jobs, invites, seats, history] = await Promise.all([
+  const [people, jobs, invites, seats, history, teams] = await Promise.all([
     listTeamPeople(),
     listTeamJobs(),
     listPendingInvites(),
     getSeatUsage(),
     listAccessHistory(),
+    listTeamsWithMembers(),
   ]);
 
   return (
     <BookOneShell active="Team" tenant={tenant}>
-      <div className="workspace">
+      <div className="workspace ppl-workspace">
         <TeamPeopleScreen
           people={people}
           jobs={jobs}
           invites={invites}
           seats={seats}
           history={history}
+          teams={teams}
           createAction={createTeamMember}
           inviteAction={inviteTeamMember}
           revokeAction={revokeInvite}

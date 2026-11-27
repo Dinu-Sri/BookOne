@@ -143,7 +143,6 @@ export const NAV_SUITES: NavSuite[] = [
       { label: 'Inventory Settings', icon: Package, href: '/company/inventory' },
       { label: 'Rental Settings', icon: CalendarDays, href: '/company/rental' },
       { label: 'Backup', icon: Archive, href: '/company/backup' },
-      { label: 'Jobs', icon: ShieldCheck, href: '/company/team/jobs' },
     ],
   },
   {

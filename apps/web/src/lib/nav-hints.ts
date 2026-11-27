@@ -55,7 +55,7 @@ export const NAV_HINTS: Record<string, string> = {
   'Dispatch / returns': 'Rental items going out and coming back.',
   'On rent': 'Rental items out with customers now.',
   // Company
-  'Company Details': 'Name, tax, brands, locations, team and more.',
+  'Company Details': 'Name, tax, brands, locations, people and jobs.',
   'Sales Settings': 'How invoices, numbers and VAT work.',
   'Print designs': 'How your invoices and receipts look on paper.',
   'Purchase Settings': 'How bills and supplier payments work.',

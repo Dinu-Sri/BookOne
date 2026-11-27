@@ -2,7 +2,7 @@
 
 import { ChevronDown, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { navHint } from '@/lib/nav-hints';
 import { isDocumentationItem, type NavItem, type NavSuite } from '@/lib/nav-suites';
@@ -13,7 +13,16 @@ import { isDocumentationItem, type NavItem, type NavSuite } from '@/lib/nav-suit
  */
 export function NavIconHint({ label, hint, children }: { label: string; hint?: string | null; children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const bubble = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  // Keep the bubble inside the window: near the bottom (e.g. the docs button) it moves up.
+  useLayoutEffect(() => {
+    const el = bubble.current;
+    if (!pos || !el) return;
+    const h = el.offsetHeight;
+    const maxTop = window.innerHeight - h - 12;
+    if (pos.top > maxTop) setPos({ left: pos.left, top: Math.max(8, maxTop) });
+  }, [pos]);
   const text = hint ?? navHint(label);
   useEffect(() => {
     if (!pos) return;
@@ -33,7 +42,7 @@ export function NavIconHint({ label, hint, children }: { label: string; hint?: s
       {children}
       {pos && typeof document !== 'undefined'
         ? createPortal(
-            <div className="status-tip-bubble nav-hint-bubble" role="tooltip" style={{ position: 'fixed', left: pos.left, top: pos.top, zIndex: 95 }}>
+            <div ref={bubble} className="status-tip-bubble nav-hint-bubble" role="tooltip" style={{ position: 'fixed', left: pos.left, top: pos.top, zIndex: 95 }}>
               <strong>{label}</strong>
               <p>{text}</p>
             </div>,
@@ -84,7 +93,7 @@ function WorkspaceNavTarget({
     );
   }
   return (
-    <Link className={className} href={item.href} title={title} aria-current={isActive ? 'page' : undefined}>
+    <Link className={className} href={item.href} aria-current={isActive ? 'page' : undefined}>
       {children}
     </Link>
   );
@@ -126,7 +135,6 @@ export function ListSuiteNav({
             <button
               className={`suite-trigger ${hasActiveItem ? 'active' : ''}`}
               type="button"
-              title={suite.label}
               aria-expanded={isOpen}
               aria-controls={`suite-panel-${suite.id}`}
               onClick={() => onOpenSuite(isOpen ? '' : suite.id)}

@@ -62,6 +62,25 @@ export function ReconciliationInbox({
   const safePage = Math.min(page, totalPages);
   const slice = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   const openCount = sessions.filter((s) => s.status !== 'reconciled').length;
+  // For each bank with nothing open: how far it is reconciled, and the next month to do.
+  const nextUp = useMemo(() => {
+    const byBank = new Map<string, ReconSessionListItem[]>();
+    for (const s of sessions) byBank.set(s.bankAccountId, [...(byBank.get(s.bankAccountId) ?? []), s]);
+    const out: Array<{ bank: string; through: string; next: string }> = [];
+    for (const list of byBank.values()) {
+      if (list.some((s) => s.status !== 'reconciled')) continue;
+      const last = [...list].sort((a, b) => (a.periodTo < b.periodTo ? 1 : -1))[0];
+      if (!last) continue;
+      const end = new Date(`${last.periodTo}T12:00:00`);
+      const next = new Date(end.getFullYear(), end.getMonth() + 1, 1);
+      out.push({
+        bank: last.bankName,
+        through: end.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+        next: next.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
+      });
+    }
+    return out;
+  }, [sessions]);
 
   function doDelete() {
     if (!deleteId) return;
@@ -125,10 +144,8 @@ export function ReconciliationInbox({
               <table className="table rin-table">
                 <thead>
                   <tr>
-                    <th>Bank account</th>
-                    <th>Period</th>
+                    <th>Bank account and month</th>
                     <th>Status</th>
-                    <th>Progress</th>
                     <th className="rin-num">Left to explain</th>
                     <th className="th-actions">
                       <span className="sr-only">Open</span>
@@ -143,24 +160,23 @@ export function ReconciliationInbox({
                     const leftOk = s.differenceVerified && Math.abs(s.differenceAmount) <= 0.009;
                     return (
                       <tr key={s.id}>
-                        <td>
-                          <strong>{s.bankName}</strong>
+                        <td className="rin-what">
+                          <strong>
+                            {s.bankName} · {s.periodLabel}
+                          </strong>
                           <div className="rin-meta">
                             {s.bankCode ? `${s.bankCode} · ` : ''}
                             {s.bankLineCount} bank lines
                           </div>
                         </td>
-                        <td>{s.periodLabel}</td>
-                        <td>
+                        <td className="rin-status">
                           <Badge tone={statusTone(s.status)}>{s.statusLabel}</Badge>
-                        </td>
-                        <td>
                           <div className="rin-progress">
                             <span className="rin-progress-bar" aria-hidden>
                               <i style={{ width: `${s.progressPct}%` }} />
                             </span>
                             <span>
-                              {s.resolvedCaseCount} of {total}
+                              {s.resolvedCaseCount} of {total} done
                             </span>
                           </div>
                         </td>
@@ -199,6 +215,22 @@ export function ReconciliationInbox({
             ) : null}
           </section>
         )}
+
+        {nextUp.length > 0 ? (
+          <section className="rin-next" aria-label="What is next">
+            {nextUp.map((n) => (
+              <div key={n.bank} className="rin-next-row">
+                <div>
+                  <strong>{n.bank} is reconciled to {n.through}.</strong>
+                  <span>Next: the {n.next} statement, once the month has ended.</span>
+                </div>
+                <Link href={importHref} className="button secondary">
+                  Import {n.next.split(' ')[0]}
+                </Link>
+              </div>
+            ))}
+          </section>
+        ) : null}
 
         {imports.length > 0 ? (
           <details className="rin-files">

@@ -187,10 +187,14 @@ function suggestionReason(
   line: { amount: string | number; date: string | null },
   bookId: string,
   books: Array<{ id: string; date: string; amountSigned: number }>,
+  carried: Set<string> = new Set(),
 ): { code: string; text: string } {
   const amt = Number(line.amount);
   const book = books.find((b) => b.id === bookId);
   if (!book) return { code: 'ambiguous', text: 'Check that this is the same payment.' };
+  if (carried.has(bookId)) {
+    return { code: 'carried_forward', text: 'This was waiting to clear last month and has now reached the bank.' };
+  }
   const sameAmount = Math.abs(book.amountSigned - amt) < 0.005;
   const twins = books.filter((b) => Math.abs(b.amountSigned - amt) < 0.005).length;
   const gap = line.date && book.date
@@ -305,17 +309,62 @@ function bookSignedAmount(
   return null;
 }
 
+/**
+ * What earlier reconciliations of this bank account decided about BookOne
+ * entries: `settled` were matched or added (never offer them again), `waiting`
+ * were left waiting to clear and are still open (carry them into this month).
+ */
+async function priorBookStates(
+  tenantId: string,
+  bankAccountId: string,
+  sessionId: string,
+): Promise<{ settled: Set<string>; waiting: Set<string> }> {
+  const rows = await db()
+    .select({
+      transactionId: bankReconciliationCaseBookTransactions.transactionId,
+      caseType: bankReconciliationCases.caseType,
+    })
+    .from(bankReconciliationCaseBookTransactions)
+    .innerJoin(bankReconciliationCases, eq(bankReconciliationCases.id, bankReconciliationCaseBookTransactions.caseId))
+    .innerJoin(bankReconciliationSessions, eq(bankReconciliationSessions.id, bankReconciliationCases.sessionId))
+    .where(
+      and(
+        eq(bankReconciliationCases.tenantId, tenantId),
+        eq(bankReconciliationSessions.bankAccountId, bankAccountId),
+        sql`${bankReconciliationSessions.id} <> ${sessionId}`,
+        isNull(bankReconciliationSessions.voidedAt),
+        isNull(bankReconciliationCases.voidedAt),
+        isNull(bankReconciliationCaseBookTransactions.voidedAt),
+        eq(bankReconciliationCases.state, 'confirmed'),
+      ),
+    );
+  const settled = new Set<string>();
+  const waiting = new Set<string>();
+  for (const r of rows) {
+    if (!r.transactionId) continue;
+    if (r.caseType === 'outstanding_book') waiting.add(r.transactionId);
+    else settled.add(r.transactionId);
+  }
+  for (const id of settled) waiting.delete(id);
+  return { settled, waiting };
+}
+
+/** Score bonus for an entry that was waiting to clear last month. */
+const CARRIED_BOOST = 0.15;
+
 async function loadBookCandidates(
   tenantId: string,
   bankAccountId: string,
   periodFrom: string,
   periodTo: string,
   bookDomain: string | null | undefined,
+  /** Entries to include whatever their date (waiting to clear from an earlier month). */
+  includeIds: string[] = [],
 ): Promise<(BookCandidate & { paymentAccountId: string })[]> {
   const from = new Date(`${periodFrom}T12:00:00`);
   const to = new Date(`${periodTo}T12:00:00`);
-  from.setDate(from.getDate() - 5);
-  to.setDate(to.getDate() + 5);
+  from.setDate(from.getDate() - 7);
+  to.setDate(to.getDate() + 7);
   const dateFrom = from.toISOString().slice(0, 10);
   const dateTo = to.toISOString().slice(0, 10);
 
@@ -335,8 +384,9 @@ async function loadBookCandidates(
       and(
         eq(transactions.tenantId, tenantId),
         isNull(transactions.voidedAt),
-        gte(transactions.date, dateFrom),
-        lte(transactions.date, dateTo),
+        includeIds.length
+          ? or(and(gte(transactions.date, dateFrom), lte(transactions.date, dateTo)), inArray(transactions.id, includeIds))
+          : and(gte(transactions.date, dateFrom), lte(transactions.date, dateTo)),
         or(
           eq(transactions.paymentAccountId, bankAccountId),
           eq(transactions.transferSourceAccountId, bankAccountId),
@@ -883,6 +933,7 @@ async function rebuildSessionSuggestionsInternal(
       direction: bankStatementLines.direction,
       status: bankStatementLines.status,
       fingerprint: bankStatementLines.fingerprint,
+      externalRef: bankStatementLines.externalRef,
       confidence: bankStatementLines.confidence,
       matchScore: bankStatementLines.matchScore,
       matchMethod: bankStatementLines.matchMethod,
@@ -1084,14 +1135,19 @@ async function rebuildSessionSuggestionsInternal(
       !lockedBankLines.has(l.id) &&
       !['duplicate', 'skipped'].includes(String(l.status ?? '').toLowerCase()),
   );
+  const prior = await priorBookStates(tenantId, session.bankAccountId, sessionId);
   const books = await loadBookCandidates(
     tenantId,
     session.bankAccountId,
     session.periodFrom,
     session.periodTo,
     session.bookDomain,
+    [...prior.waiting],
   );
-  const freeBooks = books.filter((b) => !lockedBooks.has(b.id));
+  // Never offer an entry another month already matched; give last month's waiting items a lift.
+  const freeBooks = books
+    .filter((b) => !lockedBooks.has(b.id) && !prior.settled.has(b.id))
+    .map((b) => (prior.waiting.has(b.id) ? { ...b, boost: CARRIED_BOOST } : b));
 
   let createdMatch = 0;
   let createdAdd = 0;
@@ -1116,12 +1172,13 @@ async function rebuildSessionSuggestionsInternal(
                 ? 'out'
                 : 'unknown',
         fingerprint: l.fingerprint ?? l.id,
+        externalRef: l.externalRef ?? undefined,
         dateConfidence: l.confidence != null ? Number(l.confidence) : 0.9,
         raw: {},
       };
     });
 
-    const matches = matchAll(canonical, freeBooks);
+    const matches = matchAll(canonical, freeBooks, { maxDayWindow: 7 });
 
     for (let i = 0; i < openBankLines.length; i++) {
       const line = openBankLines[i]!;
@@ -1175,7 +1232,7 @@ async function rebuildSessionSuggestionsInternal(
         const best = m.candidates[0]!;
         if (!usedBooks.has(best.id)) {
           usedBooks.add(best.id);
-          const reviewReason = suggestionReason(line, best.id, freeBooks);
+          const reviewReason = suggestionReason(line, best.id, freeBooks, prior.waiting);
           const [c] = await db()
             .insert(bankReconciliationCases)
             .values({
@@ -1274,7 +1331,7 @@ async function rebuildSessionSuggestionsInternal(
   // Book-only “waiting to clear” — limited, period-bounded, not a flood of every ledger row
   const freeBookOnly = freeBooks
     .filter((b) => !usedBooks.has(b.id) && !lockedBooks.has(b.id))
-    .filter((b) => b.date >= session.periodFrom && b.date <= session.periodTo)
+    .filter((b) => (b.date >= session.periodFrom && b.date <= session.periodTo) || prior.waiting.has(b.id))
     .sort((a, b) => Math.abs(b.amountSigned) - Math.abs(a.amountSigned))
     .slice(0, 40);
   for (const b of freeBookOnly) {
@@ -1286,8 +1343,10 @@ async function rebuildSessionSuggestionsInternal(
         caseType: 'outstanding_book',
         confidence: 'review',
         state: 'needs_review',
-        explanation: 'This BookOne entry is not on the bank statement yet (timing).',
-        reasonCodes: ['book_only'],
+        explanation: prior.waiting.has(b.id)
+          ? 'Waiting to clear since an earlier month. Match it when it reaches the bank, or keep it waiting.'
+          : 'This BookOne entry is not on the bank statement yet (timing).',
+        reasonCodes: [prior.waiting.has(b.id) ? 'carried_waiting' : 'book_only'],
         userLabel: 'Waiting to clear',
         resultLabel: 'Not on bank',
         sortDate: b.date,
@@ -4103,6 +4162,7 @@ export async function searchBookForSession(input: {
           ),
         );
       const done = new Set(settled.map((r) => r.transactionId).filter(Boolean) as string[]);
+      for (const id of (await priorBookStates(user.tenantId, session.bankAccountId, sessionId)).settled) done.add(id);
       let candidates = books
         .filter((b) => !done.has(b.id))
         .map((b) => ({

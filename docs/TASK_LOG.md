@@ -1,3 +1,7 @@
+## 2026-11-27 — Bank reconciliation: carry waiting items to the next month; screen polish (v2.25.2)
+
+Items left waiting to clear are carried into the next month and matched when they reach the bank (no double entry); entries already matched in another month are never offered again; cheques match by number up to 7 days apart. Screen fixes from the staging review: exact fit, phone lists, compact home table and a what's-next card, centred one-question import steps, a plain totals statement and save wording. See [CHG-20261127-bank-recon-ui-redesign](changes/CHG-20261127-bank-recon-ui-redesign.md).
+
 ## 2026-11-27 — Bank reconciliation screens redesigned (v2.25.0)
 
 Reconcile fills the window with one balance line (Left to explain), a To do filter and an action bar that says what to do; home shows your reconciliations with a how-it-works panel; import uses four named steps and a wider guide panel. Clearer match reasons, month names for one-month statements, search without already-matched entries; Simple Entry uses the shared dropdown and date controls. See [CHG-20261127-bank-recon-ui-redesign](changes/CHG-20261127-bank-recon-ui-redesign.md).

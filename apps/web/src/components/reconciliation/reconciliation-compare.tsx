@@ -305,6 +305,9 @@ export function ReconciliationCompare({
           </p>
         </div>
         <div className="brc-head-actions">
+          <Link href={classicHref} className="brc-detail-link">
+            Detailed view
+          </Link>
           {board.obviousCount > 0 && !finished ? (
             <Button
               variant="secondary"
@@ -568,13 +571,6 @@ export function ReconciliationCompare({
         </footer>
       )}
 
-      {review?.finishBlockers && review.finishBlockers.length > 0 && !finished ? (
-        <p className="brc-blockers">Before you can finish: {review.finishBlockers.join(' · ')}</p>
-      ) : null}
-
-      <p className="brc-classic">
-        <Link href={classicHref}>Detailed view</Link>
-      </p>
 
       <ConfirmDialog
         open={createOpen}

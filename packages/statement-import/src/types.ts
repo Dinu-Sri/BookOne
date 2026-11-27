@@ -58,6 +58,11 @@ export type BookCandidate = {
   /** Same sign convention as bank line */
   amountSigned: number;
   paymentAccountCode?: string | null;
+  /**
+   * Extra score when there is outside evidence this entry belongs to the next
+   * bank statement (e.g. it was waiting to clear in the previous reconciliation).
+   */
+  boost?: number;
 };
 
 export type MatchResult = {

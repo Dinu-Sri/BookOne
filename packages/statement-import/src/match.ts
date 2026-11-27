@@ -61,7 +61,11 @@ export function matchLine(
     let score = 0.58; // amount match base (hard-gated)
     if (dd === 0) score += 0.32; // → 0.90 floor on exact date+amount
     else if (dd <= 1) score += 0.18;
-    else score += 0.08;
+    else if (dd <= 2) score += 0.08;
+    // 3+ days apart (cheques, deposits on the last day): no date credit; needs a reference,
+    // a similar description or outside evidence (boost) to reach a suggestion.
+
+    if (tx.boost) score += tx.boost;
 
     const sim = jaccard(line.description, tx.description);
     score += sim * 0.12;

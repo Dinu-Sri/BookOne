@@ -65,8 +65,8 @@ function formatRs(n: number) {
   })}`;
 }
 
-function formatLkr(n: number) {
-  return n.toLocaleString('en-LK', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+function formatMoney2(n: number) {
+  return n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function moneyLabel(mapping: StudioMapping): string {
@@ -173,7 +173,7 @@ const STEP_META: Record<Phase, { step: StudioStepId; index: number }> = {
   date: { step: 'date', index: 5 },
   description: { step: 'description', index: 6 },
   money: { step: 'money', index: 7 },
-  map: { step: 'review', index: 8 },
+  map: { step: 'money', index: 8 }, // 'Check the columns' belongs to the Columns stage
   resolve: { step: 'review', index: 8 },
   review: { step: 'review', index: 8 },
   done: { step: 'import', index: 9 },
@@ -721,11 +721,12 @@ export function BankImportStudioWizard({
       t?.totals.periodFrom && t.totals.periodTo
         ? `${t.totals.periodFrom} – ${t.totals.periodTo}`
         : 'this statement period';
-    const account = selected ? `${selected.code} ${selected.shortName}` : 'the selected bank';
+    const account = selected ? `${selected.name || selected.shortName} (${selected.code})` : 'the selected bank';
+    const lines = (n: number) => `${n} bank line${n === 1 ? '' : 's'}`;
     const message =
       opts?.skipErrorLines && bad > 0
-        ? `Save ${good} good line(s) for ${account}, ${period}, and skip ${bad} problem line(s)? Cashbook stays unchanged.`
-        : `Save ${good} bank line(s) for ${account}, ${period}? Opening ${openingBalance || t?.inferredOpening || '—'} · closing ${closingBalance || t?.inferredClosing || '—'} · ${t?.inputRowCount ?? 0} input rows. Cashbook stays the same until you match later.`;
+        ? `Save ${lines(good)} for ${account}, ${period}, and leave out ${bad} problem line${bad === 1 ? '' : 's'}? Nothing is added to your books yet.`
+        : `Save ${lines(good)} for ${account}, ${period}? Nothing is added to your books yet; you match them next.`;
     setCommitConfirm({ skipErrorLines: opts?.skipErrorLines, message });
   }
 
@@ -1218,7 +1219,7 @@ export function BankImportStudioWizard({
       >
         {selected ? (
           <p className="bis-account-chip" data-testid="bis-account-chip">
-            {selected.code} · {selected.shortName}
+            {selected.name || selected.shortName} · {selected.code}
             {preview.transform.totals.periodFrom
               ? ` · ${preview.transform.totals.periodFrom} – ${preview.transform.totals.periodTo}`
               : ''}
@@ -1479,21 +1480,6 @@ export function BankImportStudioWizard({
           continueDisabled={!canImportAll || pending}
           continueHint={canImportAll ? null : block}
         >
-          <div className="bis-review-hero">
-            <div className="bis-hero-card">
-              <span>Good</span>
-              <strong>{t.readyCount + t.warningCount}</strong>
-            </div>
-            <div className="bis-hero-card in">
-              <span>Money in</span>
-              <strong>{formatRs(t.totals.totalMoneyIn)}</strong>
-            </div>
-            <div className="bis-hero-card out">
-              <span>Money out</span>
-              <strong>{formatRs(t.totals.totalMoneyOut)}</strong>
-            </div>
-          </div>
-
           {(() => {
             const selected = bankOnly.find((b) => b.id === bankId);
             const openN = Number(openingBalance || t.inferredOpening || 0);
@@ -1504,8 +1490,8 @@ export function BankImportStudioWizard({
               <>
                 {selected ? (
                   <p className="bis-account-chip" data-testid="bis-account-chip">
-                    {selected.code} · {selected.shortName}
-                    {t.totals.periodFrom ? ` · ${t.totals.periodFrom} – ${t.totals.periodTo}` : ''}
+                    {selected.name || selected.shortName} · {selected.code}
+                    {t.totals.periodFrom ? ` · ${t.totals.periodFrom} to ${t.totals.periodTo}` : ''}
                   </p>
                 ) : null}
                 {skippedSheetReason ? (
@@ -1516,24 +1502,39 @@ export function BankImportStudioWizard({
                     </button>
                   </p>
                 ) : null}
-                <div className="bis-equation" data-testid="bis-equation">
+                <div className={`bis-equation${t.balanceCheck.ok ? ' is-ok' : ' is-bad'}`} data-testid="bis-equation">
                   <strong>{t.balanceCheck.ok ? 'Your bank file adds up' : 'Your bank file does not add up'}</strong>
-                  <p>
-                    Starting balance {formatLkr(openN)} + money in {formatLkr(t.totals.totalMoneyIn)} − money out{' '}
-                    {formatLkr(t.totals.totalMoneyOut)} = closing balance {formatLkr(closeN)}
-                  </p>
-                  <p>
-                    Difference inside the file{' '}
-                    {t.balanceCheck.difference == null ? '—' : formatRs(t.balanceCheck.difference)}
-                    {t.balanceCheck.ok ? ' · OK' : ' · check the file or the columns'}
-                  </p>
-                  <p className="bis-money-label">
-                    This only checks the bank's own numbers. Comparing the bank with BookOne comes next, after you save.
-                  </p>
+                  <dl className="bis-sum">
+                    <div>
+                      <dt>Starting balance </dt>
+                      <dd>{formatMoney2(openN)}</dd>
+                    </div>
+                    <div>
+                      <dt>+ Money in </dt>
+                      <dd>{formatMoney2(t.totals.totalMoneyIn)}</dd>
+                    </div>
+                    <div>
+                      <dt>− Money out </dt>
+                      <dd>{formatMoney2(t.totals.totalMoneyOut)}</dd>
+                    </div>
+                    <div className="is-total">
+                      <dt>= Closing balance </dt>
+                      <dd>{formatMoney2(closeN)}</dd>
+                    </div>
+                  </dl>
+                  {t.balanceCheck.ok ? null : (
+                    <p className="bis-sum-note">
+                      Off by {t.balanceCheck.difference == null ? '—' : formatRs(t.balanceCheck.difference)}. Check the file or the
+                      columns.
+                    </p>
+                  )}
+                  <p className="bis-money-label">This checks the bank&apos;s own numbers. Comparing with BookOne comes after you save.</p>
                 </div>
                 <p className="bis-row-counts" data-testid="bis-row-counts">
-                  {t.inputRowCount} input · {t.readyCount} ready · {t.warningCount} warning · {t.errorCount}{' '}
-                  invalid · {t.skippedCount} skipped · {t.excludedCount} excluded
+                  {t.inputRowCount} input rows · {t.readyCount + t.warningCount} ready
+                  {t.errorCount ? ` · ${t.errorCount} with problems` : ''}
+                  {t.skippedCount ? ` · ${t.skippedCount} skipped` : ''}
+                  {t.excludedCount ? ` · ${t.excludedCount} balance row${t.excludedCount === 1 ? '' : 's'} left out` : ''}
                   {counted === t.inputRowCount ? '' : ` · counted ${counted}`}
                 </p>
               </>
@@ -1834,10 +1835,9 @@ export function BankImportStudioWizard({
           <strong>{importedCount} lines saved</strong>
           <p>
             {bankOnly.find((b) => b.id === bankId)
-              ? `${bankOnly.find((b) => b.id === bankId)?.code} · ${bankOnly.find((b) => b.id === bankId)?.shortName}. `
+              ? `${bankOnly.find((b) => b.id === bankId)?.name || bankOnly.find((b) => b.id === bankId)?.shortName}. `
               : ''}
-            Stored as bank statement data only. Next: match to existing cashbook entries (no new
-            journals yet).
+            Nothing has been added to your books. Next, match these lines to BookOne.
           </p>
           {importNotes.length > 0 ? (
             <ul className="bis-done-notes">
@@ -1864,15 +1864,13 @@ export function BankImportStudioWizard({
           >
             Reconcile now
           </a>
-          <a className="bis-btn secondary" href={hubAfterImport}>
-            Bank reconciliation
-          </a>
-          <a className="bis-btn secondary" href={homeAfterImport}>
-            {isErp ? 'Dashboard' : 'Back to cashbook'}
-          </a>
-          <button type="button" className="bis-btn secondary" onClick={() => window.location.reload()}>
+        </div>
+        <div className="bis-done-links">
+          <a href={hubAfterImport}>All reconciliations</a>
+          <button type="button" className="bis-link" onClick={() => window.location.reload()}>
             Import another file
           </button>
+          <a href={homeAfterImport}>{isErp ? 'Dashboard' : 'Back to cashbook'}</a>
         </div>
       </StudioShell>
     );

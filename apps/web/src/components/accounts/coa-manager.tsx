@@ -308,21 +308,24 @@ export function CoaManager({
 
   return (
     <div className="workspace party-workspace">
-      <div className="coa-page-head">
-        <div>
-          <p className="eyebrow">Accounting</p>
-          <h1 className="card-title">Chart of Accounts</h1>
-          <p className="card-subtitle">
-            Company accounts, banks, advances and opening balances. Reports use the current name; posted journals keep
-            their original lines.
-          </p>
+      <header className="ux-head">
+        <div className="ux-head-text">
+          <div>
+            <h1 className="page-title">Chart of Accounts</h1>
+            <p>
+              The accounts your money is sorted into: cash and banks, what customers owe you, what you owe, income and
+              expenses. Renaming an account changes reports; past entries keep their lines.
+            </p>
+          </div>
         </div>
         {canWrite ? (
-          <Link href="/accounts/new" className="button primary">
-            New account
-          </Link>
+          <div className="ux-head-actions">
+            <Link href="/accounts/new" className="button primary">
+              New account
+            </Link>
+          </div>
         ) : null}
-      </div>
+      </header>
       <div className="coa-toolbar">
         <div className="coa-filters">
           <SearchField
@@ -369,9 +372,6 @@ export function CoaManager({
           <Button onClick={exportCsv} disabled={pending}>
             Export CSV
           </Button>
-          <Link href="/advances" className="button secondary">
-            Advances
-          </Link>
         </div>
       </div>
       <Card>
@@ -438,8 +438,8 @@ export function CoaManager({
                       <td style={{ fontFamily: 'var(--font-mono)' }}>{row.code}</td>
                       <td>
                         <Link href={`/accounts/${row.id}`}>{row.name}</Link>
-                        {row.isGroup === '1' ? ' · group' : ''}
-                        {row.isSystem === '1' ? ' · system' : ''}
+                        {row.isGroup === '1' ? <span className="coa-tag">Group</span> : null}
+                        {row.isSystem === '1' ? <span className="coa-tag">Built-in</span> : null}
                       </td>
                       <td>
                         <Badge tone={typeTone(row.type)}>{classLabel(row.type)}</Badge>

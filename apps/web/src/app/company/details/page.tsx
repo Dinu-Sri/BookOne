@@ -75,7 +75,7 @@ export default async function CompanyDetailsPage() {
                   <div className="ux-row" key={company.id}>
                     <div className="ux-row-text">
                       <strong>{company.name}</strong>
-                      <span>{company.role}</span>
+                      <span>{company.role ? company.role.charAt(0).toUpperCase() + company.role.slice(1) : ''}</span>
                     </div>
                     {company.active ? (
                       <Badge tone="success">Open now</Badge>

@@ -1,3 +1,7 @@
+## 2026-11-28 — Calm Journal and Accounts; plain Advances wording; Company tab review fixes (v2.34.0)
+
+Journal as expandable entries plus a debits/credits statement; Accounts calm head and Built-in tags; Advances wording; backup counts and role casing fixed. See [CHG-20261128-calm-journal-accounts](changes/CHG-20261128-calm-journal-accounts.md).
+
 ## 2026-11-28 — Calm Company tabs: details, tax, brands, locations, domains, backup (v2.33.0)
 
 Folded lists with edit-in-place, registry controls, DNS record with Copy, restore folded; unused tax numbering fields folded with a pointer to Sales settings. See [CHG-20261128-calm-company-tabs](changes/CHG-20261128-calm-company-tabs.md).

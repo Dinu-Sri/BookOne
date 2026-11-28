@@ -12184,3 +12184,15 @@ a.party-back-btn[href='/company/details'], a.party-back-btn[href='/journal'] { d
 @media (max-width: 640px) {
   .co-dns > div { grid-template-columns: 1fr; gap: 4px; }
 }
+.coa-tag { display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: 999px; background: var(--bg-subtle); color: var(--ink-muted); font-size: 11px; font-weight: 600; line-height: 18px; vertical-align: 1px; }
+
+/* ---- Journal (v2.34.0) ---- */
+.ux-card .jr-list { padding: 0 16px 16px; }
+.jr-amount { font-variant-numeric: tabular-nums; }
+.jr-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jr-memo { margin: 0 0 8px; font-size: 13px; color: var(--ink-muted); }
+.jr-list tfoot td { font-weight: 700; border-top: 1px solid var(--line); }
+.jr-summary h2 { margin-bottom: 10px; }
+.jr-verdict { margin: 12px 0 0 !important; font-size: 13px; }
+.jr-verdict.is-good { color: var(--success); }
+.jr-verdict.is-bad { color: var(--danger); font-weight: 600; }

@@ -2,11 +2,10 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getPeriodOptions, getTenantInfo, listJournalEntries } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { Badge, Button, Card } from '@/components/ui/bookone-ui';
-import { ClipboardCheck, ListChecks } from 'lucide-react';
+import { Badge, Button } from '@/components/ui/bookone-ui';
 
 function formatLKR(value: number) {
-  return `LKR ${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return `LKR ${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 interface SearchParams { period?: string }
@@ -39,87 +38,67 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
   const totalDebit = audited.reduce((sum, row) => sum + row.debit, 0);
   const totalCredit = audited.reduce((sum, row) => sum + row.credit, 0);
   const unbalancedCount = audited.filter((row) => !row.balanced).length;
-  const accountSet = new Set(entries.flatMap((entry) => entry.lines.map((line) => line.accountCode)));
+
+  const allBalance = unbalancedCount === 0;
 
   return (
     <BookOneShell active="Journal" tenant={tenant} period={periodOptions}>
-      <div className="workspace">
-        <div className="grid metrics">
-          <Card className="metric-card">
-            <p className="metric-label">Journal entries</p>
-            <p className="metric-value">{entries.length}</p>
-            <p className="metric-note">{monthLabel}</p>
-          </Card>
-          <Card className="metric-card">
-            <p className="metric-label">Integrity</p>
-            <p className="metric-value">{unbalancedCount === 0 ? 'OK' : unbalancedCount}</p>
-            <p className="metric-note">{unbalancedCount === 0 ? 'All entries balance' : 'Entries need review'}</p>
-          </Card>
-          <Card className="metric-card">
-            <p className="metric-label">Total debits</p>
-            <p className="metric-value">{formatLKR(totalDebit)}</p>
-            <p className="metric-note">Must equal credits</p>
-          </Card>
-          <Card className="metric-card">
-            <p className="metric-label">Accounts touched</p>
-            <p className="metric-value">{accountSet.size}</p>
-            <p className="metric-note">Unique ledger accounts</p>
-          </Card>
-        </div>
+      <div className="workspace ux-page jr-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Journal</h1>
+              <p>Every entry in your books{periodOptions.selected ? ` in ${monthLabel}` : ''}, with the accounts it moved money between. Open an entry to see its lines.</p>
+            </div>
+          </div>
+          <div className="ux-head-actions">
+            <Link href="/journal/audit" className="button secondary">
+              Activity
+            </Link>
+          </div>
+        </header>
 
         {entries.length === 0 ? (
-          <Card style={{ marginTop: 16 }}>
-            <div className="empty-state">
-              <h3>No journal entries {periodOptions.selected ? `in ${monthLabel}` : 'yet'}</h3>
-              <p>Record your first entry to see a balanced journal audit here.</p>
-              <div className="cluster" style={{ marginTop: 14, gap: 8 }}>
-                <Link href="/"><Button variant="primary">Go to Simple Entry</Button></Link>
-                <Link href="/journal/audit"><Button variant="secondary">Activity</Button></Link>
-              </div>
+          <div className="ux-empty">
+            <h2>No journal entries {periodOptions.selected ? `in ${monthLabel}` : 'yet'}</h2>
+            <p>Record money in or out in Simple Entry, or create an invoice, and the entry appears here.</p>
+            <div className="cluster" style={{ gap: 8 }}>
+              <Link href="/">
+                <Button variant="primary">Go to Simple Entry</Button>
+              </Link>
             </div>
-          </Card>
+          </div>
         ) : (
-          <Card style={{ marginTop: 16 }}>
-            <div className="card-header">
-              <div>
-                <p className="eyebrow">Ledger audit table</p>
-                <h2 className="card-title" style={{ marginTop: 4 }}>Entries</h2>
-              </div>
-              <div className="cluster" style={{ gap: 8 }}>
-                <Link href="/journal/audit">
-                  <Button variant="secondary" type="button">Activity</Button>
-                </Link>
-                <Badge tone="info"><ListChecks size={12} /> Expand rows</Badge>
-              </div>
-            </div>
-            <div className="card-body">
-              <div className="journal-audit-list">
+          <div className="ux-split">
+            <section className="ux-card" aria-labelledby="journal-list-title">
+              <header className="ux-card-head">
+                <h2 id="journal-list-title">Entries</h2>
+                <span>{entries.length}</span>
+              </header>
+              <div className="journal-audit-list jr-list">
                 {audited.map(({ entry, debit, credit, difference, balanced }, index) => (
                   <details className={`journal-audit-row ${balanced ? '' : 'problem'}`} key={entry.id} open={index === 0}>
                     <summary>
                       <span className="audit-row-main">
-                        <strong>{entry.entryDate} - {entry.party}</strong>
+                        <strong>
+                          {entry.entryDate} · {entry.party}
+                        </strong>
                         <small>{entry.description}</small>
                       </span>
                       <span>{entry.accountingType}</span>
-                      <span>{formatLKR(entry.amount)}</span>
+                      <span className="jr-amount">{formatLKR(entry.amount)}</span>
                       <Badge tone={balanced ? 'success' : 'danger'}>
-                        {balanced ? 'Balanced' : formatLKR(difference)}
+                        {balanced ? 'Balanced' : `Off by ${formatLKR(difference)}`}
                       </Badge>
                     </summary>
                     <div className="audit-row-detail">
-                      <div className="audit-meta">
-                        <span><ClipboardCheck size={13} /> {entry.memo}</span>
-                        <span>Debit {formatLKR(debit)}</span>
-                        <span>Credit {formatLKR(credit)}</span>
-                      </div>
+                      {entry.memo ? <p className="jr-memo">{entry.memo}</p> : null}
                       <div className="table-wrap">
                         <table className="table">
                           <thead>
                             <tr>
                               <th>Account</th>
-                              <th>Side</th>
-                              <th>Memo</th>
+                              <th>Note</th>
                               <th style={{ textAlign: 'right' }}>Debit</th>
                               <th style={{ textAlign: 'right' }}>Credit</th>
                             </tr>
@@ -127,22 +106,59 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
                           <tbody>
                             {entry.lines.map((line) => (
                               <tr key={line.id}>
-                                <td>{line.accountCode} - {line.accountName}</td>
-                                <td><Badge tone={line.side === 'debit' ? 'info' : 'warning'}>{line.side}</Badge></td>
-                                <td style={{ color: 'var(--ink-muted)' }}>{line.memo ?? '-'}</td>
-                                <td style={{ textAlign: 'right' }}>{line.side === 'debit' ? formatLKR(line.amount) : '-'}</td>
-                                <td style={{ textAlign: 'right' }}>{line.side === 'credit' ? formatLKR(line.amount) : '-'}</td>
+                                <td>
+                                  {line.accountName} <span className="muted-line">({line.accountCode})</span>
+                                </td>
+                                <td style={{ color: 'var(--ink-muted)' }}>{line.memo ?? '—'}</td>
+                                <td className="jr-num">{line.side === 'debit' ? formatLKR(line.amount) : ''}</td>
+                                <td className="jr-num">{line.side === 'credit' ? formatLKR(line.amount) : ''}</td>
                               </tr>
                             ))}
                           </tbody>
+                          <tfoot>
+                            <tr>
+                              <td colSpan={2}>Total</td>
+                              <td className="jr-num">{formatLKR(debit)}</td>
+                              <td className="jr-num">{formatLKR(credit)}</td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     </div>
                   </details>
                 ))}
               </div>
-            </div>
-          </Card>
+            </section>
+
+            <aside className="ux-guide jr-summary" aria-label="Journal check">
+              <h2>{monthLabel}</h2>
+              <dl className="ux-statement">
+                <div>
+                  <dt>Entries </dt>
+                  <dd>{entries.length}</dd>
+                </div>
+                <div>
+                  <dt>Debits </dt>
+                  <dd>{formatLKR(totalDebit)}</dd>
+                </div>
+                <div>
+                  <dt>Credits </dt>
+                  <dd>{formatLKR(totalCredit)}</dd>
+                </div>
+                <div className="is-total">
+                  <dt>Difference </dt>
+                  <dd>
+                    {formatLKR(totalDebit - totalCredit)} {allBalance ? '✓' : ''}
+                  </dd>
+                </div>
+              </dl>
+              <p className={`jr-verdict ${allBalance ? 'is-good' : 'is-bad'}`} role="status">
+                {allBalance
+                  ? `All ${entries.length} entr${entries.length === 1 ? 'y balances' : 'ies balance'}: debits equal credits.`
+                  : `${unbalancedCount} entr${unbalancedCount === 1 ? 'y does' : 'ies do'} not balance. They are marked in red; open one to see its lines.`}
+              </p>
+            </aside>
+          </div>
         )}
       </div>
     </BookOneShell>

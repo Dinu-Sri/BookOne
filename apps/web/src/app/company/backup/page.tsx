@@ -12,6 +12,18 @@ import {
 } from '@/lib/tenant-archive';
 import { withTenantContext } from '@bookone/db';
 
+const BACKUP_LABELS: Record<string, [string, string]> = {
+  parties: ['customer or supplier', 'customers and suppliers'],
+  transactions: ['transaction', 'transactions'],
+  journal_entries: ['journal entry', 'journal entries'],
+  business_documents: ['invoice or other document', 'invoices and other documents'],
+  products: ['product', 'products'],
+  stock_movements: ['stock movement', 'stock movements'],
+  bank_statement_imports: ['bank statement', 'bank statements'],
+  bank_reconciliation_sessions: ['reconciliation', 'reconciliations'],
+  pos_sales: ['till sale', 'till sales'],
+};
+
 export default async function CompanyBackupPage() {
   let tenant;
   try {
@@ -42,9 +54,12 @@ export default async function CompanyBackupPage() {
     : 'Restore company data first';
 
   const tradingBits = Object.entries(emptyState.counts)
-    .filter(([, n]) => n > 0)
-    .map(([k, n]) => `${k.replace(/_/g, ' ')} ${n}`)
-    .slice(0, 8);
+    .filter(([k, n]) => n > 0 && !/_lines?$/.test(k))
+    .map(([k, n]) => {
+      const [one, many] = BACKUP_LABELS[k] ?? [k.replace(/_/g, ' '), k.replace(/_/g, ' ')];
+      return `${n} ${n === 1 ? one : many}`;
+    })
+    .slice(0, 6);
 
   return (
     <BookOneShell active="Backup" tenant={tenant}>
@@ -81,7 +96,7 @@ export default async function CompanyBackupPage() {
                   <p role="status" className="co-notice">
                     {lastExportLabel
                       ? `Your last backup was ${lastExportLabel}. Make a new one if it has been more than ${backupStatus.reminderDays} days, and keep both files off this computer.`
-                      : 'No backup has been downloaded yet. Make one now and keep both files and the password together.'}
+                      : 'Make your first backup now, and keep both files and the password together, off this computer.'}
                   </p>
                 ) : null}
                 <BackupClient initialMeta={prepared} />

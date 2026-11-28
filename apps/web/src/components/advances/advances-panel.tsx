@@ -190,7 +190,7 @@ export function AdvancesPanel({
             <tbody>
               {advances.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>No advances yet.</td>
+                  <td colSpan={6}>No advances yet. Issue one above when someone pays or is paid ahead.</td>
                 </tr>
               ) : (
                 advances.map((row) => (
@@ -234,8 +234,8 @@ export function AdvancesPanel({
               <div>
                 <h2 className="card-title">Issue an advance</h2>
                 <p className="card-subtitle">
-                  Customer receipts stay a liability until applied. Supplier and staff issues stay an asset until settled.
-                  These examples are non-VAT.
+                  Money a customer pays before an invoice is held for them until you apply it. Money you pay a supplier or
+                  staff member ahead counts as owed to you until it is settled. No VAT is added.
                 </p>
               </div>
             </div>
@@ -271,7 +271,7 @@ export function AdvancesPanel({
                   onChange={setCashCode}
                   options={cashAccounts.map((row) => ({ value: row.code, label: `${row.code} · ${row.name}` }))}
                   emptyReason="No spendable cash or bank accounts are available."
-                  help="Uses the account code the server validates. Card clearing is not listed."
+                  help="The cash or bank account the money goes into or out of."
                 />
                 <div className="field field-full">
                   <Button
@@ -295,7 +295,7 @@ export function AdvancesPanel({
               <div>
                 <h2 className="card-title">Allocate or settle</h2>
                 <p className="card-subtitle">
-                  Apply a customer or supplier advance to an eligible document, or settle staff with an expense or unused cash.
+                  Use an advance against an invoice or bill, or settle a staff advance with their receipts or the cash they return.
                 </p>
               </div>
             </div>

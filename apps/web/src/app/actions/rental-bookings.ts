@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import {
   availableQty,
@@ -1118,7 +1119,7 @@ export async function dispatchRentalLine(
     });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Dispatch failed.' };
+    return { ok: false, error: userMessageForError(error, 'Dispatch failed.') };
   }
 }
 
@@ -1295,7 +1296,7 @@ export async function returnRentalLine(input: {
     });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Return failed.' };
+    return { ok: false, error: userMessageForError(error, 'Return failed.') };
   }
 }
 
@@ -1396,7 +1397,7 @@ export async function extendRentalHire(input: {
     });
     return { ok: true, hireTo: nextTo };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not extend hire.' };
+    return { ok: false, error: userMessageForError(error, 'Could not extend hire.') };
   }
 }
 
@@ -1496,6 +1497,6 @@ export async function releaseFleetBay(input: {
     });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not mark ready.' };
+    return { ok: false, error: userMessageForError(error, 'Could not mark ready.') };
   }
 }

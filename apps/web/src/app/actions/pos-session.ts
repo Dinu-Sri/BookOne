@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireTenantContext } from '@bookone/auth';
@@ -184,7 +185,7 @@ export async function openPosShift(input: {
     revalidatePath('/pos');
     return { ok: true, shiftId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not open shift.' };
+    return { ok: false, error: userMessageForError(e, 'Could not open shift.') };
   }
 }
 
@@ -319,7 +320,7 @@ export async function completePosSale(
     revalidatePath('/transactions');
     return { ok: true, id: result.id, documentNumber };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Sale failed.' };
+    return { ok: false, error: userMessageForError(e, 'Sale failed.') };
   }
 }
 
@@ -553,7 +554,7 @@ export async function lookupPosSale(query: string): Promise<{
       };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Lookup failed.' };
+    return { ok: false, error: userMessageForError(e, 'Lookup failed.') };
   }
 }
 
@@ -697,7 +698,7 @@ export async function completePosReturn(
     revalidatePath('/transactions');
     return { ok: true, id: result.id, documentNumber };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Return failed.' };
+    return { ok: false, error: userMessageForError(e, 'Return failed.') };
   }
 }
 
@@ -902,7 +903,7 @@ export async function previewShiftZReport(shiftId: string): Promise<{
     if (!report) return { ok: false, error: 'Shift not found.' };
     return { ok: true, report };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not load Z-report.' };
+    return { ok: false, error: userMessageForError(e, 'Could not load Z-report.') };
   }
 }
 
@@ -950,7 +951,7 @@ export async function closePosShift(input: {
     revalidatePath('/sales/pos/shifts');
     return { ok: true, report: report ?? undefined };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not close shift.' };
+    return { ok: false, error: userMessageForError(e, 'Could not close shift.') };
   }
 }
 

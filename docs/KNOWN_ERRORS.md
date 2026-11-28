@@ -4,6 +4,28 @@
 
 ---
 
+## CoreGuard guard errors (`COREGUARD Gxx:`, SQLSTATE 23514)
+
+**Symptom:** A save fails with one of the messages below; `/ops/logs` has an `error` row with status `COREGUARD Gxx` and the original database message.
+**Cause:** A CoreGuard database guard (migrations `062_coreguard_guards.sql`, `063_coreguard_functions.sql`; guide [docs/coreguard/IMPLEMENTATION_GUIDE.md](coreguard/IMPLEMENTATION_GUIDE.md) §6.1) refused the write and rolled back the whole transaction. The guard is right: **fix the app, never the guard** (guide §4.7).
+**Fix:** `apps/web/src/lib/coreguard-errors.ts → userMessageForError` shows the user message and logs the original. Find the writer from the logged message and make it atomic, exact and append-only.
+
+| Code | Meaning | User message |
+| --- | --- | --- |
+| G01 | Entry doesn't balance exactly / has no debit or credit line / has an invalid line (checked at COMMIT) | This entry doesn't balance, so nothing was saved. |
+| G02 | Line side not `debit`/`credit`, or amount NaN / ≤ 0 | An amount, date or side in this entry is not valid, so nothing was saved. |
+| G03 | Line/entry/account/party of another company, group account or archived account | This entry refers to an account or contact that can't be used here. |
+| G04 | Delete, or change to a financial field of a posted row; `reversed_by` set twice; period lock changed other than locked → unlocked; ledger maintenance without authorisation | Posted entries can't be changed. Post a reversal instead. |
+| G05 | Entry or stock movement dated in a locked month; ledger write not in READ COMMITTED; close/reopen outside `coreguard.lock_period`/`unlock_period` rules | This month is closed. Reopen it (with a reason) or use an open date. |
+| G06 | Invalid ISO date, flag not `0`/`1`, NaN or non-positive amount | An amount, date or side in this entry is not valid, so nothing was saved. |
+| G07 | Transaction saved without a journal entry (checked at COMMIT) | This entry could not be saved completely, so nothing was saved. Please try again. |
+| G09 | Lines added to an entry (or an entry to a transaction) outside the DB transaction that created it | This entry could not be saved completely, so nothing was saved. Please try again. |
+| G10 | Control-account line (`ar`, `ap`, advances) without a party (from Step 7, migration 065) | Choose the customer, supplier or staff member for this entry. |
+| G11 | Allocation where payer ≠ debtor without a flagged third-party payment (from Step 8, migration 066) | This payment is from a different party than the invoice. Record it as a third-party payment with a reason and reference. |
+| other / `cg_*` unique index | Unknown `COREGUARD` code, or a CoreGuard unique index (`cg_one_live_entry_per_tx`, `cg_period_locks_active_uidx`, …) | Nothing was saved because the books would have become inconsistent. The error has been logged. |
+
+---
+
 ## Error: Named bank dates rolled over (BUG-0012 remainder / F-010)
 
 **Symptom:** `parseStatementDate('30 Feb 2026')` returned `2026-03-02`. ISO/slash impossible dates were already rejected.  

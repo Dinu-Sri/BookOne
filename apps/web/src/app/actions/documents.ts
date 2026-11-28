@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
@@ -127,22 +128,7 @@ function assertEligiblePaymentTender(account: { code: string; type: string; isAc
   }
 }
 
-async function assertOpenPeriod(tenantId: string, date: string) {
-  const period = date.slice(0, 7);
-  const [lock] = await db()
-    .select({ id: periodLocks.id })
-    .from(periodLocks)
-    .where(
-      and(
-        eq(periodLocks.tenantId, tenantId),
-        eq(periodLocks.period, period),
-        eq(periodLocks.status, 'locked'),
-        isNull(periodLocks.voidedAt),
-      ),
-    )
-    .limit(1);
-  if (lock) throw new Error(`Period ${period} is locked.`);
-}
+// CoreGuard Step 2: the period check is guard G05 in the database (any posting dated in a locked month is refused).
 
 async function nextDocumentNumber(tenantId: string, type: z.infer<typeof documentTypeSchema>, date: string) {
   const prefix = documentPrefix(type);
@@ -250,7 +236,6 @@ export async function createDocument(input: z.infer<typeof documentInputSchema>)
     });
 
     await withTenantContext(user.tenantId, async () => {
-      await assertOpenPeriod(user.tenantId, parsed.issueDate);
       const total = parsed.quantity * parsed.unitPrice;
       const controlAccount = await resolveAccount(user.tenantId, parsed.documentType === 'customer_invoice' ? '1300' : '2100');
       const lineAccount = await resolveAccount(user.tenantId, parsed.accountCode);
@@ -364,7 +349,7 @@ export async function createDocument(input: z.infer<typeof documentInputSchema>)
     revalidatePath('/reports');
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not create document.';
+    const message = userMessageForError(error, 'Could not create document.');
     return { ok: false, error: message };
   }
 }
@@ -565,7 +550,6 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
     const user = await requireTenantContext();
 
     await withTenantContext(user.tenantId, async () => {
-      await assertOpenPeriod(user.tenantId, parsed.paymentDate);
       await db().transaction(async (tx) => {
         await allocateDocumentPaymentBody(tx as AllocateTx, user, parsed);
       });
@@ -574,7 +558,7 @@ export async function allocateDocumentPayment(input: z.infer<typeof allocationIn
     revalidatePaymentPaths();
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not allocate payment.';
+    const message = userMessageForError(error, 'Could not allocate payment.');
     return { ok: false, error: message };
   }
 }
@@ -597,7 +581,6 @@ async function allocatePaymentBatch(args: {
   paymentAccountCode: string;
   allocations: { documentId: string; amount: number }[];
 }): Promise<{ paidCount: number; paymentIds: string[] }> {
-  await assertOpenPeriod(args.user.tenantId, args.paymentDate);
   const paymentIds: string[] = [];
   await db().transaction(async (tx) => {
     await lockDocumentsForUpdate(
@@ -643,7 +626,7 @@ export async function payVendorBills(input: {
     revalidatePaymentPaths();
     return { ok: true, paidCount: batch.paidCount, paymentIds: batch.paymentIds };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Pay vendors failed.', paidCount: 0 };
+    return { ok: false, error: userMessageForError(e, 'Pay vendors failed.'), paidCount: 0 };
   }
 }
 
@@ -727,7 +710,7 @@ export async function receiveCustomerPayments(input: {
     });
     return out;
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Receive payment failed.';
+    const message = userMessageForError(e, 'Receive payment failed.');
     const { logOps } = await import('@/lib/ops-log');
     await logOps({ kind: 'error', path: 'action:receiveCustomerPayments', status: 'error', message });
     return persist({ ok: false, error: message, paidCount: 0, fingerprint: fingerprint || undefined });

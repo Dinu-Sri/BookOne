@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -103,26 +104,7 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
       await assertDimensionScope(dimensions);
     }
 
-    const [lock] = await withTenantContext(user.tenantId, async () => {
-      return db()
-        .select({ id: periodLocks.id })
-        .from(periodLocks)
-        .where(
-          and(
-            eq(periodLocks.tenantId, user.tenantId),
-            eq(periodLocks.period, entryPeriod),
-            eq(periodLocks.status, 'locked'),
-            isNull(periodLocks.voidedAt),
-          ),
-        )
-        .limit(1);
-    });
-    if (lock) {
-      return {
-        success: false,
-        error: `Period ${entryPeriod} is locked. Create a reversing entry in the current period instead.`,
-      };
-    }
+    // CoreGuard Step 2: a locked month is refused by guard G05 in the database.
 
     // P0: soft block possible double-post vs commercial documents (same day, party, amount)
     if (!parsed.forceDuplicate && parsed.direction !== 'move_money') {
@@ -306,7 +288,7 @@ export async function recordEntry(input: EntryInput): Promise<RecordEntryResult>
         error: `Validation error: ${error.issues.map((e) => e.message).join(', ')}`,
       };
     }
-    const message = error instanceof Error ? error.message : 'Unknown error recording entry';
+    const message = userMessageForError(error, 'Unknown error recording entry');
     console.error('Record entry failed:', message, error);
     return { success: false, error: message };
   }
@@ -323,23 +305,7 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
     const reversalDate = new Date().toISOString().slice(0, 10);
     const reversalPeriod = reversalDate.slice(0, 7);
 
-    const [lock] = await withTenantContext(user.tenantId, async () => {
-      return db()
-        .select({ id: periodLocks.id })
-        .from(periodLocks)
-        .where(
-          and(
-            eq(periodLocks.tenantId, user.tenantId),
-            eq(periodLocks.period, reversalPeriod),
-            eq(periodLocks.status, 'locked'),
-            isNull(periodLocks.voidedAt),
-          ),
-        )
-        .limit(1);
-    });
-    if (lock) {
-      return { success: false, error: `Current period ${reversalPeriod} is locked.` };
-    }
+    // CoreGuard Step 2: a locked month is refused by guard G05 in the database.
 
     const result = await withTenantContext(user.tenantId, async () => {
       return db().transaction(async (tx) => {
@@ -507,7 +473,7 @@ export async function createReversingEntry(formData: FormData): Promise<Reversal
     if (isUniqueViolation(error)) {
       return { success: false, error: 'This transaction already has a reversing entry.' };
     }
-    const message = error instanceof Error ? error.message : 'Unknown error creating reversing entry';
+    const message = userMessageForError(error, 'Unknown error creating reversing entry');
     console.error('createReversingEntry failed:', message, error);
     return { success: false, error: message };
   }

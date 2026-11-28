@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { writeDeniedMessage } from '@/lib/access';
 import { z } from 'zod';
@@ -912,7 +913,7 @@ export async function previewStatementMapping(formData: FormData): Promise<
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Could not preview file.',
+      error: userMessageForError(e, 'Could not preview file.'),
     };
   }
 }
@@ -1249,7 +1250,7 @@ export async function commitStatementImport(formData: FormData): Promise<
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Could not import statement.',
+      error: userMessageForError(e, 'Could not import statement.'),
     };
   }
 }
@@ -1355,7 +1356,7 @@ export async function commitStatementBatch(formData: FormData): Promise<
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Could not import batch.',
+      error: userMessageForError(e, 'Could not import batch.'),
     };
   }
 }
@@ -1703,7 +1704,7 @@ export async function confirmStatementLinks(input: {
     revalidatePath('/transactions');
     return { ok: true, linked };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not confirm matches.' };
+    return { ok: false, error: userMessageForError(e, 'Could not confirm matches.') };
   }
 }
 
@@ -1790,7 +1791,7 @@ export async function manualLinkStatementLine(input: {
     revalidatePath('/transactions');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not link line.' };
+    return { ok: false, error: userMessageForError(e, 'Could not link line.') };
   }
 }
 
@@ -2042,7 +2043,7 @@ export async function confirmStatementCreates(input: {
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Could not create entries.',
+      error: userMessageForError(e, 'Could not create entries.'),
     };
   }
 }
@@ -2109,7 +2110,7 @@ export async function skipStatementLines(input: {
     revalidatePath('/reconciliation');
     return { ok: true, skipped };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not skip lines.' };
+    return { ok: false, error: userMessageForError(e, 'Could not skip lines.') };
   }
 }
 
@@ -2193,7 +2194,7 @@ export async function undoStatementCreates(input: {
     revalidatePath('/transactions');
     return { ok: true, reversed, errors };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not undo creates.' };
+    return { ok: false, error: userMessageForError(e, 'Could not undo creates.') };
   }
 }
 
@@ -2269,7 +2270,7 @@ export async function voidStatementImport(importId: string): Promise<
     revalidatePath('/reconciliation');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not discard import.' };
+    return { ok: false, error: userMessageForError(e, 'Could not discard import.') };
   }
 }
 
@@ -2507,7 +2508,7 @@ export async function runStatementMatchPass(importId: string): Promise<
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Could not match bank lines to books.',
+      error: userMessageForError(e, 'Could not match bank lines to books.'),
     };
   }
 }
@@ -2613,7 +2614,7 @@ export async function searchBookCandidatesForMatch(input: {
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Could not search book entries.',
+      error: userMessageForError(e, 'Could not search book entries.'),
     };
   }
 }
@@ -2680,6 +2681,6 @@ export async function markLinesUnmatched(input: {
     revalidatePath('/reconciliation');
     return { ok: true, count };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not update lines.' };
+    return { ok: false, error: userMessageForError(e, 'Could not update lines.') };
   }
 }

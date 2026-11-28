@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 2: database guards (v2.36.0)
+
+Guards are written and tested in CI; merge waits for the staging preflight (0 duplicates) and owner action B4 (maintenance login). After deploy: fingerprint backfill and the staging smoke test. See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md).
+
 ## 2026-11-28 — CoreGuard Step 1: writers guard-ready (v2.35.3)
 
 Writers are atomic and exact, ready for the Step 2 database guards. Next: Step 2 (guards 060–063); owner action B4 (maintenance login on staging) is needed there. See [CHG-20261128-coreguard-step-1](changes/CHG-20261128-coreguard-step-1.md).

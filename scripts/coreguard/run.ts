@@ -38,9 +38,10 @@ async function main() {
   };
   console.log('CoreGuard pilot identity', identity);
 
+  // Same schema path as production startup (docker/entrypoint.sh): additive-only push, never drizzle-kit push --force.
   const pushed = spawnSync(
     'pnpm',
-    ['--dir', 'packages/db', 'exec', 'drizzle-kit', 'push', '--force'],
+    ['--dir', 'packages/db', 'exec', 'tsx', 'scripts/push-additive.ts'],
     {
       cwd: ROOT,
       stdio: 'inherit',
@@ -53,9 +54,9 @@ async function main() {
     try {
       const rows = await sql<{ t: string | null }[]>`SELECT to_regclass('public.tenants')::text AS t`;
       if (!rows[0]?.t) {
-        throw new Error('drizzle-kit push failed and public.tenants is missing.');
+        throw new Error('push-additive failed and public.tenants is missing.');
       }
-      console.warn('drizzle-kit push failed on an existing schema; continuing with SQL migrations.');
+      console.warn('push-additive failed on an existing schema; continuing with SQL migrations.');
     } finally {
       await sql.end({ timeout: 5 });
     }

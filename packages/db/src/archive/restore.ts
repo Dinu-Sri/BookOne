@@ -1,6 +1,7 @@
-import { and, desc, eq, getTableColumns, getTableName } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, getTableName, sql } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { db, pgClient } from '../db';
+import { maintenanceDb } from '../maintenance-db';
 import { auditLog, tenantInvites, tenants } from '../schema';
 import { decryptArchivePayload } from './crypto';
 import { tenantIsOperationallyEmpty } from './empty';
@@ -75,6 +76,9 @@ function rowForInsert(table: PgTable, row: Record<string, unknown>): Record<stri
 function friendlyError(error: unknown): string {
   if (!(error instanceof Error)) return 'Could not restore this backup.';
   const msg = error.message;
+  if (msg.includes('MAINTENANCE_DATABASE_URL')) {
+    return 'Restoring a backup is not set up on this server yet. Ask the platform administrator.';
+  }
   if (
     msg.includes('BookOne archive') ||
     msg.includes('backup') ||
@@ -139,10 +143,16 @@ export async function restoreTenantDataArchive(args: {
 
     const byName = tableByName();
 
-    return await db().transaction(async (tx) => {
-      const lockRows = await pgClient()<Array<{ locked: boolean | string | number }>>`
-        select pg_try_advisory_xact_lock(${ADVISORY_NS}, hashtext(${args.tenantId})) as locked
-      `;
+    // CoreGuard §4.6: a restore re-creates posted history (locked months, archived accounts, reversal links),
+    // which the ledger guards refuse from the app login. It runs on the maintenance login, and the
+    // maintenance reason is the first statement of its transaction (every statement is logged in
+    // coreguard.bypass_log). Inside the callback, db() is this maintenance transaction.
+    return await maintenanceDb().transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL bookone.ledger_maintenance = 'archive_restore'`);
+      await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${args.tenantId}, true)`);
+      const lockRows = (await tx.execute(
+        sql`select pg_try_advisory_xact_lock(${ADVISORY_NS}, hashtext(${args.tenantId})) as locked`,
+      )) as unknown as Array<{ locked: boolean | string | number }>;
       const lockVal = lockRows[0]?.locked;
       const locked = lockVal === true || lockVal === 't' || lockVal === 'true' || lockVal === 1;
       if (!locked) {

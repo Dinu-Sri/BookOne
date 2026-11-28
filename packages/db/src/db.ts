@@ -3,6 +3,7 @@ import 'server-only';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { activeTransaction, withAmbientTransactions, withoutAmbientTransaction } from './ambient-transaction';
 import { adaptReservedForDrizzle, type ReservedSql } from './reserved-client';
 import * as schema from './schema';
 
@@ -49,7 +50,7 @@ function getDb() {
 }
 
 export function db() {
-  return tenantAls.getStore()?.db ?? getDb().db;
+  return activeTransaction<DbClient>() ?? withAmbientTransactions(tenantAls.getStore()?.db ?? getDb().db);
 }
 
 export function pgClient() {
@@ -69,7 +70,8 @@ export function drizzleOn(client: ScopedTenantDb['sql']) {
 }
 
 export function runWithTenantDb<T>(scope: ScopedTenantDb, fn: () => Promise<T>): Promise<T> {
-  return tenantAls.run(scope, fn);
+  // A new tenant connection never inherits another connection's ambient transaction.
+  return tenantAls.run(scope, () => withoutAmbientTransaction(fn));
 }
 
 export type DbClient = ReturnType<typeof getDb>['db'];

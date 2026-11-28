@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 1: writers guard-ready (v2.35.3)
+
+Every ledger/stock/allocation action is one DB transaction (db() joins the active transaction; nested ones are savepoints); balance checks are exact integer cents with no tolerance; journal_lines.party_id and transactions.source_kind/source_id added. See [CHG-20261128-coreguard-step-1](changes/CHG-20261128-coreguard-step-1.md).
+
 ## 2026-11-28 — CoreGuard Step 0: Rule Zero and governance (v2.35.2)
 
 Rule Zero is the first section of AGENTS.md and the first line of every agent file. Guide v2.1, financial surface list, CHG template section, CODEOWNERS added; production rules 0/3/8/10 rewritten. Docs only. See [CHG-20261128-coreguard-step-0](changes/CHG-20261128-coreguard-step-0.md).

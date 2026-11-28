@@ -1,3 +1,4 @@
+import { centsToNumber, centsToString, sideTotalsCents } from '../money';
 /**
  * Pure journal builders for Sales / Purchase / Inventory documents.
  * Used for accounting accuracy tests without DB coupling.
@@ -72,11 +73,11 @@ export function formatVatPercent(rate: number): string {
   return cleaned.toFixed(10).replace(/\.?0+$/, '');
 }
 
+/** Debits equal credits exactly, in integer cents; every line must be an exact 2-decimal amount (CoreGuard D3). */
 function assertBalanced(lines: PostingLine[]) {
-  const debit = round2(lines.filter((l) => l.side === 'debit').reduce((s, l) => s + l.amount, 0));
-  const credit = round2(lines.filter((l) => l.side === 'credit').reduce((s, l) => s + l.amount, 0));
+  const { debit, credit } = sideTotalsCents(lines);
   if (debit !== credit) {
-    throw new Error(`Unbalanced journal: debit ${debit} != credit ${credit}`);
+    throw new Error(`Unbalanced journal: debit ${centsToString(debit)} != credit ${centsToString(credit)}`);
   }
 }
 
@@ -622,8 +623,6 @@ export function buildOpeningStockPosting(input: {
 }
 
 export function sumSides(lines: PostingLine[]) {
-  return {
-    debit: round2(lines.filter((l) => l.side === 'debit').reduce((s, l) => s + l.amount, 0)),
-    credit: round2(lines.filter((l) => l.side === 'credit').reduce((s, l) => s + l.amount, 0)),
-  };
+  const { debit, credit } = sideTotalsCents(lines);
+  return { debit: centsToNumber(debit), credit: centsToNumber(credit) };
 }

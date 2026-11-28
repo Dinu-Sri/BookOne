@@ -1,3 +1,5 @@
+import { centsToNumber, toCents } from './money';
+
 export type OpeningLineInput = {
   accountCode: string;
   debit: number;
@@ -21,8 +23,9 @@ function roundMoney(value: number): number {
 
 export function previewOpeningBalances(lines: OpeningLineInput[], equityCode = '3000'): OpeningPreview {
   const issues: string[] = [];
-  let debitTotal = 0;
-  let creditTotal = 0;
+  // Exact integer cents (CoreGuard D3): no float sums, no tolerance.
+  let debitCents = 0n;
+  let creditCents = 0n;
   let lineCount = 0;
   const seen = new Set<string>();
   for (const line of lines) {
@@ -46,15 +49,15 @@ export function previewOpeningBalances(lines: OpeningLineInput[], equityCode = '
       continue;
     }
     seen.add(line.accountCode);
-    debitTotal += debit;
-    creditTotal += credit;
+    debitCents += toCents(debit);
+    creditCents += toCents(credit);
     lineCount += 1;
   }
-  debitTotal = roundMoney(debitTotal);
-  creditTotal = roundMoney(creditTotal);
-  const difference = roundMoney(debitTotal - creditTotal);
+  const debitTotal = centsToNumber(debitCents);
+  const creditTotal = centsToNumber(creditCents);
+  const difference = centsToNumber(debitCents - creditCents);
   if (lineCount === 0) issues.push('Enter at least one opening amount.');
-  const balanced = Math.abs(difference) < 0.005;
+  const balanced = debitCents === creditCents;
   if (!balanced) {
     issues.push(
       `Opening entries must balance. Debits ${debitTotal.toFixed(2)} vs credits ${creditTotal.toFixed(2)} (difference ${difference.toFixed(2)}). Offset to ${equityCode} if this is opening equity.`,

@@ -39,27 +39,30 @@ export async function saveInventorySettingsFromForm(formData: FormData): Promise
   const user = await requireTenantContext();
   await assertPermission('company.inventory_settings.write', 'write');
   await withTenantContext(user.tenantId, async () => {
-    const [existing] = await db()
-      .select({ id: inventorySettings.id })
-      .from(inventorySettings)
-      .where(eq(inventorySettings.tenantId, user.tenantId))
-      .limit(1);
+    // One DB transaction (CoreGuard §4.2): the costing method and the FIFO cost layers it seeds commit together.
+    await db().transaction(async () => {
+      const [existing] = await db()
+        .select({ id: inventorySettings.id })
+        .from(inventorySettings)
+        .where(eq(inventorySettings.tenantId, user.tenantId))
+        .limit(1);
 
-    const values = {
-      negativeStockPolicy: parsed.negativeStockPolicy,
-      costingMethod: parsed.costingMethod,
-      updatedAt: new Date(),
-    };
+      const values = {
+        negativeStockPolicy: parsed.negativeStockPolicy,
+        costingMethod: parsed.costingMethod,
+        updatedAt: new Date(),
+      };
 
-    if (existing) {
-      await db().update(inventorySettings).set(values).where(eq(inventorySettings.id, existing.id));
-    } else {
-      await db().insert(inventorySettings).values({ tenantId: user.tenantId, ...values });
-    }
-    if (parsed.costingMethod === 'fifo') {
-      const { seedAllProductLots } = await import('@/lib/inventory-costing');
-      await seedAllProductLots(user.tenantId, new Date().toISOString().slice(0, 10));
-    }
+      if (existing) {
+        await db().update(inventorySettings).set(values).where(eq(inventorySettings.id, existing.id));
+      } else {
+        await db().insert(inventorySettings).values({ tenantId: user.tenantId, ...values });
+      }
+      if (parsed.costingMethod === 'fifo') {
+        const { seedAllProductLots } = await import('@/lib/inventory-costing');
+        await seedAllProductLots(user.tenantId, new Date().toISOString().slice(0, 10));
+      }
+    });
   });
 
   revalidatePath('/company/inventory');

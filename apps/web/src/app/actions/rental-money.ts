@@ -520,80 +520,88 @@ export async function invoiceHireCharges(input: {
       });
     }
 
-    const created = await createCommercialDocument({
-      documentType: 'sales_invoice',
-      partyName: ctx.doc.partyName ?? 'Customer',
-      issueDate: today,
-      notes: `Hire charges for ${ctx.doc.documentNumber}`,
-      saleChannel: 'local',
-      invoiceKind: 'commercial',
-      sourceDocumentId: input.documentId,
-      linkSourceWithoutConversion: true,
-      lines,
-    });
-    if (!created.ok || !created.id) {
-      return { ok: false, error: created.error || 'Could not create hire charges invoice.' };
-    }
-    const invoiceId = created.id;
-
-    if (input.applyDeposit && ctx.event) {
-      const apply = Math.min(depositOpen(ctx.event), money(damageCharge + lateFee + extraHire));
-      if (apply > 0) {
-        await withTenantContext(user.tenantId, async () => {
-          await assertOpenPeriod(user.tenantId, today);
-          await db().transaction(async () => {
-            await lockRentalEvent(user.tenantId, ctx.event!.id);
-            const [chargeDoc] = await db()
-              .select({
-                id: businessDocuments.id,
-                documentNumber: businessDocuments.documentNumber,
-                paidAmount: businessDocuments.paidAmount,
-                total: businessDocuments.total,
-              })
-              .from(businessDocuments)
-              .where(eq(businessDocuments.id, invoiceId))
-              .limit(1);
-            const liability = await accountByCode(user.tenantId, '2400');
-            const ar = await accountByCode(user.tenantId, '1300');
-            await postBalanced({
-              tenantId: user.tenantId,
-              userId: user.id,
-              party: ctx.doc.partyName ?? 'Customer',
-              description: `Apply hire deposit to ${chargeDoc?.documentNumber ?? 'charges'}`,
-              amount: apply,
-              date: today,
-              paymentAccountId: liability.id,
-              debitAccountId: liability.id,
-              creditAccountId: ar.id,
-              categoryCode: '2400',
-              categoryName: liability.name,
-              direction: 'money_out',
-              invoiceRef: chargeDoc?.documentNumber,
-            });
-            if (chargeDoc) {
-              const newPaid = Number(chargeDoc.paidAmount) + apply;
-              const newBalance = Math.max(0, Number(chargeDoc.total) - newPaid);
-              await db()
-                .update(businessDocuments)
-                .set({
-                  paidAmount: newPaid.toFixed(2),
-                  balanceDue: newBalance.toFixed(2),
-                  status: newBalance <= 0.005 ? 'paid' : 'partial',
-                  updatedAt: new Date(),
-                })
-                .where(eq(businessDocuments.id, chargeDoc.id));
-            }
-            await db()
-              .update(rentalEvents)
-              .set({
-                depositApplied: (Number(ctx.event!.depositApplied) + apply).toFixed(2),
-                updatedAt: new Date(),
-              })
-              .where(eq(rentalEvents.id, ctx.event!.id));
-          });
+    // One DB transaction for the whole action (CoreGuard §4.2): the charges invoice and the deposit applied to it
+    // commit together or not at all.
+    const invoiceId = await withTenantContext(user.tenantId, () =>
+      db().transaction(async () => {
+        const created = await createCommercialDocument({
+          documentType: 'sales_invoice',
+          partyName: ctx.doc.partyName ?? 'Customer',
+          issueDate: today,
+          notes: `Hire charges for ${ctx.doc.documentNumber}`,
+          saleChannel: 'local',
+          invoiceKind: 'commercial',
+          sourceDocumentId: input.documentId,
+          linkSourceWithoutConversion: true,
+          lines,
         });
-      }
-    }
+        // Throw, not return, so nothing of this action is kept.
+        if (!created.ok || !created.id) {
+          throw new Error(created.error || 'Could not create hire charges invoice.');
+        }
+        const invoiceId = created.id;
+
+        if (input.applyDeposit && ctx.event) {
+          const apply = Math.min(depositOpen(ctx.event), money(damageCharge + lateFee + extraHire));
+          if (apply > 0) {
+            await withTenantContext(user.tenantId, async () => {
+              await assertOpenPeriod(user.tenantId, today);
+              await db().transaction(async () => {
+                await lockRentalEvent(user.tenantId, ctx.event!.id);
+                const [chargeDoc] = await db()
+                  .select({
+                    id: businessDocuments.id,
+                    documentNumber: businessDocuments.documentNumber,
+                    paidAmount: businessDocuments.paidAmount,
+                    total: businessDocuments.total,
+                  })
+                  .from(businessDocuments)
+                  .where(eq(businessDocuments.id, invoiceId))
+                  .limit(1);
+                const liability = await accountByCode(user.tenantId, '2400');
+                const ar = await accountByCode(user.tenantId, '1300');
+                await postBalanced({
+                  tenantId: user.tenantId,
+                  userId: user.id,
+                  party: ctx.doc.partyName ?? 'Customer',
+                  description: `Apply hire deposit to ${chargeDoc?.documentNumber ?? 'charges'}`,
+                  amount: apply,
+                  date: today,
+                  paymentAccountId: liability.id,
+                  debitAccountId: liability.id,
+                  creditAccountId: ar.id,
+                  categoryCode: '2400',
+                  categoryName: liability.name,
+                  direction: 'money_out',
+                  invoiceRef: chargeDoc?.documentNumber,
+                });
+                if (chargeDoc) {
+                  const newPaid = Number(chargeDoc.paidAmount) + apply;
+                  const newBalance = Math.max(0, Number(chargeDoc.total) - newPaid);
+                  await db()
+                    .update(businessDocuments)
+                    .set({
+                      paidAmount: newPaid.toFixed(2),
+                      balanceDue: newBalance.toFixed(2),
+                      status: newBalance <= 0.005 ? 'paid' : 'partial',
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(businessDocuments.id, chargeDoc.id));
+                }
+                await db()
+                  .update(rentalEvents)
+                  .set({
+                    depositApplied: (Number(ctx.event!.depositApplied) + apply).toFixed(2),
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(rentalEvents.id, ctx.event!.id));
+              });
+            });
+          }
+        }
+        return invoiceId;
+      }),
+    );
 
     revalidateMoney(input.documentId);
     revalidatePath(`/sales/invoices/${invoiceId}`);

@@ -1,5 +1,7 @@
 /** Non-VAT advance mechanics. Taxable advances stay refused until a sourced contract exists. */
 
+import { sideTotalsCents } from './money';
+
 export type AdvanceKind = 'customer' | 'supplier' | 'staff';
 export type AdvanceAllocationKind = 'apply' | 'refund' | 'expense_settle' | 'return_cash';
 
@@ -135,10 +137,14 @@ export function staffAdvanceReturnLines(amount: number, cashCode: string = DEFAU
   ];
 }
 
+/** Debits equal credits exactly, in integer cents (CoreGuard D3). A line that is not an exact 2-decimal amount fails. */
 export function linesBalance(lines: JournalLineDraft[]): boolean {
-  const debit = roundMoney(lines.filter((l) => l.side === 'debit').reduce((s, l) => s + l.amount, 0));
-  const credit = roundMoney(lines.filter((l) => l.side === 'credit').reduce((s, l) => s + l.amount, 0));
-  return Math.abs(debit - credit) < 0.005;
+  try {
+    const { debit, credit } = sideTotalsCents(lines);
+    return debit === credit;
+  } catch {
+    return false;
+  }
 }
 
 export function cashNetFromLines(lines: JournalLineDraft[], cashCodes: Iterable<string>): number {

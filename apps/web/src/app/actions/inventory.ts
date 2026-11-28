@@ -3,7 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
+  assertLinesBalanceExactly,
   buildOpeningStockPosting,
+  centsToString,
+  toCents,
   buildStockAdjustmentPosting,
   tracksStockQty,
 } from '@bookone/accounting';
@@ -1142,187 +1145,192 @@ async function createProductFromFormInner(formData: FormData): Promise<void> {
   const user = await requireTenantContext();
   let createdId: string | null = null;
 
-  await withTenantContext(user.tenantId, async () => {
-    await applyCategory(user.tenantId, parsed);
-    await assertProductBrandAndLocation(user.tenantId, parsed.brandId ?? null, parsed.openingLocationId ?? null);
-    if (catalog) await assertCatalogRefs(user.tenantId, catalog, null);
-    const [dup] = await db()
-      .select({ id: inventoryProducts.id })
-      .from(inventoryProducts)
-      .where(
-        and(
-          eq(inventoryProducts.tenantId, user.tenantId),
-          sql`lower(${inventoryProducts.sku}) = lower(${parsed.sku.trim()})`,
-          isNull(inventoryProducts.voidedAt),
-        ),
-      )
-      .limit(1);
-    if (dup) throw new Error('SKU already exists.');
+  // One DB transaction for the whole action (CoreGuard §4.2): product, stock, cost layer, movement and the
+  // opening-stock journal commit together or not at all.
+  await withTenantContext(user.tenantId, () =>
+    db().transaction(async () => {
+      await applyCategory(user.tenantId, parsed);
+      await assertProductBrandAndLocation(user.tenantId, parsed.brandId ?? null, parsed.openingLocationId ?? null);
+      if (catalog) await assertCatalogRefs(user.tenantId, catalog, null);
+      const [dup] = await db()
+        .select({ id: inventoryProducts.id })
+        .from(inventoryProducts)
+        .where(
+          and(
+            eq(inventoryProducts.tenantId, user.tenantId),
+            sql`lower(${inventoryProducts.sku}) = lower(${parsed.sku.trim()})`,
+            isNull(inventoryProducts.voidedAt),
+          ),
+        )
+        .limit(1);
+      if (dup) throw new Error('SKU already exists.');
 
-    const [product] = await db()
-      .insert(inventoryProducts)
-      .values({ ...toProductValues(user.tenantId, { ...parsed, productType: type }), ...(catalog ? catalogColumns(catalog) : {}) })
-      .returning({ id: inventoryProducts.id });
-    createdId = product.id;
+      const [product] = await db()
+        .insert(inventoryProducts)
+        .values({ ...toProductValues(user.tenantId, { ...parsed, productType: type }), ...(catalog ? catalogColumns(catalog) : {}) })
+        .returning({ id: inventoryProducts.id });
+      createdId = product.id;
 
-    if (type === 'rental') {
-      await replaceKitComponents(user.tenantId, product.id, parseKitComponents(formData));
-      await replaceSerials(user.tenantId, product.id, parsed.tracksSerials ? parseSerialCodes(formData) : []);
-    }
-
-    const photo = formData.get('photo');
-    if (photo instanceof File && photo.size > 0) {
-      const { saveProductPhoto } = await import('@/lib/product-image');
-      const { imageKey } = await saveProductPhoto({
-        tenantId: user.tenantId,
-        productId: product.id,
-        file: photo,
-      });
-      await db()
-        .update(inventoryProducts)
-        .set({ imageKey, updatedAt: new Date() })
-        .where(eq(inventoryProducts.id, product.id));
-    }
-
-    if (tracksStockQty(type)) {
-      const openingLocationId = parsed.openingLocationId || null;
-      const locRows = await db()
-        .select({ id: locations.id, locationType: locations.locationType })
-        .from(locations)
-        .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)));
-      const operational = locRows.filter(
-        (l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash',
-      );
-      if (operational.length > 0 && parsed.openingQty > 0 && !openingLocationId) {
-        throw new Error('Pick a location for opening stock.');
+      if (type === 'rental') {
+        await replaceKitComponents(user.tenantId, product.id, parseKitComponents(formData));
+        await replaceSerials(user.tenantId, product.id, parsed.tracksSerials ? parseSerialCodes(formData) : []);
       }
-      await assertProductBrandAndLocation(user.tenantId, parsed.brandId ?? null, openingLocationId);
-      await db().insert(inventoryStockLevels).values({
-        tenantId: user.tenantId,
-        productId: product.id,
-        locationId: openingLocationId,
-        qtyOnHand: parsed.openingQty.toFixed(4),
-      });
-      if (parsed.openingQty > 0) {
-        const openDate = new Date().toISOString().slice(0, 10);
-        await receiveCostLayer({
+
+      const photo = formData.get('photo');
+      if (photo instanceof File && photo.size > 0) {
+        const { saveProductPhoto } = await import('@/lib/product-image');
+        const { imageKey } = await saveProductPhoto({
+          tenantId: user.tenantId,
+          productId: product.id,
+          file: photo,
+        });
+        await db()
+          .update(inventoryProducts)
+          .set({ imageKey, updatedAt: new Date() })
+          .where(eq(inventoryProducts.id, product.id));
+      }
+
+      if (tracksStockQty(type)) {
+        const openingLocationId = parsed.openingLocationId || null;
+        const locRows = await db()
+          .select({ id: locations.id, locationType: locations.locationType })
+          .from(locations)
+          .where(and(eq(locations.tenantId, user.tenantId), isNull(locations.voidedAt)));
+        const operational = locRows.filter(
+          (l) => l.locationType !== 'on_rent' && l.locationType !== 'repair' && l.locationType !== 'wash',
+        );
+        if (operational.length > 0 && parsed.openingQty > 0 && !openingLocationId) {
+          throw new Error('Pick a location for opening stock.');
+        }
+        await assertProductBrandAndLocation(user.tenantId, parsed.brandId ?? null, openingLocationId);
+        await db().insert(inventoryStockLevels).values({
           tenantId: user.tenantId,
           productId: product.id,
           locationId: openingLocationId,
-          qty: parsed.openingQty,
-          unitCost: parsed.unitCost,
-          date: openDate,
-          sourceType: 'opening',
-          sourceId: product.id,
+          qtyOnHand: parsed.openingQty.toFixed(4),
         });
-        await db().insert(inventoryMovements).values({
-          tenantId: user.tenantId,
-          userId: user.id,
-          movementType: 'adjustment',
-          productId: product.id,
-          quantity: parsed.openingQty.toFixed(4),
-          unitCost: parsed.unitCost.toFixed(2),
-          referenceType: 'opening',
-          referenceId: product.id,
-          memo: 'Opening stock',
-          movementDate: openDate,
-        });
+        if (parsed.openingQty > 0) {
+          const openDate = new Date().toISOString().slice(0, 10);
+          await receiveCostLayer({
+            tenantId: user.tenantId,
+            productId: product.id,
+            locationId: openingLocationId,
+            qty: parsed.openingQty,
+            unitCost: parsed.unitCost,
+            date: openDate,
+            sourceType: 'opening',
+            sourceId: product.id,
+          });
+          await db().insert(inventoryMovements).values({
+            tenantId: user.tenantId,
+            userId: user.id,
+            movementType: 'adjustment',
+            productId: product.id,
+            quantity: parsed.openingQty.toFixed(4),
+            unitCost: parsed.unitCost.toFixed(2),
+            referenceType: 'opening',
+            referenceId: product.id,
+            memo: 'Opening stock',
+            movementDate: openDate,
+          });
 
-        // P0: capitalise opening inventory (Dr 5100 / Cr Owner Equity 3000)
-        const glLines = buildOpeningStockPosting({
-          quantity: parsed.openingQty,
-          unitCost: parsed.unitCost,
-          memo: `Opening stock ${parsed.sku}`,
-        });
-        if (glLines.length > 0) {
-          const accountMap = new Map<string, string>();
-          for (const pl of glLines) {
-            if (!accountMap.has(pl.accountCode)) {
-              const [acc] = await db()
-                .select({ id: accounts.id })
-                .from(accounts)
-                .where(
-                  and(
-                    eq(accounts.tenantId, user.tenantId),
-                    eq(accounts.code, pl.accountCode),
-                    isNull(accounts.voidedAt),
-                  ),
-                )
-                .limit(1);
-              if (!acc) throw new Error(`Account ${pl.accountCode} not found for opening stock.`);
-              accountMap.set(pl.accountCode, acc.id);
+          // P0: capitalise opening inventory (Dr 5100 / Cr Owner Equity 3000)
+          const glLines = buildOpeningStockPosting({
+            quantity: parsed.openingQty,
+            unitCost: parsed.unitCost,
+            memo: `Opening stock ${parsed.sku}`,
+          });
+          if (glLines.length > 0) {
+            const accountMap = new Map<string, string>();
+            for (const pl of glLines) {
+              if (!accountMap.has(pl.accountCode)) {
+                const [acc] = await db()
+                  .select({ id: accounts.id })
+                  .from(accounts)
+                  .where(
+                    and(
+                      eq(accounts.tenantId, user.tenantId),
+                      eq(accounts.code, pl.accountCode),
+                      isNull(accounts.voidedAt),
+                    ),
+                  )
+                  .limit(1);
+                if (!acc) throw new Error(`Account ${pl.accountCode} not found for opening stock.`);
+                accountMap.set(pl.accountCode, acc.id);
+              }
             }
-          }
-          const amount = Math.round(parsed.openingQty * parsed.unitCost * 100) / 100;
-          const [txRow] = await db()
-            .insert(transactions)
-            .values({
-              tenantId: user.tenantId,
-              userId: user.id,
-              accountingType: 'adjustment',
-              direction: 'move_money',
-              party: 'Opening balance',
-              description: `Opening stock ${parsed.sku} ${parsed.name}`.slice(0, 1000),
-              amount: amount.toFixed(2),
-              currency: 'LKR',
-              paymentMethod: 'Credit',
-              paymentAccountId: accountMap.get('5100')!,
-              date: openDate,
-              categoryCode: '5100',
-              categoryName: 'Inventory',
-              categoryConfidence: '1.00',
-              categorySource: 'document',
-              invoiceRef: parsed.sku,
-              isAlreadySettled: '1',
-              notes: 'Opening stock capitalisation',
-            })
-            .returning({ id: transactions.id });
-          const [journal] = await db()
-            .insert(journalEntries)
-            .values({
-              tenantId: user.tenantId,
-              userId: user.id,
-              transactionId: txRow.id,
-              memo: `Opening stock ${parsed.sku}`,
-              entryDate: openDate,
-              isBalanced: '1',
-            })
-            .returning({ id: journalEntries.id });
-          await db().insert(journalLines).values(
-            glLines.map((pl) => ({
-              tenantId: user.tenantId,
-              journalEntryId: journal.id,
-              accountId: accountMap.get(pl.accountCode)!,
-              side: pl.side,
-              amount: pl.amount.toFixed(2),
-              memo: pl.memo,
-            })),
-          );
-          await db()
-            .update(inventoryMovements)
-            .set({ transactionId: txRow.id })
-            .where(
-              and(
-                eq(inventoryMovements.tenantId, user.tenantId),
-                eq(inventoryMovements.productId, product.id),
-                eq(inventoryMovements.referenceType, 'opening'),
-                eq(inventoryMovements.referenceId, product.id),
-              ),
+            // Transaction amount = the journal's exact total in cents (CoreGuard D3).
+          const amount = centsToString(assertLinesBalanceExactly(glLines));
+            const [txRow] = await db()
+              .insert(transactions)
+              .values({
+                tenantId: user.tenantId,
+                userId: user.id,
+                accountingType: 'adjustment',
+                direction: 'move_money',
+                party: 'Opening balance',
+                description: `Opening stock ${parsed.sku} ${parsed.name}`.slice(0, 1000),
+                amount,
+                currency: 'LKR',
+                paymentMethod: 'Credit',
+                paymentAccountId: accountMap.get('5100')!,
+                date: openDate,
+                categoryCode: '5100',
+                categoryName: 'Inventory',
+                categoryConfidence: '1.00',
+                categorySource: 'document',
+                invoiceRef: parsed.sku,
+                isAlreadySettled: '1',
+                notes: 'Opening stock capitalisation',
+              })
+              .returning({ id: transactions.id });
+            const [journal] = await db()
+              .insert(journalEntries)
+              .values({
+                tenantId: user.tenantId,
+                userId: user.id,
+                transactionId: txRow.id,
+                memo: `Opening stock ${parsed.sku}`,
+                entryDate: openDate,
+                isBalanced: '1',
+              })
+              .returning({ id: journalEntries.id });
+            await db().insert(journalLines).values(
+              glLines.map((pl) => ({
+                tenantId: user.tenantId,
+                journalEntryId: journal.id,
+                accountId: accountMap.get(pl.accountCode)!,
+                side: pl.side,
+                amount: centsToString(toCents(pl.amount)),
+                memo: pl.memo,
+              })),
             );
+            await db()
+              .update(inventoryMovements)
+              .set({ transactionId: txRow.id })
+              .where(
+                and(
+                  eq(inventoryMovements.tenantId, user.tenantId),
+                  eq(inventoryMovements.productId, product.id),
+                  eq(inventoryMovements.referenceType, 'opening'),
+                  eq(inventoryMovements.referenceId, product.id),
+                ),
+              );
+          }
         }
       }
-    }
 
-    await db().insert(auditLog).values({
-      tenantId: user.tenantId,
-      userId: user.id,
-      action: 'CREATE',
-      tableName: 'inventory_products',
-      recordId: product.id,
-      newValues: { sku: parsed.sku, name: parsed.name, productType: type },
-      notes: 'Created product.',
-    });
-  });
+      await db().insert(auditLog).values({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'CREATE',
+        tableName: 'inventory_products',
+        recordId: product.id,
+        newValues: { sku: parsed.sku, name: parsed.name, productType: type },
+        notes: 'Created product.',
+      });
+    }),
+  );
 
   await notifyCommerce(user.tenantId, [createdId], 'product');
   revalidateInventory();

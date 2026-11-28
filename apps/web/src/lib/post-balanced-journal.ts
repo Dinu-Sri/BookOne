@@ -10,16 +10,12 @@ import {
   eq,
   isNull,
 } from '@bookone/db';
-import type { JournalLineDraft } from '@bookone/accounting';
+import { centsToString, sideTotalsCents, toCents, type JournalLineDraft } from '@bookone/accounting';
 
 export type PostedJournal = {
   transactionId: string;
   journalId: string;
 };
-
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
-}
 
 export async function assertPeriodUnlocked(tenantId: string, isoDate: string): Promise<string | null> {
   const period = isoDate.slice(0, 7);
@@ -72,12 +68,12 @@ export async function postBalancedJournal(input: {
   auditTable?: string;
   auditRecordId?: string;
 }): Promise<PostedJournal> {
-  const debit = roundMoney(input.lines.filter((l) => l.side === 'debit').reduce((s, l) => s + Number(l.amount), 0));
-  const credit = roundMoney(input.lines.filter((l) => l.side === 'credit').reduce((s, l) => s + Number(l.amount), 0));
-  if (Math.abs(debit - credit) >= 0.005) {
-    throw new Error(`Journal is not balanced (debits ${debit.toFixed(2)}, credits ${credit.toFixed(2)}).`);
+  // Exact integer cents (CoreGuard D3): each line must be an exact 2-decimal amount; debits === credits.
+  const { debit, credit } = sideTotalsCents(input.lines);
+  if (debit !== credit) {
+    throw new Error(`Journal is not balanced (debits ${centsToString(debit)}, credits ${centsToString(credit)}).`);
   }
-  const amount = Math.max(debit, credit);
+  const amount = centsToString(debit);
   const codeIds = new Map<string, string>();
   for (const line of input.lines) {
     if (codeIds.has(line.accountCode)) continue;
@@ -98,7 +94,7 @@ export async function postBalancedJournal(input: {
         direction: input.direction,
         party: input.party,
         description: input.description,
-        amount: amount.toFixed(2),
+        amount,
         currency: 'LKR',
         paymentMethod: input.paymentMethod,
         paymentAccountId: input.paymentAccountId,
@@ -123,18 +119,21 @@ export async function postBalancedJournal(input: {
       .returning({ id: journalEntries.id });
     if (!insertedJournal) throw new Error('Could not create journal.');
 
-    for (const line of input.lines) {
-      const accountId = codeIds.get(line.accountCode);
-      if (!accountId) throw new Error(`Account ${line.accountCode} was not resolved.`);
-      await tx.insert(journalLines).values({
-        tenantId: input.tenantId,
-        journalEntryId: insertedJournal.id,
-        accountId,
-        side: line.side,
-        amount: Number(line.amount).toFixed(2),
-        memo: line.memo,
-      });
-    }
+    // All lines in one multi-row insert (CoreGuard §4.2).
+    await tx.insert(journalLines).values(
+      input.lines.map((line) => {
+        const accountId = codeIds.get(line.accountCode);
+        if (!accountId) throw new Error(`Account ${line.accountCode} was not resolved.`);
+        return {
+          tenantId: input.tenantId,
+          journalEntryId: insertedJournal.id,
+          accountId,
+          side: line.side,
+          amount: centsToString(toCents(line.amount)),
+          memo: line.memo,
+        };
+      }),
+    );
 
     await tx.insert(auditLog).values({
       tenantId: input.tenantId,

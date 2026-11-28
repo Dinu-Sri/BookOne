@@ -1,44 +1,31 @@
-# CoreGuard pilot lane
+# CoreGuard
 
-Single local and CI command for the integrated BookOne lane:
+CoreGuard is BookOne's financial integrity system. It makes it impossible, or immediately visible, when the books are wrong, whoever caused it.
 
-```bash
-pnpm coreguard:pilot
-```
+**Read first:** [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) (v2.1, approved). It is the single CoreGuard spec and replaces every earlier one. Rule Zero at the top of [AGENTS.md](../../AGENTS.md) makes it binding for every change.
 
-The runner pushes the Drizzle schema, applies SQL migrations, seeds disposable companies, runs fixture/service tests, optionally drives the real app in Chromium, then deletes the seed. It pins the product `VERSION`, git SHA, latest SQL migration, and fixtures `custom-bank.v1` plus `bank-recon.v1`. This matches the web image startup (`drizzle-kit push --force` then `scripts/init-db.ts`) and never uses the Clossyan demo seed.
+## Parts
 
-## Disposable targets
-
-Set `DATABASE_URL` to a **test** database. The default local `bookone` database is refused.
-
-```bash
-createdb bookone_test
-# PowerShell
-$env:DATABASE_URL = "postgres://bookone:bookone@localhost:5432/bookone_test"
-$env:AUTH_SECRET = "test-secret-for-ci-only"
-$env:AUTH_URL = "http://127.0.0.1:3000"
-$env:BETTER_AUTH_URL = "http://127.0.0.1:3000"
-pnpm coreguard:pilot
-```
-
-Allowed database names match `test`, `pilot`, `coreguard`, or `ci`. Hosts must be local (`localhost`, `127.0.0.1`, `postgres`, `db`). Staging/production hosts and remote object storage are refused. If `S3_ENDPOINT` is set it must be local MinIO; the bucket must be a test name such as `bookone-test`.
-
-## Browser
-
-Without `COREGUARD_PILOT_BROWSER=1` the runner still migrates, seeds, and runs oracle/contract/postgres tests. Set the flag (CI does) to build `apps/web` and drive Chromium through `playwright.coreguard.config.ts`. Local re-runs may set `COREGUARD_SKIP_WEB_BUILD=1` only after a successful same-session `next build`; CI always builds.
-
-Seed passwords live only in gitignored `.local/coreguard-run.json`.
-
-## Layers
-
-| Layer | Command | What it proves |
+| Part | What it is | Where it runs |
 | --- | --- | --- |
-| Fixture oracle | always | Independent integer-cent expected values |
-| Permission/isolation contracts | always | Owner write, Viewer read-only, 11xx Simple Entry tenders, CI wiring |
-| Service/database | `COREGUARD_PILOT=1` | Create 1101, opening 300, transfer 100, journal class, company isolation; bank-recon 1102 seed 1485 |
-| Browser | `COREGUARD_PILOT_BROWSER=1` | Custom-bank slice plus ISO bank-recon import, match-without-journals, explained finish |
+| Database guards | Triggers that refuse bad writes (unbalanced, edits to posted rows, closed months, cross-company, duplicates) | PostgreSQL, migrations `060`–`067` |
+| Posting service | `packages/ledger-core`, the one writer of ledger, stock and allocations | Web app |
+| Sentinel | Read-only checks that recompute every important number a second way | `coreguard` container |
+| Lab | Golden datasets, guard/flow/property/detector tests | CI and staging `coreguard` container |
+| Guardrails | Rule Zero, CI gate, ratchets, waivers, CODEOWNERS | Repository and CI |
+| Health check screen | Control Room → Health check (super admin) | Web app |
 
-A required missing result is **blocked**. First failures are kept. This lane does not certify live tenant CoA, live Codex/Claude, or encrypted restore.
+## Key files
 
-See [coverage-matrix.md](coverage-matrix.md) and [setup-order.md](setup-order.md).
+- [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) — steps 0–12, reference, SQL (Appendix A), test record (Appendix B).
+- [FINANCIAL_SURFACE.md](FINANCIAL_SURFACE.md) — paths whose changes need a "CoreGuard impact" section in the CHG.
+- [../changes/TEMPLATE.md](../changes/TEMPLATE.md) — CHG template with the CoreGuard impact section.
+- `waivers/CGW-NNNN.md` — owner-approved waivers (§6.6), added when needed.
+
+## Status
+
+Step 0 (Rule Zero and governance) is done in product 2.35.2. Later steps land one PR each, in order (§5).
+
+## The earlier pilot lane
+
+Before this guide, `pnpm coreguard:pilot` (`scripts/coreguard/*`, CI "Docker web image") ran a scoped pilot: a fixture oracle, permission contracts, a service/database slice and a Chromium slice (custom bank, bank-recon), plus the AgentBridge registry in `packages/agent-bridge/src/coreguard.ts`. It stays in place as-is; Step 1 uses it as a "Done when" check. Run it against a disposable database such as `bookone_test` (never staging or production); the full instructions are in [PILOT.md](PILOT.md). Its notes are in [coverage-matrix.md](coverage-matrix.md) and [setup-order.md](setup-order.md), and its fixtures in [fixtures/](fixtures/).

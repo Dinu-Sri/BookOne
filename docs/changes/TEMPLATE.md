@@ -38,3 +38,15 @@ Final product/QA SHAs belong in PR metadata and external run manifests after com
 
 If not applicable, state why based on actual diff. Do not treat completing this section as product compliance or release approval.
 
+
+## CoreGuard impact (required when the diff touches the financial surface)
+- Financial surface files touched:
+- Behaviour before → after (one example in LKR):
+- Guards/checks that cover this (IDs):
+- Guards/checks added or changed (ID, revision, severity), or "none — covered by: …":
+- Golden events added/changed (scenario@version, event IDs); expected values supplied by (name, date):
+- Properties added/changed:
+- Red evidence (lab output showing the new rule failing before the implementation):
+- Green evidence (lab run on the final commit; certificate status):
+- Waivers used (CGW-…, expiry):
+- CoreGuard version: before → after

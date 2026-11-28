@@ -4,6 +4,10 @@
 
 ---
 
+## Rule 0: CoreGuard first (see AGENTS.md)
+
+Rule Zero at the top of [AGENTS.md](../AGENTS.md) overrides every other rule. Guide: [coreguard/IMPLEMENTATION_GUIDE.md](coreguard/IMPLEMENTATION_GUIDE.md).
+
 ## Rule 1: Never Hardcode Secrets or URLs
 
 ❌ `const dbUrl = "postgres://..."`  
@@ -23,12 +27,13 @@
 ❌ Accepting `tenant_id` from client request body  
 ✅ `tenant_id` comes from the authenticated session, NEVER from client input  
 
-## Rule 3: Never Delete Data, Only Void
+## Rule 3: Ledger Rows Are Never Deleted or Voided, Only Reversed
 
 ❌ `DELETE FROM transactions WHERE id = $1`  
-✅ Set `voided = true`, `voided_at = now()`, `voided_by = $userId`  
+❌ `UPDATE transactions SET voided = true ...`  
+✅ Post a reversal entry  
 
-All deletions must be soft-deletes (voids). This preserves the audit trail.
+Ledger rows are never deleted or voided, only reversed. This preserves the audit trail. The database guards enforce it.
 
 ## Rule 4: Never Skip Journal Entry Generation
 
@@ -56,16 +61,16 @@ Every mutation of financial data (transactions, journal entries, chart of accoun
 
 ## Rule 8: Respect Period Locks
 
-If a period is locked (month-end closing), do NOT allow direct edits. Instead, create a reversal entry. The `isPeriodLocked()` check must run before any mutation.
+Periods are closed only through `coreguard.lock_period` (and reopened, with a reason, only through `coreguard.unlock_period`). Never insert or update `period_locks` directly. A locked period is not edited; create a reversal entry in an open period instead.
 
 ## Rule 9: Environment Variables Are Required
 
 App must fail fast at startup if required env vars are missing. Graceful error messages, not cryptic crashes.
 
-## Rule 10: Test the Journal Balance
+## Rule 10: Debits Equal Credits Exactly
 
-Every journal entry must balance (total debits == total credits). The `generateJournalEntry()` function must validate this and throw `JournalBalanceError` if not. This error must be caught and logged to Sentry — it indicates an accounting engine bug.
+Every journal entry must balance: debits equal credits exactly, in integer cents, with no tolerance. The database enforces it (CoreGuard guard G01). An unbalanced entry is an accounting engine bug.
 
 ---
 
-*Last updated: 2026-06-14*
+*Last updated: 2026-11-28 (CoreGuard Step 0)*

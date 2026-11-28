@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 2 complete (v2.36.1)
+
+Guards live on staging; smoke test incl. archive restore passed. Next: BR-6 in bookone-qa, then Step 3 (sentinel checks and CLI). See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md).
+
 ## 2026-11-28 — CoreGuard Step 2 live on staging (v2.36.1)
 
 Guards 060–063 run on staging; smoke test passed except the archive-restore step. Next: restore check, BR-6 in bookone-qa, then Step 3 (sentinel checks). See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md).

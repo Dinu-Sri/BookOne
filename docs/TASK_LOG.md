@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 2 complete: archive restore verified on staging (docs only)
+
+Restore into an empty ZZ-TEST company: 396 rows, ledger identical to the source and balanced, 8 bypass_log rows by the maintenance login. All Step 2 "Done when" items met. See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md).
+
 ## 2026-11-28 — CoreGuard Step 2 smoke test on staging; Closed months picker fix (v2.36.1)
 
 Staging preflight 0/0, B4 verified, backfill ran (0 rows); smoke test passed (invoice, payment, entry + reversal, close October, posting refused by G05, reopen with reason). Archive restore step still open. Picker no longer blank after closing a month. See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md), [CHG-20261128-closed-months-picker](changes/CHG-20261128-closed-months-picker.md).

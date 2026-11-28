@@ -33,6 +33,9 @@ export const transactions = pgTable('transactions', {
   invoiceRef: varchar('invoice_ref', { length: 100 }),
   isAlreadySettled: varchar('is_already_settled', { length: 1 }).notNull().default('0'),
   notes: text('notes'),
+  /** Source document kind and id that produced this transaction (CoreGuard; fixed after posting, G04). */
+  sourceKind: varchar('source_kind', { length: 40 }),
+  sourceId: uuid('source_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   voidedAt: timestamp('voided_at', { withTimezone: true }),

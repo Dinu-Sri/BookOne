@@ -241,43 +241,47 @@ export async function issuePartyAdvance(input: {
           : input.kind === 'supplier'
             ? supplierAdvanceIssueLines(amount, cashCode)
             : staffAdvanceIssueLines(amount, cashCode);
-      const posted = await postBalancedJournal({
-        tenantId: user.tenantId,
-        userId: user.id,
-        date: input.date,
-        party: party.name,
-        description: `${input.kind} advance ${amount.toFixed(2)}`,
-        accountingType: input.kind === 'staff' ? 'expense' : 'transfer',
-        direction: input.kind === 'customer' ? 'in' : 'out',
-        paymentMethod: 'Bank',
-        paymentAccountId: cash.id,
-        lines,
-        notes: input.notes ?? null,
-        auditTable: 'party_advances',
-      });
-      const [row] = await db()
-        .insert(partyAdvances)
-        .values({
+      // One DB transaction for the whole action (CoreGuard §4.2): journal, advance row and audit link commit together.
+      const row = await db().transaction(async () => {
+        const posted = await postBalancedJournal({
           tenantId: user.tenantId,
-          partyId: party.id,
-          kind: input.kind,
-          accountId: control.id,
-          cashAccountId: cash.id,
-          status: 'open',
-          issuedAmount: amount.toFixed(2),
-          issuedOn: input.date,
+          userId: user.id,
+          date: input.date,
+          party: party.name,
+          description: `${input.kind} advance ${amount.toFixed(2)}`,
+          accountingType: input.kind === 'staff' ? 'expense' : 'transfer',
+          direction: input.kind === 'customer' ? 'in' : 'out',
+          paymentMethod: 'Bank',
+          paymentAccountId: cash.id,
+          lines,
           notes: input.notes ?? null,
-          idempotencyKey: input.idempotencyKey,
-          sourceTransactionId: posted.transactionId,
-          sourceJournalId: posted.journalId,
-          createdBy: user.id,
-        })
-        .returning({ id: partyAdvances.id });
-      if (!row) throw new Error('Could not record the advance.');
-      await db()
-        .update(auditLog)
-        .set({ recordId: row.id })
-        .where(and(eq(auditLog.tenantId, user.tenantId), eq(auditLog.recordId, posted.transactionId), eq(auditLog.tableName, 'party_advances')));
+          auditTable: 'party_advances',
+        });
+        const [inserted] = await db()
+          .insert(partyAdvances)
+          .values({
+            tenantId: user.tenantId,
+            partyId: party.id,
+            kind: input.kind,
+            accountId: control.id,
+            cashAccountId: cash.id,
+            status: 'open',
+            issuedAmount: amount.toFixed(2),
+            issuedOn: input.date,
+            notes: input.notes ?? null,
+            idempotencyKey: input.idempotencyKey,
+            sourceTransactionId: posted.transactionId,
+            sourceJournalId: posted.journalId,
+            createdBy: user.id,
+          })
+          .returning({ id: partyAdvances.id });
+        if (!inserted) throw new Error('Could not record the advance.');
+        await db()
+          .update(auditLog)
+          .set({ recordId: inserted.id })
+          .where(and(eq(auditLog.tenantId, user.tenantId), eq(auditLog.recordId, posted.transactionId), eq(auditLog.tableName, 'party_advances')));
+        return inserted;
+      });
       revalidatePath('/advances');
       revalidatePath('/accounts');
       return { ok: true, data: { id: row.id, remaining: amount } };
@@ -385,68 +389,73 @@ export async function applyPartyAdvance(input: {
                 : input.kind === 'expense_settle'
                   ? staffAdvanceExpenseLines(amount, input.expenseCode || '6800')
                   : staffAdvanceReturnLines(amount, cashCode);
-      const posted = await postBalancedJournal({
-        tenantId: user.tenantId,
-        userId: user.id,
-        date: advance.issuedOn,
-        party: party?.name || 'Advance',
-        description: `${advance.kind} advance ${input.kind} ${amount.toFixed(2)}`,
-        accountingType: 'transfer',
-        direction: input.kind === 'refund' || input.kind === 'return_cash' ? 'in' : 'out',
-        paymentMethod: 'Bank',
-        paymentAccountId: advance.cashAccountId,
-        lines,
-        auditTable: 'party_advance_allocations',
-      });
-      await db().insert(partyAdvanceAllocations).values({
-        tenantId: user.tenantId,
-        advanceId: advance.id,
-        kind: input.kind,
-        amount: amount.toFixed(2),
-        documentId: document?.id ?? null,
-        transactionId: posted.transactionId,
-        journalId: posted.journalId,
-        createdBy: user.id,
-      });
-      const next = {
-        appliedAmount: (Number(advance.appliedAmount) + (input.kind === 'apply' ? amount : 0)).toFixed(2),
-        refundedAmount: (Number(advance.refundedAmount) + (input.kind === 'refund' ? amount : 0)).toFixed(2),
-        expenseSettledAmount: (Number(advance.expenseSettledAmount) + (input.kind === 'expense_settle' ? amount : 0)).toFixed(2),
-        returnedCashAmount: (Number(advance.returnedCashAmount) + (input.kind === 'return_cash' ? amount : 0)).toFixed(2),
-      };
       const remaining = check.remaining;
-      const [updated] = await db()
-        .update(partyAdvances)
-        .set({
-          ...next,
-          status: remaining < 0.005 ? 'closed' : 'open',
-          version: advance.version + 1,
-          updatedAt: sql`NOW()`,
-        })
-        .where(and(eq(partyAdvances.id, advance.id), eq(partyAdvances.version, advance.version)))
-        .returning({ id: partyAdvances.id });
-      if (!updated) return { ok: false, error: 'This advance changed since you opened it. Reload and try again.' };
-      if (document && input.kind === 'apply') {
-        const paid = moneyAmount(Number(document.paidAmount) + amount);
-        const due = moneyAmount(Number(document.balanceDue) - amount);
-        await db()
-          .update(businessDocuments)
+      // One DB transaction for the whole action (CoreGuard §4.2): journal, allocation, advance, document and
+      // settlement allocation commit together or not at all.
+      await db().transaction(async () => {
+        const posted = await postBalancedJournal({
+          tenantId: user.tenantId,
+          userId: user.id,
+          date: advance.issuedOn,
+          party: party?.name || 'Advance',
+          description: `${advance.kind} advance ${input.kind} ${amount.toFixed(2)}`,
+          accountingType: 'transfer',
+          direction: input.kind === 'refund' || input.kind === 'return_cash' ? 'in' : 'out',
+          paymentMethod: 'Bank',
+          paymentAccountId: advance.cashAccountId,
+          lines,
+          auditTable: 'party_advance_allocations',
+        });
+        await db().insert(partyAdvanceAllocations).values({
+          tenantId: user.tenantId,
+          advanceId: advance.id,
+          kind: input.kind,
+          amount: amount.toFixed(2),
+          documentId: document?.id ?? null,
+          transactionId: posted.transactionId,
+          journalId: posted.journalId,
+          createdBy: user.id,
+        });
+        const next = {
+          appliedAmount: (Number(advance.appliedAmount) + (input.kind === 'apply' ? amount : 0)).toFixed(2),
+          refundedAmount: (Number(advance.refundedAmount) + (input.kind === 'refund' ? amount : 0)).toFixed(2),
+          expenseSettledAmount: (Number(advance.expenseSettledAmount) + (input.kind === 'expense_settle' ? amount : 0)).toFixed(2),
+          returnedCashAmount: (Number(advance.returnedCashAmount) + (input.kind === 'return_cash' ? amount : 0)).toFixed(2),
+        };
+        const [updated] = await db()
+          .update(partyAdvances)
           .set({
-            paidAmount: paid.toFixed(2),
-            balanceDue: due.toFixed(2),
-            status: due < 0.005 ? 'paid' : 'partial',
+            ...next,
+            status: remaining < 0.005 ? 'closed' : 'open',
+            version: advance.version + 1,
             updatedAt: sql`NOW()`,
           })
-          .where(eq(businessDocuments.id, document.id));
-        if (document.transactionId) {
-          await db().insert(settlementAllocations).values({
-            tenantId: user.tenantId,
-            paymentTransactionId: posted.transactionId,
-            invoiceTransactionId: document.transactionId,
-            allocatedAmount: amount.toFixed(2),
-          });
+          .where(and(eq(partyAdvances.id, advance.id), eq(partyAdvances.version, advance.version)))
+          .returning({ id: partyAdvances.id });
+        // Throw, not return: the journal above must roll back with the stale advance.
+        if (!updated) throw new Error('This advance changed since you opened it. Reload and try again.');
+        if (document && input.kind === 'apply') {
+          const paid = moneyAmount(Number(document.paidAmount) + amount);
+          const due = moneyAmount(Number(document.balanceDue) - amount);
+          await db()
+            .update(businessDocuments)
+            .set({
+              paidAmount: paid.toFixed(2),
+              balanceDue: due.toFixed(2),
+              status: due < 0.005 ? 'paid' : 'partial',
+              updatedAt: sql`NOW()`,
+            })
+            .where(eq(businessDocuments.id, document.id));
+          if (document.transactionId) {
+            await db().insert(settlementAllocations).values({
+              tenantId: user.tenantId,
+              paymentTransactionId: posted.transactionId,
+              invoiceTransactionId: document.transactionId,
+              allocatedAmount: amount.toFixed(2),
+            });
+          }
         }
-      }
+      });
       revalidatePath('/advances');
       revalidatePath('/accounts');
       return { ok: true, data: { remaining } };

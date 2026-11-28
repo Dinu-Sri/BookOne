@@ -350,3 +350,4 @@ export {
 } from './focus-trap';
 
 export * from './professional-statements';
+export * from './money';

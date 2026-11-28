@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { chartOfAccountsForEntity, classifiedSeedValues } from '@bookone/accounting';
+import { centsToString, chartOfAccountsForEntity, classifiedSeedValues, sideTotalsCents, toCents } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -454,164 +454,173 @@ export async function incorporateSoleToCompany(input?: {
 
     // Seed company books under new tenant RLS
     await withTenantContext(newTenantId, async () => {
-      await db().insert(accounts).values(
-        coa.map((account) => ({
-          tenantId: newTenantId,
-          ...classifiedSeedValues(account),
-        })),
-      );
+      // One DB transaction (CoreGuard §4.2): chart, profile, brand, location, opening transaction, entry, lines and audit commit together.
+      await db().transaction(async () => {
+        await db().insert(accounts).values(
+          coa.map((account) => ({
+            tenantId: newTenantId,
+            ...classifiedSeedValues(account),
+          })),
+        );
 
-      await db().insert(companyProfiles).values({
-        tenantId: newTenantId,
-        legalName: companyName,
-      });
-
-      const [brand] = await db()
-        .insert(brands)
-        .values({
+        await db().insert(companyProfiles).values({
           tenantId: newTenantId,
-          name: 'Main brand',
-          code: 'MAIN',
+          legalName: companyName,
+        });
+
+        const [brand] = await db()
+          .insert(brands)
+          .values({
+            tenantId: newTenantId,
+            name: 'Main brand',
+            code: 'MAIN',
+            status: 'active',
+          })
+          .returning({ id: brands.id });
+
+        await db().insert(locations).values({
+          tenantId: newTenantId,
+          brandId: brand?.id ?? null,
+          name: 'Head office',
+          code: 'HO',
           status: 'active',
-        })
-        .returning({ id: brands.id });
+        });
 
-      await db().insert(locations).values({
-        tenantId: newTenantId,
-        brandId: brand?.id ?? null,
-        name: 'Head office',
-        code: 'HO',
-        status: 'active',
-      });
+        // Map company account codes → ids
+        const companyAccounts = await db()
+          .select({ id: accounts.id, code: accounts.code, normalSide: accounts.normalSide })
+          .from(accounts)
+          .where(eq(accounts.tenantId, newTenantId));
+        const byCode = new Map(companyAccounts.map((a) => [a.code, a]));
+        const bank = byCode.get('1100') ?? byCode.get('1000');
+        if (!bank) throw new Error('Company CoA missing cash/bank accounts.');
 
-      // Map company account codes → ids
-      const companyAccounts = await db()
-        .select({ id: accounts.id, code: accounts.code, normalSide: accounts.normalSide })
-        .from(accounts)
-        .where(eq(accounts.tenantId, newTenantId));
-      const byCode = new Map(companyAccounts.map((a) => [a.code, a]));
-      const bank = byCode.get('1100') ?? byCode.get('1000');
-      if (!bank) throw new Error('Company CoA missing cash/bank accounts.');
+        // Opening balance lines from sole business domain (matching company CoA codes)
+        // Amounts in exact integer cents (CoreGuard D3): the equity plug makes debits === credits, no tolerance.
+        const openLines: { accountId: string; side: 'debit' | 'credit'; cents: bigint; memo: string }[] = [];
 
-      // Opening balance lines from sole business domain (matching company CoA codes)
-      const openLines: { accountId: string; side: 'debit' | 'credit'; amount: number; memo: string }[] =
-        [];
+        for (const b of balances) {
+          const acc = byCode.get(b.code);
+          if (!acc) continue;
+          // Equity accounts are re-established via plug line below
+          if (b.code === '3000' || b.code === '3100') continue;
 
-      for (const b of balances) {
-        const acc = byCode.get(b.code);
-        if (!acc) continue;
-        // Equity accounts are re-established via plug line below
-        if (b.code === '3000' || b.code === '3100') continue;
-
-        if (b.balance > 0) {
-          openLines.push({
-            accountId: acc.id,
-            side: acc.normalSide as 'debit' | 'credit',
-            amount: b.balance,
-            memo: `Opening from sole business (${b.code})`,
-          });
-        } else if (b.balance < 0) {
-          openLines.push({
-            accountId: acc.id,
-            side: acc.normalSide === 'debit' ? 'credit' : 'debit',
-            amount: Math.abs(b.balance),
-            memo: `Opening from sole business (${b.code})`,
-          });
+          const balanceCents = toCents(b.balance);
+          if (balanceCents > 0n) {
+            openLines.push({
+              accountId: acc.id,
+              side: acc.normalSide as 'debit' | 'credit',
+              cents: balanceCents,
+              memo: `Opening from sole business (${b.code})`,
+            });
+          } else if (balanceCents < 0n) {
+            openLines.push({
+              accountId: acc.id,
+              side: acc.normalSide === 'debit' ? 'credit' : 'debit',
+              cents: -balanceCents,
+              memo: `Opening from sole business (${b.code})`,
+            });
+          }
         }
-      }
 
-      // Balance the opening journal into Owner Equity 3000
-      const equity = byCode.get('3000');
-      if (equity && openLines.length > 0) {
-        let debitSum = 0;
-        let creditSum = 0;
-        for (const l of openLines) {
-          if (l.side === 'debit') debitSum += l.amount;
-          else creditSum += l.amount;
-        }
-        const diff = Math.round((debitSum - creditSum) * 100) / 100;
-        if (Math.abs(diff) >= 0.005) {
-          if (diff > 0) {
+        // Balance the opening journal into Owner Equity 3000
+        const equity = byCode.get('3000');
+        if (equity && openLines.length > 0) {
+          let debitSum = 0n;
+          let creditSum = 0n;
+          for (const l of openLines) {
+            if (l.side === 'debit') debitSum += l.cents;
+            else creditSum += l.cents;
+          }
+          const diff = debitSum - creditSum;
+          if (diff > 0n) {
             openLines.push({
               accountId: equity.id,
               side: 'credit',
-              amount: diff,
+              cents: diff,
               memo: 'Opening equity (incorporation)',
             });
-          } else {
+          } else if (diff < 0n) {
             openLines.push({
               accountId: equity.id,
               side: 'debit',
-              amount: Math.abs(diff),
+              cents: -diff,
               memo: 'Opening equity adjustment (incorporation)',
             });
           }
         }
-      }
 
-      if (openLines.length > 0) {
-        const [txn] = await db()
-          .insert(transactions)
-          .values({
-            tenantId: newTenantId,
-            userId: user.id,
-            accountingType: 'Owner',
-            direction: 'money_in',
-            party: sole.name,
-            description: 'Opening balances from sole prop business books (incorporation)',
-            amount: String(
-              openLines.filter((l) => l.side === 'debit').reduce((s, l) => s + l.amount, 0),
-            ),
-            currency: 'LKR',
-            paymentMethod: 'Bank',
-            paymentAccountId: bank.id,
-            bookDomain: 'business',
-            date: today,
-            isAlreadySettled: '1',
-            notes: `Source sole tenant ${soleTenantId}`,
-          })
-          .returning({ id: transactions.id });
+        if (openLines.length > 0) {
+          const { debit: totalCents, credit: creditCents } = sideTotalsCents(
+            openLines.map((l) => ({ side: l.side, amount: centsToString(l.cents) })),
+          );
+          if (totalCents !== creditCents) {
+            throw new Error(
+              `Opening journal is not balanced (debits ${centsToString(totalCents)}, credits ${centsToString(creditCents)}).`,
+            );
+          }
+          const [txn] = await db()
+            .insert(transactions)
+            .values({
+              tenantId: newTenantId,
+              userId: user.id,
+              accountingType: 'Owner',
+              direction: 'money_in',
+              party: sole.name,
+              description: 'Opening balances from sole prop business books (incorporation)',
+              amount: centsToString(totalCents),
+              currency: 'LKR',
+              paymentMethod: 'Bank',
+              paymentAccountId: bank.id,
+              bookDomain: 'business',
+              date: today,
+              isAlreadySettled: '1',
+              notes: `Source sole tenant ${soleTenantId}`,
+            })
+            .returning({ id: transactions.id });
 
-        const [je] = await db()
-          .insert(journalEntries)
-          .values({
-            tenantId: newTenantId,
-            userId: user.id,
-            transactionId: txn!.id,
-            bookDomain: 'business',
-            memo: 'Opening balances (incorporation from sole prop)',
-            entryDate: today,
-            isBalanced: '1',
-            notes: `Archived sole: ${soleTenantId}`,
-          })
-          .returning({ id: journalEntries.id });
+          const [je] = await db()
+            .insert(journalEntries)
+            .values({
+              tenantId: newTenantId,
+              userId: user.id,
+              transactionId: txn!.id,
+              bookDomain: 'business',
+              memo: 'Opening balances (incorporation from sole prop)',
+              entryDate: today,
+              isBalanced: '1',
+              notes: `Archived sole: ${soleTenantId}`,
+            })
+            .returning({ id: journalEntries.id });
 
-        for (const line of openLines) {
-          await db().insert(journalLines).values({
-            tenantId: newTenantId,
-            journalEntryId: je!.id,
-            accountId: line.accountId,
-            side: line.side,
-            amount: line.amount.toFixed(2),
-            memo: line.memo,
-          });
+          // All lines in one multi-row insert (CoreGuard §4.2).
+          await db().insert(journalLines).values(
+            openLines.map((line) => ({
+              tenantId: newTenantId,
+              journalEntryId: je!.id,
+              accountId: line.accountId,
+              side: line.side,
+              amount: centsToString(line.cents),
+              memo: line.memo,
+            })),
+          );
         }
-      }
 
-      await writeAudit(
-        newTenantId,
-        user.id,
-        'INCORPORATE',
-        newTenantId,
-        {
-          fromTenantId: soleTenantId,
-          fromEntity: 'sole_prop',
-          toEntity: 'company',
-          openingLineCount: openLines.length,
-          balanceAccounts: balances.map((b) => b.code),
-        },
-        'Lifecycle: sole prop incorporated to new company tenant',
-      );
+        await writeAudit(
+          newTenantId,
+          user.id,
+          'INCORPORATE',
+          newTenantId,
+          {
+            fromTenantId: soleTenantId,
+            fromEntity: 'sole_prop',
+            toEntity: 'company',
+            openingLineCount: openLines.length,
+            balanceAccounts: balances.map((b) => b.code),
+          },
+          'Lifecycle: sole prop incorporated to new company tenant',
+        );
+      });
     });
 
     // Audit on archived sole

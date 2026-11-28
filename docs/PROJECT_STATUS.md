@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 1: writers guard-ready (v2.35.3)
+
+Writers are atomic and exact, ready for the Step 2 database guards. Next: Step 2 (guards 060–063); owner action B4 (maintenance login on staging) is needed there. See [CHG-20261128-coreguard-step-1](changes/CHG-20261128-coreguard-step-1.md).
+
 ## 2026-11-28 — CoreGuard Step 0: Rule Zero and governance (v2.35.2)
 
 CoreGuard (docs/coreguard/IMPLEMENTATION_GUIDE.md v2.1) is now binding through Rule Zero. Step 0 done in its own PR; next is Step 1 (make the existing writers guard-ready). See [CHG-20261128-coreguard-step-0](changes/CHG-20261128-coreguard-step-0.md).

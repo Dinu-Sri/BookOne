@@ -1033,85 +1033,88 @@ export async function dispatchRentalLine(
     await assertRentalDispatchWrite();
     const user = await requireTenantContext();
     await withTenantContext(user.tenantId, async () => {
-      const [line] = await db()
-        .select()
-        .from(rentalBookingLines)
-        .where(
-          and(
-            eq(rentalBookingLines.id, bookingLineId),
-            eq(rentalBookingLines.tenantId, user.tenantId),
-            isNull(rentalBookingLines.voidedAt),
-          ),
-        )
-        .limit(1);
-      if (!line) throw new Error('Booking line not found.');
-      if (line.status !== 'reserved') {
-        throw new Error('Confirm the booking (order or invoice) before dispatch.');
-      }
-      const qty = Number(line.qty) - Number(line.dispatchedQty);
-      if (qty <= 0.0001) throw new Error('This line is already dispatched.');
-      const fromLocationId = await pickWarehouseLocation(
-        user.tenantId,
-        line.productId,
-        line.locationId,
-        qty,
-      );
-      const onRentId = await fleetLocationId(user.tenantId, 'on_rent');
-      const { createStockTransfer } = await import('@/app/actions/inventory');
-      const moved = await createStockTransfer({
-        fromLocationId,
-        toLocationId: onRentId,
-        reason: 'Rental dispatch',
-        notes: `Dispatch ${line.id}`,
-        lines: [{ productId: line.productId, quantity: qty }],
-      });
-      if (!moved.ok) throw new Error(moved.error || 'Dispatch transfer failed.');
-      await db()
-        .update(rentalBookingLines)
-        .set({
-          status: 'dispatched',
-          dispatchedQty: (Number(line.dispatchedQty) + qty).toFixed(4),
-          locationId: onRentId,
-          updatedAt: new Date(),
-        })
-        .where(eq(rentalBookingLines.id, line.id));
-      const [product] = await db()
-        .select({ tracksSerials: inventoryProducts.tracksSerials })
-        .from(inventoryProducts)
-        .where(eq(inventoryProducts.id, line.productId))
-        .limit(1);
-      if (product?.tracksSerials === '1') {
-        const available = await db()
+      // One DB transaction (CoreGuard §4.2): the stock transfer, line, serials and audit commit together, so a refused serial check leaves no stock moved.
+      await db().transaction(async () => {
+        const [line] = await db()
           .select()
-          .from(rentalSerials)
+          .from(rentalBookingLines)
           .where(
             and(
-              eq(rentalSerials.tenantId, user.tenantId),
-              eq(rentalSerials.productId, line.productId),
-              eq(rentalSerials.status, 'available'),
+              eq(rentalBookingLines.id, bookingLineId),
+              eq(rentalBookingLines.tenantId, user.tenantId),
+              isNull(rentalBookingLines.voidedAt),
             ),
-          );
-        if (available.length < qty - 0.0001) {
-          throw new Error(
-            `Need ${qty} available serial(s) to dispatch this SKU; ${available.length} free.`,
-          );
+          )
+          .limit(1);
+        if (!line) throw new Error('Booking line not found.');
+        if (line.status !== 'reserved') {
+          throw new Error('Confirm the booking (order or invoice) before dispatch.');
         }
-        for (const serial of available.slice(0, Math.round(qty))) {
-          await db()
-            .update(rentalSerials)
-            .set({ status: 'on_rent', bookingLineId: line.id, updatedAt: new Date() })
-            .where(eq(rentalSerials.id, serial.id));
+        const qty = Number(line.qty) - Number(line.dispatchedQty);
+        if (qty <= 0.0001) throw new Error('This line is already dispatched.');
+        const fromLocationId = await pickWarehouseLocation(
+          user.tenantId,
+          line.productId,
+          line.locationId,
+          qty,
+        );
+        const onRentId = await fleetLocationId(user.tenantId, 'on_rent');
+        const { createStockTransfer } = await import('@/app/actions/inventory');
+        const moved = await createStockTransfer({
+          fromLocationId,
+          toLocationId: onRentId,
+          reason: 'Rental dispatch',
+          notes: `Dispatch ${line.id}`,
+          lines: [{ productId: line.productId, quantity: qty }],
+        });
+        if (!moved.ok) throw new Error(moved.error || 'Dispatch transfer failed.');
+        await db()
+          .update(rentalBookingLines)
+          .set({
+            status: 'dispatched',
+            dispatchedQty: (Number(line.dispatchedQty) + qty).toFixed(4),
+            locationId: onRentId,
+            updatedAt: new Date(),
+          })
+          .where(eq(rentalBookingLines.id, line.id));
+        const [product] = await db()
+          .select({ tracksSerials: inventoryProducts.tracksSerials })
+          .from(inventoryProducts)
+          .where(eq(inventoryProducts.id, line.productId))
+          .limit(1);
+        if (product?.tracksSerials === '1') {
+          const available = await db()
+            .select()
+            .from(rentalSerials)
+            .where(
+              and(
+                eq(rentalSerials.tenantId, user.tenantId),
+                eq(rentalSerials.productId, line.productId),
+                eq(rentalSerials.status, 'available'),
+              ),
+            );
+          if (available.length < qty - 0.0001) {
+            throw new Error(
+              `Need ${qty} available serial(s) to dispatch this SKU; ${available.length} free.`,
+            );
+          }
+          for (const serial of available.slice(0, Math.round(qty))) {
+            await db()
+              .update(rentalSerials)
+              .set({ status: 'on_rent', bookingLineId: line.id, updatedAt: new Date() })
+              .where(eq(rentalSerials.id, serial.id));
+          }
         }
-      }
-      await writeRentalAudit({
-        tenantId: user.tenantId,
-        userId: user.id,
-        action: 'UPDATE',
-        tableName: 'rental_booking_lines',
-        recordId: line.id,
-        notes: `Dispatch ${qty} of booking line ${line.id} to on-rent`,
+        await writeRentalAudit({
+          tenantId: user.tenantId,
+          userId: user.id,
+          action: 'UPDATE',
+          tableName: 'rental_booking_lines',
+          recordId: line.id,
+          notes: `Dispatch ${qty} of booking line ${line.id} to on-rent`,
+        });
+        revalidateRentalPaths(line.documentId);
       });
-      revalidateRentalPaths(line.documentId);
     });
     return { ok: true };
   } catch (error) {
@@ -1140,152 +1143,155 @@ export async function returnRentalLine(input: {
     const user = await requireTenantContext();
     const settings = await getRentalSettings();
     await withTenantContext(user.tenantId, async () => {
-      const [line] = await db()
-        .select()
-        .from(rentalBookingLines)
-        .where(
-          and(
-            eq(rentalBookingLines.id, input.bookingLineId),
-            eq(rentalBookingLines.tenantId, user.tenantId),
-            isNull(rentalBookingLines.voidedAt),
-          ),
-        )
-        .limit(1);
-      if (!line) throw new Error('Booking line not found.');
-      if (line.status !== 'dispatched') throw new Error('Dispatch this line before returning it.');
-      const outstanding =
-        Number(line.dispatchedQty) -
-        Number(line.returnedQty) -
-        Number(line.damagedQty) -
-        Number(line.missingQty);
-      if (total > outstanding + 0.0001) {
-        throw new Error(`Return qty ${total} is more than outstanding ${Math.max(0, outstanding)}.`);
-      }
-      const onRentId = await fleetLocationId(user.tenantId, 'on_rent');
-      const { createStockTransfer } = await import('@/app/actions/inventory');
-      const today = new Date().toISOString().slice(0, 10);
-      const goodDestination =
-        input.goodDestination === 'wash' || input.goodDestination === 'warehouse'
-          ? input.goodDestination
-          : settings.defaultTurnaroundHours > 0
-            ? 'wash'
-            : 'warehouse';
-      if (goodQty > 0) {
-        const toLocationId =
-          goodDestination === 'wash'
-            ? await fleetLocationId(user.tenantId, 'wash')
-            : await pickWarehouseLocation(user.tenantId, line.productId, null, 0);
-        const moved = await createStockTransfer({
-          fromLocationId: onRentId,
-          toLocationId,
-          reason: 'Rental return',
-          notes: `Return good ${line.id} → ${goodDestination}`,
-          lines: [{ productId: line.productId, quantity: goodQty }],
-        });
-        if (!moved.ok) throw new Error(moved.error || 'Good return transfer failed.');
-      }
-      if (dirtyQty > 0) {
-        const washId = await fleetLocationId(user.tenantId, 'wash');
-        const moved = await createStockTransfer({
-          fromLocationId: onRentId,
-          toLocationId: washId,
-          reason: 'Rental return wash',
-          notes: `Return dirty ${line.id}`,
-          lines: [{ productId: line.productId, quantity: dirtyQty }],
-        });
-        if (!moved.ok) throw new Error(moved.error || 'Dirty return transfer failed.');
-      }
-      if (damagedQty > 0) {
-        const repairId = await fleetLocationId(user.tenantId, 'repair');
-        const moved = await createStockTransfer({
-          fromLocationId: onRentId,
-          toLocationId: repairId,
-          reason: 'Rental damage',
-          notes: `Return damaged ${line.id}`,
-          lines: [{ productId: line.productId, quantity: damagedQty }],
-        });
-        if (!moved.ok) throw new Error(moved.error || 'Damaged return transfer failed.');
-      }
-      if (missingQty > 0) {
-        await consumeAtLocation({
+      // One DB transaction (CoreGuard §4.2): stock transfers, missing-stock write-off, line, serials and audit commit together.
+      await db().transaction(async () => {
+        const [line] = await db()
+          .select()
+          .from(rentalBookingLines)
+          .where(
+            and(
+              eq(rentalBookingLines.id, input.bookingLineId),
+              eq(rentalBookingLines.tenantId, user.tenantId),
+              isNull(rentalBookingLines.voidedAt),
+            ),
+          )
+          .limit(1);
+        if (!line) throw new Error('Booking line not found.');
+        if (line.status !== 'dispatched') throw new Error('Dispatch this line before returning it.');
+        const outstanding =
+          Number(line.dispatchedQty) -
+          Number(line.returnedQty) -
+          Number(line.damagedQty) -
+          Number(line.missingQty);
+        if (total > outstanding + 0.0001) {
+          throw new Error(`Return qty ${total} is more than outstanding ${Math.max(0, outstanding)}.`);
+        }
+        const onRentId = await fleetLocationId(user.tenantId, 'on_rent');
+        const { createStockTransfer } = await import('@/app/actions/inventory');
+        const today = new Date().toISOString().slice(0, 10);
+        const goodDestination =
+          input.goodDestination === 'wash' || input.goodDestination === 'warehouse'
+            ? input.goodDestination
+            : settings.defaultTurnaroundHours > 0
+              ? 'wash'
+              : 'warehouse';
+        if (goodQty > 0) {
+          const toLocationId =
+            goodDestination === 'wash'
+              ? await fleetLocationId(user.tenantId, 'wash')
+              : await pickWarehouseLocation(user.tenantId, line.productId, null, 0);
+          const moved = await createStockTransfer({
+            fromLocationId: onRentId,
+            toLocationId,
+            reason: 'Rental return',
+            notes: `Return good ${line.id} → ${goodDestination}`,
+            lines: [{ productId: line.productId, quantity: goodQty }],
+          });
+          if (!moved.ok) throw new Error(moved.error || 'Good return transfer failed.');
+        }
+        if (dirtyQty > 0) {
+          const washId = await fleetLocationId(user.tenantId, 'wash');
+          const moved = await createStockTransfer({
+            fromLocationId: onRentId,
+            toLocationId: washId,
+            reason: 'Rental return wash',
+            notes: `Return dirty ${line.id}`,
+            lines: [{ productId: line.productId, quantity: dirtyQty }],
+          });
+          if (!moved.ok) throw new Error(moved.error || 'Dirty return transfer failed.');
+        }
+        if (damagedQty > 0) {
+          const repairId = await fleetLocationId(user.tenantId, 'repair');
+          const moved = await createStockTransfer({
+            fromLocationId: onRentId,
+            toLocationId: repairId,
+            reason: 'Rental damage',
+            notes: `Return damaged ${line.id}`,
+            lines: [{ productId: line.productId, quantity: damagedQty }],
+          });
+          if (!moved.ok) throw new Error(moved.error || 'Damaged return transfer failed.');
+        }
+        if (missingQty > 0) {
+          await consumeAtLocation({
+            tenantId: user.tenantId,
+            userId: user.id,
+            productId: line.productId,
+            locationId: onRentId,
+            quantity: missingQty,
+            memo: `Missing on return ${line.id}`,
+            docDate: today,
+          });
+        }
+        const nextReturned = Number(line.returnedQty) + goodQty + dirtyQty;
+        const nextDamaged = Number(line.damagedQty) + damagedQty;
+        const nextMissing = Number(line.missingQty) + missingQty;
+        const remaining = Number(line.dispatchedQty) - nextReturned - nextDamaged - nextMissing;
+        await db()
+          .update(rentalBookingLines)
+          .set({
+            returnedQty: nextReturned.toFixed(4),
+            damagedQty: nextDamaged.toFixed(4),
+            missingQty: nextMissing.toFixed(4),
+            status: remaining <= 0.0001 ? 'returned' : 'dispatched',
+            updatedAt: new Date(),
+          })
+          .where(eq(rentalBookingLines.id, line.id));
+
+        const files = (input.photos ?? []).filter((f) => f && typeof f.size === 'number' && f.size > 0);
+        if (files.length > MAX_RETURN_PHOTOS) {
+          throw new Error(`At most ${MAX_RETURN_PHOTOS} return photos per line.`);
+        }
+        if (files.length > 0) {
+          const { saveRentalInspectPhoto } = await import('@/lib/product-image');
+          for (const file of files) {
+            const saved = await saveRentalInspectPhoto({
+              tenantId: user.tenantId,
+              bookingLineId: line.id,
+              file,
+            });
+            await db().insert(rentalReturnPhotos).values({
+              tenantId: user.tenantId,
+              bookingLineId: line.id,
+              documentId: line.documentId,
+              imageKey: saved.imageKey,
+              createdBy: user.id,
+            });
+          }
+        }
+        const onLine = await db()
+          .select()
+          .from(rentalSerials)
+          .where(
+            and(eq(rentalSerials.tenantId, user.tenantId), eq(rentalSerials.bookingLineId, line.id)),
+          );
+        let offset = 0;
+        const assign = async (count: number, status: string) => {
+          const slice = onLine.slice(offset, offset + Math.round(count));
+          offset += slice.length;
+          for (const serial of slice) {
+            await db()
+              .update(rentalSerials)
+              .set({
+                status,
+                bookingLineId: status === 'on_rent' ? line.id : null,
+                updatedAt: new Date(),
+              })
+              .where(eq(rentalSerials.id, serial.id));
+          }
+        };
+        await assign(goodQty + dirtyQty, 'available');
+        await assign(damagedQty, 'repair');
+        await assign(missingQty, 'retired');
+        await writeRentalAudit({
           tenantId: user.tenantId,
           userId: user.id,
-          productId: line.productId,
-          locationId: onRentId,
-          quantity: missingQty,
-          memo: `Missing on return ${line.id}`,
-          docDate: today,
+          action: 'UPDATE',
+          tableName: 'rental_booking_lines',
+          recordId: line.id,
+          notes: `Return good ${goodQty} dirty ${dirtyQty} damaged ${damagedQty} missing ${missingQty} on ${line.id}`,
         });
-      }
-      const nextReturned = Number(line.returnedQty) + goodQty + dirtyQty;
-      const nextDamaged = Number(line.damagedQty) + damagedQty;
-      const nextMissing = Number(line.missingQty) + missingQty;
-      const remaining = Number(line.dispatchedQty) - nextReturned - nextDamaged - nextMissing;
-      await db()
-        .update(rentalBookingLines)
-        .set({
-          returnedQty: nextReturned.toFixed(4),
-          damagedQty: nextDamaged.toFixed(4),
-          missingQty: nextMissing.toFixed(4),
-          status: remaining <= 0.0001 ? 'returned' : 'dispatched',
-          updatedAt: new Date(),
-        })
-        .where(eq(rentalBookingLines.id, line.id));
-
-      const files = (input.photos ?? []).filter((f) => f && typeof f.size === 'number' && f.size > 0);
-      if (files.length > MAX_RETURN_PHOTOS) {
-        throw new Error(`At most ${MAX_RETURN_PHOTOS} return photos per line.`);
-      }
-      if (files.length > 0) {
-        const { saveRentalInspectPhoto } = await import('@/lib/product-image');
-        for (const file of files) {
-          const saved = await saveRentalInspectPhoto({
-            tenantId: user.tenantId,
-            bookingLineId: line.id,
-            file,
-          });
-          await db().insert(rentalReturnPhotos).values({
-            tenantId: user.tenantId,
-            bookingLineId: line.id,
-            documentId: line.documentId,
-            imageKey: saved.imageKey,
-            createdBy: user.id,
-          });
-        }
-      }
-      const onLine = await db()
-        .select()
-        .from(rentalSerials)
-        .where(
-          and(eq(rentalSerials.tenantId, user.tenantId), eq(rentalSerials.bookingLineId, line.id)),
-        );
-      let offset = 0;
-      const assign = async (count: number, status: string) => {
-        const slice = onLine.slice(offset, offset + Math.round(count));
-        offset += slice.length;
-        for (const serial of slice) {
-          await db()
-            .update(rentalSerials)
-            .set({
-              status,
-              bookingLineId: status === 'on_rent' ? line.id : null,
-              updatedAt: new Date(),
-            })
-            .where(eq(rentalSerials.id, serial.id));
-        }
-      };
-      await assign(goodQty + dirtyQty, 'available');
-      await assign(damagedQty, 'repair');
-      await assign(missingQty, 'retired');
-      await writeRentalAudit({
-        tenantId: user.tenantId,
-        userId: user.id,
-        action: 'UPDATE',
-        tableName: 'rental_booking_lines',
-        recordId: line.id,
-        notes: `Return good ${goodQty} dirty ${dirtyQty} damaged ${damagedQty} missing ${missingQty} on ${line.id}`,
+        revalidateRentalPaths(line.documentId);
       });
-      revalidateRentalPaths(line.documentId);
     });
     return { ok: true };
   } catch (error) {
@@ -1452,38 +1458,41 @@ export async function releaseFleetBay(input: {
     await assertRentalDispatchWrite();
     const user = await requireTenantContext();
     await withTenantContext(user.tenantId, async () => {
-      const [level] = await db()
-        .select({ id: inventoryStockLevels.id })
-        .from(inventoryStockLevels)
-        .where(
-          and(
-            eq(inventoryStockLevels.tenantId, user.tenantId),
-            eq(inventoryStockLevels.productId, input.productId),
-            eq(inventoryStockLevels.locationId, input.locationId),
-          ),
-        )
-        .limit(1);
-      const warehouseId = await pickWarehouseLocation(user.tenantId, input.productId, null, 0);
-      const { createStockTransfer } = await import('@/app/actions/inventory');
-      const moved = await createStockTransfer({
-        fromLocationId: input.locationId,
-        toLocationId: warehouseId,
-        reason: 'Rental turnaround',
-        notes: `Ready from bay ${input.locationId}`,
-        lines: [{ productId: input.productId, quantity: qty }],
+      // One DB transaction (CoreGuard §4.2): the stock transfer and its audit commit together.
+      await db().transaction(async () => {
+        const [level] = await db()
+          .select({ id: inventoryStockLevels.id })
+          .from(inventoryStockLevels)
+          .where(
+            and(
+              eq(inventoryStockLevels.tenantId, user.tenantId),
+              eq(inventoryStockLevels.productId, input.productId),
+              eq(inventoryStockLevels.locationId, input.locationId),
+            ),
+          )
+          .limit(1);
+        const warehouseId = await pickWarehouseLocation(user.tenantId, input.productId, null, 0);
+        const { createStockTransfer } = await import('@/app/actions/inventory');
+        const moved = await createStockTransfer({
+          fromLocationId: input.locationId,
+          toLocationId: warehouseId,
+          reason: 'Rental turnaround',
+          notes: `Ready from bay ${input.locationId}`,
+          lines: [{ productId: input.productId, quantity: qty }],
+        });
+        if (!moved.ok) throw new Error(moved.error || 'Could not move kit to warehouse.');
+        await writeRentalAudit({
+          tenantId: user.tenantId,
+          userId: user.id,
+          action: 'UPDATE',
+          tableName: 'inventory_stock_levels',
+          recordId: level?.id ?? input.locationId,
+          notes: `Release ${qty} from bay ${input.locationId} to warehouse`,
+          newValues: { productId: input.productId, locationId: input.locationId, qty },
+        });
+        revalidateRentalPaths();
+        revalidatePath('/inventory/levels');
       });
-      if (!moved.ok) throw new Error(moved.error || 'Could not move kit to warehouse.');
-      await writeRentalAudit({
-        tenantId: user.tenantId,
-        userId: user.id,
-        action: 'UPDATE',
-        tableName: 'inventory_stock_levels',
-        recordId: level?.id ?? input.locationId,
-        notes: `Release ${qty} from bay ${input.locationId} to warehouse`,
-        newValues: { productId: input.productId, locationId: input.locationId, qty },
-      });
-      revalidateRentalPaths();
-      revalidatePath('/inventory/levels');
     });
     return { ok: true };
   } catch (error) {

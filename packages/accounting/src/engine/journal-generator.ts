@@ -1,12 +1,13 @@
 import { requireAccount } from '../account-lookup';
 import type { InferredTransaction, JournalDraft, JournalLine } from '../inference/types';
+import { centsToString, sideTotalsCents } from '../money';
 
+/** Debits equal credits exactly, in integer cents (CoreGuard D3). */
 function assertBalanced(lines: JournalLine[]): void {
-  const debits = lines.reduce((sum, line) => sum + (line.side === 'debit' ? line.amount : 0), 0);
-  const credits = lines.reduce((sum, line) => sum + (line.side === 'credit' ? line.amount : 0), 0);
-  if (Math.abs(debits - credits) > 0.0001) {
+  const { debit, credit } = sideTotalsCents(lines);
+  if (debit !== credit) {
     throw new Error(
-      `Journal lines are not balanced. Debits=${debits.toFixed(2)} Credits=${credits.toFixed(2)}`,
+      `Journal lines are not balanced. Debits=${centsToString(debit)} Credits=${centsToString(credit)}`,
     );
   }
 }

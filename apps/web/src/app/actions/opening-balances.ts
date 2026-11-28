@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { previewOpeningBalances, type OpeningLineInput } from '@bookone/accounting';
+import { previewOpeningBalances, type JournalLineDraft, type OpeningLineInput } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
 import {
   accounts,
@@ -75,7 +75,7 @@ export async function postOpeningBalances(input: {
         .from(accounts)
         .where(and(eq(accounts.tenantId, user.tenantId), isNull(accounts.voidedAt)));
       const byCode = new Map(chart.map((row) => [row.code, row]));
-      const journalLines = [];
+      const journalLines: JournalLineDraft[] = [];
       for (const line of input.lines) {
         const debit = Number(line.debit) || 0;
         const credit = Number(line.credit) || 0;
@@ -88,58 +88,62 @@ export async function postOpeningBalances(input: {
       }
       const equity = byCode.get('3000') ?? chart[0];
       if (!equity) return { ok: false, error: 'Chart of accounts is empty.' };
-      const posted = await postBalancedJournal({
-        tenantId: user.tenantId,
-        userId: user.id,
-        date: input.effectiveDate,
-        party: 'Opening balances',
-        description: `Opening balances ${input.effectiveDate}`,
-        accountingType: 'transfer',
-        direction: 'in',
-        paymentMethod: 'Bank',
-        paymentAccountId: equity.id,
-        lines: journalLines,
-        notes: input.notes ?? null,
-        auditTable: 'opening_balance_runs',
-      });
-      const [run] = await db()
-        .insert(openingBalanceRuns)
-        .values({
+      // One DB transaction for the whole action (CoreGuard §4.2): journal, run, run lines and audit commit together.
+      const { run, posted } = await db().transaction(async () => {
+        const posted = await postBalancedJournal({
           tenantId: user.tenantId,
-          effectiveDate: input.effectiveDate,
-          status: 'posted',
-          fingerprint: preview.fingerprint,
-          debitTotal: preview.debitTotal.toFixed(2),
-          creditTotal: preview.creditTotal.toFixed(2),
-          sourceTransactionId: posted.transactionId,
-          sourceJournalId: posted.journalId,
+          userId: user.id,
+          date: input.effectiveDate,
+          party: 'Opening balances',
+          description: `Opening balances ${input.effectiveDate}`,
+          accountingType: 'transfer',
+          direction: 'in',
+          paymentMethod: 'Bank',
+          paymentAccountId: equity.id,
+          lines: journalLines,
           notes: input.notes ?? null,
-          createdBy: user.id,
-          postedAt: new Date(),
-        })
-        .returning({ id: openingBalanceRuns.id });
-      if (!run) throw new Error('Could not store the opening run.');
-      for (const line of input.lines) {
-        const debit = Number(line.debit) || 0;
-        const credit = Number(line.credit) || 0;
-        if (debit === 0 && credit === 0) continue;
-        const account = byCode.get(line.accountCode);
-        if (!account) continue;
-        await db().insert(openingBalanceLines).values({
-          tenantId: user.tenantId,
-          runId: run.id,
-          accountId: account.id,
-          debit: debit.toFixed(2),
-          credit: credit.toFixed(2),
+          auditTable: 'opening_balance_runs',
         });
-      }
-      await db().insert(auditLog).values({
-        tenantId: user.tenantId,
-        userId: user.id,
-        action: 'CREATE',
-        tableName: 'opening_balance_runs',
-        recordId: run.id,
-        newValues: { fingerprint: preview.fingerprint, date: input.effectiveDate },
+        const [run] = await db()
+          .insert(openingBalanceRuns)
+          .values({
+            tenantId: user.tenantId,
+            effectiveDate: input.effectiveDate,
+            status: 'posted',
+            fingerprint: preview.fingerprint,
+            debitTotal: preview.debitTotal.toFixed(2),
+            creditTotal: preview.creditTotal.toFixed(2),
+            sourceTransactionId: posted.transactionId,
+            sourceJournalId: posted.journalId,
+            notes: input.notes ?? null,
+            createdBy: user.id,
+            postedAt: new Date(),
+          })
+          .returning({ id: openingBalanceRuns.id });
+        if (!run) throw new Error('Could not store the opening run.');
+        for (const line of input.lines) {
+          const debit = Number(line.debit) || 0;
+          const credit = Number(line.credit) || 0;
+          if (debit === 0 && credit === 0) continue;
+          const account = byCode.get(line.accountCode);
+          if (!account) continue;
+          await db().insert(openingBalanceLines).values({
+            tenantId: user.tenantId,
+            runId: run.id,
+            accountId: account.id,
+            debit: debit.toFixed(2),
+            credit: credit.toFixed(2),
+          });
+        }
+        await db().insert(auditLog).values({
+          tenantId: user.tenantId,
+          userId: user.id,
+          action: 'CREATE',
+          tableName: 'opening_balance_runs',
+          recordId: run.id,
+          newValues: { fingerprint: preview.fingerprint, date: input.effectiveDate },
+        });
+        return { run, posted };
       });
       revalidatePath('/accounts');
       revalidatePath('/accounts/opening');

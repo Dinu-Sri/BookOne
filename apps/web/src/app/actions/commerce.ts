@@ -517,15 +517,18 @@ export async function seedSampleCatalogFromForm(formData: FormData) {
     if (!operator.canWrite) throw new Error('You do not have permission to change this connection.');
     const inventory = await probeModuleWriteDetail('inventory');
     if (!inventory.canWrite) throw new Error('Adding sample products needs Inventory write access.');
-    const { withTenantContext } = await import('@bookone/db');
+    const { db, withTenantContext } = await import('@bookone/db');
     await withCommerceService(operator.tenantId, async (service) => {
       const view = await service.listOperatorView(operator);
       const connection = view.find((v) => v.connection.id === connectionId)?.connection;
       if (!connection) throw new Error('Connection was not found.');
       if (connection.environment !== 'sandbox') throw new Error('Sample products can only be added to a sandbox connection.');
       const { seedSampleCatalog } = await import('@/lib/commerce-sample-catalog');
+      // One DB transaction (CoreGuard §4.2): products, stock levels, cost layers and stock movements commit together.
       await withTenantContext(operator.tenantId, () =>
-        seedSampleCatalog({ tenantId: operator.tenantId, userId: operator.userId, connectionId, locationId: connection.locationId }),
+        db().transaction(() =>
+          seedSampleCatalog({ tenantId: operator.tenantId, userId: operator.userId, connectionId, locationId: connection.locationId }),
+        ),
       );
       await service.notifyProductsChanged(operator.tenantId, (await service.channelCatalogForOperator(operator, connectionId)).products.map((p) => p.id), 'product');
     });

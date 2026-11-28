@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { closeMonth, reopenMonth, type MonthLockRow } from '@/app/actions/period-close';
 import { askConfirm, askText } from '@/components/ui/ask';
@@ -35,6 +35,13 @@ export function ClosedMonths({ rows, canWrite }: { rows: MonthLockRow[]; canWrit
   const openMonths = useMemo(() => recentMonths().filter((p) => !closed.has(p)), [closed]);
   const [month, setMonth] = useState(openMonths[1] ?? openMonths[0] ?? '');
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+
+  // After a month is closed it leaves the list; pick the newest open month before it, never a blank picker.
+  useEffect(() => {
+    if (month && openMonths.includes(month)) return;
+    const older = openMonths.find((p) => p < month);
+    setMonth(older ?? openMonths[0] ?? '');
+  }, [month, openMonths]);
 
   async function handleClose() {
     if (!month) return;

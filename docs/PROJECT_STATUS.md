@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 2 live on staging (v2.36.1)
+
+Guards 060–063 run on staging; smoke test passed except the archive-restore step. Next: restore check, BR-6 in bookone-qa, then Step 3 (sentinel checks). See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md).
+
 ## 2026-11-28 — CoreGuard Step 2: database guards (v2.36.0)
 
 Guards are written and tested in CI; merge waits for the staging preflight (0 duplicates) and owner action B4 (maintenance login). After deploy: fingerprint backfill and the staging smoke test. See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md).

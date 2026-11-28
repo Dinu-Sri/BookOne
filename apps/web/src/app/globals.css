@@ -12217,3 +12217,10 @@ a.party-back-btn[href='/company/details'], a.party-back-btn[href='/journal'] { d
   .cr-filters .cr-search { grid-column: 1 / -1; }
 }
 .cr-filters.is-single { grid-template-columns: minmax(260px, 480px) auto; justify-content: start; }
+.jr-list .journal-audit-row summary { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+@media (max-width: 1200px) {
+  .jr-list .journal-audit-row summary { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 6px; }
+  .jr-list .journal-audit-row summary .audit-row-main { flex: 1 1 100%; min-width: 0; }
+}
+/* Grid children must not grow to a wide table's width; the table scrolls in its own wrap (tablet 768). */
+.workspace.ux-page > *, .adv-stack > *, .ux-main > * { min-width: 0; }

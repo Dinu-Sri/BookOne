@@ -122,13 +122,13 @@ Use `dl.ux-statement` (or `.bis-sum`) with `is-total` on the result. Each `dt` t
 
 ### 10. Works at three sizes
 
-Check every changed screen at:
+Check every changed screen at the three sizes below. Phone sizes are not required (owner decision, 2026-11-28).
 
 | Size | What must hold |
 |---|---|
 | Desktop 1920×~860 | everything fits; no empty half-screen |
 | Laptop 1366×768 | the work screen does not scroll the page |
-| Phone 390×844 | no sideways scroll; tables turn into stacked cards under 640 px; asides drop below the main column under 1100 px |
+| Tablet 768×1024 | no sideways scroll; asides drop below the main column under 1100 px |
 
 ## Shared layout kit (globals.css "Calm screen kit")
 
@@ -161,7 +161,7 @@ Controls still come from the registry (`SelectField`, `DateField`, `TextField`, 
 - [ ] Empty, finished and error states say what to do next
 - [ ] Nothing posted, published or approved without a person
 - [ ] No browser pop-ups (alert / confirm / prompt); long forms keep Save visible
-- [ ] Checked at 1920, 1366×768 and 390×844; work screens do not page-scroll at 1366×768
+- [ ] Checked at 1920, 1366×768 and tablet 768×1024; work screens do not page-scroll at 1366×768
 - [ ] Registry controls only; test ids and accessible names kept or migrated in the same commit
 
 ## Applying this to legacy screens

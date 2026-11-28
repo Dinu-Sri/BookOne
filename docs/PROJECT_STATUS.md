@@ -1,3 +1,7 @@
+## 2026-11-28 — Tablet fit: Advances, Modules, Journal; phone size dropped (v2.35.1)
+
+Owner: tablet is the smallest size. Fixed sideways scroll at 768 on Advances and Modules, Journal row clipping. See [CHG-20261128-tablet-fit](changes/CHG-20261128-tablet-fit.md).
+
 ## 2026-11-28 — Calm Control Room: overview, companies, access, health check (v2.35.0)
 
 Plain status and event words, registry filters, overview statement; Accounts head spacing. See [CHG-20261128-calm-control-room](changes/CHG-20261128-calm-control-room.md).

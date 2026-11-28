@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { PlatformCompanyRow } from '@/app/actions/platform';
-import { StatusBadge } from '@/components/module/list-page';
-import { Button, Card } from '@/components/ui/bookone-ui';
+import { Badge, Button } from '@/components/ui/bookone-ui';
+import { SelectField } from '@/components/ui/select-field';
+import { SearchField } from '@/components/ui/text-field';
+import { companyStatusWord, environmentWord, planWord } from '@/lib/platform-labels';
 import { entityKindLabel } from '@/lib/entity-labels';
 
 const PAGE_SIZE = 10;
@@ -76,170 +78,147 @@ export function CompaniesListScreen({ rows: initialRows }: { rows: PlatformCompa
   }
 
   return (
-    <div className="workspace party-workspace">
-      <div className="party-toolbar" style={{ flexWrap: 'wrap', gap: 10 }}>
-        <div className="party-search-form" style={{ flex: '1 1 200px' }}>
-          <input
-            className="input party-search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search companies…"
-            aria-label="Search companies"
-            autoComplete="off"
-          />
+    <div className="workspace ux-page">
+      <header className="ux-head">
+        <div className="ux-head-text">
+          <div>
+            <h1 className="page-title">Companies</h1>
+            <p>Find a company, then open it to change its details, plan or status.</p>
+          </div>
         </div>
-        <select
-          className="input"
-          style={{ width: 'auto', minWidth: 120 }}
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          aria-label="Status"
-        >
-          <option value="all">All status</option>
-          <option value="active">Active</option>
-          <option value="suspended">Suspended</option>
-          <option value="archived">Archived</option>
-        </select>
-        <select
-          className="input"
-          style={{ width: 'auto', minWidth: 140 }}
-          value={entityKind}
-          onChange={(e) => setEntityKind(e.target.value)}
-          aria-label="Entity type"
-        >
-          <option value="all">All types</option>
-          <option value="personal">Personal</option>
-          <option value="sole_prop">Sole prop</option>
-          <option value="company">Company</option>
-          <option value="pending">Pending</option>
-        </select>
-        <select
-          className="input"
-          style={{ width: 'auto', minWidth: 120 }}
-          value={plan}
-          onChange={(e) => setPlan(e.target.value)}
-          aria-label="Plan"
-        >
-          <option value="all">All plans</option>
-          <option value="starter">Starter</option>
-          <option value="growth">Growth</option>
-          <option value="pro">Pro</option>
-        </select>
-        <select
-          className="input"
-          style={{ width: 'auto', minWidth: 130 }}
-          value={environment}
-          onChange={(e) => setEnvironment(e.target.value)}
-          aria-label="Environment"
-        >
-          <option value="all">All envs</option>
-          <option value="production">Production</option>
-          <option value="staging">Staging</option>
-        </select>
-        <Link href="/control-room/companies/new">
-          <Button variant="primary" type="button">
+        <div className="ux-head-actions">
+          <Link href="/control-room/companies/new" className="button primary">
             New company
-          </Button>
-        </Link>
+          </Link>
+        </div>
+      </header>
+
+      <div className="cr-filters">
+        <SearchField
+          id="cr-search"
+          label="Search companies"
+          value={query}
+          onChange={setQuery}
+          placeholder="Search by name"
+          className="cr-search"
+        />
+        <SelectField
+          id="cr-status"
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: 'all', label: 'Any status' },
+            { value: 'active', label: 'Active' },
+            { value: 'suspended', label: 'Suspended' },
+            { value: 'archived', label: 'Archived' },
+          ]}
+        />
+        <SelectField
+          id="cr-type"
+          label="Type"
+          value={entityKind}
+          onChange={setEntityKind}
+          options={[
+            { value: 'all', label: 'Any type' },
+            { value: 'personal', label: 'Personal' },
+            { value: 'sole_prop', label: 'Sole proprietor' },
+            { value: 'company', label: 'Company' },
+            { value: 'pending', label: 'Not chosen yet' },
+          ]}
+        />
+        <SelectField
+          id="cr-plan"
+          label="Plan"
+          value={plan}
+          onChange={setPlan}
+          options={[
+            { value: 'all', label: 'Any plan' },
+            { value: 'starter', label: 'Starter' },
+            { value: 'growth', label: 'Growth' },
+            { value: 'pro', label: 'Pro' },
+          ]}
+        />
+        <SelectField
+          id="cr-env"
+          label="Server"
+          value={environment}
+          onChange={setEnvironment}
+          options={[
+            { value: 'all', label: 'Live and test' },
+            { value: 'production', label: 'Live' },
+            { value: 'staging', label: 'Test (staging)' },
+          ]}
+        />
       </div>
 
-      <Card>
-        <div className="card-body" style={{ padding: 0 }}>
-          {pageRows.length === 0 ? (
-            <div className="empty-state" style={{ padding: 28 }}>
-              <h3>No companies found</h3>
-              <p>{query ? 'Try a different search.' : 'Use New company to onboard the first tenant.'}</p>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Workspace</th>
-                    <th>Type</th>
-                    <th>Plan</th>
-                    <th>Env</th>
-                    <th>Status</th>
-                    <th>Users</th>
-                    <th>Created</th>
-                    <th style={{ width: 72 }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRows.map((row) => (
+      <section className="ux-card" aria-label="Companies">
+        {pageRows.length === 0 ? (
+          <div className="ux-empty cr-empty">
+            <h2>No companies found</h2>
+            <p>{query ? 'Try a different name, or clear the filters.' : 'Use New company to set up the first one.'}</p>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Type</th>
+                  <th>Plan</th>
+                  <th>Server</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>People</th>
+                  <th>Created</th>
+                  <th aria-label="Open" />
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((row) => {
+                  const st = companyStatusWord(row.status);
+                  return (
                     <tr key={row.id}>
                       <td>
-                        <div style={{ fontWeight: 750 }}>{row.name}</div>
-                        <div style={{ color: 'var(--ink-soft)', fontSize: 12 }}>{row.slug}</div>
+                        <Link href={`/control-room/companies/${row.id}`} className="cr-name">
+                          {row.name}
+                        </Link>
                       </td>
+                      <td>{entityKindLabel(row.entityKind, row.capabilityTier)}</td>
+                      <td>{planWord(row.plan)}</td>
+                      <td>{environmentWord(row.environment)}</td>
                       <td>
-                        <span style={{ fontWeight: 650, fontSize: 13 }}>
-                          {entityKindLabel(row.entityKind, row.capabilityTier)}
-                        </span>
+                        <Badge tone={st.tone}>{st.label}</Badge>
                       </td>
-                      <td style={{ textTransform: 'capitalize' }}>{row.plan}</td>
+                      <td style={{ textAlign: 'right' }}>{row.userCount}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{new Date(row.createdAt).toLocaleDateString('en-CA')}</td>
                       <td>
-                        <StatusBadge status={row.environment === 'staging' ? 'draft' : 'posted'} />
-                        <span style={{ marginLeft: 6, fontSize: 12, textTransform: 'capitalize' }}>
-                          {row.environment}
-                        </span>
-                      </td>
-                      <td>
-                        <StatusBadge
-                          status={
-                            row.status === 'active'
-                              ? 'active'
-                              : row.status === 'archived'
-                                ? 'draft'
-                                : 'inactive'
-                          }
-                        />
-                        <span style={{ marginLeft: 6, fontSize: 12, textTransform: 'capitalize' }}>
-                          {row.status}
-                        </span>
-                      </td>
-                      <td>{row.userCount}</td>
-                      <td style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
-                        {new Date(row.createdAt).toLocaleDateString()}
-                      </td>
-                      <td>
-                        <Link href={`/control-room/companies/${row.id}`}>
-                          <Button variant="ghost" type="button">
-                            Open
-                          </Button>
+                        <Link href={`/control-room/companies/${row.id}`} className="cr-link">
+                          Open
                         </Link>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {filtered.length > PAGE_SIZE ? (
+          <div className="cr-pager">
+            <span>
+              {filtered.length} companies · page {safePage} of {totalPages}
+            </span>
+            <div className="cluster" style={{ gap: 8 }}>
+              <Button variant="secondary" type="button" disabled={safePage <= 1} onClick={() => goPage(safePage - 1)}>
+                Previous
+              </Button>
+              <Button variant="secondary" type="button" disabled={safePage >= totalPages} onClick={() => goPage(safePage + 1)}>
+                Next
+              </Button>
             </div>
-          )}
-          {filtered.length > PAGE_SIZE ? (
-            <div
-              className="cluster"
-              style={{ justifyContent: 'space-between', padding: '10px 14px', borderTop: '1px solid var(--line)' }}
-            >
-              <span style={{ color: 'var(--ink-muted)', fontSize: 13 }}>
-                {filtered.length} companies · page {safePage}/{totalPages}
-              </span>
-              <div className="cluster" style={{ gap: 8 }}>
-                <Button variant="secondary" type="button" disabled={safePage <= 1} onClick={() => goPage(safePage - 1)}>
-                  Prev
-                </Button>
-                <Button
-                  variant="secondary"
-                  type="button"
-                  disabled={safePage >= totalPages}
-                  onClick={() => goPage(safePage + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </Card>
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }

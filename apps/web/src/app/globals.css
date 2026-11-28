@@ -12196,3 +12196,24 @@ a.party-back-btn[href='/company/details'], a.party-back-btn[href='/journal'] { d
 .jr-verdict { margin: 12px 0 0 !important; font-size: 13px; }
 .jr-verdict.is-good { color: var(--success); }
 .jr-verdict.is-bad { color: var(--danger); font-weight: 600; }
+
+/* ---- Control Room (v2.35.0) ---- */
+.cr-link { font-size: 13px; font-weight: 650; color: var(--brand); text-decoration: none; }
+.cr-link:hover { text-decoration: underline; }
+.cr-row { text-decoration: none; color: inherit; }
+.cr-row:hover { background: var(--bg-subtle); }
+.cr-open { font-size: 13px; font-weight: 650; color: var(--brand); }
+.cr-when { font-size: 13px; color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cr-empty { margin: 0 16px 16px; }
+.cr-env { margin: 12px 0 0 !important; font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
+.cr-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(140px, 1fr)); gap: 10px; align-items: end; }
+.cr-filters .field { margin: 0; }
+.cr-name { font-weight: 650; color: var(--ink); text-decoration: none; }
+.cr-name:hover { color: var(--brand); text-decoration: underline; }
+.cr-pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-muted); }
+.workspace.party-workspace > .ux-head { margin-bottom: 14px; }
+@media (max-width: 900px) {
+  .cr-filters { grid-template-columns: 1fr 1fr; }
+  .cr-filters .cr-search { grid-column: 1 / -1; }
+}
+.cr-filters.is-single { grid-template-columns: minmax(260px, 480px) auto; justify-content: start; }

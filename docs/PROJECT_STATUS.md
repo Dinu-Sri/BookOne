@@ -1,3 +1,7 @@
+## 2026-11-28 — Calm Control Room: overview, companies, access, health check (v2.35.0)
+
+Plain status and event words, registry filters, overview statement; Accounts head spacing. See [CHG-20261128-calm-control-room](changes/CHG-20261128-calm-control-room.md).
+
 ## 2026-11-28 — Calm Journal and Accounts; plain Advances wording; Company tab review fixes (v2.34.0)
 
 Journal as expandable entries plus a debits/credits statement; Accounts calm head and Built-in tags; Advances wording; backup counts and role casing fixed. See [CHG-20261128-calm-journal-accounts](changes/CHG-20261128-calm-journal-accounts.md).

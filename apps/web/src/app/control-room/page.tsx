@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation';
 import { getPlatformOverview } from '@/app/actions/platform';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { StatusBadge } from '@/components/module/list-page';
-import { Button, Card } from '@/components/ui/bookone-ui';
+import { Badge } from '@/components/ui/bookone-ui';
+import { companyStatusWord, planWord, platformEventWord, shortDateTime } from '@/lib/platform-labels';
 import { entityKindLabel } from '@/lib/entity-labels';
 import { isPlatformAdmin } from '@/lib/platform-admin';
 
@@ -22,170 +22,111 @@ export default async function ControlRoomOverviewPage() {
     redirect('/');
   }
 
-  const metrics = [
-    { label: 'Companies', value: String(data.counts.total), note: 'All tenants' },
-    { label: 'Active', value: String(data.counts.active), note: 'Can operate' },
-    { label: 'Suspended', value: String(data.counts.suspended), note: 'Blocked' },
-    {
-      label: 'App env',
-      value: data.appEnv === 'staging' ? 'Staging' : 'Production',
-      note: `${data.counts.staging} staging · ${data.counts.production} prod tenants`,
-    },
-  ];
-
   return (
     <BookOneShell active="Overview" tenant={tenant}>
-      <div className="workspace party-workspace" style={{ display: 'grid', gap: 14 }}>
-        <div className="party-toolbar">
-          <div className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
-            <Link href="/control-room/companies">
-              <Button variant="secondary" type="button">
-                Companies
-              </Button>
-            </Link>
-            <Link href="/control-room/modules">
-              <Button variant="secondary" type="button">
-                Modules
-              </Button>
-            </Link>
-            <Link href="/control-room/health-check">
-              <Button variant="secondary" type="button">
-                Health check
-              </Button>
+      <div className="workspace ux-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Control Room</h1>
+              <p>Every company on this BookOne server. Open one to change its details, plan or status.</p>
+            </div>
+          </div>
+          <div className="ux-head-actions">
+            <Link href="/control-room/companies/new" className="button primary">
+              New company
             </Link>
           </div>
-          <Link href="/control-room/companies/new" style={{ marginLeft: 'auto' }}>
-            <Button variant="primary" type="button">
-              New company
-            </Button>
-          </Link>
-        </div>
+        </header>
 
-        <div className="grid metrics">
-          {metrics.map((m) => (
-            <Card key={m.label} className="metric-card">
-              <p className="metric-label">{m.label}</p>
-              <p className="metric-value" style={{ fontSize: 22 }}>
-                {m.value}
-              </p>
-              <p className="metric-note">{m.note}</p>
-            </Card>
-          ))}
-        </div>
+        <div className="ux-split">
+          <div className="ux-main set-stack">
+            <section className="ux-card" aria-labelledby="cr-recent-title">
+              <header className="ux-card-head">
+                <h2 id="cr-recent-title">Recent companies</h2>
+                <Link href="/control-room/companies" className="cr-link">
+                  All companies
+                </Link>
+              </header>
+              {data.recent.length === 0 ? (
+                <div className="ux-empty cr-empty">
+                  <h2>No companies yet</h2>
+                  <p>Use New company to set up the first one.</p>
+                </div>
+              ) : (
+                <div className="ux-rows">
+                  {data.recent.map((row) => {
+                    const st = companyStatusWord(row.status);
+                    return (
+                      <Link className="ux-row cr-row" key={row.id} href={`/control-room/companies/${row.id}`}>
+                        <span className="ux-row-text">
+                          <strong>{row.name}</strong>
+                          <span>
+                            {entityKindLabel(row.entityKind, row.capabilityTier)} · {planWord(row.plan)} plan
+                          </span>
+                        </span>
+                        <span className="ux-row-side">
+                          <Badge tone={st.tone}>{st.label}</Badge>
+                          <span className="cr-open">Open</span>
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
-        <div className="grid two" style={{ alignItems: 'start' }}>
-          <Card>
-            <div className="card-header" style={{ paddingBottom: 0 }}>
+            <section className="ux-card" aria-labelledby="cr-activity-title">
+              <header className="ux-card-head">
+                <h2 id="cr-activity-title">Recent changes</h2>
+                <span>Made in Control Room</span>
+              </header>
+              {data.recentAudit.length === 0 ? (
+                <div className="ux-empty cr-empty">
+                  <p>No changes yet.</p>
+                </div>
+              ) : (
+                <div className="ux-rows">
+                  {data.recentAudit.map((row) => (
+                    <div className="ux-row" key={row.id}>
+                      <span className="ux-row-text">
+                        <strong>{platformEventWord(row.action)}</strong>
+                        <span>{row.targetName ?? row.summary ?? '—'}</span>
+                      </span>
+                      <span className="cr-when">{shortDateTime(row.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+
+          <aside className="ux-guide cr-summary" aria-label="Companies summary">
+            <h2>Companies</h2>
+            <dl className="ux-statement">
               <div>
-                <h2 className="card-title">Recent companies</h2>
+                <dt>Active </dt>
+                <dd>{data.counts.active}</dd>
               </div>
-              <Link href="/control-room/companies">
-                <Button variant="ghost" type="button">
-                  View all
-                </Button>
-              </Link>
-            </div>
-            <div className="card-body" style={{ padding: 0 }}>
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Workspace</th>
-                      <th>Type</th>
-                      <th>Plan</th>
-                      <th>Status</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.recent.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} style={{ color: 'var(--ink-muted)' }}>
-                          No workspaces yet
-                        </td>
-                      </tr>
-                    ) : (
-                      data.recent.map((row) => (
-                        <tr key={row.id}>
-                          <td>
-                            <div style={{ fontWeight: 700 }}>{row.name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{row.slug}</div>
-                          </td>
-                          <td style={{ fontSize: 13, fontWeight: 650 }}>
-                            {entityKindLabel(row.entityKind, row.capabilityTier)}
-                          </td>
-                          <td style={{ textTransform: 'capitalize' }}>{row.plan}</td>
-                          <td>
-                            <StatusBadge
-                              status={
-                                row.status === 'active'
-                                  ? 'active'
-                                  : row.status === 'archived'
-                                    ? 'draft'
-                                    : 'inactive'
-                              }
-                            />
-                          </td>
-                          <td>
-                            <Link href={`/control-room/companies/${row.id}`}>
-                              <Button variant="ghost" type="button">
-                                Open
-                              </Button>
-                            </Link>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="card-header" style={{ paddingBottom: 0 }}>
               <div>
-                <h2 className="card-title">Recent platform activity</h2>
+                <dt>Suspended </dt>
+                <dd>{data.counts.suspended}</dd>
               </div>
-            </div>
-            <div className="card-body" style={{ padding: 0 }}>
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>When</th>
-                      <th>Action</th>
-                      <th>Target</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.recentAudit.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} style={{ color: 'var(--ink-muted)' }}>
-                          No audit events yet
-                        </td>
-                      </tr>
-                    ) : (
-                      data.recentAudit.map((row) => (
-                        <tr key={row.id}>
-                          <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
-                            {new Date(row.createdAt).toLocaleString()}
-                          </td>
-                          <td>
-                            <div style={{ fontWeight: 650 }}>{row.action}</div>
-                            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-                              {row.summary ?? '—'}
-                            </div>
-                          </td>
-                          <td style={{ fontSize: 13 }}>{row.targetName ?? '—'}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+              <div className="is-total">
+                <dt>All companies </dt>
+                <dd>{data.counts.total}</dd>
               </div>
+            </dl>
+            <p className="cr-env">
+              This server is <strong>{data.appEnv === 'staging' ? 'a test server (staging)' : 'live (production)'}</strong>.{' '}
+              {data.counts.staging} test and {data.counts.production} live companies.
+            </p>
+            <div className="ux-guide-links">
+              <Link href="/control-room/modules">Modules</Link>
+              <Link href="/control-room/access">Access</Link>
+              <Link href="/control-room/health-check">Health check</Link>
             </div>
-          </Card>
+          </aside>
         </div>
       </div>
     </BookOneShell>

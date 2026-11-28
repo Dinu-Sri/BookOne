@@ -43,9 +43,6 @@
   "apps/web/src/components/company/document-style-form.tsx": {
     "raw-select": 5
   },
-  "apps/web/src/components/control-room/companies-list.tsx": {
-    "raw-select": 4
-  },
   "apps/web/src/components/control-room/company-form.tsx": {
     "raw-select": 6
   },

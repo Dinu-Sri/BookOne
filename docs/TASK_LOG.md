@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 2 smoke test on staging; Closed months picker fix (v2.36.1)
+
+Staging preflight 0/0, B4 verified, backfill ran (0 rows); smoke test passed (invoice, payment, entry + reversal, close October, posting refused by G05, reopen with reason). Archive restore step still open. Picker no longer blank after closing a month. See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md), [CHG-20261128-closed-months-picker](changes/CHG-20261128-closed-months-picker.md).
+
 ## 2026-11-28 — CoreGuard Step 2: database guards (v2.36.0)
 
 Migrations 060–063 (guards G01–G07, G09, close/reopen protocol) copied verbatim; maintenance login for archive restore and pilot cleanup; Accounts → Closed months (reopen needs a reason); duplicate app period checks removed; guard errors shown as plain messages and logged; 55 guard/flow cases in `@bookone/coreguard`. Waiting on owner: staging preflight and B4. See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md).

@@ -1,6 +1,6 @@
 # CHG-20261128-coreguard-step-2 — CoreGuard Step 2: database guards
 
-Status: blocked on owner actions before merge (staging preflight, B4). Code complete; PR open.
+Status: merged (PR Dinu-Sri/BookOne#58, 9ede47f; staging runs v2.36.0 · 9ede47f). Open: archive-restore smoke step, BR-6 in bookone-qa.
 
 - Author/agent and date: Claude Code (Opus 5.5), 2026-11-28.
 - Product version (`VERSION` file) and base SHA / branch/PR: 2.35.3 → **2.36.0** (minor: new Closed months screen); base `69690ad`; branch `coreguard/step-2-guards`; one PR per step (guide §1.1).
@@ -50,16 +50,16 @@ Other changes needed by the above:
 
 | Item | Status |
 | --- | --- |
-| The preflight showed 0 duplicates, and the fingerprint backfill ran on staging | Preflight **done 2026-11-28** (owner allowed Portainer access): read-only transaction on `bookone-staging-postgres` → "transactions with more than one live journal entry" **0**, "months with more than one active lock" **0**; active period locks: 0 (so the backfill will insert 0 rows). Backfill: pending deploy. |
-| The 55 Step 2 cases pass in CI | Pending CI on the PR (no local PostgreSQL/Docker engine on this machine). |
-| `pnpm test`, `pnpm coreguard:pilot` and the Playwright lane pass | Local `pnpm test`: all packages pass except two load-dependent `@bookone/auth` timeouts (`ui-02-lint` this run) that pass alone (6/6). Pilot + Playwright: pending the "Docker web image" run on the branch. |
-| Manual smoke test on staging (invoice, payment, Simple Entry + reversal, close month + refused posting, reopen with reason, archive restore into an empty company) | **Pending deploy** (after merge and the owner's B4, since restore needs `MAINTENANCE_DATABASE_URL`). |
+| The preflight showed 0 duplicates, and the fingerprint backfill ran on staging | Preflight **done 2026-11-28** (owner allowed Portainer access): read-only transaction on `bookone-staging-postgres` → "transactions with more than one live journal entry" **0**, "months with more than one active lock" **0**; active period locks: 0 (so the backfill will insert 0 rows). Backfill **ran 2026-11-28** after deploy (`scripts/coreguard/backfill-fingerprints.sql` via Portainer exec): `INSERT 0 0` (no active locks before CoreGuard). |
+| The 55 Step 2 cases pass in CI | Done: PR head 9cc1ccd — Production Check "Tests" and Docker web image run 46144021915 green; master 9ede47f — Production Check 46145461335 and Docker web image 46145461280 green. |
+| `pnpm test`, `pnpm coreguard:pilot` and the Playwright lane pass | Local `pnpm test`: all packages pass except two load-dependent `@bookone/auth` timeouts (`ui-02-lint` this run) that pass alone (6/6). Pilot + Playwright: green in Docker web image runs 46144021915 (branch) and 46145461280 (master). |
+| Manual smoke test on staging (invoice, payment, Simple Entry + reversal, close month + refused posting, reopen with reason, archive restore into an empty company) | Done 2026-11-28 on staging.clossyan.com (v2.36.0 · 9ede47f), company "ZZ-TEST Bank Recon", except the restore step (see below). Results: **sales invoice** INV-20261128-0001 LKR 1,000.00 posted; **payment** LKR 1,000.00 received to 1100 (receipt shown); **Simple Entry** money out LKR 250.00 "Office supplies ZZ-TEST smoke" recorded, then **reversed** (Reversal row created; G04 allowed `reversed_by` once); **closed October 2026** on Accounts → Closed months; **invoice dated 15 Oct 2026 refused** with "This month is closed. Reopen it (with a reason) or use an open date."; **reopen with empty reason refused** ("Say why you are reopening this month."); **reopened with reason** "ZZ-TEST CoreGuard smoke test: reopen check". DB read-back (read-only): lock 2026-10 status `unlocked`, note keeps the reason; 1 fingerprint, superseded on reopen; the refused October invoice left 0 rows; `/ops/logs` row `COREGUARD G05` "period 2026-10 is locked"; 0 unbalanced entries among the 4 created; audit LOCK + UNLOCK rows. **Archive restore into an empty company: not run yet** — it needs a backup file downloaded from staging and uploaded into a new empty ZZ-TEST company (asked the owner). B4 verified read-only: `bookone_maintenance` can log in, BYPASSRLS, member of `coreguard_maintenance`, grants present; 060–063 `applied` in `coreguard.migration_runs` on the last boot; 24 guard triggers and both unique indexes present. |
 | Any guard rejection found during this work was fixed in the app, never in the guard | So far one: the pilot's own `ledger.ts` posting was non-atomic (fixed in the app). Guards untouched. |
 
 ## Not done / open
 
 - BR-6 RULE_CHANGE in bookone-qa (guide §6.11 says before the step): not created in this session.
-- UI evidence for `/accounts/months` at 1920 / 1366×768 / 768×1024: not captured (no local database to run the app). To do on staging after deploy.
+- UI sizes on staging: 1920×855 viewed; 1366×768 and 768×1024 measured in a same-origin iframe (no sideways scroll, no page scroll at 1366×768, no overflowing controls; at 768 the guide drops below the main column). Found: after closing a month the picker showed "Select…" — fixed in v2.36.1 (CHG-20261128-closed-months-picker).
 
 ## CoreGuard impact (required when the diff touches the financial surface)
 - Financial surface files touched: `packages/db/migrations/06[0-3]_coreguard_*.sql`, `packages/db/src/archive/restore.ts`, `scripts/init-db.ts`, `scripts/coreguard/**`, `packages/coreguard/**`, `apps/web/src/lib/post-balanced-journal.ts`, `apps/web/src/app/actions/{commercial-docs,documents,inventory,record-entry,entity-lifecycle,rental-money,rental-bookings,advances,opening-balances,bank-reconciliation,reconciliation,statement-import,pos-session}.ts`.
@@ -76,5 +76,5 @@ Other changes needed by the above:
 ## UI/UX impact and existing-design compatibility
 
 - New screen `/accounts/months` built from the calm-screen kit (`ux-page`, `ux-head`, `ux-split`, `ux-card`, `ux-rows`, `ux-empty`, `ux-guide`) and registry controls (`SelectField`, `Button`, `Badge`, `askConfirm`, `askText`, `withFormPending`). Entry point: "Closed months" secondary link in the Accounts toolbar (next to Opening balances). No sidebar change.
-- Rule book checklist: [x] one purpose sentence, one primary action (Close month) · [x] plain words ("Close month", "Reopen", "Closed", "Reopened"; no ids/enums) · [x] sentence case · [x] only applicable actions (Reopen only on closed months, close only for open months; read-only users see the list) · [x] status in words + Badge tone · [n/a] sums · [x] empty and error states say what to do · [x] nothing posted for the user · [x] no browser pop-ups (BookOne dialogs) · [ ] checked at 1920, 1366×768, 768×1024 — pending staging · [x] registry controls only.
+- Rule book checklist: [x] one purpose sentence, one primary action (Close month) · [x] plain words ("Close month", "Reopen", "Closed", "Reopened"; no ids/enums) · [x] sentence case · [x] only applicable actions (Reopen only on closed months, close only for open months; read-only users see the list) · [x] status in words + Badge tone · [n/a] sums · [x] empty and error states say what to do · [x] nothing posted for the user · [x] no browser pop-ups (BookOne dialogs) · [x] checked at 1920, 1366×768, 768×1024 (staging, see above) · [x] registry controls only.
 - External QA/UX refs: none yet (pending bookone-qa companion).

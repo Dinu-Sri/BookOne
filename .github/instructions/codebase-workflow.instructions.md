@@ -2,6 +2,9 @@
 applyTo: '**'
 ---
 
+RULE ZERO — CoreGuard first. Read the Rule Zero section at the top of AGENTS.md before anything else.
+Changes to money, stock, tax, ledger or periods need CoreGuard rules and tests before code.
+
 ## MANDATORY: Always use Codebase Memory MCP to read the codebase
 
 **This rule applies to EVERY request that involves this codebase.**

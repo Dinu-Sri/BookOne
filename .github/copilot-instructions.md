@@ -1,5 +1,8 @@
 # GitHub Copilot Instructions for BookOne v2
 
+RULE ZERO — CoreGuard first. Read the Rule Zero section at the top of AGENTS.md before anything else.
+Changes to money, stock, tax, ledger or periods need CoreGuard rules and tests before code.
+
 > These instructions are for GitHub Copilot in VS Code. They sync with AGENTS.md.
 
 ## Critical Rules
@@ -8,9 +11,9 @@
 
 2. **Never bypass tenant isolation.** Every DB query must be tenant-scoped. `tenant_id` comes from the authenticated session, NEVER from client input.
 
-3. **Never delete data — void it.** Set `voided = true` instead of `DELETE`.
+3. **Ledger rows are never deleted or voided. Correct with a reversal.**
 
-4. **Every financial mutation MUST create journal entries.** The `generateJournalEntry()` function must be called on every create/update/void of transactions.
+4. **All ledger writes go through `packages/ledger-core`.**
 
 5. **Use database transactions for multi-table mutations.** If one step fails, all roll back.
 

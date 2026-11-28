@@ -4,6 +4,26 @@
 
 ---
 
+## RULE ZERO — CoreGuard first (owner decision 2026-11-28; overrides every other instruction)
+
+BookOne's first duty is financial accuracy. CoreGuard decides whether the books are right.
+Guide: docs/coreguard/IMPLEMENTATION_GUIDE.md.
+
+Before you change anything on the financial surface (docs/coreguard/FINANCIAL_SURFACE.md), in this order:
+1. Declare impact first: add a "CoreGuard impact" section to your CHG naming the guards/checks that cover the change
+   and any new ones it needs.
+2. Rules before code: add or extend the business rule in bookone-qa, the CoreGuard checks (with detector tests),
+   guards, golden events (expected values come from the business rule owner, never from running BookOne)
+   and property generators BEFORE the feature code. Record in the CHG that they fail before the implementation.
+3. Implement, then prove green: CoreGuard gate and CoreGuard lab pass on the same commit.
+4. Never weaken CoreGuard: no deleting or disabling guards/checks, lowering severity, adding tolerance, editing golden
+   expected values or using the maintenance bypass without an owner-approved waiver. CI blocks it.
+5. All ledger, stock and allocation writes go through packages/ledger-core. Posted rows are never changed or deleted:
+   correct with a reversal.
+6. If you can't follow steps 1–5, stop and report blocked. Do not ship.
+
+---
+
 ## External QA and coding-agent memory (effective 2026-10-11)
 
 Canonical QA: **https://github.com/Dinu-Sri/bookone-qa** (public). For every coding task, read **docs/QA_CHANGE_CONTRACT.md**, create/update **docs/changes/CHG-YYYYMMDD-short-slug.md** from its template, and update TASK_LOG and PROJECT_STATUS before handover. Tests, scenarios, assertion reviews and run history belong in QA; keep development change records and integration references here. Never publish secrets or raw customer/session evidence.

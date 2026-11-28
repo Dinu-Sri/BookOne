@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 0: Rule Zero and governance (v2.35.2)
+
+CoreGuard (docs/coreguard/IMPLEMENTATION_GUIDE.md v2.1) is now binding through Rule Zero. Step 0 done in its own PR; next is Step 1 (make the existing writers guard-ready). See [CHG-20261128-coreguard-step-0](changes/CHG-20261128-coreguard-step-0.md).
+
 ## 2026-11-28 — Tablet fit: Advances, Modules, Journal; phone size dropped (v2.35.1)
 
 Owner: tablet is the smallest size. Fixed sideways scroll at 768 on Advances and Modules, Journal row clipping. See [CHG-20261128-tablet-fit](changes/CHG-20261128-tablet-fit.md).

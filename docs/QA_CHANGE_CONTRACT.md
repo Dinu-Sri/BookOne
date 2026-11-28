@@ -11,6 +11,7 @@ Effective 2026-10-11. Canonical QA repository: **https://github.com/Dinu-Sri/boo
 5. Run appropriate checks and attach exact commands, outcome counts, environment/build/QA revision and evidence links. Quote the on-screen sidebar stamp (`vMAJOR.MINOR.PATCH · sha7`) from [docs/VERSIONING.md](VERSIONING.md). Missing credentials, failed setup, skips, flaky retries and unrun tests must be explicit. No successful UI-save, exit code or catalog-ID count establishes financial correctness by itself.
 6. Update docs/TASK_LOG.md with a dated completion/handover entry and docs/PROJECT_STATUS.md with the current summary and next action. Update authoritative architecture/user docs when behaviour changes. Preserve old entries; clearly supersede stale guidance.
 7. In the product PR description, link the change record and QA companion PR/run. Because a commit cannot contain its own final SHA, write the base SHA in the file and put final product/QA SHAs in PR metadata and the external run manifest after commit.
+8. CoreGuard impact section: when the diff touches the financial surface ([coreguard/FINANCIAL_SURFACE.md](coreguard/FINANCIAL_SURFACE.md)), the CHG has a "CoreGuard impact" section (template in [changes/TEMPLATE.md](changes/TEMPLATE.md)) naming the guards/checks that cover the change. See Rule Zero in AGENTS.md.
 
 ## Minimum impact analysis
 

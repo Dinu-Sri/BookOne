@@ -1,0 +1,7 @@
+---
+description: RULE ZERO — CoreGuard first
+alwaysApply: true
+---
+
+RULE ZERO — CoreGuard first. Read the Rule Zero section at the top of AGENTS.md before anything else.
+Changes to money, stock, tax, ledger or periods need CoreGuard rules and tests before code.

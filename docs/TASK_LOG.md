@@ -1,3 +1,7 @@
+## 2026-11-28 — Calm Company tabs: details, tax, brands, locations, domains, backup (v2.33.0)
+
+Folded lists with edit-in-place, registry controls, DNS record with Copy, restore folded; unused tax numbering fields folded with a pointer to Sales settings. See [CHG-20261128-calm-company-tabs](changes/CHG-20261128-calm-company-tabs.md).
+
 ## 2026-11-28 — Calm Sales, Purchase, Inventory and Rental settings (v2.32.0)
 
 Settings kit with sticky Save, switches and registry selects; tills archive asks first; Jobs highlights at once. See [CHG-20261128-calm-settings-screens](changes/CHG-20261128-calm-settings-screens.md).

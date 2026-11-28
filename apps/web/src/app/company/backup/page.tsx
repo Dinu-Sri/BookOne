@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation';
-import { Archive } from 'lucide-react';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { BookOneShell } from '@/components/layout/bookone-shell';
-import { CompanyCard } from '../_components';
+import { Badge } from '@/components/ui/bookone-ui';
 import { BackupClient, FilesRestoreClient, RestoreClient } from '@/components/company/backup-client';
 import { assertScreenAccess } from '@/lib/access';
 import {
@@ -49,77 +48,89 @@ export default async function CompanyBackupPage() {
 
   return (
     <BookOneShell active="Backup" tenant={tenant}>
-      <div className="workspace">
-        <div className="grid two" style={{ alignItems: 'start' }}>
-          <CompanyCard
-            title="Company backup"
-            subtitle="Download two encrypted files for this company. BookOne does not store the password."
-            action={<Archive size={18} color="var(--brand)" />}
-          >
-            <p style={{ color: 'var(--ink-muted)', fontSize: 13, marginTop: 0 }}>
-              Data holds the books (invoices, journals, stock, settings). Attachments holds receipts and photos.
-              Keep both files and the password together. Restore only into a new empty company. Prepared files stay
-              available to download for 15 minutes.
-            </p>
-            {backupStatus.reminderNeeded ? (
-              <p
-                role="status"
-                style={{
-                  color: 'var(--ink)',
-                  fontSize: 13,
-                  margin: '0 0 12px',
-                  padding: '10px 12px',
-                  border: '1px solid var(--line)',
-                  borderRadius: 8,
-                  background: 'var(--surface-2, #f8f5ef)',
-                }}
-              >
-                {lastExportLabel
-                  ? `Last backup was ${lastExportLabel}. Create a new pair if it has been more than ${backupStatus.reminderDays} days, and keep both files off this computer.`
-                  : 'No backup has been downloaded yet. Create a pair and keep both files and the password.'}
-              </p>
-            ) : lastExportLabel ? (
-              <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '0 0 12px' }}>
-                Last backup: {lastExportLabel}.
-              </p>
-            ) : null}
-            <BackupClient initialMeta={prepared} />
-          </CompanyCard>
+      <div className="workspace ux-page set-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Backup</h1>
+              <p>Download a locked copy of this company&apos;s books and files, and keep it somewhere safe.</p>
+            </div>
+          </div>
+        </header>
 
-          <CompanyCard title="This company" subtitle="Signup seed (chart of accounts, jobs) is not trading history.">
-            {emptyState.empty ? (
-              <p style={{ color: 'var(--ink-muted)', fontSize: 13 }}>
-                No invoices, journals, parties, or stock yet. You can still download a backup of settings and the
-                starter chart.
-              </p>
-            ) : (
-              <p style={{ color: 'var(--ink-muted)', fontSize: 13 }}>
-                Trading records in this backup: {tradingBits.join(', ') || 'yes'}.
-              </p>
-            )}
-            <div className="field field-full" style={{ marginTop: 16 }}>
-              <label>Restore into this company</label>
-              <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '6px 0 8px' }}>
-                Only a new company with no invoices, journals, or stock can be restored. This replaces the starter
-                chart of accounts.
-              </p>
-              <RestoreClient restoreEnabled={emptyState.empty} />
-            </div>
-            <div className="field field-full" style={{ marginTop: 16 }}>
-              <label>Restore attachments</label>
-              <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '6px 0 8px' }}>
-                Upload the matching .bookone-files pack after company data is restored. Existing uploads are not
-                overwritten.
-              </p>
-              {backupStatus.missingAttachmentCount > 0 ? (
-                <p style={{ color: 'var(--ink-muted)', fontSize: 13, margin: '0 0 8px' }}>
-                  {backupStatus.missingAttachmentCount} attachment
-                  {backupStatus.missingAttachmentCount === 1 ? '' : 's'} missing. Upload the matching pack.
-                </p>
-              ) : null}
-              <FilesRestoreClient enabled={filesEnabled} disabledReason={filesReason} />
-            </div>
-          </CompanyCard>
+        <div className="ux-split">
+          <div className="ux-main set-stack">
+            <section className="ux-card" aria-labelledby="backup-make-title">
+              <header className="ux-card-head">
+                <div>
+                  <h2 id="backup-make-title">Make a backup</h2>
+                  <p className="set-card-sub">
+                    {emptyState.empty
+                      ? 'No trading records yet. The backup still holds your settings and starter chart of accounts.'
+                      : `Includes ${tradingBits.join(', ') || 'your trading records'}.`}
+                  </p>
+                </div>
+                {backupStatus.reminderNeeded ? (
+                  <Badge tone="warning">{lastExportLabel ? 'Backup due' : 'No backup yet'}</Badge>
+                ) : lastExportLabel ? (
+                  <Badge tone="success">Last backup {lastExportLabel}</Badge>
+                ) : null}
+              </header>
+              <div className="ux-card-body">
+                {backupStatus.reminderNeeded ? (
+                  <p role="status" className="co-notice">
+                    {lastExportLabel
+                      ? `Your last backup was ${lastExportLabel}. Make a new one if it has been more than ${backupStatus.reminderDays} days, and keep both files off this computer.`
+                      : 'No backup has been downloaded yet. Make one now and keep both files and the password together.'}
+                  </p>
+                ) : null}
+                <BackupClient initialMeta={prepared} />
+              </div>
+            </section>
+
+            <details className="ux-disclosure" open={emptyState.empty}>
+              <summary>Restore from a backup</summary>
+              <div className="co-restore">
+                <div className="co-restore-step">
+                  <h3>1. Company data</h3>
+                  <p>
+                    Only a new company with no invoices, journals or stock can be restored. This replaces the starter chart
+                    of accounts.
+                  </p>
+                  <RestoreClient restoreEnabled={emptyState.empty} />
+                </div>
+                <div className="co-restore-step">
+                  <h3>2. Attachments</h3>
+                  <p>
+                    After the data is restored, upload the matching .bookone-files pack. Uploads already here are not
+                    overwritten.
+                    {backupStatus.missingAttachmentCount > 0
+                      ? ` ${backupStatus.missingAttachmentCount} attachment${backupStatus.missingAttachmentCount === 1 ? ' is' : 's are'} missing.`
+                      : ''}
+                  </p>
+                  <FilesRestoreClient enabled={filesEnabled} disabledReason={filesReason} />
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <aside className="ux-guide set-guide" aria-label="How backup works">
+            <h2>How it works</h2>
+            <ol>
+              <li>
+                <strong>Choose a password</strong>
+                <span>BookOne does not keep it. Without it the files cannot be opened.</span>
+              </li>
+              <li>
+                <strong>Download both files</strong>
+                <span>Data holds the books and settings; Attachments holds receipts and photos. Files stay ready for 15 minutes.</span>
+              </li>
+              <li>
+                <strong>Keep them together</strong>
+                <span>Store both files and the password off this computer.</span>
+              </li>
+            </ol>
+          </aside>
         </div>
       </div>
     </BookOneShell>

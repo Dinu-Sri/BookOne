@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation';
-import { Building2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { createCompany, getCompanySettingsData, saveCompanyProfile, switchActiveCompany } from '@/app/actions/company-settings';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button } from '@/components/ui/bookone-ui';
-import { CompanyCard, Field, SaveButton } from '../_components';
+import { TextField } from '@/components/ui/text-field';
+import { SettingsForm, SettingsSection, TextRow } from '@/components/settings/settings-kit';
 
 export default async function CompanyDetailsPage() {
   let tenant;
@@ -20,55 +21,91 @@ export default async function CompanyDetailsPage() {
 
   return (
     <BookOneShell active="Company Details" tenant={tenant}>
-      <div className="workspace">
-        <div className="grid two" style={{ alignItems: 'start' }}>
-          <CompanyCard title="Company details" subtitle="Legal identity used across reports, invoices, and company records." action={<Building2 size={18} color="var(--brand)" />}>
-            <form action={saveCompanyProfile} className="form-grid">
-              <Field label="Legal name" name="legalName" defaultValue={profile?.legalName ?? tenant.name} wide />
-              <Field label="Trading name" name="tradingName" defaultValue={profile?.tradingName} />
-              <Field label="Registration no." name="registrationNumber" defaultValue={profile?.registrationNumber} />
-              <Field label="TIN" name="tin" defaultValue={tax?.tin} placeholder="Used on invoices and quotations" />
-              <Field label="Country" name="country" defaultValue={profile?.country ?? 'Sri Lanka'} />
-              <Field label="Currency" name="baseCurrency" defaultValue={profile?.baseCurrency ?? 'LKR'} />
-              <Field label="Timezone" name="timezone" defaultValue={profile?.timezone ?? 'Asia/Colombo'} />
-              <Field label="Phone" name="phone" defaultValue={profile?.phone} />
-              <Field label="Email" name="email" type="email" defaultValue={profile?.email} />
-              <Field label="Website" name="website" defaultValue={profile?.website} placeholder="https://example.com" />
-              <Field label="Address line 1" name="addressLine1" defaultValue={profile?.addressLine1} wide />
-              <Field label="Address line 2" name="addressLine2" defaultValue={profile?.addressLine2} wide />
-              <Field label="City" name="city" defaultValue={profile?.city} />
-              <Field label="Postal code" name="postalCode" defaultValue={profile?.postalCode} />
-              <SaveButton>Save company details</SaveButton>
-            </form>
-          </CompanyCard>
-
-          <CompanyCard title="Companies" subtitle="Create and switch legal companies connected to this login.">
-            <div className="balance-list">
-              {data.companies.map((company) => (
-                <div className="balance-row" key={company.id}>
-                  <div>
-                    <strong>{company.name}</strong>
-                    <span>{company.slug} - {company.role}</span>
-                  </div>
-                  {company.active ? (
-                    <Badge tone="success">Active</Badge>
-                  ) : (
-                    <form action={switchActiveCompany}>
-                      <input type="hidden" name="tenantId" value={company.id} />
-                      <Button variant="secondary" type="submit">Switch</Button>
-                    </form>
-                  )}
-                </div>
-              ))}
+      <div className="workspace ux-page set-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Company details</h1>
+              <p>Your company&apos;s name, contact details and address, as printed on invoices, quotations and reports.</p>
             </div>
-            <form action={createCompany} className="form-grid" style={{ marginTop: 16 }}>
-              <Field label="New company" name="name" placeholder="Clossyan Retail Pvt Ltd" />
-              <Field label="Slug" name="slug" placeholder="clossyan-retail" />
-              <Field label="Country" name="country" defaultValue="Sri Lanka" />
-              <Field label="Currency" name="baseCurrency" defaultValue="LKR" />
-              <SaveButton><Plus size={16} /> Add company</SaveButton>
-            </form>
-          </CompanyCard>
+          </div>
+        </header>
+
+        <div className="ux-split">
+          <div className="ux-main">
+            <SettingsForm
+              id="company-details"
+              action={saveCompanyProfile}
+              title={profile?.legalName || tenant.name}
+              saveLabel="Save company details"
+            >
+              <SettingsSection title="Name and registration">
+                <TextRow name="legalName" label="Legal name" help="As registered. Printed on documents." defaultValue={profile?.legalName ?? tenant.name} />
+                <TextRow name="tradingName" label="Trading name" help="The name customers know, if different." defaultValue={profile?.tradingName} />
+                <TextRow name="registrationNumber" label="Registration number" defaultValue={profile?.registrationNumber} />
+                <TextRow name="tin" label="TIN" help="Taxpayer number, printed on invoices and quotations." defaultValue={tax?.tin} />
+              </SettingsSection>
+              <SettingsSection title="Contact">
+                <TextRow name="phone" label="Phone" defaultValue={profile?.phone} />
+                <TextRow name="email" label="Email" type="email" defaultValue={profile?.email} />
+                <TextRow name="website" label="Website" defaultValue={profile?.website} placeholder="https://example.com" />
+              </SettingsSection>
+              <SettingsSection title="Address">
+                <TextRow name="addressLine1" label="Address line 1" defaultValue={profile?.addressLine1} />
+                <TextRow name="addressLine2" label="Address line 2" defaultValue={profile?.addressLine2} />
+                <TextRow name="city" label="City" defaultValue={profile?.city} />
+                <TextRow name="postalCode" label="Postal code" defaultValue={profile?.postalCode} />
+              </SettingsSection>
+              <SettingsSection title="Country and currency">
+                <TextRow name="country" label="Country" defaultValue={profile?.country ?? 'Sri Lanka'} />
+                <TextRow name="baseCurrency" label="Currency" help="The currency your books are kept in." defaultValue={profile?.baseCurrency ?? 'LKR'} />
+                <TextRow name="timezone" label="Time zone" help="Used for dates and times across BookOne." defaultValue={profile?.timezone ?? 'Asia/Colombo'} />
+              </SettingsSection>
+            </SettingsForm>
+          </div>
+
+          <aside className="set-stack">
+            <section className="ux-card" aria-labelledby="companies-title">
+              <header className="ux-card-head">
+                <h2 id="companies-title">Your companies</h2>
+                <span>{data.companies.length}</span>
+              </header>
+              <div className="ux-rows">
+                {data.companies.map((company) => (
+                  <div className="ux-row" key={company.id}>
+                    <div className="ux-row-text">
+                      <strong>{company.name}</strong>
+                      <span>{company.role}</span>
+                    </div>
+                    {company.active ? (
+                      <Badge tone="success">Open now</Badge>
+                    ) : (
+                      <form action={switchActiveCompany}>
+                        <input type="hidden" name="tenantId" value={company.id} />
+                        <Button variant="secondary" type="submit">
+                          Switch
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <details className="ux-disclosure set-add">
+                <summary>Add a company</summary>
+                <form action={createCompany} className="set-add-grid is-single">
+                  <TextField id="new-company-name" name="name" label="Company name" placeholder="Clossyan Retail Pvt Ltd" />
+                  <TextField id="new-company-slug" name="slug" label="Short name" help="Lowercase letters and dashes, such as clossyan-retail." placeholder="clossyan-retail" />
+                  <TextField id="new-company-country" name="country" label="Country" defaultValue="Sri Lanka" />
+                  <TextField id="new-company-currency" name="baseCurrency" label="Currency" defaultValue="LKR" />
+                  <div className="set-add-actions is-end">
+                    <Button variant="primary" type="submit">
+                      <Plus size={16} /> Add company
+                    </Button>
+                  </div>
+                </form>
+              </details>
+            </section>
+          </aside>
         </div>
       </div>
     </BookOneShell>

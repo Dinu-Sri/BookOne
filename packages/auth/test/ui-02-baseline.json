@@ -1,10 +1,4 @@
 {
-  "apps/web/src/app/company/_components.tsx": {
-    "raw-select": 1
-  },
-  "apps/web/src/app/company/brand-location-forms.tsx": {
-    "raw-select": 2
-  },
   "apps/web/src/app/inventory/adjustments/new/page.tsx": {
     "raw-date": 1,
     "raw-select": 1

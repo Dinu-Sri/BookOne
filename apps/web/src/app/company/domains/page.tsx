@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation';
-import { Globe2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { createCompanyDomain, listCompanyDomains, verifyCompanyDomain } from '@/app/actions/company-domains';
 import { getTenantInfo } from '@/app/actions/workspace';
 import { jobCanWrite } from '@/lib/access';
 import { BookOneShell } from '@/components/layout/bookone-shell';
 import { Badge, Button } from '@/components/ui/bookone-ui';
-import { CompanyCard, EmptyLine, Field, SaveButton } from '../_components';
+import { TextField } from '@/components/ui/text-field';
+import { CopyButton } from '@/components/settings/settings-kit';
 
 export default async function CompanyDomainsPage() {
   let tenant;
@@ -20,40 +21,116 @@ export default async function CompanyDomainsPage() {
 
   return (
     <BookOneShell active="Domain Verification" tenant={tenant}>
-      <div className="workspace">
-        <CompanyCard title="Domain verification" subtitle="Verify your company domain using DNS TXT before domain-based organization access is enabled." action={<Globe2 size={18} color="var(--brand)" />}>
-          {canWrite ? (
-            <form action={createCompanyDomain} className="form-grid">
-              <Field label="Domain" name="domain" placeholder="example.com" wide />
-              <SaveButton><Plus size={16} /> Add domain</SaveButton>
-            </form>
-          ) : (
-            <p className="muted">Only an Owner or Admin can add or verify domains.</p>
-          )}
-
-          <div className="balance-list" style={{ marginTop: 16 }}>
-            <EmptyLine show={domains.length === 0}>No domains added yet.</EmptyLine>
-            {domains.map((domain) => (
-              <div className="balance-row" key={domain.id} style={{ alignItems: 'flex-start' }}>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  <strong>{domain.domain}</strong>
-                  <span>Add DNS TXT record at <code>_bookone.{domain.domain}</code></span>
-                  <code style={{ overflowWrap: 'anywhere' }}>{`bookone-domain-verification=${domain.verificationToken}`}</code>
-                  {domain.verifiedAt ? <span>Verified {domain.verifiedAt.toLocaleString()}</span> : null}
-                </div>
-                <div className="cluster">
-                  <Badge tone={domain.status === 'verified' ? 'success' : 'warning'}>{domain.status}</Badge>
-                  {canWrite && domain.status !== 'verified' ? (
-                    <form action={verifyCompanyDomain}>
-                      <input type="hidden" name="domainId" value={domain.id} />
-                      <Button variant="secondary" type="submit">Check DNS</Button>
-                    </form>
-                  ) : null}
-                </div>
-              </div>
-            ))}
+      <div className="workspace ux-page set-page">
+        <header className="ux-head">
+          <div className="ux-head-text">
+            <div>
+              <h1 className="page-title">Domains</h1>
+              <p>Prove you own your company&apos;s web address, so people with that email address can be recognised as your team.</p>
+            </div>
           </div>
-        </CompanyCard>
+        </header>
+
+        <div className="ux-split">
+          <section className="ux-card co-card" aria-labelledby="domains-title">
+            <header className="ux-card-head">
+              <h2 id="domains-title">Your domains</h2>
+              <span>{domains.length}</span>
+            </header>
+
+            <div className="co-list">
+              {domains.length === 0 ? (
+                <div className="ux-empty">
+                  <strong>No domains yet.</strong>
+                  <span>{canWrite ? 'Add your web address below, such as example.com.' : 'An Owner or Admin can add one.'}</span>
+                </div>
+              ) : null}
+              {domains.map((domain) => {
+                const verified = domain.status === 'verified';
+                const record = `bookone-domain-verification=${domain.verificationToken}`;
+                return (
+                  <div className="co-domain" key={domain.id}>
+                    <div className="co-domain-head">
+                      <div className="co-item-text">
+                        <strong>{domain.domain}</strong>
+                        <span>
+                          {verified && domain.verifiedAt
+                            ? `Verified ${domain.verifiedAt.toISOString().slice(0, 10)}`
+                            : 'Add the record below at your domain provider, then check.'}
+                        </span>
+                      </div>
+                      <div className="cluster">
+                        <Badge tone={verified ? 'success' : 'warning'}>{verified ? 'Verified' : 'Waiting for DNS'}</Badge>
+                        {canWrite && !verified ? (
+                          <form action={verifyCompanyDomain}>
+                            <input type="hidden" name="domainId" value={domain.id} />
+                            <Button variant="secondary" type="submit">
+                              Check now
+                            </Button>
+                          </form>
+                        ) : null}
+                      </div>
+                    </div>
+                    {verified ? null : (
+                      <dl className="co-dns">
+                        <div>
+                          <dt>Type </dt>
+                          <dd>TXT</dd>
+                        </div>
+                        <div>
+                          <dt>Name </dt>
+                          <dd>
+                            <code>_bookone.{domain.domain}</code>
+                            <CopyButton value={`_bookone.${domain.domain}`} />
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Value </dt>
+                          <dd>
+                            <code className="co-dns-value" title={record}>{record}</code>
+                            <CopyButton value={record} />
+                          </dd>
+                        </div>
+                      </dl>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {canWrite ? (
+              <details className="ux-disclosure set-add" open={domains.length === 0}>
+                <summary>Add a domain</summary>
+                <form action={createCompanyDomain} className="set-add-grid is-single">
+                  <TextField id="domain-new" name="domain" label="Domain" placeholder="example.com" required />
+                  <div className="set-add-actions is-end">
+                    <Button variant="primary" type="submit">
+                      <Plus size={16} /> Add domain
+                    </Button>
+                  </div>
+                </form>
+              </details>
+            ) : null}
+          </section>
+
+          <aside className="ux-guide set-guide" aria-label="How domain checks work">
+            <h2>How it works</h2>
+            <ol>
+              <li>
+                <strong>Add your domain</strong>
+                <span>The part after @ in your work email.</span>
+              </li>
+              <li>
+                <strong>Add the TXT record</strong>
+                <span>In your domain provider&apos;s DNS settings, copy the name and value shown.</span>
+              </li>
+              <li>
+                <strong>Check now</strong>
+                <span>DNS changes can take a few hours to show. Check again later if it is still waiting.</span>
+              </li>
+            </ol>
+          </aside>
+        </div>
       </div>
     </BookOneShell>
   );

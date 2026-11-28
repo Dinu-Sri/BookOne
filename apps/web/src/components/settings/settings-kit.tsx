@@ -181,6 +181,7 @@ export function TextRow({
   defaultValue,
   inputMode,
   placeholder,
+  type = 'text',
 }: {
   name: string;
   label: string;
@@ -188,6 +189,7 @@ export function TextRow({
   defaultValue?: string | number | null;
   inputMode?: 'decimal' | 'numeric' | 'text';
   placeholder?: string;
+  type?: 'text' | 'email' | 'url' | 'tel';
 }) {
   const id = `set-${name}`;
   return (
@@ -199,6 +201,7 @@ export function TextRow({
           name={name}
           label={label}
           defaultValue={defaultValue == null ? '' : String(defaultValue)}
+          type={type}
           inputMode={inputMode}
           placeholder={placeholder}
           autoComplete="off"
@@ -256,6 +259,27 @@ export function ConfirmSubmitButton({
       }}
     >
       {children}
+    </Button>
+  );
+}
+
+/** Copies a value and says so on the button for two seconds. */
+export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="secondary"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        } catch {
+          setCopied(false);
+        }
+      }}
+    >
+      {copied ? 'Copied' : label}
     </Button>
   );
 }

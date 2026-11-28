@@ -12,8 +12,10 @@ import {
   type CompanyActionState,
   type CompanySettingsData,
 } from '@/app/actions/company-settings';
-import { Badge, Button } from '@/components/ui/bookone-ui';
+import { Button } from '@/components/ui/bookone-ui';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { TextAreaField, TextField } from '@/components/ui/text-field';
+import { FormSelect } from '@/components/settings/settings-kit';
 import {
   FLEET_LOCATION_TYPES,
   LOCATION_TYPE_LABELS,
@@ -29,13 +31,30 @@ type Location = CompanySettingsData['locations'][number];
 export function BrandForms({ brands }: { brands: Brand[] }) {
   return (
     <>
-      <BrandForm />
-      <div className="inline-edit-list">
-        {brands.length === 0 ? <p className="muted-line">No brands yet.</p> : null}
+      <div className="co-list">
+        {brands.length === 0 ? (
+          <div className="ux-empty">
+            <strong>No brands yet.</strong>
+            <span>Add a brand when you sell under more than one name. Each brand can print its own bank details.</span>
+          </div>
+        ) : null}
         {brands.map((brand) => (
-          <BrandForm brand={brand} key={brand.id} />
+          <details className="co-item" key={brand.id}>
+            <summary>
+              <span className="co-item-text">
+                <strong>{brand.name}</strong>
+                <span>{[brand.code, brand.website].filter(Boolean).join(' · ') || 'No code or website'}</span>
+              </span>
+              <span className="co-item-open">Edit</span>
+            </summary>
+            <BrandForm brand={brand} />
+          </details>
         ))}
       </div>
+      <details className="ux-disclosure set-add" open={brands.length === 0}>
+        <summary>Add a brand</summary>
+        <BrandForm />
+      </details>
     </>
   );
 }
@@ -93,20 +112,42 @@ export function LocationForms({
 
   return (
     <>
-      <LocationForm brands={brands} rentalModuleOn={rentalModuleOn} />
-      <div className="inline-edit-list">
-        {locations.length === 0 ? <p className="muted-line">No locations yet.</p> : null}
+      <div className="co-list">
+        {locations.length === 0 ? (
+          <div className="ux-empty">
+            <strong>No locations yet.</strong>
+            <span>Add the shops, warehouses and offices where you keep stock or take payments.</span>
+          </div>
+        ) : null}
         {locations.map((location) => (
-          <LocationForm
-            brands={brands}
-            location={location}
-            key={location.id}
-            busy={busy}
-            rentalModuleOn={rentalModuleOn}
-            onDelete={() => requestDelete(location)}
-          />
+          <details className="co-item" key={location.id}>
+            <summary>
+              <span className="co-item-text">
+                <strong>
+                  {location.name}
+                  {location.code ? <span className="co-code"> ({location.code})</span> : null}
+                </strong>
+                <span>
+                  {LOCATION_TYPE_LABELS[location.locationType ?? ''] ?? location.locationType ?? 'Location'}
+                  {location.brandName ? ` · ${location.brandName}` : ''}
+                </span>
+              </span>
+              <span className="co-item-open">Edit</span>
+            </summary>
+            <LocationForm
+              brands={brands}
+              location={location}
+              busy={busy}
+              rentalModuleOn={rentalModuleOn}
+              onDelete={() => requestDelete(location)}
+            />
+          </details>
         ))}
       </div>
+      <details className="ux-disclosure set-add" open={locations.length === 0}>
+        <summary>Add a location</summary>
+        <LocationForm brands={brands} rentalModuleOn={rentalModuleOn} />
+      </details>
 
       <ConfirmDialog
         open={Boolean(confirm)}
@@ -168,37 +209,20 @@ function BrandForm({ brand }: { brand?: Brand }) {
   return (
     <form action={action} className={`company-inline-form ${isEdit ? 'is-edit' : 'is-create'}`}>
       <input type="hidden" name="id" value={brand?.id ?? ''} />
-      <div className="field">
-        <label>Brand name</label>
-        <input name="name" className="input" defaultValue={brand?.name ?? ''} placeholder="BookOne" required />
-      </div>
-      <div className="field">
-        <label>Code</label>
-        <input name="code" className="input" defaultValue={brand?.code ?? ''} placeholder="BOOK" />
-      </div>
-      <div className="field">
-        <label>Website</label>
-        <input
-          name="website"
-          className="input"
-          defaultValue={brand?.website ?? ''}
-          placeholder="https://brand.example.com"
-        />
-      </div>
-      <div className="field field-full">
-        <label>Bank details</label>
-        <textarea
-          name="bankDetails"
-          className="input"
-          rows={3}
-          defaultValue={brand?.bankDetails ?? ''}
-          placeholder="Bank, account name, number — used on this brand’s invoices and quotes"
-        />
-      </div>
-      <div className="field field-full">
-        <label>Notes</label>
-        <textarea name="notes" className="input" rows={2} defaultValue={brand?.notes ?? ''} />
-      </div>
+      <TextField id={`brand-name-${brand?.id ?? 'new'}`} name="name" label="Brand name" defaultValue={brand?.name ?? ''} placeholder="BookOne" required />
+      <TextField id={`brand-code-${brand?.id ?? 'new'}`} name="code" label="Code" defaultValue={brand?.code ?? ''} placeholder="BOOK" />
+      <TextField id={`brand-web-${brand?.id ?? 'new'}`} name="website" label="Website" defaultValue={brand?.website ?? ''} placeholder="https://brand.example.com" />
+      <TextAreaField
+        id={`brand-bank-${brand?.id ?? 'new'}`}
+        name="bankDetails"
+        label="Bank details"
+        help="Printed on this brand's invoices and quotations."
+        rows={3}
+        defaultValue={brand?.bankDetails ?? ''}
+        placeholder="Bank, account name, account number"
+        className="field-full"
+      />
+      <TextAreaField id={`brand-notes-${brand?.id ?? 'new'}`} name="notes" label="Notes" rows={2} defaultValue={brand?.notes ?? ''} className="field-full" />
       <div className="company-form-footer field-full">
         <ActionMessage state={state} />
         <SubmitButton icon={isEdit ? <Save size={16} /> : <Plus size={16} />}>
@@ -242,42 +266,26 @@ function LocationForm({
   return (
     <form action={action} className={`company-inline-form ${isEdit ? 'is-edit' : 'is-create'}`}>
       <input type="hidden" name="id" value={location?.id ?? ''} />
-      <div className="field">
-        <label>Location name</label>
-        <input name="name" className="input" defaultValue={location?.name ?? ''} placeholder="Colombo showroom" required />
-      </div>
-      <div className="field">
-        <label>Code</label>
-        <input name="code" className="input" defaultValue={location?.code ?? ''} placeholder="COL-01" />
-      </div>
-      <div className="field">
-        <label>Brand</label>
-        <select name="brandId" className="input" defaultValue={location?.brandId ?? ''}>
-          <option value="">No brand</option>
-          {brands.map((brand) => (
-            <option value={brand.id} key={brand.id}>{brand.code ? `${brand.code} - ${brand.name}` : brand.name}</option>
-          ))}
-        </select>
-      </div>
-      <div className="field">
-        <label>Type</label>
-        <select name="locationType" className="input" defaultValue={location?.locationType ?? 'branch'}>
-          {locationTypeOptions(rentalModuleOn, location?.locationType).map((option) => (
-            <option value={option.value} key={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="field field-full">
-        <label>Address</label>
-        <textarea name="address" className="input" rows={2} defaultValue={location?.address ?? ''} />
-      </div>
-      {isEdit ? (
-        <div className="field field-full">
-          <Badge tone="neutral">{location?.brandName ?? 'No brand'}{location?.locationType ? ` - ${location.locationType}` : ''}</Badge>
-        </div>
-      ) : null}
+      <TextField id={`loc-name-${location?.id ?? 'new'}`} name="name" label="Location name" defaultValue={location?.name ?? ''} placeholder="Colombo showroom" required />
+      <TextField id={`loc-code-${location?.id ?? 'new'}`} name="code" label="Code" defaultValue={location?.code ?? ''} placeholder="COL-01" />
+      <FormSelect
+        id={`loc-brand-${location?.id ?? 'new'}`}
+        name="brandId"
+        label="Brand"
+        defaultValue={location?.brandId ?? ''}
+        options={[
+          { value: '', label: 'No brand' },
+          ...brands.map((brand) => ({ value: brand.id, label: brand.code ? `${brand.name} (${brand.code})` : brand.name })),
+        ]}
+      />
+      <FormSelect
+        id={`loc-type-${location?.id ?? 'new'}`}
+        name="locationType"
+        label="Type"
+        defaultValue={location?.locationType ?? 'branch'}
+        options={locationTypeOptions(rentalModuleOn, location?.locationType)}
+      />
+      <TextAreaField id={`loc-address-${location?.id ?? 'new'}`} name="address" label="Address" rows={2} defaultValue={location?.address ?? ''} className="field-full" />
       <div className="company-form-footer field-full">
         <ActionMessage state={state} />
         <div className="company-form-footer-actions">

@@ -93,31 +93,30 @@ describe.skipIf(!runPostgres)('CoreGuard flows on 060–063 (C1 + A5, 6 cases)',
 
     it('after timeout: finding open, ack kept', async () => {
       // The check times out inside its savepoint; the run records outcome 'error', which never changes findings.
-      await h.exec(
-        'admin',
-        `BEGIN; SAVEPOINT cg_check; SET LOCAL statement_timeout='200ms'; SELECT pg_sleep(1); ROLLBACK TO SAVEPOINT cg_check;
-         SELECT coreguard.record_check_result('${R2}','${T}','CG-A01','error','canceling statement due to statement timeout',NULL); COMMIT;`,
-      );
-      // The reference script sends this as one psql -c string: the timeout aborts it, so the error result is
-      // recorded by a second statement exactly as the worker does after ROLLBACK TO SAVEPOINT.
-      const recorded = await h.scalar('admin', `select count(*) from coreguard.check_results where run_id='${R2}'`);
-      if (recorded === '0') {
-        const conn = h.connect('admin');
+      // The worker's per-check protocol (§6.8.2), one statement at a time on one connection: the check times out
+      // inside its savepoint, is rolled back to it, and the run records outcome 'error' (which never changes findings).
+      // (The reference script sends all of this as one psql -c string, which the timeout aborts before recording.)
+      const conn = h.connect('admin');
+      let timedOut = false;
+      try {
+        await conn.unsafe('BEGIN');
+        await conn.unsafe('SAVEPOINT cg_check');
+        await conn.unsafe(`SET LOCAL statement_timeout='200ms'`);
         try {
-          await conn.begin(async (tx) => {
-            await tx.unsafe('SAVEPOINT cg_check');
-            await tx.unsafe(`SET LOCAL statement_timeout='200ms'`);
-            await tx.unsafe('SELECT pg_sleep(1)').catch(() => undefined);
-            await tx.unsafe('ROLLBACK TO SAVEPOINT cg_check');
-            await tx.unsafe(`SET LOCAL statement_timeout=0`);
-            await tx.unsafe(
-              `SELECT coreguard.record_check_result('${R2}','${T}','CG-A01','error','canceling statement due to statement timeout',NULL)`,
-            );
-          });
-        } finally {
-          await conn.end({ timeout: 5 });
+          await conn.unsafe('SELECT pg_sleep(1)');
+        } catch (error) {
+          timedOut = /statement timeout/.test(String((error as Error).message));
         }
+        await conn.unsafe('ROLLBACK TO SAVEPOINT cg_check');
+        await conn.unsafe(
+          `SELECT coreguard.record_check_result('${R2}','${T}','CG-A01','error','canceling statement due to statement timeout',NULL)`,
+        );
+        await conn.unsafe('COMMIT');
+      } finally {
+        await conn.end({ timeout: 5 });
       }
+      expect(timedOut).toBe(true);
+      expect(await h.scalar('admin', `select outcome from coreguard.check_results where run_id='${R2}'`)).toBe('error');
       expect(await h.scalar('admin', `select status||'|'||(acknowledged_by is not null) from coreguard.findings`)).toBe('open|true');
     });
 

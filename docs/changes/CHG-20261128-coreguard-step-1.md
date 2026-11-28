@@ -1,6 +1,6 @@
 # CHG-20261128-coreguard-step-1 — CoreGuard Step 1: make the existing writers guard-ready
 
-Status: ready-for-QA (PR open; pilot/Playwright lane result in the PR).
+Status: merged (PR Dinu-Sri/BookOne#57, 69690ad); all Step 1 "Done when" items met.
 
 - Author/agent and date: Claude Code (Opus 5.5), 2026-11-28.
 - Product version (`VERSION` file) and base SHA / branch/PR: 2.35.2 → **2.35.3**; base `a2bb4fc`; branch `coreguard/step-1-writers`; one PR per step (guide §1.1).
@@ -104,7 +104,7 @@ grep for `update(`/`delete(` on `transactions`, `journalEntries`, `journalLines`
 | Item | Result |
 | --- | --- |
 | The CHG lists every writer from item 1 with "wrapped" or "already atomic" | Done (table above) |
-| `pnpm test`, `pnpm coreguard:pilot` and the Playwright lane pass | `pnpm test`: pass (auth timeouts pass when run alone). Pilot + Playwright: pending CI on the PR branch |
+| `pnpm test`, `pnpm coreguard:pilot` and the Playwright lane pass | Done. `pnpm test` pass (auth timeouts pass alone). Pilot + Playwright: "Docker web image" run 46133859270 on the branch (commit 2762613) and run 46140527409 on master after merge (69690ad): all jobs success, including "AgentBridge CoreGuard" (Playwright lane + `pnpm coreguard:pilot`) |
 | `grep -rn "0\.005" apps/web/src/lib/post-balanced-journal.ts packages/accounting/src/engine` returns nothing | Done |
 
 ## CoreGuard impact (required when the diff touches the financial surface)

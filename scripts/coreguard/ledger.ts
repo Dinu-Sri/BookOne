@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import {
+  centsToString,
   classifiedSeedValues,
   inferTransaction,
+  sideTotalsCents,
+  toCents,
   previewOpeningBalances,
   validateCreateAccount,
   wizardTemplate,
@@ -191,10 +194,10 @@ async function insertBalancedJournal(
     lines: Array<{ accountCode: string; side: 'debit' | 'credit'; amount: number; memo?: string }>;
   },
 ): Promise<{ transactionId: string; journalId: string }> {
-  const debit = input.lines.filter((l) => l.side === 'debit').reduce((s, l) => s + l.amount, 0);
-  const credit = input.lines.filter((l) => l.side === 'credit').reduce((s, l) => s + l.amount, 0);
-  if (Math.abs(debit - credit) >= 0.005) {
-    throw new Error(`Journal is not balanced (debits ${debit}, credits ${credit}).`);
+  // Exact cents, no tolerance (CoreGuard D3).
+  const { debit, credit } = sideTotalsCents(input.lines);
+  if (debit !== credit) {
+    throw new Error(`Journal is not balanced (debits ${centsToString(debit)}, credits ${centsToString(credit)}).`);
   }
   const paymentAccountId = await accountId(sql, input.tenantId, input.paymentAccountCode);
   const transferSourceAccountId = input.transferSourceCode
@@ -202,27 +205,32 @@ async function insertBalancedJournal(
     : null;
   const transactionId = randomUUID();
   const journalId = randomUUID();
-  await sql`
+  // Resolve accounts before the transaction: the pilot pool has one connection.
+  const lineAccounts: string[] = [];
+  for (const line of input.lines) lineAccounts.push(await accountId(sql, input.tenantId, line.accountCode));
+  // One DB transaction: transaction, entry and lines (CoreGuard G07/G09 refuse anything else).
+  await sql.begin(async (tx) => {
+  await tx`
     INSERT INTO transactions (
       id, tenant_id, user_id, accounting_type, direction, party, description, amount, currency,
       payment_method, payment_account_id, transfer_source_account_id, date, is_already_settled
     ) VALUES (
       ${transactionId}, ${input.tenantId}, ${input.userId}, ${input.accountingType}, ${input.direction},
-      ${input.party}, ${input.description}, ${Math.max(debit, credit).toFixed(2)}, 'LKR',
+      ${input.party}, ${input.description}, ${centsToString(debit)}, 'LKR',
       ${input.paymentMethod}, ${paymentAccountId}, ${transferSourceAccountId}, ${input.date}, '1'
     )
   `;
-  await sql`
+  await tx`
     INSERT INTO journal_entries (id, tenant_id, user_id, transaction_id, memo, entry_date, is_balanced)
     VALUES (${journalId}, ${input.tenantId}, ${input.userId}, ${transactionId}, ${input.description}, ${input.date}, '1')
   `;
-  for (const line of input.lines) {
-    const id = await accountId(sql, input.tenantId, line.accountCode);
-    await sql`
+  for (const [i, line] of input.lines.entries()) {
+    await tx`
       INSERT INTO journal_lines (id, tenant_id, journal_entry_id, account_id, side, amount, memo)
-      VALUES (${randomUUID()}, ${input.tenantId}, ${journalId}, ${id}, ${line.side}, ${line.amount.toFixed(2)}, ${line.memo ?? null})
+      VALUES (${randomUUID()}, ${input.tenantId}, ${journalId}, ${lineAccounts[i]!}, ${line.side}, ${centsToString(toCents(line.amount))}, ${line.memo ?? null})
     `;
   }
+  });
   return { transactionId, journalId };
 }
 

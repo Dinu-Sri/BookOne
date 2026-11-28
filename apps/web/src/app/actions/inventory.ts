@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
@@ -251,22 +252,7 @@ async function resolveAccount(tenantId: string, code: string) {
   return account;
 }
 
-async function assertOpenPeriod(tenantId: string, date: string) {
-  const period = date.slice(0, 7);
-  const [lock] = await db()
-    .select({ id: periodLocks.id })
-    .from(periodLocks)
-    .where(
-      and(
-        eq(periodLocks.tenantId, tenantId),
-        eq(periodLocks.period, period),
-        eq(periodLocks.status, 'locked'),
-        isNull(periodLocks.voidedAt),
-      ),
-    )
-    .limit(1);
-  if (lock) throw new Error(`Period ${period} is locked.`);
-}
+// CoreGuard Step 2: the period check is guard G05 in the database (any posting dated in a locked month is refused).
 
 async function applyQtyDelta(
   tenantId: string,
@@ -1112,7 +1098,7 @@ export async function createQuickProduct(input: {
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not create product.' };
+    return { ok: false, error: userMessageForError(e, 'Could not create product.') };
   }
 }
 
@@ -1132,7 +1118,7 @@ export async function createProductFromForm(
     await createProductFromFormInner(formData);
   } catch (error) {
     if (isNextRedirect(error)) throw error;
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not save product.' };
+    return { ok: false, error: userMessageForError(error, 'Could not save product.') };
   }
 }
 
@@ -1345,7 +1331,7 @@ export async function updateProductFromForm(
     await updateProductFromFormInner(formData);
   } catch (error) {
     if (isNextRedirect(error)) throw error;
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not save product.' };
+    return { ok: false, error: userMessageForError(error, 'Could not save product.') };
   }
 }
 
@@ -1700,7 +1686,6 @@ export async function createStockDocFromForm(formData: FormData): Promise<void> 
   const user = await requireTenantContext();
   await withTenantContext(user.tenantId, async () => {
     await db().transaction(async () => {
-    if (docType === 'adjustment') await assertOpenPeriod(user.tenantId, docDate);
     await assertDimensionScope({ locationId: fromLocationId ?? toLocationId });
     if (fromLocationId) {
       await requireTenantLocation(user.tenantId, fromLocationId);
@@ -2116,6 +2101,6 @@ export async function createStockTransfer(input: {
     revalidateInventory();
     return { ok: true, id: result.id, documentNumber: result.documentNumber };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Transfer failed.' };
+    return { ok: false, error: userMessageForError(e, 'Transfer failed.') };
   }
 }

@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { previewOpeningBalances, type JournalLineDraft, type OpeningLineInput } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
@@ -15,7 +16,7 @@ import {
   isNull,
 } from '@bookone/db';
 import { assertPermission } from '@/lib/access';
-import { assertPeriodUnlocked, postBalancedJournal } from '@/lib/post-balanced-journal';
+import { postBalancedJournal } from '@/lib/post-balanced-journal';
 
 export type OpeningResult<T = unknown> =
   | { ok: true; data: T }
@@ -38,7 +39,7 @@ export async function previewOpening(input: {
     }
     return { ok: true, data: preview };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not preview opening balances.' };
+    return { ok: false, error: userMessageForError(e, 'Could not preview opening balances.') };
   }
 }
 
@@ -55,8 +56,6 @@ export async function postOpeningBalances(input: {
       return { ok: false, error: preview.issues[0] ?? 'Opening entries do not balance.', issues: preview.issues };
     }
     return withTenantContext(user.tenantId, async () => {
-      const locked = await assertPeriodUnlocked(user.tenantId, input.effectiveDate);
-      if (locked) return { ok: false, error: locked };
       const [dup] = await db()
         .select({ id: openingBalanceRuns.id })
         .from(openingBalanceRuns)
@@ -150,6 +149,6 @@ export async function postOpeningBalances(input: {
       return { ok: true, data: { runId: run.id, journalId: posted.journalId } };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not post opening balances.' };
+    return { ok: false, error: userMessageForError(e, 'Could not post opening balances.') };
   }
 }

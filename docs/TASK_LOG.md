@@ -1,3 +1,7 @@
+## 2026-11-28 — CoreGuard Step 2: database guards (v2.36.0)
+
+Migrations 060–063 (guards G01–G07, G09, close/reopen protocol) copied verbatim; maintenance login for archive restore and pilot cleanup; Accounts → Closed months (reopen needs a reason); duplicate app period checks removed; guard errors shown as plain messages and logged; 55 guard/flow cases in `@bookone/coreguard`. Waiting on owner: staging preflight and B4. See [CHG-20261128-coreguard-step-2](changes/CHG-20261128-coreguard-step-2.md).
+
 ## 2026-11-28 — CoreGuard Step 1: writers guard-ready (v2.35.3)
 
 Every ledger/stock/allocation action is one DB transaction (db() joins the active transaction; nested ones are savepoints); balance checks are exact integer cents with no tolerance; journal_lines.party_id and transactions.source_kind/source_id added. See [CHG-20261128-coreguard-step-1](changes/CHG-20261128-coreguard-step-1.md).

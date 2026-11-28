@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
@@ -498,22 +499,7 @@ async function computeGrniClearAmount(
   return Math.round(clear * 100) / 100;
 }
 
-async function assertOpenPeriod(tenantId: string, date: string) {
-  const period = date.slice(0, 7);
-  const [lock] = await db()
-    .select({ id: periodLocks.id })
-    .from(periodLocks)
-    .where(
-      and(
-        eq(periodLocks.tenantId, tenantId),
-        eq(periodLocks.period, period),
-        eq(periodLocks.status, 'locked'),
-        isNull(periodLocks.voidedAt),
-      ),
-    )
-    .limit(1);
-  if (lock) throw new Error(`Period ${period} is locked.`);
-}
+// CoreGuard Step 2: the period check is guard G05 in the database (any posting dated in a locked month is refused).
 
 async function nextDocumentNumber(tenantId: string, type: string, date: string) {
   let prefix = PREFIX[type] ?? 'DOC';
@@ -1249,7 +1235,7 @@ export async function createCommercialDocumentWithUser(
         throw new Error('You can only work in your assigned shops.');
       }
     } catch (e) {
-      return refuseAfterClaim(e instanceof Error ? e.message : 'Invalid brand/location.');
+      return refuseAfterClaim(userMessageForError(e, 'Invalid brand/location.'));
     }
 
     // Purchase P3 controls (defaults if settings row missing)
@@ -1268,10 +1254,6 @@ export async function createCommercialDocumentWithUser(
     }
 
     const needsApproval = isApBill && purchaseCfg.requireBillApproval;
-
-    if (postsToGl(parsed.documentType) && !needsApproval && parsed.intent !== 'draft') {
-      await withTenantContext(user.tenantId, () => assertOpenPeriod(user.tenantId, parsed.issueDate));
-    }
 
     const id = await withTenantContext(user.tenantId, async () => {
       return db().transaction(async () => {
@@ -1489,10 +1471,6 @@ export async function createCommercialDocumentWithUser(
             }
           }
         }
-      }
-
-      if (postsToGl(parsed.documentType) && !needsApproval && parsed.intent !== 'draft') {
-        await assertOpenPeriod(user.tenantId, parsed.issueDate);
       }
 
       // Enrich lines from products
@@ -2854,7 +2832,7 @@ export async function createCommercialDocumentWithUser(
     });
     return { ok: true, id };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not create document.';
+    const message = userMessageForError(error, 'Could not create document.');
     const { logOps } = await import('@/lib/ops-log');
     await logOps({ kind: 'error', path: `action:create:${parsedType}`, status: 'error', message });
     if (tenantId && idempotencyKey) {
@@ -3233,7 +3211,7 @@ export async function getPurchaseOrderRemainingLines(poId: string): Promise<{
       };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not load PO lines.' };
+    return { ok: false, error: userMessageForError(e, 'Could not load PO lines.') };
   }
 }
 
@@ -3469,7 +3447,7 @@ export async function convertDocument(
       return result;
     });
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Convert failed.' };
+    return { ok: false, error: userMessageForError(error, 'Convert failed.') };
   }
 }
 
@@ -4269,7 +4247,6 @@ export async function approvePurchaseDocument(
         throw new Error('Only purchase bills support approval.');
       }
 
-      await assertOpenPeriod(user.tenantId, doc.issueDate);
 
       const [party] = await db()
         .select()
@@ -4559,7 +4536,7 @@ export async function approvePurchaseDocument(
     revalidatePath(`/purchase/purchases/${id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Approve failed.' };
+    return { ok: false, error: userMessageForError(e, 'Approve failed.') };
   }
 }
 
@@ -4628,7 +4605,7 @@ export async function rejectPurchaseDocument(
     revalidatePath('/purchase/import');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Reject failed.' };
+    return { ok: false, error: userMessageForError(e, 'Reject failed.') };
   }
 }
 
@@ -4825,7 +4802,7 @@ export async function deleteCommercialDocument(id: string): Promise<{ ok: boolea
     revalidatePath('/purchase/orders');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Delete failed.' };
+    return { ok: false, error: userMessageForError(e, 'Delete failed.') };
   }
 }
 
@@ -4873,7 +4850,7 @@ export async function archiveCommercialDocument(id: string): Promise<{ ok: boole
     revalidatePath('/sales/invoices');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Archive failed.' };
+    return { ok: false, error: userMessageForError(e, 'Archive failed.') };
   }
 }
 
@@ -4914,7 +4891,7 @@ export async function restoreCommercialDocument(id: string): Promise<{ ok: boole
     revalidatePath('/sales/orders');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Restore failed.' };
+    return { ok: false, error: userMessageForError(e, 'Restore failed.') };
   }
 }
 

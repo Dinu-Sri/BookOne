@@ -197,6 +197,13 @@ jobs:
           COA01_REQUIRE_POSTGRES: '1'
           NODE_ENV: test
 
+      - name: CoreGuard database guards and flows (Step 2, 55 cases)
+        run: pnpm --filter @bookone/coreguard test
+        env:
+          DATABASE_URL: postgres://bookone:bookone@localhost:5432/bookone_test
+          COREGUARD_REQUIRE_POSTGRES: '1'
+          NODE_ENV: test
+
       - name: UI consistency UI-02
         run: pnpm --filter @bookone/auth exec vitest run test/ui-02-lint.test.ts test/ui-02-gate.test.ts
         env:

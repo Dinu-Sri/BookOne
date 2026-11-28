@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { isLiquidTenderCode } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
@@ -66,22 +67,7 @@ async function lockRentalEvent(tenantId: string, eventId: string) {
   if (!rows.length) throw new Error('No hire event on this document.');
 }
 
-async function assertOpenPeriod(tenantId: string, date: string) {
-  const period = date.slice(0, 7);
-  const [lock] = await db()
-    .select({ id: periodLocks.id })
-    .from(periodLocks)
-    .where(
-      and(
-        eq(periodLocks.tenantId, tenantId),
-        eq(periodLocks.period, period),
-        eq(periodLocks.status, 'locked'),
-        isNull(periodLocks.voidedAt),
-      ),
-    )
-    .limit(1);
-  if (lock) throw new Error(`Period ${period} is locked.`);
-}
+// CoreGuard Step 2: the period check is guard G05 in the database (any posting dated in a locked month is refused).
 
 function revalidateMoney(documentId: string) {
   revalidatePath('/inventory/on-rent');
@@ -302,7 +288,6 @@ export async function collectRentalDeposit(input: {
     const user = await requireTenantContext();
     const today = new Date().toISOString().slice(0, 10);
     await withTenantContext(user.tenantId, async () => {
-      await assertOpenPeriod(user.tenantId, today);
       await db().transaction(async () => {
         const [doc] = await db()
           .select({
@@ -364,7 +349,7 @@ export async function collectRentalDeposit(input: {
     revalidateMoney(input.documentId);
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not collect deposit.' };
+    return { ok: false, error: userMessageForError(error, 'Could not collect deposit.') };
   }
 }
 
@@ -381,7 +366,6 @@ export async function refundRentalDeposit(input: {
     const user = await requireTenantContext();
     const today = new Date().toISOString().slice(0, 10);
     await withTenantContext(user.tenantId, async () => {
-      await assertOpenPeriod(user.tenantId, today);
       await db().transaction(async () => {
         const [doc] = await db()
           .select({
@@ -444,7 +428,7 @@ export async function refundRentalDeposit(input: {
     revalidateMoney(input.documentId);
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not refund deposit.' };
+    return { ok: false, error: userMessageForError(error, 'Could not refund deposit.') };
   }
 }
 
@@ -545,8 +529,7 @@ export async function invoiceHireCharges(input: {
           const apply = Math.min(depositOpen(ctx.event), money(damageCharge + lateFee + extraHire));
           if (apply > 0) {
             await withTenantContext(user.tenantId, async () => {
-              await assertOpenPeriod(user.tenantId, today);
-              await db().transaction(async () => {
+                      await db().transaction(async () => {
                 await lockRentalEvent(user.tenantId, ctx.event!.id);
                 const [chargeDoc] = await db()
                   .select({
@@ -607,6 +590,6 @@ export async function invoiceHireCharges(input: {
     revalidatePath(`/sales/invoices/${invoiceId}`);
     return { ok: true, invoiceId };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not invoice hire charges.' };
+    return { ok: false, error: userMessageForError(error, 'Could not invoice hire charges.') };
   }
 }

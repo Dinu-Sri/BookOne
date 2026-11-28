@@ -6,6 +6,7 @@
  * Staging remains bank_statement_*; this module is recon state.
  */
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { writeDeniedMessage } from '@/lib/access';
 import { z } from 'zod';
@@ -505,7 +506,7 @@ export async function listReconPostingAccounts(): Promise<
     const posting = await withTenantContext(user.tenantId, () => loadReconPostingAccounts(user.tenantId));
     return { ok: true, ...posting };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not load posting accounts.' };
+    return { ok: false, error: userMessageForError(e, 'Could not load posting accounts.') };
   }
 }
 
@@ -793,7 +794,7 @@ export async function getOrCreateSessionFromImport(
     revalidateRecon();
     return { ok: true, sessionId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not open session.' };
+    return { ok: false, error: userMessageForError(e, 'Could not open session.') };
   }
 }
 
@@ -1413,7 +1414,7 @@ export async function rebuildSessionSuggestions(
     revalidateRecon();
     return { ok: true, stats };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not rebuild.' };
+    return { ok: false, error: userMessageForError(e, 'Could not rebuild.') };
   }
 }
 
@@ -1986,7 +1987,7 @@ export async function openReconciliationSession(
 
     return { ok: true, detail };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not open session.' };
+    return { ok: false, error: userMessageForError(e, 'Could not open session.') };
   }
 }
 
@@ -2076,7 +2077,7 @@ export async function confirmCaseMatch(input: {
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not confirm match.' };
+    return { ok: false, error: userMessageForError(e, 'Could not confirm match.') };
   }
 }
 
@@ -2113,7 +2114,7 @@ export async function bulkConfirmStrongMatches(
     revalidateRecon();
     return { ok: true, confirmed };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Bulk confirm failed.' };
+    return { ok: false, error: userMessageForError(e, 'Bulk confirm failed.') };
   }
 }
 
@@ -2184,7 +2185,7 @@ export async function undoCaseMatch(input: {
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not undo.' };
+    return { ok: false, error: userMessageForError(e, 'Could not undo.') };
   }
 }
 
@@ -2245,7 +2246,7 @@ export async function markCaseOutstanding(input: {
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not mark outstanding.' };
+    return { ok: false, error: userMessageForError(e, 'Could not mark outstanding.') };
   }
 }
 
@@ -2444,7 +2445,7 @@ export async function createCaseEntry(input: {
     revalidateRecon();
     return { ok: true, transactionId: entryResult.transactionId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not create entry.' };
+    return { ok: false, error: userMessageForError(e, 'Could not create entry.') };
   }
 }
 
@@ -2577,7 +2578,7 @@ export async function finishReconciliationSession(
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not finish reconciliation.' };
+    return { ok: false, error: userMessageForError(e, 'Could not finish reconciliation.') };
   }
 }
 
@@ -2852,7 +2853,7 @@ export async function confirmTransferCase(input: {
     revalidateRecon();
     return { ok: true, transactionId: mainTxId ?? feeTxId!, feeTransactionId: feeTxId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not confirm transfer.' };
+    return { ok: false, error: userMessageForError(e, 'Could not confirm transfer.') };
   }
 }
 
@@ -2900,7 +2901,7 @@ export async function rejectTransferCase(input: {
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not update.' };
+    return { ok: false, error: userMessageForError(e, 'Could not update.') };
   }
 }
 
@@ -3041,7 +3042,7 @@ export async function searchGroupBookCandidates(input: {
       };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Search failed.' };
+    return { ok: false, error: userMessageForError(e, 'Search failed.') };
   }
 }
 
@@ -3199,7 +3200,7 @@ export async function confirmGroupMatch(input: {
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not confirm group match.' };
+    return { ok: false, error: userMessageForError(e, 'Could not confirm group match.') };
   }
 }
 
@@ -3281,7 +3282,7 @@ export async function excludeCase(input: {
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not exclude.' };
+    return { ok: false, error: userMessageForError(e, 'Could not exclude.') };
   }
 }
 
@@ -3326,7 +3327,7 @@ export async function reopenReconciliationSession(
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not reopen.' };
+    return { ok: false, error: userMessageForError(e, 'Could not reopen.') };
   }
 }
 
@@ -3351,7 +3352,7 @@ export async function exportReconciliationSummary(
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Export failed.' };
+    return { ok: false, error: userMessageForError(e, 'Export failed.') };
   }
 }
 
@@ -3617,7 +3618,7 @@ export async function getCompareBoard(
       };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not load compare board.' };
+    return { ok: false, error: userMessageForError(e, 'Could not load compare board.') };
   }
 }
 
@@ -3879,7 +3880,7 @@ export async function matchBankToBook(input: {
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not match.' };
+    return { ok: false, error: userMessageForError(e, 'Could not match.') };
   }
 }
 
@@ -3956,7 +3957,7 @@ export async function listUnmatchedBankLinesForSession(
       return { ok: true as const, lines };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not list bank lines.' };
+    return { ok: false, error: userMessageForError(e, 'Could not list bank lines.') };
   }
 }
 
@@ -4133,7 +4134,7 @@ export async function confirmManyBanksOneBook(input: {
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Could not confirm multi-bank match.',
+      error: userMessageForError(e, 'Could not confirm multi-bank match.'),
     };
   }
 }
@@ -4225,7 +4226,7 @@ export async function searchBookForSession(input: {
       return { ok: true as const, candidates: candidates.slice(0, limit) };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Search failed.' };
+    return { ok: false, error: userMessageForError(e, 'Search failed.') };
   }
 }
 
@@ -4294,7 +4295,7 @@ export async function listGuidedQueue(
       session: res.detail.session,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not load guided queue.' };
+    return { ok: false, error: userMessageForError(e, 'Could not load guided queue.') };
   }
 }
 
@@ -4407,7 +4408,7 @@ export async function getReconciliationReportData(
 
     return { ok: true, data };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not build report.' };
+    return { ok: false, error: userMessageForError(e, 'Could not build report.') };
   }
 }
 
@@ -4500,7 +4501,7 @@ export async function voidBankImport(
     revalidateRecon();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not delete import.' };
+    return { ok: false, error: userMessageForError(e, 'Could not delete import.') };
   }
 }
 

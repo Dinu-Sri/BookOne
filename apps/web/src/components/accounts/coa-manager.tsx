@@ -364,6 +364,9 @@ export function CoaManager({
               Opening balances
             </Link>
           ) : null}
+          <Link href="/accounts/months" className="button secondary">
+            Closed months
+          </Link>
           {canWrite ? (
             <Link href="/accounts/import" className="button secondary">
               Import CSV

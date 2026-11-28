@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import {
   TAXABLE_ADVANCE_REFUSAL,
@@ -36,7 +37,7 @@ import {
   inArray,
 } from '@bookone/db';
 import { assertPermission } from '@/lib/access';
-import { assertPeriodUnlocked, postBalancedJournal, resolveAccountByCode } from '@/lib/post-balanced-journal';
+import { postBalancedJournal, resolveAccountByCode } from '@/lib/post-balanced-journal';
 
 export type AdvanceActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -218,8 +219,6 @@ export async function issuePartyAdvance(input: {
     const amount = moneyAmount(input.amount);
     if (amount <= 0) return { ok: false, error: 'Amount must be greater than zero.' };
     return withTenantContext(user.tenantId, async () => {
-      const locked = await assertPeriodUnlocked(user.tenantId, input.date);
-      if (locked) return { ok: false, error: locked };
       const [existing] = await db()
         .select({ id: partyAdvances.id, issuedAmount: partyAdvances.issuedAmount })
         .from(partyAdvances)
@@ -287,7 +286,7 @@ export async function issuePartyAdvance(input: {
       return { ok: true, data: { id: row.id, remaining: amount } };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not issue the advance.' };
+    return { ok: false, error: userMessageForError(e, 'Could not issue the advance.') };
   }
 }
 
@@ -332,8 +331,6 @@ export async function applyPartyAdvance(input: {
       const check = canApplyAdvance(state, input.amount);
       if (!check.ok) return { ok: false, error: check.error };
       const amount = moneyAmount(input.amount);
-      const locked = await assertPeriodUnlocked(user.tenantId, advance.issuedOn);
-      if (locked) return { ok: false, error: locked };
       const [party] = await db()
         .select({ name: parties.name })
         .from(parties)
@@ -461,6 +458,6 @@ export async function applyPartyAdvance(input: {
       return { ok: true, data: { remaining } };
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Could not apply the advance.' };
+    return { ok: false, error: userMessageForError(e, 'Could not apply the advance.') };
   }
 }

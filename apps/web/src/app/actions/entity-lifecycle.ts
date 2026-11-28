@@ -1,5 +1,6 @@
 'use server';
 
+import { userMessageForError } from '@/lib/coreguard-errors';
 import { revalidatePath } from 'next/cache';
 import { centsToString, chartOfAccountsForEntity, classifiedSeedValues, sideTotalsCents, toCents } from '@bookone/accounting';
 import { requireTenantContext } from '@bookone/auth';
@@ -171,7 +172,7 @@ export async function upgradePersonalToSoleLite(input?: {
       message: 'Upgraded to sole prop (lite). Use Personal | Business domain tiles.',
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Upgrade failed' };
+    return { ok: false, error: userMessageForError(e, 'Upgrade failed') };
   }
 }
 
@@ -232,7 +233,7 @@ export async function upgradeSoleLiteToFull(): Promise<LifecycleResult> {
       message: 'Full business modules on. Cashbook still available; open full BookOne for stock/POS.',
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Upgrade failed' };
+    return { ok: false, error: userMessageForError(e, 'Upgrade failed') };
   }
 }
 
@@ -292,7 +293,7 @@ export async function downgradeSoleFullToLite(): Promise<LifecycleResult> {
         'Back to sole lite. Inventory/POS stay visible as read-only. Upgrade again to create or edit.',
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Downgrade failed' };
+    return { ok: false, error: userMessageForError(e, 'Downgrade failed') };
   }
 }
 
@@ -645,7 +646,7 @@ export async function incorporateSoleToCompany(input?: {
     };
   } catch (e) {
     console.error('incorporateSoleToCompany failed', e);
-    return { ok: false, error: e instanceof Error ? e.message : 'Incorporation failed' };
+    return { ok: false, error: userMessageForError(e, 'Incorporation failed') };
   }
 }
 

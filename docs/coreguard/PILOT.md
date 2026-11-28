@@ -6,7 +6,7 @@ Single local and CI command for the integrated BookOne lane:
 pnpm coreguard:pilot
 ```
 
-The runner pushes the Drizzle schema, applies SQL migrations, seeds disposable companies, runs fixture/service tests, optionally drives the real app in Chromium, then deletes the seed. It pins the product `VERSION`, git SHA, latest SQL migration, and fixtures `custom-bank.v1` plus `bank-recon.v1`. This matches the web image startup (`drizzle-kit push --force` then `scripts/init-db.ts`) and never uses the Clossyan demo seed.
+The runner pushes the Drizzle schema, applies SQL migrations, seeds disposable companies, runs fixture/service tests, optionally drives the real app in Chromium, then deletes the seed. It pins the product `VERSION`, git SHA, latest SQL migration, and fixtures `custom-bank.v1` plus `bank-recon.v1`. This matches the web image startup (`packages/db/scripts/push-additive.ts` then `scripts/init-db.ts`; CoreGuard Step 2) and never uses the Clossyan demo seed.
 
 ## Disposable targets
 

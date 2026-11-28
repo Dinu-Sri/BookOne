@@ -14,5 +14,7 @@ export default defineConfig({
   // dropped the Better Auth tables that way. Keep SQL-only tables out of the
   // diff here as a second guard.
   // Guarded by packages/auth/test/drizzle-push-table-filter.test.ts.
-  tablesFilter: ['*', '!auth_*'],
+  // ledger_operations: CoreGuard operation keys (060). The coreguard.* schema is outside the default
+  // schemaFilter ('public'), so push-additive never sees those tables.
+  tablesFilter: ['*', '!auth_*', '!ledger_operations'],
 });

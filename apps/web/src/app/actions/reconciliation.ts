@@ -15,9 +15,11 @@ import {
   desc,
   inArray,
   periodLocks,
+  sql,
   transactions,
   withTenantContext,
 } from '@bookone/db';
+import { userMessageForError } from '@/lib/coreguard-errors';
 
 const periodSchema = z.string().regex(/^\d{4}-\d{2}$/);
 
@@ -381,38 +383,24 @@ export async function lockPeriod(period: string): Promise<{ ok: boolean; error?:
         throw new Error('Review all statement lines before locking this period.');
       }
 
-      const [existing] = await db()
-        .select({ id: periodLocks.id })
-        .from(periodLocks)
-        .where(
-          and(
-            eq(periodLocks.tenantId, user.tenantId),
-            eq(periodLocks.period, parsedPeriod),
-            eq(periodLocks.status, 'locked'),
-            isNull(periodLocks.voidedAt),
-          ),
-        )
-        .limit(1);
-      if (existing) return;
-
-      const [createdLock] = await db()
-        .insert(periodLocks)
-        .values({
+      // CoreGuard D5: a month is closed only through coreguard.lock_period (READ COMMITTED, exclusive
+      // tenant-month lock that waits for postings in flight, closing fingerprint in the same transaction).
+      // It is idempotent: an already locked month returns its existing lock.
+      await db().transaction(async () => {
+        const rows = (await db().execute(
+          sql`SELECT coreguard.lock_period(${user.tenantId}::uuid, ${parsedPeriod}, ${user.id}::uuid, ${'Locked from reconciliation workflow.'}) AS id`,
+        )) as unknown as Array<{ id: string }>;
+        const lockId = rows[0]?.id;
+        if (!lockId) throw new Error('Could not lock period.');
+        await db().insert(auditLog).values({
           tenantId: user.tenantId,
           userId: user.id,
-          period: parsedPeriod,
-          notes: 'Locked from reconciliation workflow.',
-        })
-        .returning({ id: periodLocks.id });
-
-      await db().insert(auditLog).values({
-        tenantId: user.tenantId,
-        userId: user.id,
-        action: 'LOCK',
-        tableName: 'period_locks',
-        recordId: createdLock.id,
-        newValues: { period: parsedPeriod, status: 'locked' },
-        notes: 'Locked accounting period.',
+          action: 'LOCK',
+          tableName: 'period_locks',
+          recordId: lockId,
+          newValues: { period: parsedPeriod, status: 'locked' },
+          notes: 'Locked accounting period.',
+        });
       });
     });
 
@@ -420,7 +408,7 @@ export async function lockPeriod(period: string): Promise<{ ok: boolean; error?:
     revalidatePath('/transactions');
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not lock period.';
-    return { ok: false, error: message };
+    return { ok: false, error: userMessageForError(error, 'Could not lock period.') };
   }
 }
+

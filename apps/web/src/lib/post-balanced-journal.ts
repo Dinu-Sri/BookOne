@@ -17,23 +17,7 @@ export type PostedJournal = {
   journalId: string;
 };
 
-export async function assertPeriodUnlocked(tenantId: string, isoDate: string): Promise<string | null> {
-  const period = isoDate.slice(0, 7);
-  const [lock] = await db()
-    .select({ id: periodLocks.id })
-    .from(periodLocks)
-    .where(
-      and(
-        eq(periodLocks.tenantId, tenantId),
-        eq(periodLocks.period, period),
-        eq(periodLocks.status, 'locked'),
-        isNull(periodLocks.voidedAt),
-      ),
-    )
-    .limit(1);
-  if (lock) return `Period ${period} is locked.`;
-  return null;
-}
+// CoreGuard Step 2: the period check is guard G05 in the database (assertPeriodUnlocked removed).
 
 export async function resolveAccountByCode(
   tenantId: string,

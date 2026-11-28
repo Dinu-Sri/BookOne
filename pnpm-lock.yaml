@@ -259,6 +259,19 @@ importers:
         specifier: ^4.1.12
         version: 4.1.12(@types/node@22.19.21)(vite@7.3.8(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
 
+  packages/coreguard:
+    dependencies:
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.21
+      vitest:
+        specifier: ^4.1.12
+        version: 4.1.12(@types/node@22.19.21)(vite@7.3.8(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
+
   packages/db:
     dependencies:
       drizzle-kit:

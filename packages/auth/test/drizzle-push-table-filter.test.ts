@@ -30,8 +30,10 @@ function drizzleTables(): Set<string> {
 function sqlTables(): Set<string> {
   const names = new Set<string>();
   for (const src of readAll(path.join(dbRoot, 'migrations'), '.sql')) {
-    for (const m of src.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?"?([a-z0-9_]+)"?/gi)) {
-      names.add(m[1].toLowerCase());
+    for (const m of src.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:"?([a-z0-9_]+)"?\.)?"?([a-z0-9_]+)"?/gi)) {
+      // drizzle-kit pull only reads the public schema (default schemaFilter), so coreguard.* tables are out of scope.
+      if (m[1] && m[1].toLowerCase() !== 'public') continue;
+      names.add(m[2].toLowerCase());
     }
   }
   return names;
